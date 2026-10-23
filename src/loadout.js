@@ -17,7 +17,6 @@ export const PAINTS = [
 
 const $ = (id) => document.getElementById(id);
 const hex = (n) => `#${n.toString(16).padStart(6, '0')}`;
-const groupOf = (id) => GROUPS.find((g) => g.id === ITEMS[id].group);
 const POOL_RADIUS = 19;
 
 function renderThumbnails() {
@@ -32,8 +31,7 @@ function renderThumbnails() {
   const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 200);
   const thumbs = {};
   for (const id of ITEM_IDS) {
-    const color = parseInt(groupOf(id).color.slice(1), 16);
-    const model = buildItemModel(id, color);
+    const model = buildItemModel(id, 0xff5a5f);
     scene.add(model);
     const sphere = new THREE.Box3().setFromObject(model).getBoundingSphere(new THREE.Sphere());
     const dist = (sphere.radius / Math.sin(THREE.MathUtils.degToRad(15))) * 0.82;
@@ -80,7 +78,7 @@ export class Loadout {
 
   buildTray() {
     $('item-groups').innerHTML = GROUPS.map(
-      (g) => `<section class="group" style="--tile:${g.color}">
+      (g) => `<section class="group">
         <h3 class="group-label">${g.label}</h3>
         <div class="tiles">
           ${ITEM_IDS.filter((id) => ITEMS[id].group === g.id)
@@ -99,12 +97,17 @@ export class Loadout {
     for (const tile of this.tiles) {
       const id = tile.dataset.id;
       tile.addEventListener('click', () => this.toggle(id, tile));
-      tile.addEventListener('mouseenter', () => {
-        this.showDetail(id);
+      tile.addEventListener('mouseenter', (e) => {
+        this.showDetail(id, e.clientY);
         this.sfx.play('hover');
       });
-      tile.addEventListener('focus', () => this.showDetail(id));
-      tile.addEventListener('mouseleave', () => this.showDetail(null));
+      tile.addEventListener('mousemove', (e) => this.placeDetail(e.clientY));
+      tile.addEventListener('mouseleave', () => this.hideDetail());
+      tile.addEventListener('focus', () => {
+        const box = tile.getBoundingClientRect();
+        this.showDetail(id, box.top + box.height / 2);
+      });
+      tile.addEventListener('blur', () => this.hideDetail());
     }
   }
 
@@ -144,7 +147,6 @@ export class Loadout {
       return;
     } else {
       items.push(id);
-      this.detailId = id;
       this.sfx.play('pick');
       tile.classList.remove('picked');
       void tile.offsetWidth;
@@ -154,21 +156,24 @@ export class Loadout {
     this.squashVel -= 4;
   }
 
-  showDetail(id) {
-    this.hoverId = id;
-    this.renderDetail();
+  showDetail(id, y) {
+    const item = ITEMS[id];
+    const el = $('item-detail');
+    el.innerHTML = `<img src="${this.thumbs[id]}" alt="" /><div><h3>${item.name}</h3><p>${item.blurb}</p></div>`;
+    el.classList.add('on');
+    this.placeDetail(y);
   }
 
-  renderDetail() {
-    const id = this.hoverId ?? this.detailId ?? this.setup.items.at(-1);
+  placeDetail(y) {
     const el = $('item-detail');
-    if (!id) {
-      el.innerHTML = '<p class="detail-empty">Pick two attachments for your boat. Hover one to see what it does.</p>';
-      return;
-    }
-    const item = ITEMS[id];
-    el.style.setProperty('--tile', groupOf(id).color);
-    el.innerHTML = `<img src="${this.thumbs[id]}" alt="" /><div><h3>${item.name}</h3><p>${item.blurb}</p></div>`;
+    const tray = document.querySelector('.tray').getBoundingClientRect();
+    const half = el.offsetHeight / 2;
+    el.style.right = `${innerWidth - tray.left + 14}px`;
+    el.style.top = `${Math.max(12 + half, Math.min(innerHeight - 12 - half, y))}px`;
+  }
+
+  hideDetail() {
+    $('item-detail').classList.remove('on');
   }
 
   refreshTray() {
@@ -195,7 +200,7 @@ export class Loadout {
         const id = items[i];
         const key = i === 0 ? 'O' : 'P';
         return id
-          ? `<button class="slot-chip" data-slot="${i}" style="--tile:${groupOf(id).color}" title="Test fire"><kbd>${key}</kbd><img src="${this.thumbs[id]}" alt="" /><span>${ITEMS[id].name}</span></button>`
+          ? `<button class="slot-chip" data-slot="${i}" title="Test fire"><kbd>${key}</kbd><img src="${this.thumbs[id]}" alt="" /><span>${ITEMS[id].name}</span></button>`
           : `<div class="slot-chip empty"><kbd>${key}</kbd><span>Empty slot</span></div>`;
       })
       .join('');
@@ -223,7 +228,6 @@ export class Loadout {
     }).join('');
     this.prevStats = stats;
 
-    this.renderDetail();
     this.rebuildBoat();
     this.onChange();
   }
@@ -422,7 +426,18 @@ export class Loadout {
           toon(0x34465e),
         );
         this.scene.add(hook, rope);
-        this.movers.push({ mesh: hook, rope, grapple: true, t: 0, life: 0.9, end: () => this.scene.remove(rope) });
+        b.hookHead.visible = false;
+        this.movers.push({
+          mesh: hook,
+          rope,
+          grapple: true,
+          t: 0,
+          life: 0.9,
+          end: () => {
+            this.scene.remove(rope);
+            b.hookHead.visible = true;
+          },
+        });
         this.sfx.play('hook');
         this.after(0.42, () => this.sfx.play('clank'));
         break;

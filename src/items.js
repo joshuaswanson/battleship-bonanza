@@ -1,7 +1,7 @@
 export const GROUPS = [
-  { id: 'weapons', label: 'Weapons', color: '#ff6b5e' },
-  { id: 'defense', label: 'Defense', color: '#3fb7f0' },
-  { id: 'gadgets', label: 'Gadgets', color: '#a77bf3' },
+  { id: 'weapons', label: 'Weapons' },
+  { id: 'defense', label: 'Defense' },
+  { id: 'gadgets', label: 'Gadgets' },
 ];
 
 export const STATS = [
@@ -22,16 +22,85 @@ export function statsFor(items) {
   return stats;
 }
 
+const SOLO_NAMES = {
+  spikes: 'The Pufferfish',
+  armor: 'The Tin Can',
+  camo: 'The Floating Shrub',
+  jetpack: 'The Flying Fish',
+  grapple: 'The Octopus',
+  emp: 'The Thundercloud',
+  machinegun: 'The Woodpecker',
+  laser: 'The Disco Ball',
+  saw: 'The Pizza Cutter',
+  missiles: 'The Fireworks Show',
+  mines: 'The Sea Urchin',
+};
+
+const PAIR_NAMES = {
+  'armor+camo': 'The Sneaky Turtle',
+  'armor+emp': 'The Lightning Rod',
+  'armor+grapple': 'The Iron Claw',
+  'armor+jetpack': 'The Flying Anvil',
+  'armor+laser': 'The Iron Lighthouse',
+  'armor+machinegun': 'The Rolling Fortress',
+  'armor+mines': 'The Armored Litterbug',
+  'armor+missiles': 'The Actual Battleship',
+  'armor+saw': 'The Can Opener',
+  'armor+spikes': 'The Iron Porcupine',
+  'camo+emp': 'The Electric Fern',
+  'camo+grapple': 'The Swamp Snatcher',
+  'camo+jetpack': 'The Leaping Shrub',
+  'camo+laser': 'The Sniper',
+  'camo+machinegun': 'The Jungle Commando',
+  'camo+mines': 'The Booby Trap',
+  'camo+missiles': 'The Ambush',
+  'camo+saw': 'The Lawnmower',
+  'camo+spikes': 'The Thorn Bush',
+  'emp+grapple': 'The Jellyfish',
+  'emp+jetpack': 'The Thunderbird',
+  'emp+laser': 'The Tesla Tower',
+  'emp+machinegun': 'The Thunderstorm',
+  'emp+mines': 'The Static Trap',
+  'emp+missiles': 'The Storm Chaser',
+  'emp+saw': 'The Electric Razor',
+  'emp+spikes': 'The Zappy Cactus',
+  'grapple+jetpack': 'The Trapeze Artist',
+  'grapple+laser': 'The Tractor Beam',
+  'grapple+machinegun': 'The Pirate Raider',
+  'grapple+mines': 'The Trapdoor Spider',
+  'grapple+missiles': 'The Bounty Hunter',
+  'grapple+saw': 'The Hungry Crab',
+  'grapple+spikes': 'The Harpoon Hedgehog',
+  'jetpack+laser': 'The Starfighter',
+  'jetpack+machinegun': 'The Attack Chopper',
+  'jetpack+mines': 'The Dive Bomber',
+  'jetpack+missiles': 'The Rocket Overload',
+  'jetpack+saw': 'The Flying Pizza Cutter',
+  'jetpack+spikes': 'The Flying Cactus',
+  'laser+machinegun': 'The Arcade Machine',
+  'laser+mines': 'The Trip Wire',
+  'laser+missiles': 'The Space Invader',
+  'laser+saw': 'The Lightsaber',
+  'laser+spikes': 'The Dazzling Thistle',
+  'machinegun+mines': 'The Popcorn Popper',
+  'machinegun+missiles': 'The Fourth of July',
+  'machinegun+saw': 'The Wood Chipper',
+  'machinegun+spikes': 'The Rattlesnake',
+  'mines+missiles': 'The Kaboom Express',
+  'mines+saw': 'The Junkyard Dog',
+  'mines+spikes': 'The Caltrop Trail',
+  'missiles+saw': 'The Demolition Crew',
+  'missiles+spikes': 'The Pineapple Express',
+  'saw+spikes': 'The Blender',
+};
 export function comboName(items) {
   if (items.length === 0) return 'The Plain Dinghy';
-  if (items.length === 1) return `The ${ITEMS[items[0]].noun}`;
-  return `The ${ITEMS[items[0]].adj} ${ITEMS[items[1]].noun}`;
+  if (items.length === 1) return SOLO_NAMES[items[0]];
+  return PAIR_NAMES[[...items].sort().join('+')];
 }
 
 export const ITEMS = {
   spikes: {
-    adj: 'Prickly',
-    noun: 'Pufferfish',
     stats: { tough: 1, punch: 1 },
     name: 'Spikes',
     group: 'defense',
@@ -39,8 +108,6 @@ export const ITEMS = {
     blurb: 'Keep other boats at a distance AND look intimidating. Watch out for grappling hooks though.',
   },
   armor: {
-    adj: 'Ironclad',
-    noun: 'Bathtub',
     stats: { tough: 3, speed: -2 },
     name: 'Armor',
     group: 'defense',
@@ -48,8 +115,6 @@ export const ITEMS = {
     blurb: "Turn your boat into a heavy armored bathtub. Deflects bullets, spikes and saw blades, but you won't move as fast.",
   },
   camo: {
-    adj: 'Sneaky',
-    noun: 'Shrub',
     stats: { tough: 1, tricks: 1 },
     name: 'Camo',
     group: 'defense',
@@ -57,8 +122,6 @@ export const ITEMS = {
     blurb: "Heat seeking missiles can't find you. As far as they know, you're just a floating shrub.",
   },
   jetpack: {
-    adj: 'Flying',
-    noun: 'Rocket',
     stats: { speed: 1, tricks: 2 },
     name: 'Jet pack',
     group: 'gadgets',
@@ -66,8 +129,6 @@ export const ITEMS = {
     blurb: "Who said boats can't fly? Leap over sea mines and dodge missiles and grappling hooks.",
   },
   grapple: {
-    adj: 'Grabby',
-    noun: 'Octopus',
     stats: { speed: 1, tricks: 2 },
     name: 'Grappling hook',
     group: 'gadgets',
@@ -75,8 +136,6 @@ export const ITEMS = {
     blurb: 'Snag a boat with spikes or a jet pack and get slingshotted right past it. Free ride!',
   },
   emp: {
-    adj: 'Buzzing',
-    noun: 'Thundercloud',
     stats: { tough: 1, tricks: 2 },
     name: 'EMP',
     group: 'gadgets',
@@ -84,8 +143,6 @@ export const ITEMS = {
     blurb: 'A big zappy bubble that swats away missiles and grappling hooks. Rude, but effective.',
   },
   machinegun: {
-    adj: 'Rattling',
-    noun: 'Woodpecker',
     stats: { punch: 2 },
     name: 'Machine gun',
     group: 'weapons',
@@ -93,8 +150,6 @@ export const ITEMS = {
     blurb: "Hold the trigger for a hailstorm of bullets. Just don't let it overheat!",
   },
   laser: {
-    adj: 'Dazzling',
-    noun: 'Disco',
     stats: { punch: 3 },
     name: 'Laser',
     group: 'weapons',
@@ -102,17 +157,13 @@ export const ITEMS = {
     blurb: 'Hold for a sizzling beam and steer to slice up anyone in the way. Melts armor, but saw blades bounce it back at you.',
   },
   saw: {
-    adj: 'Slicing',
-    noun: 'Pizza Cutter',
     stats: { punch: 2, tough: 1 },
     name: 'Saw blade',
     group: 'weapons',
     passive: true,
-    blurb: 'Swivels around on its own to slice up anyone who gets too close. Lasers bounce right off its spinning shield.',
+    blurb: 'Slice up anyone who gets too close and deflect lasers!',
   },
   missiles: {
-    adj: 'Homing',
-    noun: 'Fireworks',
     stats: { punch: 3 },
     name: 'Heat seeking missiles',
     group: 'weapons',
@@ -120,8 +171,6 @@ export const ITEMS = {
     blurb: "Fire and forget. They chase down the nearest boat ahead, unless it's hiding in camo.",
   },
   mines: {
-    adj: 'Explosive',
-    noun: 'Sea Urchin',
     stats: { punch: 2, tricks: 1 },
     name: 'Sea mines',
     group: 'weapons',
