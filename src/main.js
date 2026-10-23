@@ -572,6 +572,15 @@ function updateSawSound() {
     }
   }
   sfx.setSaw(level, grinding);
+  let flame = 0;
+  if (mode === 'loadout') flame = loadout.heat.flamethrower.firing ? 1 : 0;
+  else if ((mode === 'race' || mode === 'results') && !race.attract) {
+    for (const b of race.boats) {
+      const h = b.heat.flamethrower;
+      if (h?.firing && h.delay <= 0 && b.alive) flame = Math.max(flame, sfx.volumeAt(b.pos));
+    }
+  }
+  sfx.setFlame(flame);
 }
 
 function updateCamera(dt) {

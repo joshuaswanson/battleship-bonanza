@@ -68,7 +68,6 @@ export class Boat {
     this.sawState = { spin: 0, yaw: 0, tick: 0, shield: 0, shieldYaw: 0, sound: 0 };
     this.heat = Object.fromEntries(HOLD_IDS.map((id) => [id, newHeat()]));
     this.flameTicks = new Map();
-    this.flameHum = 0;
     this.burn = null;
     this.exploded = false;
     this.laserTicks = new Map();

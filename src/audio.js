@@ -67,6 +67,7 @@ export class Sfx {
       this.engine.connect(this.engineFilter).connect(this.engineGain).connect(this.master);
       this.engine.start();
       this.buildSaw();
+      this.buildFlame();
     }
     if (this.ctx.state === 'suspended') this.ctx.resume();
     if (this.musicWanted && this.musicOn && this.music.paused) this.music.play().catch(() => {});
@@ -148,6 +149,67 @@ export class Sfx {
     screech.connect(screechGain).connect(grind);
     for (const node of [lfo, ...whine, motor, hiss, grindNoise, screech]) node.start();
     this.saw = { out, grind, whine, motor };
+  }
+
+  buildFlame() {
+    const ctx = this.ctx;
+    const out = ctx.createGain();
+    out.gain.value = 0;
+    out.connect(this.master);
+    const flutter = ctx.createGain();
+    flutter.gain.value = 0.8;
+    flutter.connect(out);
+    const lfo = ctx.createOscillator();
+    lfo.type = 'sine';
+    lfo.frequency.value = 9;
+    const depth = ctx.createGain();
+    depth.gain.value = 0.2;
+    lfo.connect(depth).connect(flutter.gain);
+    const source = (rate) => {
+      const n = ctx.createBufferSource();
+      n.buffer = this.noiseBuffer;
+      n.loop = true;
+      n.playbackRate.value = rate;
+      n.start();
+      return n;
+    };
+    const roar = ctx.createBiquadFilter();
+    roar.type = 'lowpass';
+    roar.frequency.value = 520;
+    roar.Q.value = 1.4;
+    const roarGain = ctx.createGain();
+    roarGain.gain.value = 1.6;
+    source(0.6).connect(roar).connect(roarGain).connect(flutter);
+    const hiss = ctx.createBiquadFilter();
+    hiss.type = 'bandpass';
+    hiss.frequency.value = 2400;
+    hiss.Q.value = 0.7;
+    const hissGain = ctx.createGain();
+    hissGain.gain.value = 0.35;
+    source(1).connect(hiss).connect(hissGain).connect(flutter);
+    const crackle = ctx.createBiquadFilter();
+    crackle.type = 'highpass';
+    crackle.frequency.value = 3000;
+    const crackleGain = ctx.createGain();
+    crackleGain.gain.value = 0;
+    source(1.3).connect(crackle).connect(crackleGain).connect(out);
+    lfo.start();
+    this.flame = { out, crackleGain, roar, on: false };
+  }
+
+  setFlame(level) {
+    if (!this.flame) return;
+    const t = this.ctx.currentTime;
+    const f = this.flame;
+    f.out.gain.setTargetAtTime(0.3 * level, t, level > f.level ? 0.03 : 0.12);
+    f.roar.frequency.setTargetAtTime(420 + 260 * level + Math.random() * 120, t, 0.05);
+    f.crackleGain.gain.setTargetAtTime(level > 0.05 && Math.random() < 0.35 ? 0.25 + Math.random() * 0.35 : 0, t, 0.01);
+    if (level > 0.3 && !f.on) {
+      this.noise(0.35, { vol: 0.45 * level, freq: 300, to: 1400 });
+      this.tone(90, 0.3, { type: 'sine', vol: 0.35 * level, to: 45 });
+    }
+    f.on = level > 0.3;
+    f.level = level;
   }
 
   setSaw(level, grinding = 0) {
@@ -342,9 +404,6 @@ export class Sfx {
         break;
       case 'heal':
         [660, 880, 1100, 1320].forEach((f, i) => this.tone(f, 0.16, { type: 'sine', vol: 0.12 * v, delay: i * 0.06 }));
-        break;
-      case 'flame':
-        this.noise(0.4, { vol: 0.14 * v, freq: 500, type: 'lowpass', to: 900 });
         break;
       case 'ignite':
         this.noise(0.3, { vol: 0.22 * v, freq: 2500, type: 'bandpass', to: 600 });

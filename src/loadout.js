@@ -601,12 +601,7 @@ export class Loadout {
     const b = this.boat;
     const { spraying, overheatedNow } = stepFlame(this.heat.flamethrower, b, dt, this.time);
     this.afterHeat('flamethrower', overheatedNow, b.flameMount);
-    this.flameHum = spraying ? (this.flameHum ?? 0) - dt : 0;
     if (!spraying) return;
-    if (this.flameHum <= 0) {
-      this.flameHum = 0.32;
-      this.sfx.play('flame');
-    }
     const origin = b.flameMount.getWorldPosition(new THREE.Vector3());
     const dir = flameDirection(b, new THREE.Vector3()).setY(0).normalize();
     this.fx.flameSpray(origin, dir, new THREE.Vector3());

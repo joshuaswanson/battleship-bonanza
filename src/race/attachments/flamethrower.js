@@ -8,13 +8,8 @@ export const methods = {
     for (const b of this.boats) {
       if (!b.has('flamethrower')) continue;
       const { spraying } = this.stepHold(b, 'flamethrower', stepFlame, b.model.flameMount, dt);
-      b.flameHum -= dt;
       if (!spraying) continue;
       b.lastFired = this.time;
-      if (b.flameHum <= 0) {
-        b.flameHum = 0.32;
-        this.sfx.play('flame', b.pos);
-      }
       const origin = b.model.flameMount.getWorldPosition(new THREE.Vector3());
       const dir = flameDirection(b.model, new THREE.Vector3());
       dir.y = 0;
