@@ -1,0 +1,16 @@
+import puppeteer from 'puppeteer-core';
+const [items, key, ms, name] = process.argv.slice(2);
+const browser = await puppeteer.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: 'new', args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'], defaultViewport: { width: 1440, height: 900 } });
+const page = await browser.newPage();
+page.on('pageerror', (e) => console.log('[pageerror]', e.message));
+const wait = (t) => new Promise((r) => setTimeout(r, t));
+await page.goto('http://localhost:5288/', { waitUntil: 'networkidle0' });
+await wait(500);
+await page.click('#btn-play');
+await page.evaluate((items) => { window.__bb.setup.items.splice(0, 2, ...items.split(',')); window.__bb.loadout.refresh(); }, items);
+await wait(1500);
+await page.keyboard.down(key);
+await wait(Number(ms));
+await (await page.$('.stage-col')).screenshot({ path: `tools/shots/${name}.png` });
+await page.keyboard.up(key);
+await browser.close();

@@ -25,7 +25,8 @@ async function race(items) {
       const others = r.boats.filter((b) => !b.isPlayer && b !== t);
       others.forEach((o, i) => { o.pos.set(p.pos.x + 300 + i * 20, 0, p.pos.z + 300); o.ko = 0; });
       t.items = items;
-      t.model.missileMount ??= p.pos.clone().set(0, 1.2, 0);
+      t.model.missileMount ??= t.model.body;
+      t.ai.base = 0;
       const fx = Math.sin(p.heading), fz = Math.cos(p.heading);
       t.pos.set(p.pos.x + fx * dist - fz * lateral, 0, p.pos.z + fz * dist + fx * lateral);
       t.heading = p.heading; t.vel.set(0, 0, 0); t.speed = 0; t.hp = 100; p.hp = 100; t.invuln = 0; p.invuln = 0; t.ko = 0;
@@ -37,9 +38,16 @@ async function race(items) {
 const ev = (fn, ...args) => page.evaluate(fn, ...args);
 
 await race(['laser', 'emp']);
-console.log('laser vs saw:', await ev(() => { const r = window.__bb.race; const t = __setup(['saw']); r.useItem(r.player, 0); return `player hp ${r.player.hp}, target hp ${t.hp}`; }));
-console.log('laser vs plain:', await ev(() => { const r = window.__bb.race; const t = __setup(['spikes']); r.useItem(r.player, 0); return `player hp ${r.player.hp}, target hp ${t.hp}`; }));
-console.log('laser vs armor:', await ev(() => { const r = window.__bb.race; const t = __setup(['armor']); r.useItem(r.player, 0); return `target hp ${t.hp}`; }));
+const sweep = async (items) => {
+  await ev((items) => { window.__t = __setup(items); }, items);
+  await page.keyboard.down('KeyO');
+  await wait(1200);
+  await page.keyboard.up('KeyO');
+  return ev(() => { const r = window.__bb.race; r.player.laser.heat = 0; r.player.laser.overheated = false; return `player hp ${r.player.hp}, target hp ${window.__t.hp}`; });
+};
+console.log('laser vs saw:', await sweep(['saw']));
+console.log('laser vs plain:', await sweep(['spikes']));
+console.log('laser vs armor:', await sweep(['armor']));
 await ev(() => { const r = window.__bb.race; const t = __setup(['missiles', 'grapple'], 30); t.heading += Math.PI; r.player.items = ['laser', 'emp']; window.__t = t; r.actions.missiles.call(r, t); return r.missiles[0]?.target?.name; }).then((x) => console.log('AI missile targets:', x));
 await wait(250);
 console.log('EMP vs missile:', await ev(() => { const r = window.__bb.race; r.useItem(r.player, 1); return 'used'; }));
@@ -49,8 +57,13 @@ console.log('  after:', await ev(() => { const r = window.__bb.race; return `pla
 await page.keyboard.press('Escape'); await wait(100);
 await ev(() => document.getElementById('btn-quit').click()); await wait(150);
 await race(['machinegun', 'grapple']);
-console.log('MG vs armor:', await ev(async () => { const r = window.__bb.race; const t = __setup(['armor'], 18); r.useItem(r.player, 0); await new Promise((res) => setTimeout(res, 1500)); return `target hp ${t.hp}`; }));
-console.log('MG vs plain:', await ev(async () => { const r = window.__bb.race; const t = __setup(['camo'], 18); r.useItem(r.player, 0); await new Promise((res) => setTimeout(res, 1500)); return `target hp ${t.hp}`; }));
+for (const [label, items] of [['MG vs armor', ['armor']], ['MG vs plain', ['camo']]]) {
+  await ev((items) => { window.__t = __setup(items, 18); }, items);
+  await page.keyboard.down('KeyO');
+  await wait(1500);
+  await page.keyboard.up('KeyO');
+  console.log(label + ':', await ev(() => { const r = window.__bb.race; r.player.gun.heat = 0; r.player.gun.overheated = false; return `target hp ${window.__t.hp}`; }));
+}
 console.log('grapple vs plain:', await ev(() => { const r = window.__bb.race; __setup(['camo'], 40); r.useItem(r.player, 1); return `hook target ${r.hooks.at(-1).target?.name ?? 'none'}`; }));
 console.log('grapple vs jetpack:', await ev(() => { const r = window.__bb.race; const t = __setup(['jetpack'], 40); r.player.cooldowns = [0, 0]; r.useItem(r.player, 1); return `hook target ${r.hooks.at(-1).target?.name ?? 'none'} (expected ${t.name})`; }));
 await wait(700);
