@@ -132,7 +132,7 @@ export const ITEMS = {
     stats: { speed: 1, tricks: 2 },
     name: 'Grappling hook',
     group: 'gadgets',
-    cooldown: 5,
+    cooldown: 7,
     blurb: 'Snag any boat and get slingshotted right past it. Boats with spikes or a jet pack are extra easy to catch.',
   },
   emp: {

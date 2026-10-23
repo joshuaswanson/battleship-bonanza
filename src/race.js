@@ -10,7 +10,7 @@ import { TrackFeatures } from './features.js';
 export const LAPS = 3;
 export const MAX_HP = 100;
 export const BASE_SPEED = 44;
-const ARMOR_SPEED = 0.88;
+const ARMOR_SPEED = 0.95;
 const SAW_WORK = 3;
 const SAW_REST = 1.5;
 const EASY_HOOK = (o) => o.has('spikes') || o.has('jetpack');
@@ -827,10 +827,10 @@ export class Race {
         for (const o of this.boats) {
           if (!o.alive || o.yOffset > 1.6) continue;
           if (o === mine.owner && mine.age < 2.5) continue;
-          if (o.distanceToAxis2D(mine.pos.x, mine.pos.z) < 2.6) {
+          if (o.distanceToAxis2D(mine.pos.x, mine.pos.z) < 3.4) {
             this.fx.explosion(mine.pos.x, water + 0.5, mine.pos.z, 1.2);
             this.sfx.play('boom', mine.pos);
-            this.damage(o, 34, mine.owner, 'mine', { spin: 1, launch: 0.9 });
+            this.damage(o, 40, mine.owner, 'mine', { spin: 1, launch: 0.9 });
             this.removeMine(mine);
             break;
           }
@@ -1191,7 +1191,7 @@ export class Race {
       s.tick -= dt;
       if (s.tick <= 0) {
         s.tick = 0.22;
-        this.damage(target, 5, b, 'saw', { stun: 0.15 });
+        this.damage(target, 4, b, 'saw', { stun: 0.15 });
         this.fx.sparkBurst(contact.x, contact.y, contact.z, 0xffa62b, 12);
         if (s.sound <= 0) {
           s.sound = 0.45;
