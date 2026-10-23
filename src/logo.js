@@ -41,7 +41,7 @@ export const logoSvg = ({ boat = true, main = true, art = true } = {}) => `
       <stop offset="1" stop-color="#FF8A1F"/>
     </radialGradient>
   </defs>
-  <path id="lg-arc-top" d="M 205 186 Q 500 -12 795 186" fill="none" />
+  <path id="lg-arc-top" d="M 116.5 254.3 Q 500.0 -80.3 883.5 254.3" fill="none" />
   <path id="lg-arc-bottom" d="M 105 425 Q 500 675 895 425" fill="none" />
   <path id="lg-arc-bottom-shadow" d="M 117 437 Q 512 687 907 437" fill="none" />
   ${art ? `  <g transform="translate(500 300)">
