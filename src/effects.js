@@ -116,14 +116,67 @@ class Transient {
   }
 }
 
+class CasingPool {
+  constructor(scene, max) {
+    const geometry = new THREE.CylinderGeometry(0.07, 0.07, 0.3, 8);
+    this.mesh = new THREE.InstancedMesh(geometry, toon(0xe0b040, { emissive: 0x6b4a10 }), max);
+    this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.mesh.frustumCulled = false;
+    this.zero = new THREE.Matrix4().makeScale(0, 0, 0);
+    for (let i = 0; i < max; i++) this.mesh.setMatrixAt(i, this.zero);
+    scene.add(this.mesh);
+    this.items = Array.from({ length: max }, () => ({ pos: new THREE.Vector3(), vel: new THREE.Vector3(), spin: new THREE.Vector3(), rot: new THREE.Euler(), life: 0 }));
+    this.next = 0;
+    this.m = new THREE.Matrix4();
+    this.q = new THREE.Quaternion();
+    this.one = new THREE.Vector3(1, 1, 1);
+  }
+
+  emit(pos, vel) {
+    const c = this.items[this.next];
+    this.next = (this.next + 1) % this.items.length;
+    c.pos.copy(pos);
+    c.vel.copy(vel);
+    c.spin.set((Math.random() - 0.5) * 30, (Math.random() - 0.5) * 30, (Math.random() - 0.5) * 30);
+    c.rot.set(Math.random() * 6, Math.random() * 6, Math.random() * 6);
+    c.life = 1.4;
+  }
+
+  update(dt, onWater) {
+    this.items.forEach((c, i) => {
+      if (c.life <= 0) return;
+      c.life -= dt;
+      c.vel.y -= 30 * dt;
+      c.pos.addScaledVector(c.vel, dt);
+      c.rot.x += c.spin.x * dt;
+      c.rot.y += c.spin.y * dt;
+      c.rot.z += c.spin.z * dt;
+      if (c.pos.y < 0.1 && c.vel.y < 0) {
+        onWater(c.pos);
+        c.life = 0;
+      }
+      this.mesh.setMatrixAt(i, c.life > 0 ? this.m.compose(c.pos, this.q.setFromEuler(c.rot), this.one) : this.zero);
+    });
+    this.mesh.instanceMatrix.needsUpdate = true;
+  }
+}
+
 export class Effects {
   constructor(scene) {
-    this.puffs = new ParticlePool(scene, toon(0xffffff, { emissive: 0x6f93ad }), 2400);
+    this.puffs = new ParticlePool(scene, toon(0xffffff, { emissive: 0x6f93ad }), 4200);
     this.sparks = new ParticlePool(scene, glow(0xffffff), 900);
     this.rings = new Transient(scene, new THREE.TorusGeometry(1, 0.12, 8, 48).rotateX(Math.PI / 2), 16, false);
     const beam = new THREE.CylinderGeometry(1, 1, 1, 10, 1, true).rotateX(Math.PI / 2).translate(0, 0, 0.5);
-    this.beams = new Transient(scene, beam, 48, false);
+    this.beams = new Transient(scene, beam, 420, false);
     this.shells = new Transient(scene, new THREE.SphereGeometry(1, 32, 20), 6, true);
+    this.casings = new CasingPool(scene, 240);
+  }
+
+  casing(pos, side, carry) {
+    const r = Math.random;
+    const vel = side.clone().multiplyScalar(7 + r() * 4).add(carry);
+    vel.y += 6 + r() * 4;
+    this.casings.emit(pos, vel);
   }
 
   update(dt) {
@@ -132,6 +185,7 @@ export class Effects {
     this.rings.update(dt);
     this.beams.update(dt);
     this.shells.update(dt);
+    this.casings.update(dt, (p) => this.puffs.emit(p.x, 0.2, p.z, 0, 1.5, 0, 0.14, 0.35, 0xffffff, 6, 1, 1));
   }
 
   wake(x, y, z, sideX, sideZ, speed) {
@@ -149,13 +203,39 @@ export class Effects {
 
   splash(x, y, z, power = 1) {
     const r = Math.random;
-    const count = Math.round(14 * power);
+    const count = Math.round(24 * power) + 3;
     for (let i = 0; i < count; i++) {
       const a = r() * Math.PI * 2;
-      const sp = (4 + r() * 6) * power;
-      this.puffs.emit(x, y, z, Math.cos(a) * sp, (6 + r() * 8) * power, Math.sin(a) * sp, 0.4 + r() * 0.5 * power, 0.7 + r() * 0.4, r() < 0.3 ? 0xbff6ff : 0xffffff, 22, 0.5, 1);
+      const sp = (4 + r() * 7) * power;
+      this.puffs.emit(x, y, z, Math.cos(a) * sp, (7 + r() * 9) * power, Math.sin(a) * sp, 0.4 + r() * 0.55 * power, 0.7 + r() * 0.5, r() < 0.3 ? 0xbff6ff : 0xffffff, 22, 0.5, 1);
     }
-    this.ring(x, y + 0.2, z, 0xffffff, 1 * power, 6 * power, 0.6);
+    if (power >= 0.5) {
+      for (let i = 0; i < 8 * power; i++) {
+        this.puffs.emit(x + (r() - 0.5) * power, y, z + (r() - 0.5) * power, (r() - 0.5) * 2, (12 + r() * 8) * Math.sqrt(power), (r() - 0.5) * 2, (0.5 + r() * 0.4) * power, 0.9 + r() * 0.3, 0xffffff, 24, 0.3, 1);
+      }
+    }
+    this.ring(x, y + 0.2, z, 0xffffff, 1 * power, 7 * power, 0.7);
+  }
+
+  droplet(x, y, z, vx, vy, vz, size = 0.3) {
+    const r = Math.random;
+    this.puffs.emit(x, y, z, vx, vy, vz, size * (0.7 + r() * 0.6), 0.5 + r() * 0.4, r() < 0.35 ? 0xbff6ff : 0xffffff, 22, 0.8, 1);
+  }
+
+  spray(x, y, z, fx, fz, sx, sz, speed, steer) {
+    const r = Math.random;
+    const s = Math.min(1, speed / 40);
+    for (const side of [-1, 1]) {
+      const out = 3 + s * 6 + Math.max(0, side * steer) * 7;
+      const bx = x + fx * 2.2 + sx * side * 1.3;
+      const bz = z + fz * 2.2 + sz * side * 1.3;
+      this.droplet(bx, y, bz, sx * side * out + fx * speed * 0.5, 3 + s * 5 + r() * 2, sz * side * out + fz * speed * 0.5, 0.22 + s * 0.2);
+    }
+    if (s > 0.4) {
+      const sx0 = x - fx * 2.6;
+      const sz0 = z - fz * 2.6;
+      this.droplet(sx0 + (r() - 0.5), y, sz0 + (r() - 0.5), fx * speed * 0.2 + (r() - 0.5) * 3, 4 + s * 8 + r() * 3, fz * speed * 0.2 + (r() - 0.5) * 3, 0.3 + s * 0.25);
+    }
   }
 
   explosion(x, y, z, power = 1) {
@@ -256,6 +336,41 @@ export class Effects {
     const r = Math.random;
     this.sparks.emit(x, y, z, 0, 0, 0, 0.55 + r() * 0.2, 1.1, r() < 0.5 ? 0xff2a2a : 0xffffff, 0, 0, 1, 0.25);
     if (r() < 0.35) this.puffs.emit(x, y + 0.3, z, (r() - 0.5), 2 + r() * 2, (r() - 0.5), 0.5 + r() * 0.4, 0.9, 0xffffff, -1, 1, 0);
+  }
+
+  bolt(from, to, color = 0x2f7dff, width = 0.18, life = 0.12, fork = true) {
+    const r = Math.random;
+    const length = from.distanceTo(to);
+    const steps = Math.max(3, Math.min(9, Math.round(length / 1.6)));
+    const jitter = Math.min(2.5, length * 0.18);
+    const points = [from.clone()];
+    for (let i = 1; i < steps; i++) {
+      const p = from.clone().lerp(to, i / steps);
+      const taper = Math.sin((i / steps) * Math.PI);
+      p.x += (r() - 0.5) * jitter * taper;
+      p.y += (r() - 0.5) * jitter * taper;
+      p.z += (r() - 0.5) * jitter * taper;
+      points.push(p);
+    }
+    points.push(to.clone());
+    for (let i = 0; i < points.length - 1; i++) {
+      const a = points[i];
+      const b = points[i + 1];
+      const len = a.distanceTo(b);
+      for (const [w, c] of [[width, color], [width * 0.45, 0xffffff]]) {
+        this.beams.take(c, life, (mesh, k) => {
+          mesh.position.copy(a);
+          mesh.lookAt(b);
+          mesh.scale.set(w, w, len);
+          mesh.material.opacity = (r() < 0.75 ? 1 : 0.25) * (1 - k);
+        });
+      }
+    }
+    if (fork && steps > 3 && r() < 0.6) {
+      const at = points[1 + Math.floor(r() * (steps - 2))];
+      const end = at.clone().add(new THREE.Vector3(r() - 0.5, r() - 0.5, r() - 0.5).multiplyScalar(length * 0.4));
+      this.bolt(at, end, color, width * 0.7, life, false);
+    }
   }
 
   beam(from, to, color, width = 0.35, life = 0.4, sparks = 6) {

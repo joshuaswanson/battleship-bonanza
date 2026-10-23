@@ -612,10 +612,12 @@ const MODULES = {
     const tankMat = toon(RED);
     refs.heatMats.flamethrower = [tankMat];
     part(m, 'cylinder', mats.dark, 0, 0.3, -0.1, 0.55, 0.6, 0.55, 0.03);
-    const tank = part(m, 'capsule', tankMat, 0, 0.95, -0.55, 0.75, 0.75, 0.75, 0.04);
-    tank.rotation.x = Math.PI / 2;
-    part(m, 'cylinder', mats.white, 0, 0.95, -0.55, 0.39, 0.14, 0.39, 0.02).rotation.x = Math.PI / 2;
-    part(m, 'cylinder', mats.metal, 0, 0.95, -1.35, 0.14, 0.25, 0.14, 0.02).rotation.x = Math.PI / 2;
+    for (const x of [-0.36, 0.36]) {
+      part(m, 'capsule', tankMat, x, 1.15, -0.6, 0.6, 0.62, 0.6, 0.04);
+      part(m, 'cylinder', mats.white, x, 1.15, -0.6, 0.32, 0.14, 0.32, 0.02);
+      part(m, 'cylinder', mats.metal, x, 1.92, -0.6, 0.1, 0.16, 0.1, 0.02);
+    }
+    part(m, 'cylinder', mats.dark, 0, 0.72, -0.3, 0.12, 0.7, 0.12, 0.02).rotation.x = Math.PI / 2;
     part(m, 'sphere', mats.dark, 0, 0.8, 0.25, 0.32, 0.32, 0.32, 0.03);
     const pipe = part(m, 'cylinder', mats.metal, 0, 0.8, 0.95, 0.13, 1.4, 0.13, 0.03);
     pipe.rotation.x = Math.PI / 2;
@@ -679,9 +681,9 @@ const MODULES = {
     cup.rotation.x = Math.PI / 2;
     for (let i = 0; i < 3; i++) {
       const a = (i / 3) * Math.PI * 2;
-      const claw = part(m, 'roundBox', mats.metal, Math.cos(a) * 0.62, 0.85, Math.sin(a) * 0.62, 0.14, 0.6, 0.14, 0.02);
+      const claw = part(m, 'roundBox', mats.metal, Math.cos(a) * 0.84, 0.8, Math.sin(a) * 0.84, 0.14, 0.7, 0.14, 0.02);
       claw.rotation.set(0, -a, 0);
-      claw.rotateZ(0.35);
+      claw.rotateZ(0.1);
     }
     const loaded = new THREE.Group();
     loaded.position.set(0, MINE_REST_Y, 0);
@@ -753,6 +755,7 @@ const MODULES = {
     const b = part(m, 'ring', mats.metal, 0, 1.9, 0, 0.68, 0.68, 0.68, 0.03);
     b.rotation.x = Math.PI / 2;
     refs.spinners.push({ mesh: a, axis: 'y', speed: 2.4 }, { mesh: b, axis: 'z', speed: -3 });
+    return { empOrb: new THREE.Vector3(0, 1.9, 0) };
   },
 };
 

@@ -282,6 +282,7 @@ export class Race {
     }
 
     for (const b of this.boats) this.updateBoat(b, dt);
+    this.whitecaps(dt);
     this.collideBoats();
     this.updateBullets(dt);
     this.updateMissiles(dt);
@@ -368,7 +369,8 @@ export class Race {
         b.yOffset = 0;
         b.air = null;
         b.bump(5);
-        this.fx.splash(b.pos.x, b.waterY, b.pos.z, 1);
+        this.fx.splash(b.pos.x, b.waterY, b.pos.z, 1.5);
+        this.fx.splash(b.pos.x + Math.sin(b.heading) * 3, b.waterY, b.pos.z + Math.cos(b.heading) * 3, 0.8);
         this.sfx.play('splash', b.pos);
       }
     }
@@ -538,7 +540,7 @@ export class Race {
             a.bump(3);
             b.bump(3);
             this.sfx.play('boing', a.pos);
-            this.fx.splash((a.pos.x + b.pos.x) / 2, a.waterY, (a.pos.z + b.pos.z) / 2, 0.4);
+            this.fx.splash((a.pos.x + b.pos.x) / 2, a.waterY, (a.pos.z + b.pos.z) / 2, 0.8);
           }
         }
         if (a.has('spikes')) this.spikeHit(a, b, nx, nz);
@@ -576,6 +578,7 @@ export class Race {
     target.flash = 1;
     const light = kind === 'bullet' || kind === 'flame' || kind === 'fire';
     target.bump(light ? 1.5 : 5);
+    if (!light && !target.air) this.fx.splash(target.pos.x, target.waterY, target.pos.z, 0.6);
     target.vel.x += knockX;
     target.vel.z += knockZ;
     const SLOWDOWN = { bullet: 0.97, saw: 0.94, laser: 0.97, reflect: 0.97, flame: 0.97, fire: 1 };
@@ -716,6 +719,13 @@ export class Race {
 
     emp(b) {
       this.pulses.push({ owner: b, age: 0, life: 0.5, radius: 26, jolted: new Set() });
+      const orb = b.model.empOrb.getWorldPosition(new THREE.Vector3());
+      for (let i = 0; i < 14; i++) {
+        const a = (i / 14) * Math.PI * 2 + Math.random() * 0.4;
+        const reach = 8 + Math.random() * 16;
+        const end = new THREE.Vector3(orb.x + Math.cos(a) * reach, b.waterY + 0.3 + Math.random() * 3, orb.z + Math.sin(a) * reach);
+        this.fx.bolt(orb, end, 0x2f7dff, 0.34, 0.3);
+      }
       this.fx.followRing(b.pos, 0x5ff4ff, 26, 0.7);
       this.fx.followRing(b.pos, 0xffffff, 18, 0.55);
       this.fx.shell(b.pos, 0x5ff4ff, 26, 0.7);
@@ -780,8 +790,16 @@ export class Race {
     dir.normalize();
     const vel = dir.clone().multiplyScalar(BULLET_SPEED).add(b.vel);
     this.bullets.push({ pos: origin, prev: origin.clone(), start: origin.clone(), vel, owner: b, life: 0.48 });
+    this.ejectCasing(b.model, b.vel);
     this.fx.sparkBurst(origin.x, origin.y, origin.z, 0xffffff, 2);
     this.sfx.play('shoot', b.pos);
+  }
+
+  ejectCasing(refs, carry) {
+    const swivel = refs.gunSwivel;
+    const port = swivel.localToWorld(new THREE.Vector3(-0.55, 0.7, 0.1));
+    const side = new THREE.Vector3(-1, 0, 0).applyQuaternion(swivel.getWorldQuaternion(new THREE.Quaternion()));
+    this.fx.casing(port, side, carry);
   }
 
   updateBullets(dt) {
@@ -816,7 +834,8 @@ export class Race {
       }
       if (bullet.life <= 0) return false;
       if (bullet.pos.y < waveHeight(bullet.pos.x, bullet.pos.z, this.time)) {
-        this.fx.splash(bullet.pos.x, bullet.pos.y, bullet.pos.z, 0.2);
+        this.fx.splash(bullet.pos.x, bullet.pos.y, bullet.pos.z, 0.3);
+        this.fx.droplet(bullet.pos.x, bullet.pos.y, bullet.pos.z, 0, 9 + Math.random() * 4, 0, 0.3);
         return false;
       }
       if (n < 400) {
@@ -1070,6 +1089,8 @@ export class Race {
         if (o === p.owner || !o.alive || p.jolted.has(o)) continue;
         if (o.center(new THREE.Vector3()).distanceTo(center) > r + 1.5) continue;
         p.jolted.add(o);
+        if (p.owner.model.empOrb) this.fx.bolt(p.owner.model.empOrb.getWorldPosition(new THREE.Vector3()), o.center(), 0x2f7dff, 0.32, 0.35);
+        this.sfx.play('zap', o.pos);
         o.stun = Math.max(o.stun, 1.1);
         o.disabled = Math.max(o.disabled, 1.6);
         o.flash = 0.6;
@@ -1315,6 +1336,12 @@ export class Race {
         const p = sag.getWorldPosition(new THREE.Vector3());
         this.fx.sparkBurst(p.x, p.y + 1, p.z, 0x5ff4ff, 3);
       }
+      if (off && Math.random() < dt * 24) {
+        const p = sag.getWorldPosition(new THREE.Vector3());
+        const jolt = () => new THREE.Vector3(p.x + (Math.random() - 0.5) * 2.6, p.y + 0.4 + Math.random() * 1.8, p.z + (Math.random() - 0.5) * 2.6);
+        this.fx.bolt(jolt(), jolt(), 0x2f7dff, 0.16, 0.1, false);
+        if (Math.random() < 0.3) this.sfx.play('crackle', p);
+      }
     });
   }
 
@@ -1452,6 +1479,14 @@ export class Race {
     shield.scale.setScalar(1 + 0.08 * Math.sin(this.time * 30));
   }
 
+  crackle(orbMarker, intensity, dt, pos) {
+    if (Math.random() > dt * 9 * intensity) return;
+    const orb = orbMarker.getWorldPosition(new THREE.Vector3());
+    const dir = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.3, Math.random() - 0.5).normalize();
+    this.fx.bolt(orb, orb.clone().addScaledVector(dir, 1 + Math.random() * 1.4), 0x2f7dff, 0.11, 0.08, false);
+    if (Math.random() < 0.12 * intensity) this.sfx.play('crackle', pos);
+  }
+
   shieldAgainst(victim, shooter) {
     const s = victim.sawState;
     const pivot = victim.model.sawYaw.getWorldPosition(new THREE.Vector3());
@@ -1516,6 +1551,7 @@ export class Race {
     root.visible = b.exploded ? false : b.invuln > 0 && b.alive ? Math.floor(b.invuln * 12) % 2 === 0 : true;
 
     if (b.model.sawYaw) this.updateSaw(b, dt);
+    if (b.model.empOrb && b.alive) this.crackle(b.model.empOrb, b.cooldowns[b.items.indexOf('emp')] > 0 ? 0.3 : 1, dt, b.pos);
     this.updateTurrets(b, dt);
     this.updateSulk(b, dt);
     this.updateRegen(b, dt);
@@ -1543,6 +1579,7 @@ export class Race {
         const sx = -lx;
         const sz = -lz;
         this.fx.wake(b.pos.x - fx * (HULL_L - 0.3), w + 0.1, b.pos.z - fz * (HULL_L - 0.3), sx, sz, Math.abs(b.speed));
+        this.fx.spray(b.pos.x, w + 0.3, b.pos.z, fx, fz, sx, sz, Math.abs(b.speed), b.steerVis);
       }
     }
 
@@ -1552,6 +1589,16 @@ export class Race {
     b.shadow.scale.set(shadowSize * 0.5, 1, shadowSize);
     b.shadow.rotation.y = b.heading;
     b.shadow.material.opacity = 1 / (1 + h * 0.15);
+  }
+
+  whitecaps(dt) {
+    const focus = this.player ?? this.boats[0];
+    if (!focus || Math.random() > dt * 5) return;
+    const a = Math.random() * Math.PI * 2;
+    const d = 15 + Math.random() * 60;
+    const x = focus.pos.x + Math.cos(a) * d;
+    const z = focus.pos.z + Math.sin(a) * d;
+    this.fx.splash(x, waveHeight(x, z, this.time), z, 0.2 + Math.random() * 0.2);
   }
 
   updateStandings() {

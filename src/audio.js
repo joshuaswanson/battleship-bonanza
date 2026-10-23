@@ -120,7 +120,15 @@ export class Sfx {
         this.noise(0.5, { vol: 0.2 * v, freq: 1500, type: 'bandpass', to: 500 });
         this.tone(300, 0.3, { type: 'square', vol: 0.05 * v, to: 600 });
         break;
+      case 'crackle':
+        for (let i = 0; i < 3; i++) this.noise(0.03 + Math.random() * 0.04, { vol: 0.07 * v, freq: 4000 + Math.random() * 3000, type: 'highpass' });
+        break;
+      case 'zap':
+        this.noise(0.25, { vol: 0.22 * v, freq: 3500, type: 'bandpass', to: 6000 });
+        this.tone(90, 0.2, { type: 'square', vol: 0.08 * v, to: 60 });
+        break;
       case 'emp':
+        this.noise(0.4, { vol: 0.25 * v, freq: 5000, type: 'bandpass', to: 1500 });
         this.tone(160, 0.5, { vol: 0.3 * v, to: 1400 });
         this.tone(1400, 0.4, { type: 'triangle', vol: 0.08 * v, to: 200, delay: 0.1 });
         break;

@@ -501,6 +501,12 @@ export class Loadout {
         this.fx.followRing(c, 0xffffff, 8, 0.55);
         this.fx.shell(c, 0x5ff4ff, 11, 0.7);
         for (let i = 0; i < 3; i++) this.fx.sparkBurst(c.x, c.y + 1, c.z, 0x5ff4ff, 10);
+        const orb = b.empOrb.getWorldPosition(new THREE.Vector3());
+        for (let i = 0; i < 10; i++) {
+          const a = (i / 10) * Math.PI * 2 + Math.random() * 0.5;
+          const reach = 5 + Math.random() * 7;
+          this.fx.bolt(orb, new THREE.Vector3(orb.x + Math.cos(a) * reach, 0.3 + Math.random() * 2, orb.z + Math.sin(a) * reach), 0x2f7dff, 0.28, 0.3);
+        }
         this.sfx.play('emp');
         break;
       }
@@ -556,6 +562,9 @@ export class Loadout {
       dir.y += (Math.random() - 0.4) * 0.1;
       dir.z += (Math.random() - 0.5) * 0.34;
       this.fx.beam(o, o.clone().addScaledVector(dir.normalize(), 28), 0xffe066, 0.12, 0.1, 2);
+      const port = b.gunSwivel.localToWorld(new THREE.Vector3(-0.55, 0.7, 0.1));
+      const side = new THREE.Vector3(-1, 0, 0).applyQuaternion(b.gunSwivel.getWorldQuaternion(new THREE.Quaternion()));
+      this.fx.casing(port, side, new THREE.Vector3());
       this.sfx.play('shoot');
     }
     this.afterHeat('machinegun', overheatedNow, b.gunMount);
@@ -653,6 +662,13 @@ export class Loadout {
       }
     }
     root.position.set(0, waveHeight(0, 0, this.time) + 0.35 + lift, 0);
+    if (!this.jump && Math.random() < dt * 2.5) {
+      const a = Math.random() * Math.PI * 2;
+      const x = Math.cos(a) * 3.5;
+      const z = Math.sin(a) * 5;
+      const p = this.world(new THREE.Vector3(x, 0, z));
+      this.fx.splash(p.x, waveHeight(p.x, p.z, this.time), p.z, 0.25);
+    }
     body.rotation.z = Math.sin(this.time * 1.3) * 0.05;
     body.rotation.x = Math.cos(this.time * 1.1) * 0.04 - (this.jump ? 0.15 : 0);
 
@@ -692,6 +708,11 @@ export class Loadout {
     if (b.laserMount) this.stepLaser(dt);
     if (b.flameMount) this.stepFlame(dt);
     for (const sp of spinners) sp.mesh.rotation[sp.axis] += sp.speed * dt;
+    if (b.empOrb && Math.random() < dt * 9) {
+      const orb = b.empOrb.getWorldPosition(new THREE.Vector3());
+      const dir = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.3, Math.random() - 0.5).normalize();
+      this.fx.bolt(orb, orb.clone().addScaledVector(dir, 1 + Math.random() * 1.4), 0x2f7dff, 0.11, 0.08, false);
+    }
     flag.rotation.y = Math.sin(this.time * 9) * 0.25;
 
     const due = this.timers.filter((t) => t.at <= this.time);

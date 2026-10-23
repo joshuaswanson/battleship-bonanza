@@ -255,7 +255,7 @@ const STRINGS = {
 
 const ITEM_TEXT = {
   en: {
-    spikes: ['Spikes', 'Keep other boats at a distance AND look intimidating. Grappling hooks love them though.'],
+    spikes: ['Spikes', 'Keep other boats at a distance AND look intimidating. Buzz saws bounce right off. Grappling hooks love them though.'],
     armor: ['Armor', "Turn your boat into a heavy armored bathtub. Deflects bullets, spikes and buzz saws, but you won't move as fast."],
     camo: ['Camo', "Probably the worst camouflage you could wear on the open ocean. But it does hide you from heat seeking missiles, so that's nice."],
     jetpack: ['Jet pack', "Who said boats can't fly? Leap over sea mines and dodge missiles and grappling hooks."],
@@ -269,7 +269,7 @@ const ITEM_TEXT = {
     flamethrower: ['Flamethrower', 'Light it up up up, light it up up up. Enemies caught in the flame continue burning and taking damage.'],
   },
   fr: {
-    spikes: ['Pointes', "Tenez les autres bateaux à distance ET ayez l'air redoutable. Les grappins les adorent, par contre."],
+    spikes: ['Pointes', "Tenez les autres bateaux à distance ET ayez l'air redoutable. Les scies rebondissent dessus. Les grappins les adorent, par contre."],
     armor: ['Blindage', 'Transformez votre bateau en baignoire blindée. Repousse balles, pointes et scies, mais vous irez moins vite.'],
     camo: ['Camouflage', "Sans doute le pire camouflage possible en pleine mer. Mais il vous cache des missiles à tête chercheuse, c'est déjà ça."],
     jetpack: ['Jetpack', 'Qui a dit que les bateaux ne volaient pas ? Sautez par-dessus les mines et esquivez missiles et grappins.'],
@@ -283,7 +283,7 @@ const ITEM_TEXT = {
     flamethrower: ['Lance-flammes', 'Light it up up up, light it up up up. Les ennemis pris dans les flammes continuent de brûler et de perdre de la vie.'],
   },
   de: {
-    spikes: ['Stacheln', 'Halte andere Boote auf Abstand UND sieh dabei furchteinflößend aus. Enterhaken lieben sie allerdings.'],
+    spikes: ['Stacheln', 'Halte andere Boote auf Abstand UND sieh dabei furchteinflößend aus. Kreissägen prallen einfach ab. Enterhaken lieben sie allerdings.'],
     armor: ['Panzerung', 'Verwandle dein Boot in eine schwer gepanzerte Badewanne. Hält Kugeln, Stacheln und Sägen ab, aber du bist etwas langsamer.'],
     camo: ['Tarnung', 'Wahrscheinlich die schlechteste Tarnung, die man auf offener See tragen kann. Aber sie versteckt dich vor Lenkraketen, immerhin.'],
     jetpack: ['Jetpack', 'Wer sagt, dass Boote nicht fliegen können? Spring über Seeminen und weich Raketen und Enterhaken aus.'],
