@@ -202,20 +202,13 @@ export class Loadout {
         const id = items[i];
         const key = i === 0 ? 'O' : 'P';
         return id
-          ? `<div class="slot-chip" data-slot="${i}" role="button" tabindex="0" title="${t('testFire')}"><kbd>${key}</kbd><button class="slot-remove" data-remove="${id}" aria-label="${itemName(id)}">×</button><img src="${this.thumbs[id]}" alt="" /><span>${itemName(id)}</span></div>`
+          ? `<button class="slot-chip" data-remove="${id}"><kbd>${key}</kbd><img src="${this.thumbs[id]}" alt="" /><span>${itemName(id)}</span></button>`
           : `<div class="slot-chip empty"><kbd>${key}</kbd><span>${t('emptySlot')}</span></div>`;
       })
       .join('');
-    for (const chip of document.querySelectorAll('.slot-chip[data-slot]')) {
-      chip.addEventListener('click', () => this.demo(Number(chip.dataset.slot)));
-      chip.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') this.demo(Number(chip.dataset.slot));
-      });
-    }
-    for (const remove of document.querySelectorAll('.slot-remove')) {
-      remove.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const id = remove.dataset.remove;
+    for (const chip of document.querySelectorAll('.slot-chip[data-remove]')) {
+      chip.addEventListener('click', () => {
+        const id = chip.dataset.remove;
         this.toggle(id, this.tiles.find((tile) => tile.dataset.id === id));
       });
     }
