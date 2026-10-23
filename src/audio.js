@@ -167,15 +167,16 @@ export class Sfx {
         this.noise(0.12, { vol: 0.15 * v, freq: 2500 });
         break;
       case 'saw':
-        this.noise(0.45, { vol: 0.4 * v, freq: 3400, type: 'bandpass', to: 2200 });
-        this.tone(1900, 0.4, { type: 'sawtooth', vol: 0.07 * v, to: 2600 });
-        this.tone(2300, 0.4, { type: 'square', vol: 0.04 * v, to: 1700 });
-        this.tone(95, 0.4, { type: 'square', vol: 0.12 * v, to: 80 });
+        this.noise(0.45, { vol: 0.6 * v, freq: 3400, type: 'bandpass', to: 2200 });
+        this.tone(1500, 0.4, { type: 'sawtooth', vol: 0.14 * v, to: 1100 });
+        this.tone(2900, 0.4, { type: 'square', vol: 0.06 * v, to: 2300 });
+        this.tone(95, 0.4, { type: 'square', vol: 0.2 * v, to: 70 });
         break;
       case 'sawSpin':
-        this.tone(170, 0.36, { type: 'sawtooth', vol: 0.09 * v, to: 178 });
-        this.tone(340, 0.36, { type: 'sawtooth', vol: 0.04 * v, to: 352 });
-        this.noise(0.36, { vol: 0.06 * v, freq: 1400, type: 'bandpass', to: 1500 });
+        this.tone(1850, 0.36, { type: 'sawtooth', vol: 0.11 * v, to: 1900 });
+        this.tone(3700, 0.36, { type: 'square', vol: 0.035 * v, to: 3800 });
+        this.tone(120, 0.36, { type: 'sawtooth', vol: 0.18 * v, to: 124 });
+        this.noise(0.36, { vol: 0.16 * v, freq: 3000, type: 'bandpass', to: 3200 });
         break;
       case 'whoosh':
         this.noise(0.6, { vol: 0.3 * v, freq: 400, type: 'bandpass', to: 2400 });
