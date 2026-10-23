@@ -12,21 +12,40 @@
 
     <div id="ui">
       <section id="screen-title" class="screen">
-        <div class="title-logo" data-logo></div>
-        <div class="title-actions">
-          <button id="btn-play" class="btn btn-big">Pick your boat</button>
-          <dl class="controls">
-            <div><dt>W A S D</dt><dd>Drive</dd></div>
-            <div><dt>O</dt><dd>First attachment</dd></div>
-            <div><dt>P</dt><dd>Second attachment</dd></div>
-            <div><dt>Esc</dt><dd>Pause</dd></div>
-            <div><dt>M</dt><dd>Sound</dd></div>
+        <div class="title-logo" data-logo="3d"></div>
+        <div class="title-menu">
+          <button id="btn-play" class="btn btn-big btn-play">Play</button>
+          <div class="title-row">
+            <button id="btn-howto" class="btn">How to play</button>
+            <button id="btn-sound" class="btn">Sound on</button>
+          </div>
+        </div>
+        <p class="title-hint">Press <kbd>Enter</kbd> to play</p>
+      </section>
+
+      <section id="screen-howto" class="screen screen-dim hidden">
+        <div class="panel howto">
+          <h2>How to play</h2>
+          <dl class="howto-keys">
+            <div><dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd>Drive</dd></div>
+            <div><dt><kbd>O</kbd></dt><dd>First attachment</dd></div>
+            <div><dt><kbd>P</kbd></dt><dd>Second attachment</dd></div>
+            <div><dt><kbd>Esc</kbd></dt><dd>Pause</dd></div>
+            <div><dt><kbd>M</kbd></dt><dd>Sound on or off</dd></div>
           </dl>
+          <ul class="howto-tips">
+            <li>Pick two attachments in the shipyard, then race three laps.</li>
+            <li>Hold the key for the machine gun and laser. Let go before they overheat.</li>
+            <li>Drive through med kit buoys to patch up your hull.</li>
+            <li>Fire the jet pack right before a missile or hook hits to dodge it.</li>
+          </ul>
+          <button id="btn-howto-close" class="btn btn-big">Got it</button>
         </div>
       </section>
 
       <section id="screen-loadout" class="screen hidden">
         <canvas id="preview"></canvas>
+        <div class="item-detail" id="item-detail" role="tooltip"></div>
         <div class="yard">
           <div class="stage-col">
             <header class="yard-head">
@@ -54,7 +73,6 @@
           <div class="tray-col">
             <aside class="tray">
               <div class="item-groups" id="item-groups"></div>
-              <div class="item-detail" id="item-detail"></div>
             </aside>
             <button id="btn-start" class="btn btn-big btn-launch">Start race</button>
           </div>

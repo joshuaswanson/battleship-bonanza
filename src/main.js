@@ -13,11 +13,13 @@ import { Input } from './input.js';
 import { Race, BASE_SPEED } from './race.js';
 import { Hud, ordinal, formatTime } from './hud.js';
 import { Loadout, PAINTS } from './loadout.js';
-import { LOGO_SVG } from './logo.js';
+import { logoSvg } from './logo.js';
+import { TitleBoat } from './titleBoat.js';
 import { ITEMS, ITEM_IDS } from './items.js';
 
 const $ = (id) => document.getElementById(id);
-for (const el of document.querySelectorAll('[data-logo]')) el.innerHTML = LOGO_SVG;
+for (const el of document.querySelectorAll('[data-logo]')) el.innerHTML = logoSvg({ boat: el.dataset.logo !== '3d' });
+new TitleBoat(document.querySelector('.title-logo'));
 
 const canvas = $('game');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -91,7 +93,7 @@ function newRace(attract) {
   cam.snap = true;
 }
 
-const screens = ['screen-title', 'screen-loadout', 'screen-pause', 'screen-results'];
+const screens = ['screen-title', 'screen-howto', 'screen-loadout', 'screen-pause', 'screen-results'];
 function showScreen(id) {
   for (const s of screens) $(s).classList.toggle('hidden', s !== id);
   loadout.active = false;
@@ -166,6 +168,21 @@ function renderResults() {
 const loadout = new Loadout({ setup, sfx, onChange: saveSetup });
 
 $('btn-play').addEventListener('click', goLoadout);
+const soundLabel = () => ($('btn-sound').textContent = sfx.muted ? 'Sound off' : 'Sound on');
+soundLabel();
+$('btn-sound').addEventListener('click', () => {
+  sfx.unlock();
+  sfx.toggleMute();
+  soundLabel();
+});
+$('btn-howto').addEventListener('click', () => {
+  showScreen('screen-howto');
+  $('btn-howto-close').focus();
+});
+$('btn-howto-close').addEventListener('click', () => {
+  showScreen('screen-title');
+  $('btn-howto').focus();
+});
 $('btn-back').addEventListener('click', goTitle);
 $('btn-start').addEventListener('click', startRace);
 $('btn-resume').addEventListener('click', () => pause(false));
@@ -265,7 +282,10 @@ function frame(now) {
   const state = input.poll();
   const pressed = input.pressed;
 
-  if (pressed.has('mute')) sfx.toggleMute();
+  if (pressed.has('mute')) {
+    sfx.toggleMute();
+    soundLabel();
+  }
   if (pressed.has('pause')) {
     if (mode === 'race') pause(true);
     else if (mode === 'paused') pause(false);
@@ -305,7 +325,8 @@ function frame(now) {
 }
 
 addEventListener('keydown', (e) => {
-  if (e.code === 'Enter' && mode === 'title') goLoadout();
+  if (e.code === 'Enter' && mode === 'title' && $('screen-howto').classList.contains('hidden')) goLoadout();
+  if (e.code === 'Escape' && !$('screen-howto').classList.contains('hidden')) $('btn-howto-close').click();
 });
 
 if (import.meta.env.DEV) window.__bb = { get race() { return race; }, setup, camera, cam, world, loadout };
