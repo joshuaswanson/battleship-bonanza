@@ -77,12 +77,12 @@ function avoidMines(race, b, ai) {
 function useItems(race, b, ai) {
   for (let slot = 0; slot < 2; slot++) {
     if (b.items[slot] === 'machinegun') {
-      const t = race.findTarget(b, race.gunArc('machinegun', 75));
+      const t = race.findTarget(b, race.gunArc(b, 'machinegun', 75));
       b.gun.trigger = !!t && !t.has('armor') && b.gun.heat < 0.7 && Math.random() < ai.aggression + 0.3;
       continue;
     }
     if (b.items[slot] === 'laser') {
-      const t = race.findTarget(b, race.gunArc('laser', 70));
+      const t = race.findTarget(b, race.gunArc(b, 'laser', 70));
       b.laser.trigger = !!t && b.laser.heat < 0.7 && Math.random() < ai.aggression + 0.3;
       continue;
     }

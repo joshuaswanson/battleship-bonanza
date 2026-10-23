@@ -89,7 +89,7 @@ class Boat {
         if (aimer) aimer.module.rotation.y = 0;
         const rest = aimer ? Math.PI : 0;
         s.group.rotation.y = rest;
-        return { id: s.id, group: s.group, rest, limit: s.front ? FRONT_LIMIT : Math.PI };
+        return { id: s.id, group: s.group, rest, backGun: this.model.backGuns.has(s.id), limit: s.front ? FRONT_LIMIT : Math.PI };
       });
     this.missileQueue = [];
     this.stats = { dealt: 0, sunk: 0, kills: 0 };
@@ -732,7 +732,7 @@ export class Race {
     const dir = gunDirection(b.model, new THREE.Vector3());
     dir.y = 0;
     dir.normalize();
-    const target = this.findTarget(b, { ...this.gunArc('machinegun', 80), filter: (o) => !o.has('camo') });
+    const target = this.findTarget(b, { ...this.gunArc(b, 'machinegun', 80), filter: (o) => !o.has('camo') });
     if (target) {
       const c = target.center();
       const lead = c.distanceTo(origin) / BULLET_SPEED;
@@ -1129,7 +1129,8 @@ export class Race {
     this.damage(victim, amount, b, 'laser', { knockX: dir.x * 4, knockZ: dir.z * 4, stun: 0.4, spin: amount > 10 ? 0.5 : 0 });
   }
 
-  gunArc(id, range) {
+  gunArc(b, id, range) {
+    if (b.model.backGuns.has(id)) return { range: Math.min(range, WATCH_RANGE), minDot: -1 };
     return { range, minDot: id === 'laser' ? 0.97 : 0.88 };
   }
 
@@ -1171,7 +1172,7 @@ export class Race {
         target = b.missileAim;
         rate = 16;
       } else if (firing || busy[t.id] > 0) {
-        target = 0;
+        target = t.backGun && watchAngle !== null ? watchAngle : 0;
         rate = 16;
       } else if (watchAngle !== null) {
         target = watchAngle;
