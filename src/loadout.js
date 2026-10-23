@@ -492,7 +492,7 @@ export class Loadout {
           },
         });
         this.sfx.play('hook');
-        this.after(0.42, () => this.sfx.play('clank'));
+        this.after(0.42, () => this.sfx.play('hookCatch'));
         break;
       }
       case 'emp': {

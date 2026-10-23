@@ -54,6 +54,7 @@ export class Sfx {
       this.samples = {};
       this.loadSamples('gun', ['sfx/gun1.wav', 'sfx/gun2.wav', 'sfx/gun3.wav']);
       this.loadSamples('jetpack', ['sfx/jetpack.wav']);
+      for (const name of ['emp', 'zap', 'hook', 'hookcatch', 'reel']) this.loadSamples(name, [`sfx/${name}.wav`]);
       this.noiseBuffer = this.ctx.createBuffer(1, this.ctx.sampleRate, this.ctx.sampleRate);
       const data = this.noiseBuffer.getChannelData(0);
       for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
@@ -367,16 +368,26 @@ export class Sfx {
         for (let i = 0; i < 2; i++) this.noise(0.03 + Math.random() * 0.03, { vol: 0.035 * v, freq: 2200 + Math.random() * 800, type: 'bandpass' });
         break;
       case 'zap':
+        if (this.sample('zap', 0.4 * v, 0.9 + Math.random() * 0.2)) break;
         this.noise(0.14, { vol: 0.09 * v, freq: 1600, type: 'bandpass', to: 900 });
         this.tone(260, 0.16, { type: 'triangle', vol: 0.06 * v, to: 110 });
         break;
       case 'emp':
+        if (this.sample('emp', 0.75 * v)) break;
         this.tone(220, 0.6, { vol: 0.3 * v, to: 55 });
         this.noise(0.5, { vol: 0.14 * v, freq: 700, to: 150 });
         this.tone(520, 0.45, { type: 'triangle', vol: 0.04 * v, to: 260, delay: 0.05 });
         break;
       case 'hook':
+        if (this.sample('hook', 0.7 * v, 0.95 + Math.random() * 0.1)) break;
         this.tone(400, 0.14, { type: 'square', vol: 0.08 * v, to: 1100 });
+        break;
+      case 'hookCatch':
+        if (this.sample('hookcatch', 0.55 * v)) break;
+        this.tone(320, 0.18, { type: 'square', vol: 0.12 * v, to: 140 });
+        break;
+      case 'reel':
+        this.sample('reel', 0.35 * v);
         break;
       case 'clank':
         this.tone(320, 0.18, { type: 'square', vol: 0.12 * v, to: 140 });

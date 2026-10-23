@@ -38,7 +38,14 @@ export const methods = {
     const rope = h.loose;
     const { points, prev } = rope;
     rope.wait -= dt;
-    if (rope.wait <= 0) rope.length = Math.max(0, rope.length - fast(55) * dt);
+    if (rope.wait <= 0) {
+      rope.length = Math.max(0, rope.length - fast(55) * dt);
+      rope.click = (rope.click ?? 0) - dt;
+      if (rope.click <= 0) {
+        rope.click = 0.7;
+        this.sfx.play('reel', h.owner.pos);
+      }
+    }
     if (rope.length < 2.5) return true;
     const step = new THREE.Vector3();
     for (let i = 1; i < ROPE_POINTS; i++) {
@@ -110,7 +117,7 @@ export const methods = {
           if (gap < 1.2) {
             h.phase = 'attached';
             h.time = 3;
-            this.sfx.play('clank', h.target.pos);
+            this.sfx.play('hookCatch', h.target.pos);
             if (o.isPlayer) this.emit('feed', { text: tr('youHooked', { name: h.target.name }), player: true });
           }
         } else {
