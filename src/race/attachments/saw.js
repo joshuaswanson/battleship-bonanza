@@ -12,6 +12,11 @@ export const methods = {
     const lx = Math.cos(b.heading);
     const lz = -Math.sin(b.heading);
     const { cutting: armed } = this.stepHold(b, 'saw', stepSaw, refs.saw, dt);
+    s.spinSound = (s.spinSound ?? 0) - dt;
+    if (armed && s.spinSound <= 0) {
+      s.spinSound = 0.32;
+      this.sfx.play('sawSpin', b.pos);
+    }
     if (armed) b.lastFired = this.time;
     const slot = b.items.indexOf('saw');
     const center = slotCenter(slot);

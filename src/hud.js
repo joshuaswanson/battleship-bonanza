@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { ITEMS } from './items.js';
 import { t, ordinal, itemName } from './i18n.js';
 import { MAX_HP } from './race.js';
+import { COUNT_LAND } from './audio.js';
 
 
 export function formatTime(seconds) {
@@ -122,6 +123,12 @@ export class Hud {
     this.lastPlace = 0;
   }
 
+  popInSync(text, kind) {
+    const lag = this.sfx.latency - COUNT_LAND;
+    if (lag > 0.01) setTimeout(() => this.pop(text, kind), lag * 1000);
+    else this.pop(text, kind);
+  }
+
   pop(text, kind = '') {
     this.center.className = 'hud-center';
     void this.center.offsetWidth;
@@ -153,10 +160,10 @@ export class Hud {
   handle(e) {
     switch (e.type) {
       case 'count':
-        this.pop(String(e.n), 'count');
+        this.popInSync(String(e.n), 'count');
         break;
       case 'go':
-        this.pop(t('go'), 'go');
+        this.popInSync(t('go'), 'go');
         break;
       case 'lap':
         this.pop(t('lapN', { n: e.lap }));

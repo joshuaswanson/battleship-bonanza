@@ -1,3 +1,4 @@
+export const COUNT_LAND = 0.11;
 const RACE_VOLUME = 0.2;
 const SFX_VOLUME = 0.85;
 
@@ -17,6 +18,10 @@ export class Sfx {
     this.tracks = { menu: track('menu-music.mp3', 0.45), race: track('race-music.mp3', RACE_VOLUME) };
     this.musicWanted = null;
     this.music = this.tracks.menu;
+  }
+
+  get latency() {
+    return this.ctx ? (this.ctx.outputLatency || 0) + (this.ctx.baseLatency || 0) : 0;
   }
 
   playMusic(name) {
@@ -143,6 +148,13 @@ export class Sfx {
         this.noise(0.7, { vol: 0.5 * v, freq: 900, to: 80 });
         this.tone(110, 0.5, { vol: 0.4 * v, to: 35 });
         break;
+      case 'mineBoom':
+        this.tone(70, 0.9, { type: 'sine', vol: 0.6 * v, to: 28 });
+        this.tone(140, 0.35, { type: 'square', vol: 0.18 * v, to: 40 });
+        this.noise(0.25, { vol: 0.55 * v, freq: 2600, to: 300 });
+        this.noise(1.4, { vol: 0.32 * v, freq: 1800, type: 'bandpass', to: 400 });
+        this.tone(1250, 0.25, { type: 'triangle', vol: 0.06 * v, to: 900 });
+        break;
       case 'boing':
         this.tone(220, 0.22, { vol: 0.22 * v, to: 660 });
         break;
@@ -155,15 +167,24 @@ export class Sfx {
         this.noise(0.12, { vol: 0.15 * v, freq: 2500 });
         break;
       case 'saw':
-        this.noise(0.45, { vol: 0.25 * v, freq: 3000, type: 'bandpass', to: 1200 });
-        this.tone(500, 0.4, { type: 'sawtooth', vol: 0.06 * v, to: 900 });
+        this.noise(0.45, { vol: 0.4 * v, freq: 3400, type: 'bandpass', to: 2200 });
+        this.tone(1900, 0.4, { type: 'sawtooth', vol: 0.07 * v, to: 2600 });
+        this.tone(2300, 0.4, { type: 'square', vol: 0.04 * v, to: 1700 });
+        this.tone(95, 0.4, { type: 'square', vol: 0.12 * v, to: 80 });
+        break;
+      case 'sawSpin':
+        this.tone(170, 0.36, { type: 'sawtooth', vol: 0.09 * v, to: 178 });
+        this.tone(340, 0.36, { type: 'sawtooth', vol: 0.04 * v, to: 352 });
+        this.noise(0.36, { vol: 0.06 * v, freq: 1400, type: 'bandpass', to: 1500 });
         break;
       case 'whoosh':
         this.noise(0.6, { vol: 0.3 * v, freq: 400, type: 'bandpass', to: 2400 });
         break;
       case 'missile':
-        this.noise(0.5, { vol: 0.2 * v, freq: 1500, type: 'bandpass', to: 500 });
-        this.tone(300, 0.3, { type: 'square', vol: 0.05 * v, to: 600 });
+        this.noise(0.12, { vol: 0.45 * v, freq: 900, to: 200 });
+        this.tone(120, 0.18, { type: 'square', vol: 0.16 * v, to: 45 });
+        this.noise(0.9, { vol: 0.28 * v, freq: 1200, type: 'bandpass', to: 4200 });
+        this.tone(220, 0.8, { type: 'sawtooth', vol: 0.06 * v, to: 900 });
         break;
       case 'crackle':
         for (let i = 0; i < 2; i++) this.noise(0.03 + Math.random() * 0.03, { vol: 0.035 * v, freq: 2200 + Math.random() * 800, type: 'bandpass' });
@@ -235,10 +256,10 @@ export class Sfx {
         this.tone(140, 0.09, { type: 'square', vol: 0.06 });
         break;
       case 'beep':
-        this.tone(520, 0.22, { type: 'square', vol: 0.22 });
+        this.tone(520, 0.22, { type: 'square', vol: 0.22, delay: Math.max(0, COUNT_LAND - this.latency) });
         break;
       case 'go':
-        this.tone(1040, 0.6, { type: 'square', vol: 0.22 });
+        this.tone(1040, 0.6, { type: 'square', vol: 0.22, delay: Math.max(0, COUNT_LAND - this.latency) });
         break;
       case 'lap':
         [660, 880, 1320].forEach((f, i) => this.tone(f, 0.16, { type: 'triangle', vol: 0.15, delay: i * 0.08 }));

@@ -460,7 +460,7 @@ export class Loadout {
           float: true,
           end: (m) => {
             this.fx.explosion(m.position.x, m.position.y + 0.5, m.position.z, 1.3);
-            this.sfx.play('boom');
+            this.sfx.play('mineBoom');
           },
         });
         this.sfx.play('plop');
@@ -710,6 +710,11 @@ export class Loadout {
       const { overheatedNow } = stepSaw(sawHeat, b, dt, this.time);
       this.afterHeat('saw', overheatedNow, b.saw);
       const active = this.sawBoost > 0 || sawHeat.firing;
+      this.sawSound = (this.sawSound ?? 0) - dt;
+      if (active && this.sawSound <= 0) {
+        this.sawSound = 0.32;
+        this.sfx.play('sawSpin');
+      }
       this.sawSpin += ((active ? 42 : 0) - this.sawSpin) * (1 - Math.exp(-(active ? 6 : 2) * dt));
       saw.rotation.x += this.sawSpin * dt;
       const glowAmount = active ? 0.55 + 0.25 * Math.sin(this.time * 45) : 0;

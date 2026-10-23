@@ -674,7 +674,7 @@ function frame(now) {
 
   updateCamera(dt);
   if (race.player && !race.attract && mode !== 'replay') {
-    hud.update(race, camera, dt);
+    hud.update(race, camera, mode === 'paused' ? 0 : dt);
     sfx.listener = race.player.pos;
     sfx.setEngine(Math.abs(race.player.speed) / BASE_SPEED, mode === 'race' && state.throttle > 0 && race.player.alive);
   } else {

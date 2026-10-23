@@ -41,7 +41,7 @@ export const methods = {
           if (o === mine.owner && mine.age < 2.5) continue;
           if (o.distanceToAxis2D(mine.pos.x, mine.pos.z) < 4) {
             this.fx.explosion(mine.pos.x, water + 0.5, mine.pos.z, 1.2);
-            this.sfx.play('boom', mine.pos);
+            this.sfx.play('mineBoom', mine.pos);
             this.damage(o, 40, mine.owner, 'mine', { spin: 1, launch: 0.9 });
             this.removeMine(mine);
             break;
