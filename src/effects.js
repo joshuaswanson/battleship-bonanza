@@ -200,6 +200,33 @@ const BOLT_FRAG = /* glsl */ `
   }
 `;
 
+function arcPoints(a, b) {
+  const r = Math.random;
+  const span = a.distanceTo(b);
+  const control = a.clone().lerp(b, 0.5);
+  control.y += 1.5 + span * 0.35;
+  const steps = Math.max(10, Math.min(28, Math.round(span / 1.2)));
+  const jitter = Math.min(0.6, 0.15 + span * 0.02);
+  const points = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const u = 1 - t;
+    const p = new THREE.Vector3(
+      u * u * a.x + 2 * u * t * control.x + t * t * b.x,
+      u * u * a.y + 2 * u * t * control.y + t * t * b.y,
+      u * u * a.z + 2 * u * t * control.z + t * t * b.z,
+    );
+    if (i > 0 && i < steps) {
+      const k = Math.sin(t * Math.PI) * jitter;
+      p.x += (r() - 0.5) * k;
+      p.y += (r() - 0.5) * k;
+      p.z += (r() - 0.5) * k;
+    }
+    points.push(p);
+  }
+  return points;
+}
+
 class Lightning {
   constructor(scene, max = 30000) {
     this.max = max;
@@ -539,6 +566,18 @@ export class Effects {
       dir.y += (r() - 0.3) * 0.6;
       const end = at.clone().addScaledVector(dir.normalize(), length * (0.2 + r() * 0.25));
       this.strike(at, end, color, width * 0.6, life, false);
+    }
+  }
+
+  arcTo(from, to, duration = 0.45, color = 0x1f5bff, width = 0.42) {
+    for (let k = 0; k * 0.05 < duration; k++) {
+      this.later(k * 0.05, () => {
+        const a = from();
+        const b = to();
+        if (!a || !b) return;
+        this.lightning.add(arcPoints(a, b), color, width * (k === 0 ? 1.3 : 1), 0.07);
+        if (k === 0) this.sparkBurst(b.x, b.y, b.z, 0x9ff8ff, 10);
+      });
     }
   }
 

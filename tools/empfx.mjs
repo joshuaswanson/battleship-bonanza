@@ -19,10 +19,11 @@ await page.evaluate(() => {
   p.ai.base = 0;
   const others = r.boats.filter((b) => !b.isPlayer);
   others.forEach((o, i) => o.pos.set(p.pos.x + 400 + i * 30, 0, p.pos.z + 400));
-  const v = others[0]; v.items = ['machinegun', 'laser'];
+  const v = others[0]; const w = others[1];
   const lx = Math.cos(p.heading), lz = -Math.sin(p.heading);
   v.pos.set(p.pos.x + lx * 12 + Math.sin(p.heading) * 4, 0, p.pos.z + lz * 12 + Math.cos(p.heading) * 4);
   v.heading = p.heading; window.__v = v;
+  w.pos.set(p.pos.x - lx * 10 + Math.sin(p.heading) * 8, 0, p.pos.z - lz * 10 + Math.cos(p.heading) * 8); w.heading = p.heading;
   window.__bb.freeCam = true;
   const c = window.__bb.camera;
   c.position.set(p.pos.x - lx * 14 - Math.sin(p.heading) * 10, 12, p.pos.z - lz * 14 - Math.cos(p.heading) * 10);
@@ -30,7 +31,7 @@ await page.evaluate(() => {
 });
 await wait(400);
 await page.keyboard.press('KeyP');
-await wait(120);
+await wait(260);
 await page.screenshot({ path: 'tools/shots/emp-blast.png' });
 await page.evaluate(() => {
   const v = window.__v; v.disabled = 5;

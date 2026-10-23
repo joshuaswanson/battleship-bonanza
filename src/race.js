@@ -757,13 +757,6 @@ export class Race {
 
     emp(b) {
       this.pulses.push({ owner: b, age: 0, life: 0.5, radius: 26, jolted: new Set() });
-      const orb = b.model.empOrb.getWorldPosition(new THREE.Vector3());
-      for (let i = 0; i < 14; i++) {
-        const a = (i / 14) * Math.PI * 2 + Math.random() * 0.4;
-        const reach = 8 + Math.random() * 16;
-        const end = new THREE.Vector3(orb.x + Math.cos(a) * reach, b.waterY + 0.3 + Math.random() * 3, orb.z + Math.sin(a) * reach);
-        this.fx.bolt(orb, end, 0x2f6bff, 0.22, 0.3);
-      }
       this.fx.followRing(b.pos, 0x5ff4ff, 26, 0.7);
       this.fx.followRing(b.pos, 0xffffff, 18, 0.55);
       this.fx.shell(b.pos, 0x5ff4ff, 26, 0.7);
@@ -1121,13 +1114,18 @@ export class Race {
         m.target = null;
         m.dir.copy(m.pos).sub(center).setY(0).normalize().setY(0.7).normalize();
         m.fizzle = 0.9;
-        this.fx.sparkBurst(m.pos.x, m.pos.y, m.pos.z, 0x5ff4ff, 10);
+        this.fx.arcTo(() => this.empOrigin(p.owner), () => (this.missiles.includes(m) ? m.pos.clone() : null), 0.3);
       }
       for (const o of this.boats) {
         if (o === p.owner || !o.alive || p.jolted.has(o)) continue;
         if (o.center(new THREE.Vector3()).distanceTo(center) > r + 1.5) continue;
         p.jolted.add(o);
-        if (p.owner.model.empOrb) this.fx.bolt(p.owner.model.empOrb.getWorldPosition(new THREE.Vector3()), o.center(), 0x2f6bff, 0.24, 0.35);
+        for (const id of o.items) {
+          if (ITEMS[id].group !== 'weapons') continue;
+          const module = o.model.modules[id];
+          if (!module) continue;
+          this.fx.arcTo(() => this.empOrigin(p.owner), () => (o.alive ? module.localToWorld(new THREE.Vector3(0, 0.9, 0)) : null));
+        }
         this.sfx.play('zap', o.pos);
         o.stun = Math.max(o.stun, 1.1);
         o.disabled = Math.max(o.disabled, 1.6);
@@ -1137,6 +1135,10 @@ export class Race {
       }
       return p.age < p.life;
     });
+  }
+
+  empOrigin(b) {
+    return b.alive ? b.model.empOrb.getWorldPosition(new THREE.Vector3()) : null;
   }
 
   updateLasers(dt) {

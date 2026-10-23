@@ -619,6 +619,7 @@ const MODULES = {
     const tankMat = mats.paint.clone();
     refs.heatMats.flamethrower = [tankMat];
     part(m, 'cylinder', mats.dark, 0, 0.3, -0.1, 0.55, 0.6, 0.55, 0.03);
+    part(m, 'cylinder', mats.paint, 0, 0.32, -0.1, 0.58, 0.16, 0.58, 0.02);
     for (const x of [-0.36, 0.36]) {
       part(m, 'capsule', tankMat, x, 1.15, -0.6, 0.6, 0.62, 0.6, 0.04);
       part(m, 'cylinder', mats.white, x, 1.15, -0.6, 0.32, 0.14, 0.32, 0.02);
@@ -644,7 +645,7 @@ const MODULES = {
     part(m, 'sphere', mats.dark, 0, 0.8, 0.25, 0.32, 0.32, 0.32, 0.03);
     const pipe = part(m, 'cylinder', mats.metal, 0, 0.8, 0.95, 0.13, 1.4, 0.13, 0.03);
     pipe.rotation.x = Math.PI / 2;
-    for (const z of [0.6, 1.1]) part(m, 'cylinder', mats.dark, 0, 0.8, z, 0.17, 0.1, 0.17, 0.02).rotation.x = Math.PI / 2;
+    for (const z of [0.45, 0.85, 1.25]) part(m, 'cylinder', mats.paint, 0, 0.8, z, 0.18, 0.12, 0.18, 0.02).rotation.x = Math.PI / 2;
     const nozzle = part(m, 'cone', mats.dark, 0, 0.8, 1.75, 0.24, 0.35, 0.24, 0.03);
     nozzle.rotation.x = -Math.PI / 2;
     const pilot = new THREE.Mesh(geo.smallSphere(), glow(0x6ac8ff));
@@ -759,8 +760,14 @@ const MODULES = {
 
   grapple(m, mats, refs) {
     part(m, 'sphere', mats.dark, 0, 0.35, 0, 0.6, 0.45, 0.6, 0.04);
-    const barrel = part(m, 'cylinder', mats.metal, 0, 0.75, 0.75, 0.24, 1.7, 0.24, 0.04);
+    part(m, 'cylinder', mats.paint, 0, 0.3, 0, 0.62, 0.16, 0.62, 0.02);
+    const barrel = new THREE.Group();
+    barrel.position.set(0, 0.75, 0.75);
     barrel.rotation.x = Math.PI / 2 - 0.25;
+    m.add(barrel);
+    part(barrel, 'cylinder', mats.metal, 0, 0, 0, 0.24, 1.7, 0.24, 0.04);
+    for (const y of [-0.5, 0.25]) part(barrel, 'cylinder', mats.paint, 0, y, 0, 0.28, 0.18, 0.28, 0.02);
+    part(barrel, 'cylinder', mats.paint, 0, 0.82, 0, 0.3, 0.12, 0.3, 0.02);
     const hook = new THREE.Group();
     hook.position.set(0, 0.97, 1.65);
     hook.rotation.x = -0.25;
@@ -768,6 +775,7 @@ const MODULES = {
     m.add(hook);
     hookHead(hook, mats.metal, mats.dark);
     refs.hookHead = hook;
+    part(m, 'cylinder', mats.paint, 0.75, 0.25, -0.2, 0.3, 0.32, 0.3, 0.02);
     part(m, 'ring', toon(0xc0874f), 0.75, 0.25, -0.2, 0.4, 0.4, 1.4, 0.03).rotation.x = Math.PI / 2;
     return { hookMount: new THREE.Vector3(0, 0.97, 1.7) };
   },

@@ -502,11 +502,11 @@ export class Loadout {
         this.fx.followRing(c, 0xffffff, 8, 0.55);
         this.fx.shell(c, 0x5ff4ff, 11, 0.7);
         for (let i = 0; i < 3; i++) this.fx.sparkBurst(c.x, c.y + 1, c.z, 0x5ff4ff, 10);
-        const orb = b.empOrb.getWorldPosition(new THREE.Vector3());
-        for (let i = 0; i < 10; i++) {
-          const a = (i / 10) * Math.PI * 2 + Math.random() * 0.5;
-          const reach = 5 + Math.random() * 7;
-          this.fx.bolt(orb, new THREE.Vector3(orb.x + Math.cos(a) * reach, 0.3 + Math.random() * 2, orb.z + Math.sin(a) * reach), 0x2f6bff, 0.2, 0.3);
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * Math.PI * 2 + Math.random() * 0.5;
+          const reach = 7 + Math.random() * 5;
+          const end = new THREE.Vector3(Math.cos(a) * reach, 0.2, Math.sin(a) * reach);
+          this.fx.arcTo(() => b.empOrb.getWorldPosition(new THREE.Vector3()), () => end, 0.4);
         }
         this.sfx.play('emp');
         break;
