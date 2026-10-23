@@ -12,8 +12,12 @@ await wait(500);
 async function race(items) {
   await page.evaluate((items) => window.__bb.setup.items.splice(0, 2, ...items), items);
   await page.evaluate(() => document.getElementById('btn-play').click());
+await new Promise((r) => setTimeout(r, 1400)); // PLAYWAIT
   await wait(150);
   await page.evaluate(() => document.getElementById('btn-start').click());
+await new Promise((r) => setTimeout(r, 1000));
+await page.evaluate(() => document.getElementById('btn-go').click());
+await new Promise((r) => setTimeout(r, 1000));
   await wait(4600);
   // Freeze the AI so only scripted actions happen.
   await page.evaluate(() => {

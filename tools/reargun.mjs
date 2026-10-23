@@ -8,8 +8,12 @@ await wait(500);
 async function trial(items, key, behind, label, shot) {
   await page.evaluate((items) => window.__bb.setup.items.splice(0, 2, ...items), items);
   await page.evaluate(() => document.getElementById('btn-play').click());
+await new Promise((r) => setTimeout(r, 1400)); // PLAYWAIT
   await wait(200);
   await page.evaluate(() => document.getElementById('btn-start').click());
+await new Promise((r) => setTimeout(r, 1000));
+await page.evaluate(() => document.getElementById('btn-go').click());
+await new Promise((r) => setTimeout(r, 1000));
   await wait(4600);
   await page.evaluate((behind) => {
     const r = window.__bb.race; const p = r.player;

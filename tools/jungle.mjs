@@ -8,9 +8,13 @@ await page.goto('http://localhost:5288/', { waitUntil: 'networkidle0' });
 await wait(300);
 await page.evaluate(() => { window.__bb.map = 'jungle'; });
 await page.evaluate(() => document.getElementById('btn-play').click());
+await new Promise((r) => setTimeout(r, 1400)); // PLAYWAIT
 await wait(200);
 const t0 = Date.now();
 await page.evaluate(() => document.getElementById('btn-start').click());
+await new Promise((r) => setTimeout(r, 1000));
+await page.evaluate(() => document.getElementById('btn-go').click());
+await new Promise((r) => setTimeout(r, 1000));
 console.log('start click took', Date.now() - t0, 'ms');
 await wait(1500);
 await page.screenshot({ path: 'tools/shots/jungle-start.png' });

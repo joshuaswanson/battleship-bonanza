@@ -13,8 +13,12 @@ await page.goto('http://localhost:5288/', { waitUntil: 'networkidle0' });
 if (process.argv[2]) await page.evaluate((m) => { window.__bb.map = m; }, process.argv[2]);
 await wait(500);
 await page.evaluate(() => document.getElementById('btn-play').click());
+await new Promise((r) => setTimeout(r, 1400)); // PLAYWAIT
 await wait(200);
 await page.evaluate(() => document.getElementById('btn-start').click());
+await new Promise((r) => setTimeout(r, 1000));
+await page.evaluate(() => document.getElementById('btn-go').click());
+await new Promise((r) => setTimeout(r, 1000));
 await page.evaluate(() => { window.__bb.autopilot = true; window.__bb.steps = 6; });
 const t0 = Date.now();
 let shot = 0;

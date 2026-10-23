@@ -6,8 +6,12 @@ const wait = (t) => new Promise((r) => setTimeout(r, t));
 await page.goto('http://localhost:5288/', { waitUntil: 'networkidle0' });
 await wait(500);
 await page.evaluate(() => document.getElementById('btn-play').click());
+await new Promise((r) => setTimeout(r, 1400)); // PLAYWAIT
 await wait(200);
 await page.evaluate(() => document.getElementById('btn-start').click());
+await new Promise((r) => setTimeout(r, 1000));
+await page.evaluate(() => document.getElementById('btn-go').click());
+await new Promise((r) => setTimeout(r, 1000));
 await wait(4600);
 await page.keyboard.down('KeyW');
 await page.keyboard.down('KeyD');

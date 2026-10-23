@@ -18,8 +18,12 @@ for (const [map, fn] of Object.entries(shots)) {
   await page.goto('http://localhost:5288/', { waitUntil: 'networkidle0' });
   await page.evaluate((m) => { window.__bb.map = m; }, map);
   await page.evaluate(() => document.getElementById('btn-play').click());
+await new Promise((r) => setTimeout(r, 1400)); // PLAYWAIT
   await wait(200);
   await page.evaluate(() => document.getElementById('btn-start').click());
+await new Promise((r) => setTimeout(r, 1000));
+await page.evaluate(() => document.getElementById('btn-go').click());
+await new Promise((r) => setTimeout(r, 1000));
   await wait(4500);
   await page.evaluate(() => { document.getElementById('ui').style.display = 'none'; document.getElementById('hud').style.display = 'none'; window.__bb.freeCam = true; });
   await page.evaluate(`(${fn.toString()})()`);

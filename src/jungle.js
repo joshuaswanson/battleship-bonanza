@@ -20,6 +20,9 @@ const JUNGLE_COLORS = {
   leafLime: 0x8ccf45,
   leafTeal: 0x1b8a5e,
   monstera: 0x1f7f45,
+  caveRock: 0x7a6a5a,
+  caveRockDark: 0x5b4d41,
+  caveRockLight: 0x958270,
   fern: 0x4cbf5a,
   vine: 0x3f7a2c,
   banana: 0x62d04c,
@@ -250,34 +253,86 @@ function buildRiver(track) {
 
 const GHOST = 45;
 
-function archPoint(track, k, theta, levelAt, extra = 0) {
-  const i = track.wrap(k);
-  const w = track.halfWidth + 7 + extra;
-  const lat = Math.cos(theta) * w;
-  const y = levelAt(k * track.spacing) + ARCH_FLOOR + (ARCH_TOP - ARCH_FLOOR) * Math.sin(theta);
-  return new THREE.Vector3(track.px[i] + track.nx[i] * lat, y, track.pz[i] + track.nz[i] * lat);
+const CAVE_STEPS = 30;
+
+function hash(a, b) {
+  const v = Math.sin(a * 127.1 + b * 311.7) * 43758.5453;
+  return v - Math.floor(v);
 }
 
-function buildTube(track, from, to, levelAt) {
-  const steps = 16;
+function rockOffset(k, j) {
+  const theta = (j / CAVE_STEPS) * Math.PI;
+  const lumps = 2.2 * Math.sin(k * 0.21 + j * 0.7) * Math.sin(k * 0.07 + j * 0.31 + 1.7);
+  const ledges = 1.6 * Math.max(0, Math.sin(k * 0.13 + j * 1.9)) ** 3;
+  const jag = 1.5 * (hash(k, j) - 0.5);
+  const ceiling = Math.sin(theta) ** 2;
+  let d = lumps + jag * (0.7 + ceiling) - ledges;
+  if (theta < 0.3 || theta > Math.PI - 0.3) d = Math.max(d, -1.2);
+  return d;
+}
+
+function profile(k, j, extra = 0) {
+  const theta = (j / CAVE_STEPS) * Math.PI;
+  const w = CAVE_HALF;
+  const h = ARCH_TOP - ARCH_FLOOR;
+  const d = rockOffset(k, j) + extra;
+  const nx = Math.cos(theta) * h;
+  const ny = Math.sin(theta) * w;
+  const n = Math.hypot(nx, ny);
+  return { lat: Math.cos(theta) * w + (d * nx) / n, up: ARCH_FLOOR + h * Math.sin(theta) + (d * ny) / n };
+}
+
+const CAVE_HALF = 29;
+
+function tubePoint(track, k, j, levelAt, extra = 0) {
+  const i = track.wrap(k);
+  const { lat, up } = profile(k, j, extra);
+  return new THREE.Vector3(track.px[i] + track.nx[i] * lat, levelAt(k * track.spacing) + up, track.pz[i] + track.nz[i] * lat);
+}
+
+function buildTube(track, from, to, levelAt, ends) {
   const positions = [];
   const colors = [];
-  const dark = new THREE.Color(0x4a4038);
-  const light = new THREE.Color(0x7d6d5c);
-  const moss = new THREE.Color(0x3f6f3a);
+  const tones = [new THREE.Color(0x6e5d4e), new THREE.Color(0x85725f), new THREE.Color(0x7a6655)];
+  const crack = new THREE.Color(0x3e342c);
+  const wet = new THREE.Color(0x3d4038);
+  const moss = new THREE.Color(0x4f8a3a);
   const c = new THREE.Color();
-  for (let k = from; k < to; k++) {
-    for (let j = 0; j < steps; j++) {
-      const t0 = (j / steps) * Math.PI;
-      const t1 = ((j + 1) / steps) * Math.PI;
-      const quad = [archPoint(track, k, t0, levelAt), archPoint(track, k + 1, t0, levelAt), archPoint(track, k, t1, levelAt), archPoint(track, k + 1, t1, levelAt)];
-      for (const idx of [0, 1, 2, 2, 1, 3]) {
-        const p = quad[idx];
-        const up = Math.sin(idx < 2 ? t0 : t1);
-        c.copy(dark).lerp(light, up);
-        if (noise(p.x * 4, p.z * 4 + p.y * 3) > 0.72) c.lerp(moss, 0.6);
-        positions.push(p.x, p.y, p.z);
-        colors.push(c.r, c.g, c.b);
+  const grid = [];
+  for (let k = from; k <= to + 1; k++) {
+    const row = [];
+    for (let j = 0; j <= CAVE_STEPS; j++) row.push(tubePoint(track, k, j, levelAt));
+    grid.push(row);
+  }
+  const tri = (a, b, d, k, j) => {
+    const level = levelAt(k * track.spacing);
+    const cy = (a.y + b.y + d.y) / 3 - level;
+    const band = Math.floor((cy + 1.2 * Math.sin(k * 0.17)) / 2.4);
+    c.copy(tones[((band % 3) + 3) % 3]);
+    c.multiplyScalar(0.88 + hash(k * 3 + 1, j * 5 + (a === d ? 1 : 0)) * 0.24);
+    if (hash(k + 0.5, j + 0.25) < 0.07) c.copy(crack);
+    if (cy < 1.4) c.lerp(wet, 0.75);
+    const nearMouth = Math.min(...ends.map((e) => Math.abs(k - e)));
+    if (nearMouth < 16 && hash(k * 1.3, j * 0.7) < 0.55 * (1 - nearMouth / 16)) c.lerp(moss, 0.8);
+    if (cy > 9) c.multiplyScalar(0.82);
+    for (const p of [a, b, d]) {
+      positions.push(p.x, p.y, p.z);
+      colors.push(c.r, c.g, c.b);
+    }
+  };
+  for (let r = 0; r < grid.length - 1; r++) {
+    const k = from + r;
+    for (let j = 0; j < CAVE_STEPS; j++) {
+      const p00 = grid[r][j];
+      const p10 = grid[r + 1][j];
+      const p01 = grid[r][j + 1];
+      const p11 = grid[r + 1][j + 1];
+      if (hash(k, j) < 0.5) {
+        tri(p00, p10, p01, k, j);
+        tri(p01, p10, p11, k, j);
+      } else {
+        tri(p00, p10, p11, k, j);
+        tri(p00, p11, p01, k, j);
       }
     }
   }
@@ -286,6 +341,54 @@ function buildTube(track, from, to, levelAt) {
   geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   geometry.computeVertexNormals();
   return new THREE.Mesh(geometry, toon(0xffffff, { vertexColors: true, side: THREE.DoubleSide }));
+}
+
+const CAVE_KEYS = ['caveRock', 'caveRockDark', 'caveRockLight'];
+const DRIP = new THREE.ConeGeometry(1, 1, 6).rotateX(Math.PI);
+
+function caveDetails(batch, track, from, to, levelAt) {
+  for (let k = from; k < to; k++) {
+    if (hash(k, 91) < 0.4) {
+      const j = Math.round(CAVE_STEPS * (0.28 + hash(k, 17) * 0.44));
+      const top = tubePoint(track, k, j, levelAt, -0.4);
+      const count = 1 + Math.floor(hash(k, 23) * 3);
+      for (let n = 0; n < count; n++) {
+        const len = 1.6 + hash(k, 30 + n) * 4;
+        const r = 0.35 + hash(k, 40 + n) * 0.6;
+        const ox = (hash(k, 50 + n) - 0.5) * 2.4;
+        const oz = (hash(k, 60 + n) - 0.5) * 2.4;
+        batch.add(CAVE_KEYS[(k + n) % 3], DRIP, mat(top.x + ox, top.y - len / 2 + 0.3, top.z + oz, r, len, r));
+      }
+    }
+    for (const side of [0, 1]) {
+      if (hash(k, 70 + side) > 0.32) continue;
+      const j = side ? CAVE_STEPS - 2 - Math.floor(hash(k, 80) * 2) : 2 + Math.floor(hash(k, 81) * 2);
+      const p = tubePoint(track, k, j, levelAt, -0.6);
+      const size = 1 + hash(k, 90 + side) * 1.8;
+      batch.add(CAVE_KEYS[(k + side) % 3], ROCK, mat(p.x, Math.max(p.y, levelAt(k * track.spacing) + size * 0.2), p.z, size, size * (0.6 + hash(k, 95) * 0.6), size, hash(k, 1), hash(k, 2) * 6, hash(k, 3)));
+      if (hash(k, 99 + side) < 0.3) {
+        const h = 1.5 + hash(k, 100) * 2.5;
+        batch.add(CAVE_KEYS[(k + 1) % 3], CONE, mat(p.x, levelAt(k * track.spacing) + h / 2, p.z, 0.7, h, 0.7));
+      }
+    }
+  }
+}
+
+function mouthRocks(batch, track, k, levelAt, toward, rand) {
+  const i = track.wrap(k);
+  for (let j = 0; j <= CAVE_STEPS; j += 1) {
+    for (let ring = 0; ring < 2; ring++) {
+      if (rand() < 0.25) continue;
+      const p = tubePoint(track, k, j, levelAt, 1.2 + ring * 3 + rand() * 1.5);
+      const size = 1.8 + rand() * 2.4 + ring * 0.8;
+      const along = toward * (rand() * 2.5 - 0.5);
+      batch.add(CAVE_KEYS[Math.floor(rand() * 3)], ROCK, mat(p.x + track.tx[i] * along, p.y, p.z + track.tz[i] * along, size, size * (0.7 + rand() * 0.5), size, rand() * 6, rand() * 6, rand() * 6));
+    }
+    if (j > 6 && j < CAVE_STEPS - 6 && rand() < 0.45) {
+      const p = tubePoint(track, k, j, levelAt, 0.5);
+      vine(batch, p.clone().add(new THREE.Vector3(track.tx[i] * toward * 1.2, 0, track.tz[i] * toward * 1.2)), 2 + rand() * 6, rand, new THREE.Vector3((rand() - 0.5) * 0.8, 0, (rand() - 0.5) * 0.8));
+    }
+  }
 }
 
 function buildShell(track, from, to) {
@@ -321,7 +424,7 @@ function buildShell(track, from, to) {
 }
 
 function buildMouth(track, k, levelAt, top) {
-  const hw = track.halfWidth + 10;
+  const hw = track.halfWidth + 14;
   const i = track.wrap(k);
   const base = levelAt(k * track.spacing);
   const shape = new THREE.Shape();
@@ -331,17 +434,14 @@ function buildMouth(track, k, levelAt, top) {
   shape.lineTo(-hw, top);
   shape.closePath();
   const hole = new THREE.Path();
-  for (let j = 0; j <= 24; j++) {
-    const theta = (j / 24) * Math.PI;
-    const w = track.halfWidth + 7;
-    const x = Math.cos(theta) * w;
-    const y = base + ARCH_FLOOR + (ARCH_TOP - ARCH_FLOOR) * Math.sin(theta);
-    if (j === 0) hole.moveTo(x, y);
-    else hole.lineTo(x, y);
+  for (let j = 0; j <= CAVE_STEPS; j++) {
+    const { lat, up } = profile(k, j);
+    if (j === 0) hole.moveTo(lat, base + up);
+    else hole.lineTo(lat, base + up);
   }
   shape.holes.push(hole);
   const geometry = new THREE.ShapeGeometry(shape);
-  const mesh = outlined(geometry, toon(0x8b7d6e, { side: THREE.DoubleSide }), 0);
+  const mesh = new THREE.Mesh(geometry, toon(0x6e5d4e, { side: THREE.DoubleSide }));
   const basis = new THREE.Matrix4().makeBasis(
     new THREE.Vector3(track.nx[i], 0, track.nz[i]),
     new THREE.Vector3(0, 1, 0),
@@ -368,8 +468,7 @@ function buildCrystals(track, from, to, levelAt) {
   for (let k = from; k < to; k++) {
     if (k % 11 !== 0) continue;
     for (const side of [-1, 1]) {
-      const theta = side < 0 ? Math.PI - 0.5 : 0.5;
-      const p = archPoint(track, k, theta, levelAt, -0.6);
+      const p = tubePoint(track, k, side < 0 ? CAVE_STEPS - 5 : 5, levelAt, -0.8);
       for (let n = 0; n < 3; n++) {
         const seed = Math.sin((k * 7 + n * 13 + side * 5) * 12.9898) * 43758.5453;
         const r = seed - Math.floor(seed);
@@ -394,8 +493,17 @@ function buildTunnel(track) {
   const low = lowLevel(track);
   const high = copyLevel(track);
   const group = new THREE.Group();
-  group.add(buildTube(track, kIn, kOut, low));
-  group.add(buildTube(track, kSeam - GHOST, kOut, high));
+  group.add(buildTube(track, kIn, kOut, low, [kIn, kOut]));
+  group.add(buildTube(track, kSeam - GHOST, kOut, high, [kIn, kOut]));
+  const batch = new Batcher();
+  caveDetails(batch, track, kIn, kOut, low);
+  caveDetails(batch, track, kSeam - GHOST, kOut, high);
+  const rand = mulberry32(4411);
+  mouthRocks(batch, track, kIn, low, -1, rand);
+  mouthRocks(batch, track, kOut, high, 1, rand);
+  const details = new THREE.Group();
+  batch.build(details, 0.08, JUNGLE_COLORS);
+  group.add(details);
   group.add(buildCrystals(track, kIn, kOut, low));
   group.add(buildCrystals(track, kSeam - GHOST, kOut, high));
   group.add(buildShell(track, kIn, kOut));

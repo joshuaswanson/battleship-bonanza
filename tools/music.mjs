@@ -9,9 +9,13 @@ await wait(1500);
 const state = () => page.evaluate(() => { const m = window.__bb.sfx?.music; return m ? `paused=${m.paused} t=${m.currentTime.toFixed(1)} dur=${m.duration.toFixed(0)} err=${m.error?.code ?? 'none'}` : 'no handle'; });
 console.log('title', await state());
 await page.evaluate(() => document.getElementById('btn-play').click());
+await new Promise((r) => setTimeout(r, 1400)); // PLAYWAIT
 await wait(800);
 console.log('shipyard', await state());
 await page.evaluate(() => document.getElementById('btn-start').click());
+await new Promise((r) => setTimeout(r, 1000));
+await page.evaluate(() => document.getElementById('btn-go').click());
+await new Promise((r) => setTimeout(r, 1000));
 await wait(800);
 console.log('race', await state());
 await browser.close();

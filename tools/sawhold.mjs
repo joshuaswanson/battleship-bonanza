@@ -8,8 +8,12 @@ await page.evaluate(() => { window.__bb.map = 'bay'; });
 await wait(500);
 await page.evaluate(() => window.__bb.setup.items.splice(0, 2, 'saw', 'jetpack'));
 await page.evaluate(() => document.getElementById('btn-play').click());
+await new Promise((r) => setTimeout(r, 1400)); // PLAYWAIT
 await wait(200);
 await page.evaluate(() => document.getElementById('btn-start').click());
+await new Promise((r) => setTimeout(r, 1000));
+await page.evaluate(() => document.getElementById('btn-go').click());
+await new Promise((r) => setTimeout(r, 1000));
 await wait(4800);
 await page.evaluate(() => {
   const r = window.__bb.race; const p = r.player;

@@ -9,8 +9,12 @@ await page.evaluate(() => window.__bb.setup.items.splice(0, 2, 'grapple', 'laser
 let found = false;
 for (let attempt = 0; attempt < 8 && !found; attempt++) {
   await page.evaluate(() => document.getElementById('btn-play').click());
+await new Promise((r) => setTimeout(r, 1400)); // PLAYWAIT
   await wait(200);
   await page.evaluate(() => document.getElementById('btn-start').click());
+await new Promise((r) => setTimeout(r, 1000));
+await page.evaluate(() => document.getElementById('btn-go').click());
+await new Promise((r) => setTimeout(r, 1000));
   await wait(300);
   found = await page.evaluate(() => window.__bb.race.boats.some((b) => !b.isPlayer && b.has('spikes')));
   if (!found) { await page.keyboard.press('Escape'); await wait(100); await page.evaluate(() => document.getElementById('btn-quit').click()); await wait(200); }
