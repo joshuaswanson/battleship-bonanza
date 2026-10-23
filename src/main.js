@@ -47,7 +47,7 @@ function loadSetup() {
     const saved = JSON.parse(localStorage.getItem('bb-setup'));
     if (saved && Array.isArray(saved.items) && saved.items.every((id) => ITEMS[id])) return saved;
   } catch {}
-  return { name: 'Sea Biscuit', color: PAINTS[0].value, items: ['spikes', 'machinegun'] };
+  return { name: 'Sea Biscuit', color: PAINTS[0].value, items: ['jetpack', 'machinegun'] };
 }
 const setup = loadSetup();
 const saveSetup = () => localStorage.setItem('bb-setup', JSON.stringify(setup));
@@ -271,7 +271,7 @@ function frame(now) {
   if (mode !== 'paused') {
     time += dt;
     const playerInput = mode === 'race' || mode === 'results'
-      ? { throttle: state.throttle, steer: state.steer, use0: pressed.has('item0'), use1: pressed.has('item1') }
+      ? { throttle: state.throttle, steer: state.steer, use0: pressed.has('item0'), use1: pressed.has('item1'), hold0: state.hold0, hold1: state.hold1 }
       : null;
     const steps = import.meta.env.DEV ? (window.__bb?.steps ?? 1) : 1;
     for (let i = 0; i < steps; i++) race.update(dt, time + (i * dt), import.meta.env.DEV && window.__bb?.autopilot ? null : playerInput);

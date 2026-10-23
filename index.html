@@ -28,13 +28,13 @@
       <section id="screen-loadout" class="screen hidden">
         <div class="yard">
           <div class="stage-col">
+            <canvas id="preview"></canvas>
             <header class="yard-head">
               <button id="btn-back" class="btn btn-small">Back</button>
               <div class="mini-logo" data-logo></div>
             </header>
             <div class="stage" id="stage">
-              <canvas id="preview"></canvas>
-              <p class="stage-hint">Drag to spin your boat. Press <kbd>O</kbd> or <kbd>P</kbd> to test fire.</p>
+              <p class="stage-hint">Drag to spin your boat. Press or hold <kbd>O</kbd> and <kbd>P</kbd> to test fire.</p>
             </div>
             <div class="boat-card">
               <h2 class="combo" id="combo-name">The Plain Dinghy</h2>
@@ -52,14 +52,13 @@
               </div>
             </div>
           </div>
-          <aside class="tray">
-            <div class="item-groups" id="item-groups"></div>
-            <div class="item-detail" id="item-detail"></div>
-            <div class="tray-actions">
-              <button id="btn-surprise" class="btn">Surprise me</button>
-              <button id="btn-start" class="btn btn-big">Start race</button>
-            </div>
-          </aside>
+          <div class="tray-col">
+            <aside class="tray">
+              <div class="item-groups" id="item-groups"></div>
+              <div class="item-detail" id="item-detail"></div>
+            </aside>
+            <button id="btn-start" class="btn btn-big btn-launch">Start race</button>
+          </div>
         </div>
       </section>
 

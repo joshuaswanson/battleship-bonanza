@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GROUPS, ITEMS, ITEM_IDS, STATS, statsFor, comboName } from './items.js';
-import { buildBoat, buildItemModel, buildMine, buildMissile, buildHook, HULL_L } from './boatModel.js';
+import { buildBoat, buildItemModel, buildMine, buildMissile, buildHook, aimTurret, updateAimers, stepGun, stepLaser, newHeat, gunDirection, laserDirection, reloadMine, updateMineHolder } from './boatModel.js';
 import { createWater, waveHeight } from './water.js';
 import { Effects } from './effects.js';
 import { SUN_DIR } from './world.js';
@@ -19,14 +19,7 @@ const $ = (id) => document.getElementById(id);
 const hex = (n) => `#${n.toString(16).padStart(6, '0')}`;
 const groupOf = (id) => GROUPS.find((g) => g.id === ITEMS[id].group);
 const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
-const easeOutBack = (t) => 1 + 2.7 * Math.pow(t - 1, 3) + 1.7 * Math.pow(t - 1, 2);
-const easeOutBounce = (t) => {
-  if (t < 1 / 2.75) return 7.5625 * t * t;
-  if (t < 2 / 2.75) return 7.5625 * (t -= 1.5 / 2.75) * t + 0.75;
-  if (t < 2.5 / 2.75) return 7.5625 * (t -= 2.25 / 2.75) * t + 0.9375;
-  return 7.5625 * (t -= 2.625 / 2.75) * t + 0.984375;
-};
-const POOL_RADIUS = 12.5;
+const POOL_RADIUS = 10.5;
 
 function renderThumbnails() {
   const size = 220;
@@ -69,11 +62,20 @@ export class Loadout {
     this.buildIdentity();
     this.initPreview();
     $('btn-surprise').addEventListener('click', () => this.surprise());
+    this.heat = { machinegun: newHeat(), laser: newHeat() };
+    this.heldSlots = new Set();
+    this.autoFire = { machinegun: 0, laser: 0 };
+    const slotFor = { KeyO: 0, KeyP: 1 };
     addEventListener('keydown', (e) => {
       if (!this.active || e.target instanceof HTMLInputElement || e.repeat) return;
-      if (e.code === 'KeyO') this.demo(0);
-      if (e.code === 'KeyP') this.demo(1);
+      const slot = slotFor[e.code];
+      if (slot === undefined) return;
+      this.sfx.unlock();
+      if (ITEMS[this.setup.items[slot]]?.hold) this.heldSlots.add(slot);
+      else this.demo(slot);
     });
+    addEventListener('keyup', (e) => this.heldSlots.delete(slotFor[e.code]));
+    addEventListener('blur', () => this.heldSlots.clear());
     this.refresh();
   }
 
@@ -91,10 +93,11 @@ export class Loadout {
               </button>`,
             )
             .join('')}
+          ${g.id === 'weapons' ? '<button class="tile tile-random" id="btn-surprise"><span class="dice">?</span><span class="tile-name">Surprise me</span></button>' : ''}
         </div>
       </section>`,
     ).join('');
-    this.tiles = [...document.querySelectorAll('.tile')];
+    this.tiles = [...document.querySelectorAll('.tile[data-id]')];
     for (const tile of this.tiles) {
       const id = tile.dataset.id;
       tile.addEventListener('click', () => this.toggle(id, tile));
@@ -136,43 +139,22 @@ export class Loadout {
     if (at >= 0) {
       items.splice(at, 1);
       this.sfx.play('plop');
-      this.refresh();
-      this.puffBoat();
+    } else if (items.length >= 2) {
+      this.sfx.play('nope');
+      tile.classList.remove('full');
+      void tile.offsetWidth;
+      tile.classList.add('full');
       return;
+    } else {
+      items.push(id);
+      this.detailId = id;
+      this.sfx.play('pick');
+      tile.classList.remove('picked');
+      void tile.offsetWidth;
+      tile.classList.add('picked');
     }
-    if (items.length >= 2) items.shift();
-    items.push(id);
-    this.sfx.play('pick');
-    this.detailId = id;
-    this.refreshTray();
-    tile.classList.remove('picked');
-    void tile.offsetWidth;
-    tile.classList.add('picked');
-    this.flyToBoat(tile, () => this.refresh({ added: id }));
-  }
-
-  flyToBoat(tile, done) {
-    if (reducedMotion()) return done();
-    const img = tile.querySelector('img');
-    const from = img.getBoundingClientRect();
-    const to = this.canvas.getBoundingClientRect();
-    const ghost = img.cloneNode();
-    ghost.className = 'flyer';
-    Object.assign(ghost.style, { left: `${from.left}px`, top: `${from.top}px`, width: `${from.width}px`, height: `${from.height}px` });
-    document.body.append(ghost);
-    const dx = to.left + to.width * 0.5 - (from.left + from.width / 2);
-    const dy = to.top + to.height * 0.42 - (from.top + from.height / 2);
-    ghost.animate(
-      [
-        { transform: 'translate(0, 0) scale(1) rotate(0deg)' },
-        { transform: `translate(${dx * 0.5}px, ${dy * 0.5 - 160}px) scale(1.5) rotate(-25deg)`, offset: 0.45 },
-        { transform: `translate(${dx}px, ${dy}px) scale(0.35) rotate(-50deg)`, opacity: 0.3 },
-      ],
-      { duration: 560, easing: 'cubic-bezier(0.45, 0, 0.55, 1)' },
-    ).onfinish = () => {
-      ghost.remove();
-      done();
-    };
+    this.refresh();
+    this.squashVel -= 4;
   }
 
   surprise() {
@@ -180,18 +162,18 @@ export class Loadout {
     this.sfx.unlock();
     this.spinning = true;
     const pick = [...ITEM_IDS].sort(() => Math.random() - 0.5).slice(0, 2);
-    let steps = reducedMotion() ? 0 : 22;
+    let steps = reducedMotion() ? 0 : 16;
     let delay = 45;
     let last = null;
     const tick = () => {
       last?.classList.remove('lit');
       if (steps-- <= 0) {
-        this.setup.items.length = 0;
+        this.setup.items.splice(0, this.setup.items.length, ...pick);
+        this.detailId = pick[1];
         this.spinning = false;
-        const first = this.tiles.find((t) => t.dataset.id === pick[0]);
-        const second = this.tiles.find((t) => t.dataset.id === pick[1]);
-        this.toggle(pick[0], first);
-        setTimeout(() => this.toggle(pick[1], second), 260);
+        this.sfx.play('pick');
+        this.refresh();
+        this.squashVel -= 6;
         return;
       }
       last = this.tiles[Math.floor(Math.random() * this.tiles.length)];
@@ -227,10 +209,12 @@ export class Loadout {
       tile.setAttribute('aria-pressed', slot >= 0 ? 'true' : 'false');
       tile.querySelector('.tile-key').textContent = slot === 0 ? 'O' : slot === 1 ? 'P' : '';
     }
-    $('btn-start').disabled = items.length < 2;
+    const start = $('btn-start');
+    start.disabled = items.length < 2;
+    start.textContent = items.length === 2 ? 'Start race' : `Pick ${2 - items.length} more attachment${items.length === 1 ? '' : 's'}`;
   }
 
-  refresh({ added = null } = {}) {
+  refresh() {
     const { items, color } = this.setup;
     this.refreshTray();
     for (const swatch of document.querySelectorAll('.swatch')) {
@@ -271,7 +255,7 @@ export class Loadout {
     this.prevStats = stats;
 
     this.renderDetail();
-    this.rebuildBoat(added);
+    this.rebuildBoat();
     this.onChange();
   }
 
@@ -307,7 +291,6 @@ export class Loadout {
     this.spinVel = 0;
     this.squash = 0;
     this.squashVel = 0;
-    this.drops = [];
     this.timers = [];
     this.movers = [];
     this.jump = null;
@@ -332,29 +315,35 @@ export class Loadout {
     canvas.addEventListener('pointerup', () => (dragging = null));
     canvas.addEventListener('pointercancel', () => (dragging = null));
 
-    new ResizeObserver(() => {
+    const stage = $('stage');
+    const frame = () => {
       const { clientWidth: w, clientHeight: h } = canvas;
       if (!w || !h) return;
       this.renderer.setSize(w, h, false);
       this.camera.aspect = w / h;
-      const narrow = Math.max(1, 1.6 / (w / h));
-      this.camera.position.set(12 * narrow, 7.6 * narrow, 14.8 * narrow);
+      const canvasBox = canvas.getBoundingClientRect();
+      const stageBox = stage.getBoundingClientRect();
+      const halfFov = THREE.MathUtils.degToRad(this.camera.fov / 2);
+      const fitWidth = (POOL_RADIUS + 2.4) / (Math.tan(halfFov) * this.camera.aspect);
+      const fitHeight = (POOL_RADIUS * 0.75) / Math.tan(halfFov) / (stageBox.height / h);
+      const dist = Math.max(fitWidth, fitHeight, 24);
+      this.camera.position.set(12, 7.6, 14.8).setLength(dist);
       this.camera.lookAt(0, 0.9, 0);
+      const shift = canvasBox.top + h / 2 - (stageBox.top + stageBox.height / 2);
+      this.camera.setViewOffset(w, h, 0, shift, w, h);
       this.camera.updateProjectionMatrix();
       if (this.boat) this.render(0);
-    }).observe(canvas);
+    };
+    const observer = new ResizeObserver(frame);
+    observer.observe(canvas);
+    observer.observe(stage);
   }
 
-  rebuildBoat(added) {
+  rebuildBoat() {
     if (this.boat) this.scene.remove(this.boat.root);
+    this.heat = { machinegun: newHeat(), laser: newHeat() };
     this.boat = buildBoat(this.setup.color, this.setup.items);
     this.scene.add(this.boat.root);
-    this.drops = [];
-    if (added && this.boat.parts[added] && !reducedMotion()) {
-      const part = this.boat.parts[added];
-      this.drops.push({ part, t: 0, base: part.position.clone(), mounted: part.position.y > 0.5 });
-      part.visible = false;
-    }
   }
 
   after(delay, fn) {
@@ -390,27 +379,9 @@ export class Loadout {
     const up = new THREE.Vector3(0, 1, 0);
     switch (id) {
       case 'machinegun':
-        this.gunSpin = 1.3;
-        for (let i = 0; i < 14; i++) {
-          this.after(i * 0.07, () => {
-            const o = this.world(b.gunMount);
-            const end = o
-              .clone()
-              .addScaledVector(this.forward(), 30)
-              .add(new THREE.Vector3((Math.random() - 0.5) * 2, Math.random() * 1.5, (Math.random() - 0.5) * 2));
-            this.fx.beam(o, end, 0xffe066, 0.12, 0.12);
-            this.sfx.play('shoot');
-          });
-        }
+      case 'laser':
+        this.autoFire[id] = 1.6;
         break;
-      case 'laser': {
-        const o = this.world(b.laserMount);
-        this.fx.beam(o, o.clone().addScaledVector(fwd, 45), 0xff4fd8, 0.6, 0.5);
-        this.fx.sparkBurst(o.x, o.y, o.z, 0xff4fd8, 12);
-        this.sfx.play('laser');
-        this.squashVel -= 3;
-        break;
-      }
       case 'saw':
         this.sawBoost = 1.4;
         this.lunge = 1;
@@ -424,7 +395,8 @@ export class Loadout {
         break;
       case 'missiles': {
         const mesh = buildMissile();
-        mesh.position.copy(this.world(b.missileMount));
+        aimTurret(b, 'missiles');
+        b.missileMount.getWorldPosition(mesh.position);
         this.scene.add(mesh);
         this.movers.push({
           mesh,
@@ -442,12 +414,15 @@ export class Loadout {
         break;
       }
       case 'mines': {
+        if (b.mineReload != null) return;
         const mesh = buildMine();
-        mesh.position.copy(this.world(new THREE.Vector3(0, 1.4, -HULL_L - 0.5)));
+        b.mineMount.getWorldPosition(mesh.position);
         this.scene.add(mesh);
+        reloadMine(b);
+        this.after(0.5, () => this.sfx.play('clank'));
         this.movers.push({
           mesh,
-          vel: fwd.clone().multiplyScalar(-6).addScaledVector(up, 6),
+          vel: fwd.clone().multiplyScalar(-6).addScaledVector(up, 9),
           gravity: 20,
           life: 2.2,
           float: true,
@@ -466,6 +441,7 @@ export class Loadout {
         this.sfx.play('whoosh');
         break;
       case 'grapple': {
+        aimTurret(b, 'grapple');
         const hook = buildHook();
         const rope = new THREE.Mesh(
           new THREE.CylinderGeometry(0.07, 0.07, 1, 6, 1, true).rotateX(Math.PI / 2).translate(0, 0, 0.5),
@@ -513,6 +489,53 @@ export class Loadout {
     }
   }
 
+  stepGun(dt) {
+    const b = this.boat;
+    const gun = this.heat.machinegun;
+    const { shots, overheatedNow } = stepGun(gun, b, dt, this.time);
+    for (let i = 0; i < shots; i++) {
+      const o = b.gunMount.getWorldPosition(new THREE.Vector3());
+      const dir = gunDirection(b, new THREE.Vector3());
+      dir.x += (Math.random() - 0.5) * 0.16;
+      dir.y += (Math.random() - 0.4) * 0.08;
+      dir.z += (Math.random() - 0.5) * 0.16;
+      this.fx.beam(o, o.clone().addScaledVector(dir.normalize(), 28), 0xffe066, 0.12, 0.1, 2);
+      this.sfx.play('shoot');
+    }
+    this.afterHeat('machinegun', overheatedNow, b.gunMount);
+  }
+
+  stepLaser(dt) {
+    const b = this.boat;
+    const { beaming, overheatedNow } = stepLaser(this.heat.laser, b, dt, this.time);
+    this.afterHeat('laser', overheatedNow, b.laserMount);
+    this.laserHum = beaming ? (this.laserHum ?? 0) - dt : 0;
+    if (!beaming) return;
+    if (this.laserHum <= 0) {
+      this.laserHum = 1.25;
+      this.sfx.play('laser');
+    }
+    const origin = b.laserMount.getWorldPosition(new THREE.Vector3());
+    const dir = laserDirection(b, new THREE.Vector3());
+    dir.y = 0;
+    const reach = 9;
+    dir.normalize().setY(-(origin.y - 0.2) / reach).normalize();
+    const end = origin.clone().addScaledVector(dir, reach * Math.hypot(1, (origin.y - 0.2) / reach));
+    this.fx.beam(origin, end, 0xff4fd8, 0.5, 0.05, 1);
+    this.fx.scorch(end.x, waveHeight(end.x, end.z, this.time) + 0.15, end.z);
+  }
+
+  afterHeat(id, overheatedNow, mount) {
+    if (overheatedNow) {
+      this.autoFire[id] = 0;
+      this.sfx.play('overheat');
+    }
+    if (this.heat[id].overheated && Math.random() < 0.4) {
+      const p = mount.getWorldPosition(new THREE.Vector3());
+      this.fx.smoke(p.x, p.y + 0.3, p.z);
+    }
+  }
+
   setFade(opacity) {
     const fading = opacity < 0.999;
     for (const m of this.boat.materials) {
@@ -537,12 +560,13 @@ export class Loadout {
     if (this.jump) {
       this.jump.t += dt;
       const u = this.jump.t / this.jump.dur;
-      lift = 6 * 4 * u * (1 - u);
+      lift = 2.4 * 4 * u * (1 - u);
       for (const f of flames) {
         f.visible = true;
         f.scale.set(0.32 + Math.random() * 0.1, 1.6 + Math.random() * 0.8, 0.32 + Math.random() * 0.1);
         const p = f.getWorldPosition(new THREE.Vector3());
-        this.fx.flame(p.x, p.y - 0.4, p.z);
+        const back = this.forward().negate();
+        this.fx.flame(p.x + back.x * 0.6, p.y, p.z + back.z * 0.6, back.x * 10, -1, back.z * 10);
       }
       if (u >= 1) {
         this.jump = null;
@@ -572,30 +596,17 @@ export class Loadout {
 
     this.sawBoost = Math.max(0, this.sawBoost - dt);
     if (saw) saw.rotation.x += dt * (this.sawBoost > 0 ? 45 : 6);
-    this.gunSpin = Math.max(0, (this.gunSpin ?? 0) - dt);
-    if (b.minigun) b.minigun.rotation.z += dt * (this.gunSpin > 0 ? 30 : 1.5);
+    updateAimers(b, dt);
+    updateMineHolder(b, dt);
+    for (const id of ['machinegun', 'laser']) {
+      this.autoFire[id] = Math.max(0, this.autoFire[id] - dt);
+      const slot = this.setup.items.indexOf(id);
+      this.heat[id].trigger = slot >= 0 && (this.heldSlots.has(slot) || this.autoFire[id] > 0);
+    }
+    if (b.minigun) this.stepGun(dt);
+    if (b.laserMount) this.stepLaser(dt);
     for (const sp of spinners) sp.mesh.rotation[sp.axis] += sp.speed * dt;
     flag.rotation.y = Math.sin(this.time * 9) * 0.25;
-
-    for (const drop of this.drops) {
-      drop.t = Math.min(1, drop.t + dt / 0.6);
-      drop.part.visible = true;
-      if (drop.mounted) {
-        drop.part.position.copy(drop.base);
-        drop.part.position.y += (1 - easeOutBounce(drop.t)) * 7;
-        drop.part.scale.setScalar(Math.min(1, 0.4 + drop.t * 1.2));
-      } else {
-        drop.part.scale.setScalar(Math.max(0.01, easeOutBack(drop.t)));
-      }
-      if (drop.t >= 1 && !drop.landed) {
-        drop.landed = true;
-        const p = this.world(drop.base);
-        this.fx.sparkBurst(p.x, p.y + 0.5, p.z, 0xffe066, 14);
-        this.fx.ring(p.x, p.y + 0.2, p.z, 0xffffff, 1, 4, 0.4);
-        this.splashBoat(0.8);
-        this.sfx.play('drop');
-      }
-    }
 
     const due = this.timers.filter((t) => t.at <= this.time);
     this.timers = this.timers.filter((t) => t.at > this.time);
@@ -605,7 +616,7 @@ export class Loadout {
       m.life -= dt;
       if (m.grapple) {
         m.t += dt;
-        const from = this.world(b.hookMount);
+        const from = b.hookMount.getWorldPosition(new THREE.Vector3());
         const k = m.t < 0.45 ? m.t / 0.45 : Math.max(0, 1 - (m.t - 0.45) / 0.45);
         const to = from.clone().addScaledVector(this.forward(), 24 * k).add(new THREE.Vector3(0, 2 * k, 0));
         m.mesh.position.copy(to);
@@ -619,10 +630,16 @@ export class Loadout {
           this.fx.splash(m.mesh.position.x, m.mesh.position.y, m.mesh.position.z, 0.5);
         }
         m.mesh.position.y = waveHeight(m.mesh.position.x, m.mesh.position.z, this.time) - 0.3;
+        m.mesh.rotation.x *= Math.exp(-4 * dt);
+        m.mesh.rotation.z *= Math.exp(-4 * dt);
         m.mesh.userData.light.visible = (this.time * 4) % 1 < 0.5;
       } else {
         m.vel.y -= m.gravity * dt;
         m.mesh.position.addScaledVector(m.vel, dt);
+        if (m.float) {
+          m.mesh.rotation.x += dt * 7;
+          m.mesh.rotation.z += dt * 4.5;
+        }
         if (m.trail) {
           m.mesh.lookAt(m.mesh.position.clone().add(m.vel));
           this.fx.smoke(m.mesh.position.x, m.mesh.position.y, m.mesh.position.z);
