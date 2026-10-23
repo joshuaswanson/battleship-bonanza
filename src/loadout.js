@@ -263,7 +263,7 @@ export class Loadout {
     this.timers = [];
     this.movers = [];
     this.jump = null;
-    this.lunge = 0;
+    this.sawSpin = 0;
     this.sawBoost = 0;
     this.fade = 0;
     this.bristle = 0;
@@ -344,7 +344,7 @@ export class Loadout {
     const id = this.setup.items[slot];
     if (!id || !this.boat) return;
     this.sfx.unlock();
-    this.busy[id] = 2.2;
+    this.busy[id] = id === 'saw' ? 1.8 : 2.2;
     const b = this.boat;
     const fwd = this.forward();
     const up = new THREE.Vector3(0, 1, 0);
@@ -354,13 +354,12 @@ export class Loadout {
         this.autoFire[id] = 1.6;
         break;
       case 'saw':
-        this.sawBoost = 1.4;
-        this.lunge = 1;
+        this.sawBoost = 1.6;
         this.sfx.play('saw');
-        for (let i = 0; i < 6; i++) {
-          this.after(0.1 + i * 0.12, () => {
+        for (let i = 0; i < 8; i++) {
+          this.after(0.15 + i * 0.16, () => {
             const p = b.saw.getWorldPosition(new THREE.Vector3());
-            this.fx.sparkBurst(p.x, p.y, p.z, 0xffe066, 8);
+            this.fx.sparkBurst(p.x, p.y, p.z, i % 2 ? 0xff9ef0 : 0xffe066, 8);
           });
         }
         break;
@@ -468,6 +467,7 @@ export class Loadout {
     this.boat.swivels.forEach((s, i) => {
       this.busy[s.id] = Math.max(0, (this.busy[s.id] ?? 0) - dt);
       const busy = this.busy[s.id] > 0 || this.heat[s.id]?.trigger;
+      s.group.rotation.y = Math.atan2(Math.sin(s.group.rotation.y), Math.cos(s.group.rotation.y));
       const wave = Math.sin(this.time * 0.8 + i * 2.1);
       const target = busy ? 0 : 0.55 * Math.sign(wave) * Math.sqrt(Math.abs(wave));
       s.group.rotation.y += (target - s.group.rotation.y) * (1 - Math.exp(-(busy ? 12 : 3) * dt));
@@ -560,10 +560,7 @@ export class Loadout {
         this.sfx.play('splash');
       }
     }
-    this.lunge = Math.max(0, this.lunge - dt * 1.6);
-    const lungeOffset = Math.sin(this.lunge * Math.PI) * 3;
-    const fwd = this.forward();
-    root.position.set(fwd.x * lungeOffset, waveHeight(0, 0, this.time) + 0.35 + lift, fwd.z * lungeOffset);
+    root.position.set(0, waveHeight(0, 0, this.time) + 0.35 + lift, 0);
     body.rotation.z = Math.sin(this.time * 1.3) * 0.05;
     body.rotation.x = Math.cos(this.time * 1.1) * 0.04 - (this.jump ? 0.15 : 0);
 
@@ -580,7 +577,14 @@ export class Loadout {
     }
 
     this.sawBoost = Math.max(0, this.sawBoost - dt);
-    if (saw) saw.rotation.x += dt * (this.sawBoost > 0 ? 45 : 6);
+    if (saw) {
+      const active = this.sawBoost > 0;
+      this.sawSpin += ((active ? 42 : 0) - this.sawSpin) * (1 - Math.exp(-(active ? 6 : 2) * dt));
+      saw.rotation.x += this.sawSpin * dt;
+      if (active) b.sawYaw.rotation.y += dt * 4.5;
+      const glowAmount = active ? 0.55 + 0.25 * Math.sin(this.time * 45) : 0;
+      b.sawShield.material.opacity += (glowAmount - b.sawShield.material.opacity) * (1 - Math.exp(-14 * dt));
+    }
     updateAimers(b, dt);
     this.swivelIdle(dt);
     updateMineHolder(b, dt);

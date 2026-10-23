@@ -358,18 +358,22 @@ kbd {
 }
 
 .slots {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 0.5rem;
 }
 
 .slot-chip {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 0.55rem;
-  height: 56px;
-  padding: 0.3rem 0.7rem 0.3rem 0.45rem;
-  font: 600 1rem var(--ui);
+  justify-content: center;
+  gap: 0.2rem;
+  height: 124px;
+  padding: 0.4rem 0.5rem;
+  position: relative;
+  font: 600 0.92rem var(--ui);
+  line-height: 1.15;
   color: var(--ink);
   text-align: left;
   background: color-mix(in srgb, var(--tile) 30%, #ffffff);
@@ -391,8 +395,18 @@ kbd {
 }
 
 .slot-chip img {
-  width: 40px;
-  height: 40px;
+  width: 64px;
+  height: 64px;
+}
+
+.slot-chip kbd {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+}
+
+.slot-chip span {
+  text-align: center;
 }
 
 .slot-chip.empty {
