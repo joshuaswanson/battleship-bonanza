@@ -802,12 +802,21 @@ function addArch(batch, track, fraction, rand) {
   const thick = 5 + rand() * 1.5;
   const p = track.point(idx, 0);
   const heading = track.heading(idx);
-  batch.add('rockland', archGeometry(span, height, thick, rand), mat(p.x, 0, p.z, 1, 1, 1, 0, heading, 0));
+  const slab = archGeometry(span, height, thick, rand).applyMatrix4(mat(p.x, 0, p.z, 1, 1, 1, 0, heading, 0));
+  batch.add('rockland', slab);
   const nx = track.nx[idx];
   const nz = track.nz[idx];
+  const probe = new THREE.Mesh(slab, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+  const ray = new THREE.Raycaster();
   for (let k = -3; k <= 3; k++) {
     const lat = (k / 3) * span * 0.75;
-    plantTop(batch, p.x + nx * lat, height + thick * 0.55, p.z + nz * lat, 2.2, rand, 0.4);
+    for (const off of [-1.5, 1.5]) {
+      const x = p.x + nx * lat + track.tx[idx] * off;
+      const z = p.z + nz * lat + track.tz[idx] * off;
+      ray.set(new THREE.Vector3(x, height + 40, z), new THREE.Vector3(0, -1, 0));
+      const hit = ray.intersectObject(probe)[0];
+      if (hit && hit.face.normal.y > 0.4) plantTop(batch, x, hit.point.y, z, 1.4, rand, 0.25);
+    }
   }
   const blobs = [];
   for (const side of [-1, 1]) {
