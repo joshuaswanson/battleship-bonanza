@@ -333,6 +333,35 @@ const treadPlate = () =>
     for (let i = 0; i <= 4; i++) ctx.fillRect(i * 64 - 1, 0, 3, 256);
   });
 
+const CAMO_SCALE = 0.22;
+
+function applyCamoMapping(root, material) {
+  root.updateMatrixWorld(true);
+  const p = new THREE.Vector3();
+  const n = new THREE.Vector3();
+  const normalMatrix = new THREE.Matrix3();
+  root.traverse((mesh) => {
+    if (!mesh.isMesh || mesh.material !== material) return;
+    const g = mesh.geometry.clone();
+    const pos = g.attributes.position;
+    const nor = g.attributes.normal;
+    const uv = new Float32Array(pos.count * 2);
+    normalMatrix.getNormalMatrix(mesh.matrixWorld);
+    for (let i = 0; i < pos.count; i++) {
+      p.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld);
+      n.fromBufferAttribute(nor, i).applyMatrix3(normalMatrix);
+      const ax = Math.abs(n.x);
+      const ay = Math.abs(n.y);
+      const az = Math.abs(n.z);
+      const [u, v] = ax >= ay && ax >= az ? [p.z, p.y] : ay >= az ? [p.x, p.z] : [p.x, p.y];
+      uv[i * 2] = u * CAMO_SCALE;
+      uv[i * 2 + 1] = v * CAMO_SCALE;
+    }
+    g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    mesh.geometry = g;
+  });
+}
+
 export function buildBoat(color, items) {
   const root = new THREE.Group();
   const body = new THREE.Group();
@@ -443,6 +472,7 @@ export function buildBoat(color, items) {
   });
 
   refs.sawYaw = refs.swivels.find((s) => s.id === 'saw')?.group ?? null;
+  if (camoMat) applyCamoMapping(root, camoMat);
 
   body.traverse((o) => {
     if (o.isMesh && o.material.isMeshToonMaterial && !refs.materials.includes(o.material)) refs.materials.push(o.material);
