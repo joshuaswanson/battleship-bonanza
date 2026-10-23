@@ -239,10 +239,6 @@ kbd {
   animation: lg-bob 3.2s 1.2s ease-in-out infinite;
 }
 
-.title-logo .lg-streaks {
-  animation: fade-in 400ms 600ms both;
-}
-
 @keyframes lg-slide-left {
   from {
     transform: translateX(-700px);
@@ -333,6 +329,22 @@ kbd {
   font-weight: 500;
   color: #ffffff;
   text-shadow: 0 2px 0 var(--ink);
+  animation: fade-in 400ms 1200ms both;
+}
+
+.title-credit {
+  position: absolute;
+  bottom: 1.2rem;
+  left: 0;
+  right: 0;
+  margin: 0;
+  text-align: center;
+  font-family: var(--race);
+  font-weight: 800;
+  font-size: 1.3rem;
+  color: #ffffff;
+  transform: skewX(-10deg);
+  text-shadow: 0 2px 0 var(--ink), 0 0 6px rgba(14, 42, 71, 0.6);
   animation: fade-in 400ms 1200ms both;
 }
 
