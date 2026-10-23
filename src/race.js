@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { ITEMS } from './items.js';
 import { buildBoat, buildMine, buildMissile, buildHook, laserWobble, aimLaserGun, aimTurret, SALVO, spendMissile, reloadMissiles, updateMissileTips, missileDirection, stepGun, stepLaser, stepFlame, stepSaw, slotCenter, ALWAYS_AIMS, flameDirection, newHeat, gunDirection, laserDirection, launchMine, reloadMine, updateMineHolder, HULL_L } from './boatModel.js';
-import { waveHeight } from './water.js';
+import { waveHeight, isWater } from './water.js';
 import { createAI, driveAI } from './ai.js';
 import { toon, glow } from './toon.js';
 import { fast } from './tuning.js';
@@ -22,6 +22,8 @@ const REGEN_RAMP = 4;
 const REGEN_MAX = 22;
 const OFF_COURSE_SPEED = 0.35;
 const OUTER_LIMIT = 45;
+const BANK_MARGIN = 2.5;
+const FALL_GRAVITY = 42;
 const SHORE_MARGIN = 2.2;
 const SAW_LEAK = 0.4;
 const EASY_HOOK = (o) => o.has('spikes') || o.has('jetpack');
@@ -361,7 +363,20 @@ export class Race {
     b.pos.x += b.vel.x * dt;
     b.pos.z += b.vel.z * dt;
 
-    if (b.air) {
+    if (b.air?.fall) {
+      b.air.vy -= FALL_GRAVITY * dt;
+      b.air.y += b.air.vy * dt;
+      b.yOffset = b.air.y - (b.surfaceLevel ?? 0);
+      if (b.yOffset <= 0) {
+        b.yOffset = 0;
+        b.air = null;
+        b.bump(8);
+        this.fx.splash(b.pos.x, b.waterY, b.pos.z, 2.2);
+        this.fx.splash(b.pos.x + Math.sin(b.heading) * 4, b.waterY, b.pos.z + Math.cos(b.heading) * 4, 1.2);
+        this.sfx.play('splash', b.pos);
+        if (b.isPlayer) this.emit('lockShake', { amount: 1.2 });
+      }
+    } else if (b.air) {
       b.air.t += dt;
       const u = b.air.t / b.air.dur;
       b.yOffset = b.air.peak * 4 * u * (1 - u);
@@ -383,12 +398,13 @@ export class Race {
     b.dist += ds;
     b.trackS = pr.s;
     b.trackIdx = pr.idx;
+    if (t.river) this.followRiver(b, pr.s);
 
     b.offCourse = Math.abs(pr.lateral) > t.halfWidth + 1.5 ? b.offCourse + dt : 0;
     if (b.offCourse > 0 && b.speed > OFF_COURSE_SPEED * BASE_SPEED) b.speed *= Math.exp(-1.5 * dt);
     this.collideShores(b);
 
-    const lim = t.halfWidth + OUTER_LIMIT;
+    const lim = t.halfWidth + (t.river ? -BANK_MARGIN : OUTER_LIMIT);
     if (Math.abs(pr.lateral) > lim) {
       const sgn = Math.sign(pr.lateral);
       const nx = t.nx[pr.idx];
@@ -412,6 +428,24 @@ export class Race {
     if (b.isPlayer) {
       const facing = fx * t.tx[pr.idx] + fz * t.tz[pr.idx];
       b.wrongWay = facing < -0.3 && b.speed > 4 ? b.wrongWay + dt : 0;
+    }
+  }
+
+  followRiver(b, s) {
+    const t = this.track;
+    const level = t.level(s);
+    const before = b.surfaceLevel ?? level;
+    if (before - level > 2) {
+      let vy = 3;
+      if (b.air?.fall) vy = b.air.vy;
+      else if (b.air) vy = (b.air.peak * 4 * (1 - (2 * b.air.t) / b.air.dur)) / b.air.dur;
+      b.air = { fall: true, y: before + b.yOffset, vy };
+      if (b.isPlayer) this.emit('falls');
+    }
+    b.surfaceLevel = level;
+    if (t.onLift(s) && !b.air) {
+      b.speed = Math.max(b.speed, BASE_SPEED * 1.05);
+      b.boost = Math.max(b.boost, 0.15);
     }
   }
 
@@ -479,6 +513,7 @@ export class Race {
     b.hp = MAX_HP;
     b.invuln = 2;
     b.air = null;
+    b.surfaceLevel = null;
     b.yOffset = 0;
     b.spinTime = 0;
     b.stun = 0;
@@ -724,7 +759,7 @@ export class Race {
         const a = (i / 14) * Math.PI * 2 + Math.random() * 0.4;
         const reach = 8 + Math.random() * 16;
         const end = new THREE.Vector3(orb.x + Math.cos(a) * reach, b.waterY + 0.3 + Math.random() * 3, orb.z + Math.sin(a) * reach);
-        this.fx.bolt(orb, end, 0x2f7dff, 0.34, 0.3);
+        this.fx.bolt(orb, end, 0x2f6bff, 0.22, 0.3);
       }
       this.fx.followRing(b.pos, 0x5ff4ff, 26, 0.7);
       this.fx.followRing(b.pos, 0xffffff, 18, 0.55);
@@ -1089,7 +1124,7 @@ export class Race {
         if (o === p.owner || !o.alive || p.jolted.has(o)) continue;
         if (o.center(new THREE.Vector3()).distanceTo(center) > r + 1.5) continue;
         p.jolted.add(o);
-        if (p.owner.model.empOrb) this.fx.bolt(p.owner.model.empOrb.getWorldPosition(new THREE.Vector3()), o.center(), 0x2f7dff, 0.32, 0.35);
+        if (p.owner.model.empOrb) this.fx.bolt(p.owner.model.empOrb.getWorldPosition(new THREE.Vector3()), o.center(), 0x2f6bff, 0.24, 0.35);
         this.sfx.play('zap', o.pos);
         o.stun = Math.max(o.stun, 1.1);
         o.disabled = Math.max(o.disabled, 1.6);
@@ -1517,6 +1552,7 @@ export class Race {
 
     const hF = waveHeight(b.pos.x + fx * 3.4, b.pos.z + fz * 3.4, t);
     const hB = waveHeight(b.pos.x - fx * 3.4, b.pos.z - fz * 3.4, t);
+    const slope = clamp(hF - hB, -3, 3);
     const lx = Math.cos(b.heading);
     const lz = -Math.sin(b.heading);
     const hL = waveHeight(b.pos.x + lx * 1.8, b.pos.z + lz * 1.8, t);
@@ -1527,8 +1563,10 @@ export class Race {
 
     const ease = 1 - Math.exp(-8 * dt);
     if (b.alive) {
-      const airPitch = b.air ? -0.25 * (1 - 2 * Math.min(1, b.air.t / b.air.dur)) : 0;
-      const targetPitch = -Math.atan2(hF - hB, 6.8) * onWater - 0.08 * speedFrac - clamp(accel, -20, 20) * 0.003 + airPitch;
+      let airPitch = 0;
+      if (b.air?.fall) airPitch = clamp(-b.air.vy * 0.018, -0.1, 0.55);
+      else if (b.air) airPitch = -0.25 * (1 - 2 * Math.min(1, b.air.t / b.air.dur));
+      const targetPitch = -Math.atan2(slope, 6.8) * onWater - 0.08 * speedFrac - clamp(accel, -20, 20) * 0.003 + airPitch;
       const targetRoll = Math.atan2(hL - hR, 3.6) * onWater + b.steerVis * 0.2 * clamp(speedFrac, 0, 1);
       body.rotation.x += (targetPitch - body.rotation.x) * ease;
       body.rotation.z += (targetRoll - body.rotation.z) * ease;
@@ -1571,7 +1609,7 @@ export class Race {
     for (const sp of spinners) sp.mesh.rotation[sp.axis] += sp.speed * dt;
     flag.rotation.y = Math.sin(t * 9 + b.index) * 0.25 - b.steerVis * 0.3;
 
-    if (b.alive && !b.air && Math.abs(b.speed) > 5) {
+    if (b.alive && !b.air && Math.abs(b.speed) > 5 && isWater(b.pos.x, b.pos.z)) {
       b.wakeTimer -= dt;
       if (b.wakeTimer <= 0) {
         b.wakeTimer = 0.035;
@@ -1593,10 +1631,18 @@ export class Race {
   whitecaps(dt) {
     const focus = this.player ?? this.boats[0];
     if (!focus || Math.random() > dt * 5) return;
-    const a = Math.random() * Math.PI * 2;
-    const d = 15 + Math.random() * 60;
-    const x = focus.pos.x + Math.cos(a) * d;
-    const z = focus.pos.z + Math.sin(a) * d;
+    let x, z;
+    if (this.track.river) {
+      const p = this.track.point(focus.trackIdx + Math.round((Math.random() - 0.3) * 60), (Math.random() - 0.5) * 2 * this.track.halfWidth);
+      x = p.x;
+      z = p.z;
+      if (!isWater(x, z)) return;
+    } else {
+      const a = Math.random() * Math.PI * 2;
+      const d = 15 + Math.random() * 60;
+      x = focus.pos.x + Math.cos(a) * d;
+      z = focus.pos.z + Math.sin(a) * d;
+    }
     this.fx.splash(x, waveHeight(x, z, this.time), z, 0.2 + Math.random() * 0.2);
   }
 

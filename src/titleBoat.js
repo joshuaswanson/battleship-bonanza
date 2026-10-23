@@ -22,8 +22,7 @@ export class TitleBoat {
 
     const { root, body, minigun, towRings } = buildBoat(0xff5a5f, ['machinegun']);
     for (const ring of towRings) for (const mesh of ring.userData.parts) mesh.visible = false;
-    minigun.parent.rotation.x = 0;
-    minigun.rotation.x = -0.22;
+    minigun.parent.rotation.x = -0.22;
     root.rotation.y = 0.5;
     body.rotation.x = -0.32;
     root.position.y = 0.3;

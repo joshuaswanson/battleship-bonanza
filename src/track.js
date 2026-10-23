@@ -1,16 +1,8 @@
 import * as THREE from 'three';
 
-export const HALF_WIDTH = 28;
-
-const CONTROL = [
-  [0, 0], [140, -10], [260, 30], [330, 130], [300, 240], [190, 270],
-  [110, 200], [20, 230], [-60, 320], [-190, 310], [-280, 200], [-260, 80],
-  [-310, -40], [-230, -150], [-100, -120],
-];
-
-export function createTrack() {
+export function createTrack(map) {
   const curve = new THREE.CatmullRomCurve3(
-    CONTROL.map(([x, z]) => new THREE.Vector3(x, 0, z)),
+    map.control.map(([x, z]) => new THREE.Vector3(x, 0, z)),
     true,
     'centripetal',
   );
@@ -79,5 +71,31 @@ export function createTrack() {
     return Math.atan2(tx[i], tz[i]);
   }
 
-  return { N, length, spacing, px, pz, tx, tz, nx, nz, wrap, project, point, heading, halfWidth: HALF_WIDTH };
+  const ahead = (from, s) => (((s - from) % length) + length) % length;
+  const river = map.height
+    ? {
+        falls: project(...map.falls).s,
+        liftStart: project(...map.lift[0]).s,
+        liftEnd: project(...map.lift[1]).s,
+      }
+    : null;
+
+  function level(s) {
+    if (!river) return 0;
+    const lower = ahead(river.falls, river.liftStart);
+    const climb = ahead(river.liftStart, river.liftEnd);
+    const sinceFalls = ahead(river.falls, s);
+    if (sinceFalls < lower) return 0;
+    if (sinceFalls < lower + climb) {
+      const u = (sinceFalls - lower) / climb;
+      return map.height * u * u * (3 - 2 * u);
+    }
+    return map.height;
+  }
+
+  function onLift(s) {
+    return !!river && ahead(river.liftStart, s) < ahead(river.liftStart, river.liftEnd);
+  }
+
+  return { N, length, spacing, px, pz, tx, tz, nx, nz, wrap, project, point, heading, halfWidth: map.halfWidth, map, river, level, onLift, ahead };
 }

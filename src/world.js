@@ -7,7 +7,7 @@ const SKY_TOP = 0x3fa9f5;
 const SKY_HORIZON = 0xc4f1ff;
 export const SUN_DIR = new THREE.Vector3(0.45, 0.85, 0.3).normalize();
 
-const COLORS = {
+export const COLORS = {
   sand: 0xffe1a1,
   grass: 0x7fd957,
   foam: 0xf4fbff,
@@ -47,7 +47,7 @@ function mossyRock() {
   return material;
 }
 
-class Batcher {
+export class Batcher {
   constructor() {
     this.groups = new Map();
   }
@@ -57,7 +57,7 @@ class Batcher {
     if (!this.groups.has(key)) this.groups.set(key, []);
     this.groups.get(key).push(g);
   }
-  build(parent, outline = 0.12) {
+  build(parent, outline = 0.12, colors = COLORS) {
     for (const [key, list] of this.groups) {
       const geometry = mergeGeometries(list);
       const painted = geometry.hasAttribute('color');
@@ -65,7 +65,7 @@ class Batcher {
         ? mossyRock()
         : painted
           ? toon(0xffffff, { vertexColors: true })
-          : toon(COLORS[key]);
+          : toon(colors[key]);
       parent.add(new THREE.Mesh(geometry, material));
       if (outline && key !== 'foam') parent.add(new THREE.Mesh(geometry, outlineMaterial(outline)));
     }
@@ -75,17 +75,17 @@ class Batcher {
 const m4 = new THREE.Matrix4();
 const q = new THREE.Quaternion();
 const e = new THREE.Euler();
-function mat(x, y, z, sx = 1, sy = 1, sz = 1, rx = 0, ry = 0, rz = 0) {
+export function mat(x, y, z, sx = 1, sy = 1, sz = 1, rx = 0, ry = 0, rz = 0) {
   e.set(rx, ry, rz);
   q.setFromEuler(e);
   return m4.compose(new THREE.Vector3(x, y, z), q, new THREE.Vector3(sx, sy, sz)).clone();
 }
 
-const SPHERE = new THREE.SphereGeometry(1, 20, 14);
-const LOW_SPHERE = new THREE.SphereGeometry(1, 12, 8);
-const CYLINDER = new THREE.CylinderGeometry(1, 1, 1, 12);
-const CONE = new THREE.ConeGeometry(1, 1, 14);
-const ROCK = new THREE.DodecahedronGeometry(1, 0);
+export const SPHERE = new THREE.SphereGeometry(1, 20, 14);
+export const LOW_SPHERE = new THREE.SphereGeometry(1, 12, 8);
+export const CYLINDER = new THREE.CylinderGeometry(1, 1, 1, 12);
+export const CONE = new THREE.ConeGeometry(1, 1, 14);
+export const ROCK = new THREE.DodecahedronGeometry(1, 0);
 ROCK.computeVertexNormals();
 const RING = new THREE.TorusGeometry(1, 0.06, 6, 40).rotateX(Math.PI / 2);
 
@@ -182,7 +182,7 @@ function frondGeometry(start, heading, elevation, length, width, droop, palette)
   return g;
 }
 
-function addPalm(batch, x, baseY, z, rand, { height, lean, dir }) {
+export function addPalm(batch, x, baseY, z, rand, { height, lean, dir }) {
   const reach = Math.min(height * lean, 8);
   const sway = (rand() - 0.5) * 0.6;
   const points = [];
@@ -560,7 +560,7 @@ function addLighthouse(batch, x, z, baseY) {
   batch.add('stripeRed', SPHERE, mat(x, top + 5, z, 0.5, 0.5, 0.5));
 }
 
-function createSky() {
+export function createSky() {
   const material = new THREE.ShaderMaterial({
     uniforms: {
       uTop: { value: new THREE.Color(SKY_TOP) },
@@ -597,7 +597,7 @@ function createSky() {
   return mesh;
 }
 
-function createCloud(rand) {
+export function createCloud(rand) {
   const parts = [];
   const puffs = 4 + Math.floor(rand() * 4);
   for (let i = 0; i < puffs; i++) {
@@ -644,7 +644,7 @@ function createMarkerBuoy(kind) {
 }
 
 export function createWorld(scene, track) {
-  scene.fog = new THREE.Fog(SKY_HORIZON, 260, 950);
+  const fog = new THREE.Fog(SKY_HORIZON, 260, 950);
 
   const sky = createSky();
   scene.add(sky);
@@ -757,6 +757,7 @@ export function createWorld(scene, track) {
 
   const dummy = new THREE.Object3D();
   return {
+    fog,
     water,
     sun,
     islands,
@@ -808,10 +809,10 @@ function checkerTexture() {
   return texture;
 }
 
-function createArch(track, half) {
+export function createArch(track, half) {
   const group = new THREE.Group();
   const p = track.point(0);
-  group.position.set(p.x, 0, p.z);
+  group.position.set(p.x, track.level(0), p.z);
   group.rotation.y = track.heading(0);
   const span = half + 4;
   const red = toon(COLORS.stripeRed);

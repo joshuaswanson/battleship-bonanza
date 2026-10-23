@@ -7,6 +7,9 @@ import './style.css';
 import * as THREE from 'three';
 import { createTrack } from './track.js';
 import { createWorld } from './world.js';
+import { createJungle } from './jungle.js';
+import { MAPS } from './maps.js';
+import { setSurface } from './water.js';
 import { Effects } from './effects.js';
 import { Sfx } from './audio.js';
 import { Input } from './input.js';
@@ -42,13 +45,42 @@ function resize() {
 addEventListener('resize', resize);
 resize();
 
-const track = createTrack();
-const world = createWorld(scene, track);
 const fx = new Effects(scene);
 const sfx = new Sfx();
 const SILENT = { play() {} };
 const input = new Input();
-const hud = new Hud(track, sfx);
+
+const venues = {};
+function venue(id) {
+  if (!venues[id]) {
+    const track = createTrack(MAPS[id]);
+    const group = new THREE.Group();
+    group.visible = false;
+    scene.add(group);
+    const world = id === 'jungle' ? createJungle(group, track, fx) : createWorld(group, track);
+    venues[id] = { track, world, group };
+  }
+  return venues[id];
+}
+let current = venue('bay');
+const hud = new Hud(current.track, sfx);
+
+function useVenue(id) {
+  const next = venue(id);
+  current.group.visible = false;
+  next.group.visible = true;
+  scene.fog = next.world.fog;
+  setSurface(next.world.surface ?? null);
+  hud.setTrack(next.track);
+  current = next;
+}
+
+function pickMap(attract) {
+  if (import.meta.env.DEV && window.__bb?.map) return window.__bb.map;
+  if (attract) return 'bay';
+  const ids = Object.keys(MAPS);
+  return ids[Math.floor(Math.random() * ids.length)];
+}
 
 
 function loadSetup() {
@@ -94,6 +126,7 @@ let race = null;
 let resultsTimer = 0;
 let time = 0;
 let shake = 0;
+const HURT_SHAKE = { bullet: 0.25, laser: 0.3, reflect: 0.3, saw: 0.5, flame: 0, fire: 0 };
 let quake = 0;
 const shakers = [document.getElementById('game'), document.getElementById('hud')];
 
@@ -101,7 +134,8 @@ function newRace(attract) {
   race?.dispose();
   quake = 0;
   for (const el of shakers) el.style.transform = '';
-  race = new Race({ scene, track, fx, sfx: attract ? SILENT : sfx, shores: world.shores, defs: makeDefs(attract ? null : setup), attract });
+  useVenue(pickMap(attract));
+  race = new Race({ scene, track: current.track, fx, sfx: attract ? SILENT : sfx, shores: current.world.shores, defs: makeDefs(attract ? null : setup), attract });
   cam.snap = true;
 }
 
@@ -260,7 +294,7 @@ function updateCamera(dt) {
     const fz = Math.cos(cam.heading);
     const speedFrac = Math.max(0, Math.min(1.4, b.speed / BASE_SPEED));
     const back = 11 + speedFrac * 2;
-    const chase = new THREE.Vector3(b.pos.x - fx * back, b.waterY + 6 + b.yOffset * 0.6, b.pos.z - fz * back);
+    const chase = new THREE.Vector3(b.pos.x - fx * back, b.waterY + 6 + b.yOffset * (b.air?.fall ? 0.95 : 0.6), b.pos.z - fz * back);
     let desired = chase;
     if (race.state === 'countdown') {
       const u = Math.min(1, Math.max(0, (4.2 - race.countdown) / 3.2));
@@ -295,7 +329,7 @@ function updateCamera(dt) {
     camera.rotateZ((Math.random() - 0.5) * quake * 0.07);
     const px = (Math.random() - 0.5) * quake * 9;
     const py = (Math.random() - 0.5) * quake * 9;
-    quake = Math.max(0, quake - dt * 3.2);
+    quake = Math.max(0, quake - dt * 4.5);
     const [canvas, hudEl] = shakers;
     canvas.style.transform = quake > 0 ? `translate(${px}px, ${py}px) scale(1.06)` : '';
     hudEl.style.transform = quake > 0 ? `translate(${px * 0.6}px, ${py * 0.6}px)` : '';
@@ -310,7 +344,7 @@ function handleEvents() {
   for (const e of race.events) {
     if (race.attract) continue;
     hud.handle(e);
-    if (e.type === 'hurt') shake = Math.max(shake, e.kind === 'bullet' ? 0.25 : 1.2);
+    if (e.type === 'hurt') shake = Math.max(shake, HURT_SHAKE[e.kind] ?? 1.2);
     if (e.type === 'ko') shake = 1.6;
     if (e.type === 'lockShake') shake = Math.max(shake, e.amount);
     if (e.type === 'quake') quake = Math.max(quake, e.amount);
@@ -342,7 +376,7 @@ function frame(now) {
     time += (steps - 1) * dt;
     handleEvents();
     fx.update(dt);
-    world.update(time, dt, camera);
+    current.world.update(time, dt, camera);
     if (resultsTimer > 0) {
       resultsTimer -= dt;
       if (resultsTimer <= 0 && mode === 'race') showResults();
@@ -381,12 +415,16 @@ if (import.meta.env.DEV) {
     setup,
     camera,
     cam,
-    world,
+    get world() {
+      return current.world;
+    },
+    map: null,
     loadout,
     simRace() {
       race?.dispose();
       const defs = PAINTS.map((paint, i) => ({ name: `Boat ${i + 1}`, color: paint.value, items: arrange(shuffle(ITEM_IDS).slice(0, 2)) }));
-      race = new Race({ scene, track, fx, sfx, shores: world.shores, defs, attract: false });
+      useVenue(pickMap(false));
+      race = new Race({ scene, track: current.track, fx, sfx, shores: current.world.shores, defs, attract: false });
       mode = 'sim';
       hud.show(false);
       showScreen(null);
@@ -396,3 +434,4 @@ if (import.meta.env.DEV) {
 
 goTitle();
 requestAnimationFrame(frame);
+setTimeout(() => venue('jungle'), 1500);

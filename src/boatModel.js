@@ -21,6 +21,7 @@ export function arrange([a, b]) {
 
 export const slotCenter = (slot) => (slot === 0 ? 0 : Math.PI);
 export const ALWAYS_AIMS = new Set(['flamethrower', 'saw']);
+const BACK_HEIGHT = { machinegun: 1.45, laser: 1.45, flamethrower: 1.45, missiles: 1.2, saw: 0.95 };
 const MODULE_SCALE = 1.3;
 
 export function halfWidth(z) {
@@ -433,7 +434,7 @@ export function buildBoat(color, items) {
   items.forEach((id, slot) => {
     if (!MOUNTED.has(id)) return;
     const z = slot === 0 ? FRONT_MOUNT : REAR_MOUNT;
-    const baseH = slot === 1 && MOUNTED.has(items[0]) ? 0.85 : 0.35;
+    const baseH = slot === 0 ? 0.35 : BACK_HEIGHT[id] ?? (MOUNTED.has(items[0]) ? 0.85 : 0.35);
     const turret = new THREE.Group();
     turret.position.set(0, deckTop(z), z);
     body.add(turret);
@@ -494,6 +495,7 @@ function sphereDirections(count) {
   return dirs;
 }
 
+const CLAW_ANGLES = [114, 234, 354];
 const MINE_BODY = toon(0x8e9aa8);
 const MINE_BAND = toon(0x5d6b7e);
 const MINE_HORN = toon(0xb8c3cf);
@@ -610,7 +612,7 @@ const MODULES = {
   },
 
   flamethrower(m, mats, refs) {
-    const tankMat = toon(RED);
+    const tankMat = mats.paint.clone();
     refs.heatMats.flamethrower = [tankMat];
     part(m, 'cylinder', mats.dark, 0, 0.3, -0.1, 0.55, 0.6, 0.55, 0.03);
     for (const x of [-0.36, 0.36]) {
@@ -618,7 +620,16 @@ const MODULES = {
       part(m, 'cylinder', mats.white, x, 1.15, -0.6, 0.32, 0.14, 0.32, 0.02);
       part(m, 'cylinder', mats.metal, x, 1.92, -0.6, 0.1, 0.16, 0.1, 0.02);
     }
-    part(m, 'cylinder', mats.dark, 0, 0.72, -0.3, 0.12, 0.7, 0.12, 0.02).rotation.x = Math.PI / 2;
+    for (const x of [-0.36, 0.36]) {
+      const hose = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(x, 0.6, -0.42),
+        new THREE.Vector3(x * 1.8, 0.52, -0.2),
+        new THREE.Vector3(x * 1.6, 0.62, 0.15),
+        new THREE.Vector3(x * 0.75, 0.78, 0.27),
+      ]);
+      m.add(outlined(new THREE.TubeGeometry(hose, 16, 0.075, 8), mats.dark, 0.02));
+      part(m, 'cylinder', mats.metal, x, 0.6, -0.42, 0.11, 0.12, 0.11, 0.02);
+    }
     part(m, 'sphere', mats.dark, 0, 0.8, 0.25, 0.32, 0.32, 0.32, 0.03);
     const pipe = part(m, 'cylinder', mats.metal, 0, 0.8, 0.95, 0.13, 1.4, 0.13, 0.03);
     pipe.rotation.x = Math.PI / 2;
@@ -684,13 +695,10 @@ const MODULES = {
     part(m, 'cylinder', mats.dark, 0, 0.25, 0, 0.5, 0.5, 0.5, 0.03);
     const cup = part(m, 'ring', mats.paint, 0, 0.55, 0, 0.6, 0.6, 1.8, 0.03);
     cup.rotation.x = Math.PI / 2;
-    for (let i = 0; i < 3; i++) {
-      const a = (i / 3) * Math.PI * 2;
-      const claw = part(m, 'roundBox', mats.metal, Math.cos(a) * 0.84, 0.85, Math.sin(a) * 0.84, 0.14, 0.7, 0.14, 0.02);
-      claw.rotation.set(0, -a, 0);
-      claw.rotateZ(0.1);
-      const bracket = part(m, 'roundBox', mats.metal, Math.cos(a) * 0.68, 0.55, Math.sin(a) * 0.68, 0.4, 0.14, 0.16, 0.02);
-      bracket.rotation.y = -a;
+    for (const degrees of CLAW_ANGLES) {
+      const a = THREE.MathUtils.degToRad(degrees);
+      const claw = part(m, 'roundBox', mats.metal, Math.cos(a) * 0.615, 0.74, Math.sin(a) * 0.615, 0.14, 0.48, 0.14, 0.02);
+      claw.rotation.y = -a;
     }
     const loaded = new THREE.Group();
     loaded.position.set(0, MINE_REST_Y, 0);

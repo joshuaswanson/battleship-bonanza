@@ -4,12 +4,6 @@ import { toon, outlined, INK } from './toon.js';
 import { waveHeight } from './water.js';
 import { fast } from './tuning.js';
 
-const PADS = [
-  [0.03, 6], [0.15, -10], [0.27, 10], [0.4, -4], [0.52, -12], [0.64, 8], [0.77, -8], [0.89, 12],
-];
-const RAMPS = [
-  [0.11, 0], [0.35, 9], [0.6, -9], [0.84, 3],
-];
 const PAD_W = 6;
 const PAD_L = 9;
 const RAMP_W = 7;
@@ -122,8 +116,8 @@ export class TrackFeatures {
       scene.add(mesh);
       return { kind, idx, lateral, x: p.x, z: p.z, heading, mesh, used: new Map() };
     };
-    this.pads = PADS.map((spot) => place(spot, buildPad(this.texture), 'pad'));
-    this.ramps = RAMPS.map((spot) => place(spot, buildRamp(), 'ramp'));
+    this.pads = track.map.pads.map((spot) => place(spot, buildPad(this.texture), 'pad'));
+    this.ramps = track.map.ramps.map((spot) => place(spot, buildRamp(), 'ramp'));
     this.all = [...this.pads, ...this.ramps];
   }
 

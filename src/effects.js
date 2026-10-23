@@ -101,6 +101,7 @@ class Transient {
     item.life = life;
     item.maxLife = life;
     item.update = update;
+    update(item.mesh, 0);
     return item;
   }
   update(dt) {
@@ -167,8 +168,10 @@ export class Effects {
     this.sparks = new ParticlePool(scene, glow(0xffffff), 900);
     this.rings = new Transient(scene, new THREE.TorusGeometry(1, 0.12, 8, 48).rotateX(Math.PI / 2), 16, false);
     const beam = new THREE.CylinderGeometry(1, 1, 1, 10, 1, true).rotateX(Math.PI / 2).translate(0, 0, 0.5);
-    this.beams = new Transient(scene, beam, 420, false);
-    this.arcs = new Transient(scene, beam, 360, true);
+    this.beams = new Transient(scene, beam, 900, false);
+    this.arcs = new Transient(scene, beam, 1700, true);
+    this.timers = [];
+    this.clock = 0;
     this.shells = new Transient(scene, new THREE.SphereGeometry(1, 32, 20), 6, true);
     this.casings = new CasingPool(scene, 240);
   }
@@ -186,6 +189,12 @@ export class Effects {
     this.rings.update(dt);
     this.beams.update(dt);
     this.arcs.update(dt);
+    this.clock += dt;
+    if (this.timers.length) {
+      const due = this.timers.filter((t) => t.at <= this.clock);
+      this.timers = this.timers.filter((t) => t.at > this.clock);
+      for (const t of due) t.fn();
+    }
     this.shells.update(dt);
     this.casings.update(dt, (p) => this.puffs.emit(p.x, 0.2, p.z, 0, 1.5, 0, 0.14, 0.35, 0xffffff, 6, 1, 1));
   }
@@ -262,6 +271,11 @@ export class Effects {
       const sp = 6 + r() * 8;
       this.sparks.emit(x, y, z, (r() - 0.5) * sp, r() * sp * 0.8, (r() - 0.5) * sp, 0.18 + r() * 0.15, 0.3 + r() * 0.2, color, 18, 1, 1);
     }
+  }
+
+  mist(x, y, z) {
+    const r = Math.random;
+    this.puffs.emit(x, y, z, (r() - 0.5) * 4, 2 + r() * 4, (r() - 0.5) * 4, 1.6 + r() * 1.6, 1.3 + r() * 0.8, r() < 0.5 ? 0xffffff : 0xe6fbff, -1.5, 1.2, 0);
   }
 
   smoke(x, y, z) {
@@ -382,38 +396,62 @@ export class Effects {
   }
 
   bolt(from, to, color = 0x2f7dff, width = 0.18, life = 0.12, fork = true) {
+    const strikes = life >= 0.2 ? 3 : 1;
+    for (let k = 0; k < strikes; k++) {
+      this.later((k * life) / strikes, () => this.strike(from, to, color, width, life / strikes + 0.03, fork));
+    }
+  }
+
+  strike(from, to, color, width, life, fork) {
     const r = Math.random;
     const length = from.distanceTo(to);
-    const steps = Math.max(3, Math.min(9, Math.round(length / 1.6)));
-    const jitter = Math.min(2.5, length * 0.18);
-    const points = [from.clone()];
-    for (let i = 1; i < steps; i++) {
-      const p = from.clone().lerp(to, i / steps);
-      const taper = Math.sin((i / steps) * Math.PI);
-      p.x += (r() - 0.5) * jitter * taper;
-      p.y += (r() - 0.5) * jitter * taper;
-      p.z += (r() - 0.5) * jitter * taper;
-      points.push(p);
-    }
-    points.push(to.clone());
-    for (let i = 0; i < points.length - 1; i++) {
-      const a = points[i];
-      const b = points[i + 1];
-      const len = a.distanceTo(b);
-      for (const [w, c] of [[width, color], [width * 0.45, 0xffffff]]) {
-        this.beams.take(c, life, (mesh, k) => {
-          mesh.position.copy(a);
-          mesh.lookAt(b);
-          mesh.scale.set(w, w, len);
-          mesh.material.opacity = (r() < 0.75 ? 1 : 0.25) * (1 - k);
-        });
+    let points = [from.clone(), to.clone()];
+    let offset = length * 0.2;
+    while (points.length < 17 && length / (points.length - 1) > 1.1) {
+      const next = [points[0]];
+      for (let i = 1; i < points.length; i++) {
+        const mid = points[i - 1].clone().lerp(points[i], 0.5);
+        mid.x += (r() - 0.5) * offset;
+        mid.y += (r() - 0.5) * offset * 0.6;
+        mid.z += (r() - 0.5) * offset;
+        next.push(mid, points[i]);
       }
+      points = next;
+      offset *= 0.55;
     }
-    if (fork && steps > 3 && r() < 0.6) {
-      const at = points[1 + Math.floor(r() * (steps - 2))];
-      const end = at.clone().add(new THREE.Vector3(r() - 0.5, r() - 0.5, r() - 0.5).multiplyScalar(length * 0.4));
-      this.bolt(at, end, color, width * 0.7, life, false);
+    for (let i = 0; i < points.length - 1; i++) this.zap(points[i], points[i + 1], color, width, life);
+    if (!fork) return;
+    for (let f = 0; f < 2; f++) {
+      const at = points[1 + Math.floor(r() * (points.length - 2))];
+      const dir = to.clone().sub(from).normalize();
+      dir.x += (r() - 0.5) * 1.6;
+      dir.z += (r() - 0.5) * 1.6;
+      dir.y += (r() - 0.3) * 0.6;
+      const end = at.clone().addScaledVector(dir.normalize(), length * (0.2 + r() * 0.25));
+      this.strike(at, end, color, width * 0.6, life, false);
     }
+  }
+
+  zap(a, b, color, width, life) {
+    const len = a.distanceTo(b);
+    const layers = [
+      [this.arcs, color, width * 2.2, 0.14],
+      [this.beams, color, width * 0.7, 0.95],
+      [this.arcs, 0xffffff, width * 0.3, 1],
+    ];
+    for (const [pool, c, w, opacity] of layers) {
+      pool.take(c, life, (mesh, k) => {
+        mesh.position.copy(a);
+        mesh.lookAt(b);
+        mesh.scale.set(w, w, len);
+        mesh.material.opacity = opacity * (1 - k * k);
+      });
+    }
+  }
+
+  later(delay, fn) {
+    if (delay <= 0) fn();
+    else this.timers.push({ at: this.clock + delay, fn });
   }
 
   beam(from, to, color, width = 0.35, life = 0.4, sparks = 6) {

@@ -5,6 +5,7 @@ async function scenario(items, key, place, victimItems = ['jetpack', 'machinegun
   const page = await browser.newPage();
   page.on('pageerror', (e) => console.log('[pageerror]', e.message));
   await page.goto('http://localhost:5288/', { waitUntil: 'networkidle0' });
+await page.evaluate(() => { window.__bb.map = 'bay'; });
   await wait(300);
   await page.evaluate((items) => window.__bb.setup.items.splice(0, 2, ...items), items);
   await page.evaluate(() => document.getElementById('btn-play').click());
@@ -46,6 +47,8 @@ const cases = [
   ['back saw, target alongside-ahead', ['camo', 'saw'], 'KeyP', [3.5, 5.2]],
   ['front saw, target alongside-ahead', ['saw', 'camo'], 'KeyO', [1.5, 5.2]],
   ['front saw vs spikes', ['saw', 'camo'], 'KeyO', [1.5, 5.2], ['spikes', 'jetpack']],
+  ['front flamethrower, target 45deg ahead', ['flamethrower', 'camo'], 'KeyO', [7, 7]],
+  ['front mg, target 45deg ahead (control)', ['machinegun', 'camo'], 'KeyO', [7, 7]],
   ['back flamethrower, target behind', ['armor', 'flamethrower'], 'KeyP', [-10, 3], undefined, 'arc-backflame'],
 ];
 for (const [label, items, key, place, victim, shot] of cases) console.log(label.padEnd(38), await scenario(items, key, place, victim, shot));

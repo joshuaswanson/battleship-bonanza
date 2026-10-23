@@ -42,10 +42,13 @@ export class Hud {
     this.flash = $('hud-flash');
     this.map = $('hud-map');
     this.ctx = this.map.getContext('2d');
-    this.track = track;
     this.warnTime = 0;
     this.projected = new THREE.Vector3();
+    this.setTrack(track);
+  }
 
+  setTrack(track) {
+    this.track = track;
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
     for (let i = 0; i < track.N; i++) {
       minX = Math.min(minX, track.px[i]);
@@ -164,6 +167,9 @@ export class Hud {
         this.flash.className = 'hud-flash';
         void this.flash.offsetWidth;
         this.flash.className = 'hud-flash on blast';
+        break;
+      case 'falls':
+        this.pop(t('wheee'), 'go');
         break;
       case 'dodge':
         this.pop(t('dodged'), 'go');

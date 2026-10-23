@@ -1,0 +1,28 @@
+import puppeteer from 'puppeteer-core';
+const browser = await puppeteer.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: 'new', args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'], defaultViewport: { width: 1000, height: 640 } });
+const page = await browser.newPage();
+const wait = (t) => new Promise((r) => setTimeout(r, t));
+await page.goto('http://localhost:5288/', { waitUntil: 'networkidle0' });
+await page.evaluate(() => { window.__bb.map = 'bay'; });
+await page.evaluate(() => window.__bb.setup.items.splice(0, 2, 'flamethrower', 'armor'));
+await page.evaluate(() => document.getElementById('btn-play').click());
+await wait(200);
+await page.evaluate(() => document.getElementById('btn-start').click());
+await wait(7000);
+const shoot = async (name, fn) => {
+  await page.evaluate((src) => {
+    const r = window.__bb.race; const p = r.player;
+    for (const b of r.boats) { b.ai.think = 1e9; b.ai.base = 0; b.vel.set(0, 0, 0); b.speed = 0; }
+    p.ai.base = 0; window.__bb.freeCam = true;
+    const o = p.model.flameMount.getWorldPosition(p.pos.clone());
+    const lx = Math.cos(p.heading), lz = -Math.sin(p.heading);
+    const c = window.__bb.camera; c.position.set(o.x - lx * 3 + Math.sin(p.heading) * 2.5, o.y + 0.7, o.z - lz * 3 + Math.cos(p.heading) * 2.5); c.lookAt(o.x, o.y - 0.3, o.z);
+    new Function('p', src)(p);
+  }, fn);
+  await wait(150);
+  await page.screenshot({ path: `tools/shots/${name}.png`, clip: { x: 300, y: 150, width: 400, height: 340 } });
+};
+await shoot('dbg-a', '');
+
+
+await browser.close();

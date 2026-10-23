@@ -4,6 +4,7 @@ const page = await browser.newPage();
 page.on('pageerror', (e) => console.log('[pageerror]', e.message));
 const wait = (t) => new Promise((r) => setTimeout(r, t));
 await page.goto('http://localhost:5288/', { waitUntil: 'networkidle0' });
+await page.evaluate(() => { window.__bb.map = 'bay'; });
 await wait(300);
 await page.evaluate(() => window.__bb.setup.items.splice(0, 2, 'machinegun', 'jetpack'));
 await page.evaluate(() => document.getElementById('btn-play').click());

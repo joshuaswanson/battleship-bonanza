@@ -10,6 +10,7 @@ page.on('console', (m) => logs.push(`[${m.type()}] ${m.text()}`));
 page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}`));
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 await page.goto('http://localhost:5288/', { waitUntil: 'networkidle0' });
+if (process.argv[2]) await page.evaluate((m) => { window.__bb.map = m; }, process.argv[2]);
 await wait(500);
 await page.evaluate(() => document.getElementById('btn-play').click());
 await wait(200);

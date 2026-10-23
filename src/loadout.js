@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GROUPS, ITEMS, ITEM_IDS, STATS, statsFor } from './items.js';
 import { t, itemName, itemBlurb, comboName } from './i18n.js';
 import { buildBoat, buildItemModel, slotLock, slotCenter, laserWobble, aimLaserGun, SALVO, buildMine, buildMissile, buildHook, aimTurret, spendMissile, reloadMissiles, updateMissileTips, missileDirection, stepGun, stepLaser, stepFlame, stepSaw, flameDirection, newHeat, gunDirection, laserDirection, launchMine, reloadMine, updateMineHolder } from './boatModel.js';
-import { createWater, waveHeight } from './water.js';
+import { createWater, seaWaves as waveHeight } from './water.js';
 import { Effects } from './effects.js';
 import { SUN_DIR } from './world.js';
 import { toon, outlined } from './toon.js';
@@ -505,7 +505,7 @@ export class Loadout {
         for (let i = 0; i < 10; i++) {
           const a = (i / 10) * Math.PI * 2 + Math.random() * 0.5;
           const reach = 5 + Math.random() * 7;
-          this.fx.bolt(orb, new THREE.Vector3(orb.x + Math.cos(a) * reach, 0.3 + Math.random() * 2, orb.z + Math.sin(a) * reach), 0x2f7dff, 0.28, 0.3);
+          this.fx.bolt(orb, new THREE.Vector3(orb.x + Math.cos(a) * reach, 0.3 + Math.random() * 2, orb.z + Math.sin(a) * reach), 0x2f6bff, 0.2, 0.3);
         }
         this.sfx.play('emp');
         break;
