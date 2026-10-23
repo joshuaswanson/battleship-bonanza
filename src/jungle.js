@@ -781,6 +781,16 @@ function addBush(batch, x, y, z, rand) {
   }
 }
 
+function addReeds(batch, x, y, z, rand, out) {
+  const blades = 4 + Math.floor(rand() * 4);
+  for (let i = 0; i < blades; i++) {
+    const h = 1.6 + rand() * 2.4;
+    const ox = (rand() - 0.5) * 1.2;
+    const oz = (rand() - 0.5) * 1.2;
+    batch.add(rand() < 0.5 ? 'fern' : 'leafLight', CONE, mat(x + ox, y + h / 2, z + oz, 0.18, h, 0.18, out.z * 0.35 + (rand() - 0.5) * 0.3, 0, -out.x * 0.35 + (rand() - 0.5) * 0.3));
+  }
+}
+
 function addFern(batch, x, y, z, rand) {
   const leaves = 5 + Math.floor(rand() * 3);
   const size = 1.2 + rand() * 1.4;
@@ -857,6 +867,26 @@ export async function createJungle(group, track, fx) {
   await place(800, 3, 22, (x, y, z) => addBanana(batch, x, y, z, rand));
   await place(700, 3.5, 16, (x, y, z) => addBush(batch, x, y, z, rand));
   await place(400, 5, 30, (x, y, z) => addFern(batch, x, y, z, rand));
+  for (const side of [-1, 1]) {
+    for (let k = 0; k < track.N; k += 1) {
+      await tick();
+      const i = track.wrap(k);
+      const out = { x: side * track.nx[i], z: side * track.nz[i] };
+      for (let n = 0; n < 2; n++) {
+        const lat = side * (hw - 0.5 + rand() * 4.5);
+        const along = (rand() - 0.5) * track.spacing;
+        const x = track.px[i] + track.nx[i] * lat + track.tx[i] * along;
+        const z = track.pz[i] + track.nz[i] * lat + track.tz[i] * along;
+        const { s } = surface.sample(x, z);
+        if (tunnelMask(track, s) > 0 || track.river.drops.some((d) => Math.abs(track.ahead(d.s, s) - 2) < 10 || track.ahead(s, d.s) < 6)) continue;
+        const ground = Math.max(terrainHeight(surface, track, x, z), track.level(s) - 0.3);
+        const roll = rand();
+        if (roll < 0.45) addBush(batch, x, ground - 0.4, z, rand);
+        else if (roll < 0.75) addReeds(batch, x, ground - 0.3, z, rand, out);
+        else addBanana(batch, x, ground - 0.2, z, rand, rand() < 0.4);
+      }
+    }
+  }
   for (let n = 0, tries = 0; n < 300 && tries < 9000; tries++) {
     await tick();
     const x = minX + rand() * (maxX - minX);
