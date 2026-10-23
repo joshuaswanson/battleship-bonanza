@@ -292,9 +292,9 @@ export class Loadout {
       const canvasBox = canvas.getBoundingClientRect();
       const stageBox = stage.getBoundingClientRect();
       const tan = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
-      const byWidth = 13 / (0.62 * (stageBox.width / w) * 2 * tan * this.camera.aspect);
-      const byHeight = 7 / (0.75 * (stageBox.height / h) * 2 * tan);
-      const dist = Math.max(16, Math.max(byWidth, byHeight));
+      const byWidth = 12.5 / (0.85 * (stageBox.width / w) * 2 * tan * this.camera.aspect);
+      const byHeight = 6.5 / (0.95 * (stageBox.height / h) * 2 * tan);
+      const dist = Math.max(12, Math.max(byWidth, byHeight));
       this.camera.position.set(12, 7.6, 14.8).setLength(dist);
       this.camera.lookAt(0, 0.9, 0);
       const shiftX = canvasBox.left + w / 2 - (stageBox.left + stageBox.width / 2);
