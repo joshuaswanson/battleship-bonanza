@@ -564,7 +564,8 @@ export class Race {
     target.bump(kind === 'bullet' ? 1.5 : 5);
     target.vel.x += knockX;
     target.vel.z += knockZ;
-    target.speed *= kind === 'bullet' ? 0.97 : kind === 'saw' ? 0.94 : 0.7;
+    const SLOWDOWN = { bullet: 0.97, saw: 0.94, laser: 0.97, reflect: 0.97 };
+    target.speed *= SLOWDOWN[kind] ?? 0.7;
     if (spin && target.spinTime <= 0) {
       target.spinTime = spin;
       target.spinDur = spin;
@@ -1123,15 +1124,15 @@ export class Race {
     if (victim.has('saw')) {
       this.sfx.play('tink', victim.pos);
       this.fx.sparkBurst(end.x, end.y, end.z, 0xffffff, 16);
-      this.damage(victim, amount * SAW_LEAK, b, 'laser', { stun: 0.2 });
+      this.damage(victim, amount * SAW_LEAK, b, 'laser');
       const stray = bounce?.boat;
       if (stray && !(stray.has('saw') && stray !== b)) {
-        this.damage(stray, amount * SAW_LEAK, victim, 'reflect', { knockX: bounce.dir.x * 2, knockZ: bounce.dir.z * 2, stun: 0.2 });
+        this.damage(stray, amount * SAW_LEAK, victim, 'reflect', { knockX: bounce.dir.x, knockZ: bounce.dir.z });
       }
       return;
     }
     this.fx.sparkBurst(end.x, end.y, end.z, 0xff2a2a, 12);
-    this.damage(victim, amount, b, 'laser', { knockX: dir.x * 4, knockZ: dir.z * 4, stun: 0.4, spin: amount > 10 ? 0.5 : 0 });
+    this.damage(victim, amount, b, 'laser', { knockX: dir.x * 1.5, knockZ: dir.z * 1.5 });
   }
 
   gunArc(b, id, range) {
