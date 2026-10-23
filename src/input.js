@@ -6,7 +6,6 @@ const BINDINGS = {
   item0: ['KeyO'],
   item1: ['KeyP'],
   pause: ['Escape'],
-  mute: ['KeyM'],
 };
 
 const PAD_BUTTONS = { item0: [0, 4], item1: [1, 2, 5], pause: [9] };

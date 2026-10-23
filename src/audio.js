@@ -1,7 +1,7 @@
 export class Sfx {
   constructor() {
     this.ctx = null;
-    this.muted = localStorage.getItem('bb-muted') === '1';
+    localStorage.removeItem('bb-muted');
     this.listener = null;
     this.music = new Audio(`${import.meta.env.BASE_URL}menu-music.mp3`);
     this.music.loop = true;
@@ -11,7 +11,7 @@ export class Sfx {
 
   playMusic(on) {
     this.musicWanted = on;
-    if (on && !this.muted && this.ctx) this.music.play().catch(() => {});
+    if (on && this.ctx) this.music.play().catch(() => {});
     else this.music.pause();
   }
 
@@ -19,7 +19,7 @@ export class Sfx {
     if (!this.ctx) {
       this.ctx = new AudioContext();
       this.master = this.ctx.createGain();
-      this.master.gain.value = this.muted ? 0 : 0.5;
+      this.master.gain.value = 0.5;
       this.master.connect(this.ctx.destination);
       this.noiseBuffer = this.ctx.createBuffer(1, this.ctx.sampleRate, this.ctx.sampleRate);
       const data = this.noiseBuffer.getChannelData(0);
@@ -35,15 +35,7 @@ export class Sfx {
       this.engine.start();
     }
     if (this.ctx.state === 'suspended') this.ctx.resume();
-    if (this.musicWanted && !this.muted && this.music.paused) this.music.play().catch(() => {});
-  }
-
-  toggleMute() {
-    this.muted = !this.muted;
-    localStorage.setItem('bb-muted', this.muted ? '1' : '0');
-    if (this.master) this.master.gain.value = this.muted ? 0 : 0.5;
-    this.playMusic(this.musicWanted);
-    return this.muted;
+    if (this.musicWanted && this.music.paused) this.music.play().catch(() => {});
   }
 
   setEngine(speedFraction, active) {
@@ -93,7 +85,7 @@ export class Sfx {
   }
 
   play(name, pos) {
-    if (!this.ctx || this.muted) return;
+    if (!this.ctx) return;
     const v = this.volumeAt(pos);
     if (!(v >= 0.04)) return;
     switch (name) {

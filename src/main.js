@@ -350,7 +350,6 @@ function frame(now) {
   const state = input.poll();
   const pressed = input.pressed;
 
-  if (pressed.has('mute')) sfx.toggleMute();
   if (pressed.has('pause') && $('screen-howto').classList.contains('hidden')) {
     if (mode === 'race') pause(true);
     else if (mode === 'paused') pause(false);
