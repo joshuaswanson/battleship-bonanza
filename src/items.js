@@ -119,7 +119,7 @@ export const ITEMS = {
     name: 'Camo',
     group: 'defense',
     passive: true,
-    blurb: "Missiles and the minimap can't find you, and machine guns won't lock on. As far as anyone knows, you're just a floating shrub.",
+    blurb: "Unfortunately you're still very visible out on the open ocean. Luckily, heat seeking missiles can't seem to find you.",
   },
   jetpack: {
     stats: { speed: 1, tricks: 2 },
