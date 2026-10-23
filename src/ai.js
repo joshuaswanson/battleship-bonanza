@@ -45,7 +45,7 @@ export function driveAI(race, b, dt) {
 
   ai.think -= dt;
   if (ai.think <= 0) {
-    ai.think = 0.2 + Math.random() * 0.35;
+    ai.think = race.incomingThreats(b).length ? 0.08 : 0.2 + Math.random() * 0.35;
     if (race.state === 'racing' && (race.clock > 2.5 || race.attract)) useItems(race, b, ai);
   }
 }
@@ -115,6 +115,8 @@ function shouldUse(race, b, id, ai) {
       return threatened && r < 0.85;
     }
     case 'jetpack': {
+      const threat = race.incomingThreats(b).some((t) => t.eta < 0.4);
+      if (threat) return r < 0.6;
       const idx = race.track.wrap(b.trackIdx + Math.round(40 / race.track.spacing));
       const straight = Math.abs(wrapAngle(race.track.heading(idx) - b.heading)) < 0.12;
       return straight && b.speed > 25 && r < 0.12;

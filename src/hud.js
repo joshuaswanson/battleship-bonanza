@@ -122,6 +122,9 @@ export class Hud {
       case 'finalLap':
         this.pop('Final lap');
         break;
+      case 'dodge':
+        this.pop('Dodged!', 'go');
+        break;
       case 'finish':
         this.pop(`You finished ${ordinal(e.place)}`, 'go');
         break;

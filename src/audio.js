@@ -141,6 +141,10 @@ export class Sfx {
         this.tone(700, 0.08, { vol: 0.25 * v, to: 1400 });
         this.tone(500, 0.5, { type: 'triangle', vol: 0.15 * v, to: 100, delay: 0.08 });
         break;
+      case 'dodge':
+        this.noise(0.4, { vol: 0.25 * v, freq: 600, type: 'bandpass', to: 3000 });
+        [880, 1320, 1760].forEach((f, i) => this.tone(f, 0.14, { type: 'triangle', vol: 0.14, delay: 0.05 + i * 0.06 }));
+        break;
       case 'overheat':
         this.noise(0.9, { vol: 0.3 * v, freq: 4000, type: 'highpass', to: 1500 });
         this.tone(900, 0.5, { type: 'square', vol: 0.06 * v, to: 120 });

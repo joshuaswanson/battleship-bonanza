@@ -21,6 +21,7 @@ const HIT_RADIUS = 2.1;
 const AXIS_HALF = 3.4;
 const KO_TIME = 2.2;
 const LASER_REACH = 75;
+const DODGE_WINDOW = 0.45;
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const approach = (v, target, step) => (v < target ? Math.min(target, v + step) : Math.max(target, v - step));
@@ -617,6 +618,7 @@ export class Race {
 
     jetpack(b) {
       if (b.air) return false;
+      this.tryDodge(b);
       b.air = { t: 0, dur: 1.5, peak: 7, jet: true };
       b.speed += 12;
       b.boost = Math.max(b.boost, 1.5);
@@ -745,7 +747,7 @@ export class Race {
 
       if (m.fizzle <= 0) {
         for (const o of this.boats) {
-          if (o === m.owner || !o.alive) continue;
+          if (o === m.owner || o === m.dodgedBy || !o.alive) continue;
           if (o.distanceToAxis(m.pos) < HIT_RADIUS + 0.4) return this.explodeMissile(m, o, 1);
         }
       }
@@ -873,6 +875,47 @@ export class Race {
       h.rope.scale.set(1, 1, Math.max(0.01, from.distanceTo(h.pos)));
       return true;
     });
+  }
+
+  incomingThreats(b) {
+    const threats = [];
+    const c = b.center();
+    for (const m of this.missiles) {
+      if (m.target !== b || m.fizzle > 0) continue;
+      threats.push({ kind: 'missile', m, eta: m.pos.distanceTo(c) / Math.max(m.speed, 1) });
+    }
+    const p = new THREE.Vector3();
+    for (const h of this.hooks) {
+      if (h.target !== b || h.phase !== 'fly') continue;
+      threats.push({ kind: 'hook', h, eta: this.hookPoint(h, p).distanceTo(h.pos) / 150 });
+    }
+    return threats;
+  }
+
+  tryDodge(b) {
+    const dodged = this.incomingThreats(b).filter((t) => t.eta < DODGE_WINDOW);
+    if (!dodged.length) return;
+    for (const t of dodged) {
+      if (t.kind === 'missile') {
+        t.m.target = null;
+        t.m.dodgedBy = b;
+        t.m.dir.y = Math.min(t.m.dir.y, -0.08);
+        t.m.dir.normalize();
+      } else {
+        t.h.target = null;
+        t.h.anchor = null;
+        t.h.travelled = 45;
+      }
+      const attacker = t.kind === 'missile' ? t.m.owner : t.h.owner;
+      const what = t.kind === 'missile' ? 'missile' : 'grappling hook';
+      if (b.isPlayer) this.emit('feed', { text: `You dodged ${attacker.name}'s ${what}`, player: true });
+      else if (attacker.isPlayer) this.emit('feed', { text: `${b.name} dodged your ${what}`, player: true });
+    }
+    const c = b.center();
+    this.fx.ring(c.x, c.y, c.z, 0xffffff, 2, 9, 0.45);
+    this.fx.sparkBurst(c.x, c.y + 1, c.z, 0xffe066, 20);
+    this.sfx.play('dodge', b.pos);
+    if (b.isPlayer) this.emit('dodge');
   }
 
   nearestHookMarker(target, from) {
