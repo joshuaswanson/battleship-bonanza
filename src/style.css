@@ -1626,7 +1626,7 @@ kbd {
   top: -28px;
   width: 56px;
   height: 56px;
-  border: 4px dashed var(--pink);
+  border: 4px dashed var(--sun);
   border-radius: 50%;
   animation: spin 2.5s linear infinite;
   filter: drop-shadow(0 0 2px var(--ink));
@@ -1642,10 +1642,11 @@ kbd {
   font-weight: 600;
   font-size: 0.8rem;
   padding: 0.1rem 0.45rem;
-  color: #ffffff;
-  background: var(--pink);
+  color: var(--ink);
+  background: var(--sun);
   border: 2px solid var(--ink);
   border-radius: 8px;
+  box-shadow: 0 2px 0 var(--ink);
 }
 
 @keyframes spin {
