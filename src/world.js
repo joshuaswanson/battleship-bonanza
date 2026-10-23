@@ -665,10 +665,10 @@ function addIsland(batch, x, z, r, rand, { clearCenter = 0 } = {}) {
   return sand;
 }
 
-const PILLAR_DARK = new THREE.Color(0x6f6457);
-const PILLAR_STREAK = new THREE.Color(0x857868);
-const PILLAR_LIGHT = new THREE.Color(0xa49582);
-const PILLAR_WET = new THREE.Color(0x4f4a43);
+const PILLAR_DARK = new THREE.Color(0x6b6e70);
+const PILLAR_STREAK = new THREE.Color(0x85888a);
+const PILLAR_LIGHT = new THREE.Color(0xa7a9a7);
+const PILLAR_WET = new THREE.Color(0x4a4e52);
 
 function paintPillar(g, top) {
   g.computeVertexNormals();
@@ -758,27 +758,26 @@ function addPillar(batch, x, z, rand, { radius, height, plants = 1 }) {
 }
 
 function archGeometry(span, height, thick, rand) {
+  const tilt = (rand() - 0.5) * 8;
+  const sag = 2 + rand() * 4;
   const pts = [
-    new THREE.Vector3(-span, -3, 0),
-    new THREE.Vector3(-span * 1.02, height * 0.45, 0),
-    new THREE.Vector3(-span * 0.85, height * 0.85, 0),
-    new THREE.Vector3(-span * 0.4, height, 0),
-    new THREE.Vector3(span * 0.4, height * (0.97 + rand() * 0.06), 0),
-    new THREE.Vector3(span * 0.85, height * 0.85, 0),
-    new THREE.Vector3(span * 1.02, height * 0.45, 0),
-    new THREE.Vector3(span, -3, 0),
+    new THREE.Vector3(-span * 1.08, height - tilt + 2, (rand() - 0.5) * 4),
+    new THREE.Vector3(-span * 0.55, height - tilt * 0.5 - sag * 0.5 + (rand() - 0.5) * 3, (rand() - 0.5) * 5),
+    new THREE.Vector3(0, height - sag + (rand() - 0.5) * 2, (rand() - 0.5) * 6),
+    new THREE.Vector3(span * 0.55, height + tilt * 0.5 - sag * 0.5 + (rand() - 0.5) * 3, (rand() - 0.5) * 5),
+    new THREE.Vector3(span * 1.08, height + tilt + 2, (rand() - 0.5) * 4),
   ];
   const curve = new THREE.CatmullRomCurve3(pts);
   const segments = 60;
   const radial = 12;
   const tube = new THREE.TubeGeometry(curve, segments, 1, radial, false);
   const pos = tube.attributes.position;
-  const lumps = Array.from({ length: 3 }, () => ({ f: 3 + rand() * 6, k: 2 + Math.floor(rand() * 3), p: rand() * 6, a: 0.08 + rand() * 0.1 }));
+  const lumps = Array.from({ length: 5 }, () => ({ f: 3 + rand() * 9, k: 1 + Math.floor(rand() * 4), p: rand() * 6, a: 0.08 + rand() * 0.14 }));
   for (let i = 0; i <= segments; i++) {
     const t = i / segments;
     const c = curve.getPointAt(t);
     const along = Math.abs(t - 0.5) * 2;
-    const r = thick * (1.2 - 0.4 * along + 0.7 * along ** 8);
+    const r = thick * (0.85 + 0.5 * along ** 2 + 0.25 * Math.sin(t * 9 + lumps[0].p));
     for (let j = 0; j <= radial; j++) {
       const k = i * (radial + 1) + j;
       const a = (j / radial) * Math.PI * 2;
@@ -787,8 +786,8 @@ function archGeometry(span, height, thick, rand) {
       const dx = pos.getX(k) - c.x;
       const dy = pos.getY(k) - c.y;
       const dz = pos.getZ(k) - c.z;
-      const flat = dy > 0 && along < 0.6 ? 0.7 : 1;
-      pos.setXYZ(k, c.x + dx * r * bump, c.y + dy * r * bump * flat, c.z + dz * r * bump * 1.35);
+      const flat = dy > 0 ? 0.55 : 1.15;
+      pos.setXYZ(k, c.x + dx * r * bump, c.y + dy * r * bump * flat, c.z + dz * r * bump * 1.6);
     }
   }
   const g = mergeVertices(tube.deleteAttribute('normal').deleteAttribute('uv'));
@@ -798,7 +797,7 @@ function archGeometry(span, height, thick, rand) {
 function addArch(batch, track, fraction, rand) {
   const idx = track.wrap(Math.round(fraction * track.N));
   const half = track.halfWidth;
-  const span = half + 9;
+  const span = half + 11;
   const height = 26 + rand() * 6;
   const thick = 5 + rand() * 1.5;
   const p = track.point(idx, 0);
@@ -812,12 +811,74 @@ function addArch(batch, track, fraction, rand) {
   }
   const blobs = [];
   for (const side of [-1, 1]) {
-    const lx = p.x + nx * side * span;
-    const lz = p.z + nz * side * span;
-    batch.add('foam', RING, mat(lx, 0.2, lz, thick * 1.6, 6, thick * 1.6));
-    blobs.push({ x: lx, z: lz, rx: thick * 1.4, rz: thick * 1.4, rot: 0 });
+    const lx = p.x + nx * side * (span + 2);
+    const lz = p.z + nz * side * (span + 2);
+    const anchor = addPillar(batch, lx, lz, rand, { radius: 8 + rand() * 4, height: height + 8 + rand() * 22 });
+    blobs.push(anchor.blob);
   }
   return blobs;
+}
+
+const mainlandEdge = (x) => 485 + 45 * Math.sin(x * 0.005 + 0.7) + 22 * Math.sin(x * 0.013 + 2) + 8 * Math.sin(x * 0.05);
+const mainlandHeight = (x) => 74 + 16 * Math.sin(x * 0.009) + 9 * Math.sin(x * 0.031 + 1);
+const MAINLAND_ROWS = [-14, -5, -1.5, 0.4, 1.5, 3, 5, 9, 16, 30, 60, 120, 240, 520];
+
+function addMainland(batch, rand) {
+  const step = 8;
+  const cols = Math.round(2600 / step);
+  const positions = [];
+  for (let c = 0; c <= cols; c++) {
+    const x = -1300 + c * step;
+    const edge = mainlandEdge(x);
+    const top = mainlandHeight(x);
+    for (const d of MAINLAND_ROWS) {
+      let y;
+      let z = edge + d;
+      let px = x;
+      if (d < 0) y = -4;
+      else if (d < 6) {
+        const u = THREE.MathUtils.smoothstep(d, 0.4, 5);
+        y = -4 + (top + 4) * Math.min(1, u * 1.15);
+        z += Math.sin(y * 0.22 + x * 0.09) * 2.6 + Math.sin(y * 0.07 + x * 0.21) * 1.8;
+        px += Math.sin(y * 0.15 + x * 0.3) * 1.2;
+      } else {
+        y = top + Math.min(1, d / 40) * (6 * Math.sin(x * 0.02 + d * 0.03) + 5 * Math.sin(d * 0.05 - x * 0.011));
+      }
+      positions.push(px, y, z);
+    }
+  }
+  const rows = MAINLAND_ROWS.length;
+  const indices = [];
+  for (let c = 0; c < cols; c++) {
+    for (let r = 0; r < rows - 1; r++) {
+      const a = c * rows + r;
+      const b = (c + 1) * rows + r;
+      indices.push(a, a + 1, b, a + 1, b + 1, b);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  g.setIndex(indices);
+  const land = paintPillar(g.toNonIndexed(), 1e9);
+  const nor = land.attributes.normal;
+  const green = land.attributes.aGreen;
+  for (let i = 0; i < green.count; i++) green.setX(i, THREE.MathUtils.smoothstep(nor.getY(i), 0.55, 0.75));
+  batch.add('rockland', land);
+  for (let x = -1300; x <= 1300; x += 9 + rand() * 9) {
+    const edge = mainlandEdge(x);
+    const top = mainlandHeight(x);
+    for (let k = 0; k < 3; k++) {
+      const d = 8 + rand() * 70;
+      const px = x + (rand() - 0.5) * 8;
+      const pz = edge + d;
+      const y = top + Math.min(1, d / 40) * (6 * Math.sin(px * 0.02 + d * 0.03) + 5 * Math.sin(d * 0.05 - px * 0.011));
+      if (rand() < 0.35) addPalm(batch, px, y - 0.4, pz, rand, { height: 8 + rand() * 7, lean: rand() * 0.4, dir: rand() * Math.PI * 2 });
+      else {
+        const sz = 3 + rand() * 4;
+        batch.add(rand() < 0.5 ? 'moss' : 'mossDark', LOW_SPHERE, mat(px, y + sz * 0.3, pz, sz * 1.3, sz * 0.8, sz));
+      }
+    }
+  }
 }
 
 function addLighthouse(batch, x, z, baseY) {
@@ -958,12 +1019,14 @@ export function createWorld(scene, track) {
       const radius = mesa ? 13 + rand() * 12 : 4 + rand() * 9;
       if (clearance < radius + 6) continue;
       if (!fits(x, z, radius)) continue;
+      if (z > mainlandEdge(x) - radius - 14) continue;
       const height = mesa ? 26 + rand() * 30 : 30 + rand() * 65 + (clearance > 120 ? rand() * 35 : 0);
       const pillar = addPillar(batch, x, z, rand, { radius, height });
       pillars.push({ x, z, r: radius });
       shores.push(pillar.blob);
     }
   }
+  addMainland(batch, rand);
   const islands = pillars.map((p) => ({ x: p.x, z: p.z, r: p.r }));
   const stacks = [];
 
@@ -1017,6 +1080,7 @@ export function createWorld(scene, track) {
     const clearance = track.project(x, z).distance - half;
     if (clearance < 8 || clearance > 120) continue;
     if (islands.some((o) => Math.hypot(o.x - x, o.z - z) < o.r + 8)) continue;
+    if (z > mainlandEdge(x) - 12) continue;
     if (markers.some((m) => Math.hypot(m.position.x - x, m.position.z - z) < 30)) continue;
     const marker = createMarkerBuoy(markers.length % 3);
     marker.position.set(x, 0, z);
