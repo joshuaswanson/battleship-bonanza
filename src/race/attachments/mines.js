@@ -39,7 +39,7 @@ export const methods = {
         for (const o of this.boats) {
           if (!o.alive || o.yOffset > 1.6) continue;
           if (o === mine.owner && mine.age < 2.5) continue;
-          if (o.distanceToAxis2D(mine.pos.x, mine.pos.z) < 3.4) {
+          if (o.distanceToAxis2D(mine.pos.x, mine.pos.z) < 4) {
             this.fx.explosion(mine.pos.x, water + 0.5, mine.pos.z, 1.2);
             this.sfx.play('boom', mine.pos);
             this.damage(o, 40, mine.owner, 'mine', { spin: 1, launch: 0.9 });

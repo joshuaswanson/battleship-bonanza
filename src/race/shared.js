@@ -4,7 +4,7 @@ import { fast } from '../tuning.js';
 export const LAPS = 3;
 export const MAX_HP = 100;
 export const BASE_SPEED = fast(44);
-export const ARMOR_SPEED = 0.95;
+export const ARMOR_SPEED = 0.97;
 export const FLAME_REACH = 15;
 export const BURN_TIME = 3;
 export const BURN_DPS = 5;

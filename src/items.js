@@ -47,7 +47,7 @@ export const ITEMS = {
   grapple: {
     stats: { speed: 1, tricks: 2 },
     group: 'gadgets',
-    cooldown: 7,
+    cooldown: 9,
   },
   emp: {
     stats: { tough: 1, tricks: 2 },

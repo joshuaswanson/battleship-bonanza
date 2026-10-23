@@ -133,7 +133,7 @@ export const methods = {
         if (h.time <= 0 || d < 10 || !t.alive) {
           h.phase = 'retract';
           o.boost = Math.max(o.boost, 1.2);
-          o.speed += fast(10);
+          o.speed += fast(7);
         }
       } else if (h.loose) {
         if (this.reelSlack(h, from, dt)) {
