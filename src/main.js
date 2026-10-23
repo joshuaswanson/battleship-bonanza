@@ -171,6 +171,8 @@ $('btn-start').addEventListener('click', startRace);
 $('btn-resume').addEventListener('click', () => pause(false));
 $('btn-restart').addEventListener('click', startRace);
 $('btn-quit').addEventListener('click', goLoadout);
+$('btn-menu').addEventListener('click', goTitle);
+$('btn-pause').addEventListener('click', () => pause(true));
 $('btn-again').addEventListener('click', startRace);
 $('btn-change').addEventListener('click', goLoadout);
 addEventListener('pointerdown', () => sfx.unlock(), { once: true });
