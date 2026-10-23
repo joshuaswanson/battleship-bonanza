@@ -12,11 +12,7 @@ const COLORS = {
   grass: 0x7fd957,
   foam: 0xf4fbff,
   grassDeep: 0x5fc24a,
-  trunk: 0xc0874f,
-  trunkDark: 0xa8713f,
-  leaf: 0x37b862,
-  leafDeep: 0x2a9a50,
-  leafLight: 0x5ccc5e,
+  crown: 0x6f8a32,
   bush: 0x2e9e52,
   coconut: 0x7a4a2a,
   rock: 0x9aa7b8,
@@ -25,11 +21,13 @@ const COLORS = {
   roof: 0x0e2a47,
 };
 
+const IDENTITY = new THREE.Matrix4();
+
 class Batcher {
   constructor() {
     this.groups = new Map();
   }
-  add(key, geometry, matrix) {
+  add(key, geometry, matrix = IDENTITY) {
     const g = (geometry.index ? geometry.toNonIndexed() : geometry.clone()).applyMatrix4(matrix);
     g.deleteAttribute('uv');
     if (!this.groups.has(key)) this.groups.set(key, []);
@@ -38,8 +36,11 @@ class Batcher {
   build(parent, outline = 0.12) {
     for (const [key, list] of this.groups) {
       const geometry = mergeGeometries(list);
-      const mesh = new THREE.Mesh(geometry, toon(COLORS[key]));
-      parent.add(mesh);
+      const painted = geometry.hasAttribute('color');
+      const material = painted
+        ? toon(0xffffff, { vertexColors: true })
+        : toon(COLORS[key]);
+      parent.add(new THREE.Mesh(geometry, material));
       if (outline && key !== 'foam') parent.add(new THREE.Mesh(geometry, outlineMaterial(outline)));
     }
   }
@@ -57,74 +58,146 @@ function mat(x, y, z, sx = 1, sy = 1, sz = 1, rx = 0, ry = 0, rz = 0) {
 const SPHERE = new THREE.SphereGeometry(1, 20, 14);
 const LOW_SPHERE = new THREE.SphereGeometry(1, 12, 8);
 const CYLINDER = new THREE.CylinderGeometry(1, 1, 1, 12);
-const TRUNK = new THREE.CylinderGeometry(0.82, 1, 1, 9);
 const ROCK = new THREE.DodecahedronGeometry(1, 0);
 ROCK.computeVertexNormals();
 const RING = new THREE.TorusGeometry(1, 0.06, 6, 40).rotateX(Math.PI / 2);
-const FROND = SPHERE.clone().translate(0, 0, 1);
 
 const UP = new THREE.Vector3(0, 1, 0);
-const LEAF_KEYS = ['leaf', 'leafDeep', 'leafLight'];
+const LEAF_PALETTES = [
+  [0x86de6c, 0x2c9a4c],
+  [0xa3e46a, 0x3fa845],
+  [0x6ad67f, 0x1f8548],
+];
+const BARK = [new THREE.Color(0xd39a5c), new THREE.Color(0x9c6a3a)];
+
+function trunkGeometry(points, baseRadius) {
+  const curve = new THREE.CatmullRomCurve3(points);
+  const segments = 48;
+  const radial = 9;
+  const g = new THREE.TubeGeometry(curve, segments, 1, radial, false);
+  const pos = g.attributes.position;
+  const colors = [];
+  const center = new THREE.Vector3();
+  const v = new THREE.Vector3();
+  const bands = 9 + Math.round(points[points.length - 1].distanceTo(points[0]) * 0.6);
+  for (let i = 0; i <= segments; i++) {
+    const t = i / segments;
+    curve.getPointAt(t, center);
+    const band = (t * bands) % 1;
+    const r = baseRadius * (1 - 0.42 * t) * (1 + 0.6 * Math.pow(1 - t, 8)) * (1 + 0.08 * band);
+    const c = band > 0.6 ? BARK[1] : BARK[0];
+    for (let j = 0; j <= radial; j++) {
+      const k = i * (radial + 1) + j;
+      v.fromBufferAttribute(pos, k).sub(center).multiplyScalar(r).add(center);
+      pos.setXYZ(k, v.x, v.y, v.z);
+      colors.push(c.r, c.g, c.b);
+    }
+  }
+  g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  g.computeVertexNormals();
+  return g;
+}
+
+function frondGeometry(start, heading, elevation, length, width, droop, palette) {
+  const steps = 16;
+  const horiz = new THREE.Vector3(Math.cos(heading), 0, Math.sin(heading));
+  const side = new THREE.Vector3(-horiz.z, 0, horiz.x);
+  const light = new THREE.Color(palette[0]);
+  const dark = new THREE.Color(palette[1]);
+  const under = dark.clone().multiplyScalar(0.8);
+  const spine = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    spine.push(
+      start
+        .clone()
+        .addScaledVector(horiz, length * t * (0.8 + 0.2 * Math.cos(elevation)))
+        .addScaledVector(UP, length * (Math.sin(elevation) * t - droop * t * t)),
+    );
+  }
+  const pos = [];
+  const col = [];
+  const vertex = (p, c) => {
+    pos.push(p.x, p.y, p.z);
+    col.push(c.r, c.g, c.b);
+    return pos.length / 3 - 1;
+  };
+  const tangent = new THREE.Vector3();
+  const rows = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    tangent.subVectors(spine[Math.min(steps, i + 1)], spine[Math.max(0, i - 1)]).normalize();
+    const w = width * Math.sin(Math.PI * Math.pow(t, 0.7)) * (1 - 0.3 * t) * (i % 2 ? 0.55 : 1);
+    const thick = 0.16 * Math.sin(Math.PI * t);
+    const edge = (s) =>
+      spine[i].clone().addScaledVector(side, s * w).addScaledVector(tangent, -0.45 * w).addScaledVector(UP, -0.45 * w);
+    rows.push({
+      top: vertex(spine[i], light),
+      bottom: vertex(spine[i].clone().addScaledVector(UP, -thick), under),
+      left: vertex(edge(-1), dark),
+      right: vertex(edge(1), dark),
+    });
+  }
+  const index = [];
+  for (let i = 0; i < steps; i++) {
+    const a = rows[i];
+    const b = rows[i + 1];
+    index.push(a.top, a.right, b.top, a.right, b.right, b.top);
+    index.push(a.top, b.top, a.left, a.left, b.top, b.left);
+    index.push(a.bottom, b.bottom, a.right, a.right, b.bottom, b.right);
+    index.push(a.bottom, a.left, b.bottom, a.left, b.left, b.bottom);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setIndex(index);
+  g.computeVertexNormals();
+  return g;
+}
 
 function addPalm(batch, x, baseY, z, rand, { height, lean, dir }) {
-  const segments = 8;
   const reach = Math.min(height * lean, 8);
   const sway = (rand() - 0.5) * 0.6;
   const points = [];
-  for (let i = 0; i <= segments; i++) {
-    const t = i / segments;
+  for (let i = 0; i <= 6; i++) {
+    const t = i / 6;
     const out = reach * (1 - (1 - t) * (1 - t));
-    const side = sway * reach * t * t;
+    const sideways = sway * reach * t * t;
     points.push(new THREE.Vector3(
-      x + Math.cos(dir) * out - Math.sin(dir) * side,
+      x + Math.cos(dir) * out - Math.sin(dir) * sideways,
       baseY + height * t - reach * 0.15 * t * t,
-      z + Math.sin(dir) * out + Math.cos(dir) * side,
+      z + Math.sin(dir) * out + Math.cos(dir) * sideways,
     ));
   }
-  const base = 0.45 + height * 0.035;
-  const step = new THREE.Vector3();
-  for (let i = 0; i < segments; i++) {
-    const p0 = points[i];
-    const p1 = points[i + 1];
-    step.subVectors(p1, p0);
-    const len = step.length();
-    q.setFromUnitVectors(UP, step.normalize());
-    const r = base * (1 - 0.4 * (i / segments));
-    const matrix = new THREE.Matrix4().compose(p0.clone().lerp(p1, 0.5), q, new THREE.Vector3(r, len * 1.04, r));
-    batch.add(i % 2 ? 'trunk' : 'trunkDark', TRUNK, matrix);
-  }
+  const radius = 0.4 + height * 0.03;
+  batch.add('trunk', trunkGeometry(points, radius));
 
-  const top = points[segments];
-  const leafKey = LEAF_KEYS[Math.floor(rand() * LEAF_KEYS.length)];
-  const fronds = 7 + Math.floor(rand() * 4);
-  const frondLen = 3 + height * 0.16 + rand() * 1.2;
-  const droop = 0.3 + rand() * 0.35;
+  const top = points[points.length - 1];
+  batch.add('crown', SPHERE, mat(top.x, top.y + 0.1, top.z, radius * 1.3, radius * 1.1, radius * 1.3));
+  const palette = LEAF_PALETTES[Math.floor(rand() * LEAF_PALETTES.length)];
   const spin = rand() * Math.PI * 2;
+  const size = 3.8 + height * 0.22;
+  const fronds = 10 + Math.floor(rand() * 4);
   for (let i = 0; i < fronds; i++) {
-    const a = spin + (i / fronds) * Math.PI * 2 + (rand() - 0.5) * 0.4;
-    const len = frondLen * (0.8 + rand() * 0.35);
-    const pitch = droop + (rand() - 0.5) * 0.2;
-    e.set(pitch * 0.4 - 0.15, a, 0, 'YXZ');
-    q.setFromEuler(e);
-    const first = new THREE.Vector3(0.75, 0.2, len * 0.3);
-    batch.add(leafKey, FROND, new THREE.Matrix4().compose(top, q, first));
-    const tip = new THREE.Vector3(0, 0, len * 0.58).applyQuaternion(q).add(top);
-    e.set(pitch * 1.7, a, 0, 'YXZ');
-    q.setFromEuler(e);
-    batch.add(leafKey, FROND, new THREE.Matrix4().compose(tip, q, new THREE.Vector3(0.65, 0.17, len * 0.32)));
+    const heading = spin + (i / fronds) * Math.PI * 2 + (rand() - 0.5) * 0.35;
+    const upper = i % 3 === 0;
+    batch.add(
+      'fronds',
+      frondGeometry(
+        top,
+        heading,
+        upper ? 0.75 + rand() * 0.3 : 0.25 + rand() * 0.3,
+        size * (upper ? 0.7 : 1) * (0.85 + rand() * 0.3),
+        1.0 + rand() * 0.3,
+        upper ? 0.55 : 0.75 + rand() * 0.35,
+        palette,
+      ),
+    );
   }
-  e.set(0, 0, 0, 'XYZ');
-  for (let i = 0; i < 3; i++) {
-    const a = spin + (i / 3) * Math.PI * 2;
-    e.set(-1.1, a, 0, 'YXZ');
-    q.setFromEuler(e);
-    batch.add(leafKey, FROND, new THREE.Matrix4().compose(top, q, new THREE.Vector3(0.4, 0.14, frondLen * 0.22)));
-  }
-  e.set(0, 0, 0, 'XYZ');
   const nuts = Math.floor(rand() * 5);
   for (let i = 0; i < nuts; i++) {
     const a = spin + (i / Math.max(1, nuts)) * Math.PI * 2;
-    batch.add('coconut', LOW_SPHERE, mat(top.x + Math.cos(a) * 0.55, top.y - 0.55, top.z + Math.sin(a) * 0.55, 0.42, 0.42, 0.42));
+    batch.add('coconut', LOW_SPHERE, mat(top.x + Math.cos(a) * radius * 1.2, top.y - 0.45, top.z + Math.sin(a) * radius * 1.2, 0.42, 0.42, 0.42));
   }
 }
 
