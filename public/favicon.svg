@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="14" fill="#1FC8D6"/>
+  <g transform="translate(10 0) skewX(-14)">
+    <polygon points="4,38 22,36 22,42" fill="#FF4141"/>
+    <text x="40" y="47" text-anchor="middle" font-family="Arial Black, Impact, sans-serif" font-weight="900" font-size="38" fill="#FFD23F" stroke="#0E2A47" stroke-width="5" paint-order="stroke">B</text>
+  </g>
+</svg>

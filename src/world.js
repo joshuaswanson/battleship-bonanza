@@ -1,0 +1,513 @@
+import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { createWater, waveHeight } from './water.js';
+import { toon, outlineMaterial, mulberry32 } from './toon.js';
+
+const SKY_TOP = 0x3fa9f5;
+const SKY_HORIZON = 0xc4f1ff;
+export const SUN_DIR = new THREE.Vector3(0.45, 0.85, 0.3).normalize();
+
+const COLORS = {
+  sand: 0xffe1a1,
+  grass: 0x7fd957,
+  foam: 0xf4fbff,
+  grassDeep: 0x5fc24a,
+  trunk: 0xc0874f,
+  trunkDark: 0xa8713f,
+  leaf: 0x37b862,
+  leafDeep: 0x2a9a50,
+  leafLight: 0x5ccc5e,
+  bush: 0x2e9e52,
+  coconut: 0x7a4a2a,
+  rock: 0x9aa7b8,
+  stripeRed: 0xff4141,
+  stripeWhite: 0xf6f8ff,
+  roof: 0x0e2a47,
+};
+
+class Batcher {
+  constructor() {
+    this.groups = new Map();
+  }
+  add(key, geometry, matrix) {
+    const g = (geometry.index ? geometry.toNonIndexed() : geometry.clone()).applyMatrix4(matrix);
+    g.deleteAttribute('uv');
+    if (!this.groups.has(key)) this.groups.set(key, []);
+    this.groups.get(key).push(g);
+  }
+  build(parent, outline = 0.12) {
+    for (const [key, list] of this.groups) {
+      const geometry = mergeGeometries(list);
+      const mesh = new THREE.Mesh(geometry, toon(COLORS[key]));
+      parent.add(mesh);
+      if (outline && key !== 'foam') parent.add(new THREE.Mesh(geometry, outlineMaterial(outline)));
+    }
+  }
+}
+
+const m4 = new THREE.Matrix4();
+const q = new THREE.Quaternion();
+const e = new THREE.Euler();
+function mat(x, y, z, sx = 1, sy = 1, sz = 1, rx = 0, ry = 0, rz = 0) {
+  e.set(rx, ry, rz);
+  q.setFromEuler(e);
+  return m4.compose(new THREE.Vector3(x, y, z), q, new THREE.Vector3(sx, sy, sz)).clone();
+}
+
+const SPHERE = new THREE.SphereGeometry(1, 20, 14);
+const LOW_SPHERE = new THREE.SphereGeometry(1, 12, 8);
+const CYLINDER = new THREE.CylinderGeometry(1, 1, 1, 12);
+const TRUNK = new THREE.CylinderGeometry(0.82, 1, 1, 9);
+const ROCK = new THREE.DodecahedronGeometry(1, 0);
+ROCK.computeVertexNormals();
+const RING = new THREE.TorusGeometry(1, 0.06, 6, 40).rotateX(Math.PI / 2);
+const FROND = SPHERE.clone().translate(0, 0, 1);
+
+const UP = new THREE.Vector3(0, 1, 0);
+const LEAF_KEYS = ['leaf', 'leafDeep', 'leafLight'];
+
+function addPalm(batch, x, baseY, z, rand, { height, lean, dir }) {
+  const segments = 8;
+  const reach = Math.min(height * lean, 8);
+  const sway = (rand() - 0.5) * 0.6;
+  const points = [];
+  for (let i = 0; i <= segments; i++) {
+    const t = i / segments;
+    const out = reach * (1 - (1 - t) * (1 - t));
+    const side = sway * reach * t * t;
+    points.push(new THREE.Vector3(
+      x + Math.cos(dir) * out - Math.sin(dir) * side,
+      baseY + height * t - reach * 0.15 * t * t,
+      z + Math.sin(dir) * out + Math.cos(dir) * side,
+    ));
+  }
+  const base = 0.45 + height * 0.035;
+  const step = new THREE.Vector3();
+  for (let i = 0; i < segments; i++) {
+    const p0 = points[i];
+    const p1 = points[i + 1];
+    step.subVectors(p1, p0);
+    const len = step.length();
+    q.setFromUnitVectors(UP, step.normalize());
+    const r = base * (1 - 0.4 * (i / segments));
+    const matrix = new THREE.Matrix4().compose(p0.clone().lerp(p1, 0.5), q, new THREE.Vector3(r, len * 1.04, r));
+    batch.add(i % 2 ? 'trunk' : 'trunkDark', TRUNK, matrix);
+  }
+
+  const top = points[segments];
+  const leafKey = LEAF_KEYS[Math.floor(rand() * LEAF_KEYS.length)];
+  const fronds = 7 + Math.floor(rand() * 4);
+  const frondLen = 3 + height * 0.16 + rand() * 1.2;
+  const droop = 0.3 + rand() * 0.35;
+  const spin = rand() * Math.PI * 2;
+  for (let i = 0; i < fronds; i++) {
+    const a = spin + (i / fronds) * Math.PI * 2 + (rand() - 0.5) * 0.4;
+    const len = frondLen * (0.8 + rand() * 0.35);
+    const pitch = droop + (rand() - 0.5) * 0.2;
+    e.set(pitch * 0.4 - 0.15, a, 0, 'YXZ');
+    q.setFromEuler(e);
+    const first = new THREE.Vector3(0.75, 0.2, len * 0.3);
+    batch.add(leafKey, FROND, new THREE.Matrix4().compose(top, q, first));
+    const tip = new THREE.Vector3(0, 0, len * 0.58).applyQuaternion(q).add(top);
+    e.set(pitch * 1.7, a, 0, 'YXZ');
+    q.setFromEuler(e);
+    batch.add(leafKey, FROND, new THREE.Matrix4().compose(tip, q, new THREE.Vector3(0.65, 0.17, len * 0.32)));
+  }
+  e.set(0, 0, 0, 'XYZ');
+  for (let i = 0; i < 3; i++) {
+    const a = spin + (i / 3) * Math.PI * 2;
+    e.set(-1.1, a, 0, 'YXZ');
+    q.setFromEuler(e);
+    batch.add(leafKey, FROND, new THREE.Matrix4().compose(top, q, new THREE.Vector3(0.4, 0.14, frondLen * 0.22)));
+  }
+  e.set(0, 0, 0, 'XYZ');
+  const nuts = Math.floor(rand() * 5);
+  for (let i = 0; i < nuts; i++) {
+    const a = spin + (i / Math.max(1, nuts)) * Math.PI * 2;
+    batch.add('coconut', LOW_SPHERE, mat(top.x + Math.cos(a) * 0.55, top.y - 0.55, top.z + Math.sin(a) * 0.55, 0.42, 0.42, 0.42));
+  }
+}
+
+function islandSurface(blobs) {
+  return (px, pz) => {
+    let best = -Infinity;
+    for (const b of blobs) {
+      const dx = px - b.x;
+      const dz = pz - b.z;
+      const lx = (dx * Math.cos(b.rot) - dz * Math.sin(b.rot)) / b.rx;
+      const lz = (dx * Math.sin(b.rot) + dz * Math.cos(b.rot)) / b.rz;
+      const d2 = lx * lx + lz * lz;
+      if (d2 < 1) best = Math.max(best, b.y + b.h * Math.sqrt(1 - d2));
+    }
+    return best;
+  };
+}
+
+function addBlob(batch, key, blob) {
+  batch.add(key, SPHERE, mat(blob.x, blob.y, blob.z, blob.rx, blob.h, blob.rz, 0, blob.rot, 0));
+}
+
+function addIsland(batch, x, z, r, rand, { clearCenter = 0 } = {}) {
+  const roll = rand();
+  const kind = r < 14 && roll < 0.45 ? 'sandbar' : roll > 0.65 ? 'lush' : 'normal';
+
+  const sand = [];
+  const blobCount = 1 + Math.floor(rand() * (r > 18 ? 4 : 2));
+  for (let i = 0; i < blobCount; i++) {
+    const a = rand() * Math.PI * 2;
+    const off = i === 0 ? 0 : r * (0.15 + rand() * 0.2);
+    const size = r * (i === 0 ? 0.62 + rand() * 0.15 : 0.35 + rand() * 0.25);
+    const stretch = 0.75 + rand() * 0.4;
+    sand.push({
+      x: x + Math.cos(a) * off,
+      z: z + Math.sin(a) * off,
+      rx: size * stretch,
+      rz: size / stretch,
+      rot: rand() * Math.PI,
+      y: -1,
+      h: kind === 'sandbar' ? 1.8 + rand() * 0.8 : Math.min(6, size * 0.22) + 1 + rand() * 1.5,
+    });
+  }
+  for (const blob of sand) {
+    addBlob(batch, 'sand', blob);
+    batch.add('foam', RING, mat(blob.x, 0.25, blob.z, blob.rx * 1.03, 6, blob.rz * 1.03, 0, blob.rot, 0));
+    batch.add('foam', RING, mat(blob.x, 0.1, blob.z, blob.rx * 1.13, 4, blob.rz * 1.13, 0, blob.rot, 0));
+  }
+  const sandAt = islandSurface(sand);
+
+  const green = [];
+  if (kind !== 'sandbar') {
+    const grassKey = rand() < 0.5 ? 'grass' : 'grassDeep';
+    for (const blob of sand) {
+      if (kind === 'normal' && rand() < 0.35) continue;
+      const g = {
+        x: blob.x + (rand() - 0.5) * blob.rx * 0.2,
+        z: blob.z + (rand() - 0.5) * blob.rz * 0.2,
+        rx: blob.rx * (0.55 + rand() * 0.2),
+        rz: blob.rz * (0.55 + rand() * 0.2),
+        rot: blob.rot,
+        y: blob.h - 3.2,
+        h: 3.5,
+      };
+      green.push(g);
+      addBlob(batch, grassKey, g);
+    }
+    if (kind === 'lush' && r > 22) {
+      const hill = { x: x + (rand() - 0.5) * r * 0.3, z: z + (rand() - 0.5) * r * 0.3, rx: r * 0.35, rz: r * 0.3, rot: rand() * Math.PI, y: 0, h: 7 + rand() * 7 };
+      green.push(hill);
+      addBlob(batch, grassKey, hill);
+    }
+  }
+  const groundAt = (px, pz) => Math.max(sandAt(px, pz), islandSurface(green)(px, pz));
+
+  const plant = (px, pz, opts) => {
+    if (Math.hypot(px - x, pz - z) < clearCenter) return;
+    const y = groundAt(px, pz);
+    if (y < 0.6) return;
+    addPalm(batch, px, y - 0.4, pz, rand, opts);
+  };
+  const outward = (px, pz) => Math.atan2(pz - z, px - x) + (rand() - 0.5) * 1.2;
+
+  const clusters = kind === 'sandbar' ? (rand() < 0.6 ? 1 : 0) : kind === 'lush' ? 2 + Math.floor(rand() * 4) : 1 + Math.floor(rand() * 3);
+  for (let c = 0; c < clusters; c++) {
+    const a = rand() * Math.PI * 2;
+    const d = rand() * r * (kind === 'sandbar' ? 0.3 : 0.55);
+    const cx = x + Math.cos(a) * d;
+    const cz = z + Math.sin(a) * d;
+    const count = kind === 'sandbar' ? 1 + Math.floor(rand() * 2) : 1 + Math.floor(rand() * 5);
+    const tallest = 9 + rand() * 9;
+    for (let i = 0; i < count; i++) {
+      const pa = rand() * Math.PI * 2;
+      const pd = i === 0 ? 0 : 1.5 + rand() * 3;
+      const px = cx + Math.cos(pa) * pd;
+      const pz = cz + Math.sin(pa) * pd;
+      const edge = Math.min(1, Math.hypot(px - x, pz - z) / r);
+      plant(px, pz, {
+        height: i === 0 ? tallest : tallest * (0.35 + rand() * 0.55),
+        lean: 0.05 + rand() * 0.25 + edge * edge * 0.45,
+        dir: i === 0 ? outward(px, pz) : pa + (rand() - 0.5) * 0.8,
+      });
+    }
+  }
+
+  if (kind !== 'sandbar' && rand() < 0.55) {
+    const a = rand() * Math.PI * 2;
+    const px = x + Math.cos(a) * r * 0.6;
+    const pz = z + Math.sin(a) * r * 0.6;
+    plant(px, pz, { height: 8 + rand() * 6, lean: 0.55 + rand() * 0.3, dir: a + (rand() - 0.5) * 0.4 });
+  }
+
+  if (kind !== 'sandbar') {
+    const bushes = Math.floor(rand() * (kind === 'lush' ? 7 : 4));
+    for (let i = 0; i < bushes; i++) {
+      const a = rand() * Math.PI * 2;
+      const px = x + Math.cos(a) * r * (0.3 + rand() * 0.35);
+      const pz = z + Math.sin(a) * r * (0.3 + rand() * 0.35);
+      const y = groundAt(px, pz);
+      if (y < 0.6) continue;
+      const s = 1.2 + rand() * 1.6;
+      for (let k = 0; k < 3; k++) {
+        batch.add('bush', LOW_SPHERE, mat(px + (k - 1) * s * 0.7, y + s * 0.3, pz + (rand() - 0.5) * s, s * (0.8 + rand() * 0.4), s * 0.75, s));
+      }
+    }
+  }
+
+  const rocks = Math.floor(rand() * 5);
+  const rockA = rand() * Math.PI * 2;
+  for (let i = 0; i < rocks; i++) {
+    const a = rockA + (rand() - 0.5) * 1.2;
+    const s = 0.8 + rand() * 2.6;
+    batch.add('rock', ROCK, mat(x + Math.cos(a) * r * (0.75 + rand() * 0.3), 0.3, z + Math.sin(a) * r * (0.75 + rand() * 0.3), s, s * 0.75, s, rand(), rand() * 3, rand()));
+  }
+}
+
+function addLighthouse(batch, x, z, baseY) {
+  const stripes = 6;
+  for (let i = 0; i < stripes; i++) {
+    const r = 3 - i * 0.22;
+    batch.add(i % 2 ? 'stripeWhite' : 'stripeRed', CYLINDER, mat(x, baseY + i * 3 + 1.5, z, r, 3, r));
+  }
+  const top = baseY + stripes * 3;
+  batch.add('stripeWhite', CYLINDER, mat(x, top + 0.2, z, 2.6, 0.4, 2.6));
+  batch.add('roof', SPHERE, mat(x, top + 2.6, z, 2, 2.4, 2));
+  batch.add('stripeRed', SPHERE, mat(x, top + 5, z, 0.5, 0.5, 0.5));
+}
+
+function createSky() {
+  const material = new THREE.ShaderMaterial({
+    uniforms: {
+      uTop: { value: new THREE.Color(SKY_TOP) },
+      uHorizon: { value: new THREE.Color(SKY_HORIZON) },
+      uSunDir: { value: SUN_DIR.clone() },
+    },
+    vertexShader: /* glsl */ `
+      varying vec3 vDir;
+      void main() {
+        vDir = normalize(position);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform vec3 uTop;
+      uniform vec3 uHorizon;
+      uniform vec3 uSunDir;
+      varying vec3 vDir;
+      void main() {
+        vec3 dir = normalize(vDir);
+        vec3 color = mix(uHorizon, uTop, smoothstep(0.0, 0.55, dir.y));
+        float sun = dot(dir, normalize(uSunDir));
+        color += vec3(1.0, 0.92, 0.7) * pow(max(sun, 0.0), 24.0) * 0.35;
+        color = mix(color, vec3(1.0, 0.98, 0.88), smoothstep(0.9965, 0.9975, sun));
+        gl_FragColor = vec4(color, 1.0);
+        #include <colorspace_fragment>
+      }
+    `,
+    side: THREE.BackSide,
+    depthWrite: false,
+  });
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(1400, 32, 16), material);
+  mesh.renderOrder = -1;
+  return mesh;
+}
+
+function createCloud(rand) {
+  const parts = [];
+  const puffs = 4 + Math.floor(rand() * 4);
+  for (let i = 0; i < puffs; i++) {
+    const s = 9 + rand() * 9;
+    parts.push(LOW_SPHERE.clone().applyMatrix4(mat((i - puffs / 2) * 9 + rand() * 4, rand() * 5, rand() * 10 - 5, s * 1.2, s * 0.8, s)));
+  }
+  return new THREE.Mesh(mergeGeometries(parts), toon(0xffffff, { emissive: 0x9bd9ff, emissiveIntensity: 0.25 }));
+}
+
+function createDuck() {
+  const duck = new THREE.Group();
+  const yellow = toon(0xffd23f);
+  const add = (geometry, material, x, y, z, sx, sy, sz) => {
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(x, y, z);
+    mesh.scale.set(sx, sy, sz);
+    duck.add(mesh);
+    const shell = new THREE.Mesh(geometry, outlineMaterial(0.06));
+    mesh.add(shell);
+  };
+  add(SPHERE, yellow, 0, 2, 0, 5, 3.6, 6.5);
+  add(SPHERE, yellow, 0, 3.4, -5.6, 2.2, 3.6, 1.4);
+  add(SPHERE, yellow, 0, 8, 3.6, 3.4, 3.2, 3.2);
+  add(SPHERE, toon(0xff8a1f), 0, 7.4, 7, 1.9, 0.8, 1.6);
+  add(SPHERE, toon(0x0e2a47), 1.9, 8.8, 5.6, 0.55, 0.75, 0.5);
+  add(SPHERE, toon(0x0e2a47), -1.9, 8.8, 5.6, 0.55, 0.75, 0.5);
+  return duck;
+}
+
+export function createWorld(scene, track) {
+  scene.fog = new THREE.Fog(SKY_HORIZON, 260, 950);
+
+  const sky = createSky();
+  scene.add(sky);
+
+  scene.add(new THREE.HemisphereLight(0xe8f8ff, 0x3cc4d4, 1.4));
+  const sun = new THREE.DirectionalLight(0xfff0d8, 2.4);
+  sun.position.copy(SUN_DIR).multiplyScalar(100);
+  scene.add(sun);
+
+  const water = createWater();
+  scene.add(water.mesh);
+
+  const rand = mulberry32(20261023);
+  const batch = new Batcher();
+  const islands = [];
+  const half = track.halfWidth;
+  for (let gx = -540; gx <= 540; gx += 52) {
+    for (let gz = -480; gz <= 560; gz += 52) {
+      const x = gx + (rand() - 0.5) * 36;
+      const z = gz + (rand() - 0.5) * 36;
+      if (rand() < 0.3) continue;
+      const clearance = track.project(x, z).distance - half;
+      if (clearance < 24) continue;
+      const r = Math.min(44, clearance - 14) * (0.45 + rand() * 0.5);
+      if (r < 7) continue;
+      if (islands.some((o) => Math.hypot(o.x - x, o.z - z) < o.r + r + 8)) continue;
+      islands.push({ x, z, r });
+    }
+  }
+  for (const island of islands) addIsland(batch, island.x, island.z, island.r, rand);
+
+  const start = track.point(0, -(half + 40));
+  addIsland(batch, start.x, start.z, 13, rand, { clearCenter: 5 });
+  addLighthouse(batch, start.x, start.z, 3);
+
+  const scenery = new THREE.Group();
+  batch.build(scenery);
+  scene.add(scenery);
+
+  const buoySpacing = 15;
+  const buoyCount = Math.floor(track.length / buoySpacing);
+  const buoyGeometry = new THREE.SphereGeometry(1, 14, 10);
+  buoyGeometry.scale(0.95, 0.8, 0.95);
+  const buoys = new THREE.InstancedMesh(buoyGeometry, toon(0xffffff), buoyCount * 2);
+  const buoyOutline = new THREE.InstancedMesh(buoyGeometry, outlineMaterial(0.14), buoyCount * 2);
+  const buoyPositions = [];
+  const red = new THREE.Color(COLORS.stripeRed);
+  const white = new THREE.Color(0xffffff);
+  for (let i = 0; i < buoyCount; i++) {
+    const idx = Math.round((i * buoySpacing) / track.spacing);
+    for (const side of [-1, 1]) {
+      const p = track.point(idx, side * (half + 1.5));
+      const n = buoyPositions.length;
+      buoyPositions.push(p);
+      buoys.setColorAt(n, (i + (side > 0 ? 1 : 0)) % 2 ? red : white);
+    }
+  }
+  buoys.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  buoyOutline.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  buoys.frustumCulled = false;
+  buoyOutline.frustumCulled = false;
+  scene.add(buoys, buoyOutline);
+
+  const arch = createArch(track, half);
+  scene.add(arch);
+
+  const clouds = [];
+  for (let i = 0; i < 16; i++) {
+    const cloud = createCloud(rand);
+    const a = rand() * Math.PI * 2;
+    const d = 150 + rand() * 600;
+    cloud.position.set(Math.cos(a) * d, 110 + rand() * 70, Math.sin(a) * d);
+    cloud.userData.speed = 2 + rand() * 3;
+    clouds.push(cloud);
+    scene.add(cloud);
+  }
+
+  const ducks = [];
+  const duckSpots = islands.filter((o) => o.r > 18).slice(0, 4);
+  for (const spot of duckSpots) {
+    const duck = createDuck();
+    const p = { x: spot.x + spot.r + 9, z: spot.z };
+    if (track.project(p.x, p.z).distance - half < 12) continue;
+    duck.position.set(p.x, 0, p.z);
+    duck.rotation.y = rand() * Math.PI * 2;
+    duck.userData.phase = rand() * 10;
+    ducks.push(duck);
+    scene.add(duck);
+  }
+
+  const dummy = new THREE.Object3D();
+  return {
+    water,
+    sun,
+    islands,
+    update(t, dt, camera) {
+      water.update(t);
+      sky.position.copy(camera.position);
+      for (let i = 0; i < buoyPositions.length; i++) {
+        const p = buoyPositions[i];
+        dummy.position.set(p.x, waveHeight(p.x, p.z, t) + 0.15, p.z);
+        dummy.rotation.set(Math.sin(t * 1.7 + i) * 0.15, 0, Math.cos(t * 1.3 + i * 0.7) * 0.15);
+        dummy.updateMatrix();
+        buoys.setMatrixAt(i, dummy.matrix);
+        buoyOutline.setMatrixAt(i, dummy.matrix);
+      }
+      buoys.instanceMatrix.needsUpdate = true;
+      buoyOutline.instanceMatrix.needsUpdate = true;
+      for (const cloud of clouds) {
+        cloud.position.x += cloud.userData.speed * dt;
+        if (cloud.position.x > 800) cloud.position.x = -800;
+      }
+      for (const duck of ducks) {
+        const ph = duck.userData.phase;
+        duck.position.y = waveHeight(duck.position.x, duck.position.z, t) - 0.6;
+        duck.rotation.z = Math.sin(t * 0.9 + ph) * 0.06;
+        duck.rotation.x = Math.cos(t * 0.7 + ph) * 0.05;
+      }
+    },
+  };
+}
+
+function checkerTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  const cell = 16;
+  for (let y = 0; y < 4; y++) {
+    for (let x = 0; x < 32; x++) {
+      ctx.fillStyle = (x + y) % 2 ? '#0E2A47' : '#FFFFFF';
+      ctx.fillRect(x * cell, y * cell, cell, cell);
+    }
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
+  return texture;
+}
+
+function createArch(track, half) {
+  const group = new THREE.Group();
+  const p = track.point(0);
+  group.position.set(p.x, 0, p.z);
+  group.rotation.y = track.heading(0);
+  const span = half + 4;
+  const red = toon(COLORS.stripeRed);
+  const white = toon(0xffffff);
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < 5; i++) {
+      const mesh = new THREE.Mesh(CYLINDER, i % 2 ? white : red);
+      mesh.scale.set(1.6, 3.2, 1.6);
+      mesh.position.set(side * span, i * 3.2 + 1.6, 0);
+      mesh.add(new THREE.Mesh(CYLINDER, outlineMaterial(0.08)));
+      group.add(mesh);
+    }
+    const ball = new THREE.Mesh(SPHERE, toon(0xffd23f));
+    ball.scale.setScalar(2.2);
+    ball.position.set(side * span, 17.5, 0);
+    ball.add(new THREE.Mesh(SPHERE, outlineMaterial(0.08)));
+    group.add(ball);
+  }
+  const bannerGeometry = new THREE.BoxGeometry(span * 2, 3.4, 0.8);
+  const banner = new THREE.Mesh(bannerGeometry, toon(0xffffff, { map: checkerTexture() }));
+  banner.position.set(0, 14.5, 0);
+  banner.add(new THREE.Mesh(bannerGeometry, outlineMaterial(0.12)));
+  group.add(banner);
+  return group;
+}

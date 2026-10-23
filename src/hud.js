@@ -1,0 +1,273 @@
+import * as THREE from 'three';
+import { ITEMS, iconSvg } from './items.js';
+import { MAX_HP } from './race.js';
+
+export const ordinal = (n) => `${n}${n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th'}`;
+
+export function formatTime(seconds) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds - m * 60;
+  return `${m}:${s.toFixed(1).padStart(4, '0')}`;
+}
+
+const $ = (id) => document.getElementById(id);
+
+const TARGETING = {
+  missiles: { range: 180, minDot: 0.25, filter: (o) => !o.has('camo') },
+  grapple: { range: 120, minDot: 0.55, filter: (o) => o.has('spikes') || o.has('jetpack') },
+  laser: { range: 140, minDot: 0.96 },
+};
+
+export class Hud {
+  constructor(track) {
+    this.root = $('hud');
+    this.place = $('hud-place');
+    this.of = $('hud-of');
+    this.lap = $('hud-lap');
+    this.time = $('hud-time');
+    this.feed = $('hud-feed');
+    this.center = $('hud-center');
+    this.warn = $('hud-warn');
+    this.reticle = $('hud-reticle');
+    this.hull = $('hud-hull');
+    this.slotsEl = $('hud-slots');
+    this.flash = $('hud-flash');
+    this.map = $('hud-map');
+    this.ctx = this.map.getContext('2d');
+    this.track = track;
+    this.warnTime = 0;
+    this.projected = new THREE.Vector3();
+
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (let i = 0; i < track.N; i++) {
+      minX = Math.min(minX, track.px[i]);
+      maxX = Math.max(maxX, track.px[i]);
+      minZ = Math.min(minZ, track.pz[i]);
+      maxZ = Math.max(maxZ, track.pz[i]);
+    }
+    const pad = 16;
+    const size = this.map.width - pad * 2;
+    const scale = size / Math.max(maxX - minX, maxZ - minZ);
+    const offX = pad + (size - (maxX - minX) * scale) / 2;
+    const offZ = pad + (size - (maxZ - minZ) * scale) / 2;
+    this.toMap = (x, z) => [offX + (maxX - x) * scale, offZ + (maxZ - z) * scale];
+    this.mapScale = scale;
+  }
+
+  show(visible) {
+    this.root.classList.toggle('hidden', !visible);
+  }
+
+  setup(race) {
+    this.race = race;
+    const player = race.player;
+    this.feed.innerHTML = '';
+    this.center.textContent = '';
+    this.warn.textContent = '';
+    this.of.textContent = `of ${race.boats.length}`;
+    this.slotsEl.innerHTML = player.items
+      .map((id, i) => {
+        const item = ITEMS[id];
+        return `<div class="slot ${item.passive ? 'slot-passive' : ''}" data-slot="${i}">
+          <div class="slot-face">${iconSvg(id)}</div>
+          <div class="slot-text"><kbd>${i === 0 ? 'Q' : 'E'}</kbd><span>${item.name}</span></div>
+          <div class="slot-state">${item.passive ? 'Always on' : 'Ready'}</div>
+        </div>`;
+      })
+      .join('');
+    this.slots = [...this.slotsEl.querySelectorAll('.slot')];
+    this.slotLabels = this.slots.map((slot) => slot.querySelector('.slot-state'));
+    this.lastPlace = 0;
+  }
+
+  pop(text, kind = '') {
+    this.center.className = 'hud-center';
+    void this.center.offsetWidth;
+    this.center.textContent = text;
+    this.center.className = `hud-center pop ${kind}`;
+  }
+
+  addFeed(text, highlight) {
+    const li = document.createElement('li');
+    li.textContent = text;
+    if (highlight) li.classList.add('mine');
+    this.feed.prepend(li);
+    while (this.feed.children.length > 4) this.feed.lastChild.remove();
+    setTimeout(() => li.classList.add('fade'), 3500);
+    setTimeout(() => li.remove(), 4200);
+  }
+
+  setWarning(text, time = 1.6) {
+    this.warn.textContent = text;
+    this.warnTime = time;
+  }
+
+  hurtFlash() {
+    this.flash.className = 'hud-flash';
+    void this.flash.offsetWidth;
+    this.flash.className = 'hud-flash on';
+  }
+
+  handle(e) {
+    switch (e.type) {
+      case 'count':
+        this.pop(String(e.n), 'count');
+        break;
+      case 'go':
+        this.pop('Go!', 'go');
+        break;
+      case 'lap':
+        this.pop(`Lap ${e.lap}`);
+        break;
+      case 'finalLap':
+        this.pop('Final lap');
+        break;
+      case 'finish':
+        this.pop(`You finished ${ordinal(e.place)}`, 'go');
+        break;
+      case 'feed':
+        this.addFeed(e.text, e.player);
+        break;
+      case 'hurt':
+        this.hurtFlash();
+        break;
+      case 'ko':
+        this.pop('Sunk!', 'ko');
+        break;
+      case 'warning':
+        this.setWarning(e.text);
+        break;
+      case 'blocked':
+        this.setWarning(e.kind === 'laser' ? 'Laser bounced off your saw' : 'Armor blocked it', 1.1);
+        break;
+    }
+  }
+
+  update(race, camera, dt) {
+    const p = race.player;
+    if (!p) return;
+    if (p.place !== this.lastPlace) {
+      this.place.textContent = ordinal(p.place);
+      this.place.classList.remove('bump');
+      void this.place.offsetWidth;
+      this.place.classList.add('bump');
+      this.lastPlace = p.place;
+    }
+    this.lap.textContent = p.finished ? 'Finished' : `Lap ${p.lap} of ${race.laps}`;
+    this.time.textContent = formatTime(p.finished ? p.finishTime : race.clock);
+    const hp = Math.max(0, p.hp) / MAX_HP;
+    this.hull.style.width = `${hp * 100}%`;
+    this.hull.classList.toggle('low', hp < 0.35);
+
+    p.items.forEach((id, i) => {
+      const item = ITEMS[id];
+      if (item.passive) return;
+      const slot = this.slots[i];
+      const cd = p.cooldowns[i];
+      const ready = cd <= 0;
+      slot.style.setProperty('--cd', ready ? 0 : cd / item.cooldown);
+      slot.classList.toggle('ready', ready);
+      const state = ready ? 'Ready' : `${cd.toFixed(1)}s`;
+      const label = this.slotLabels[i];
+      if (label.textContent !== state) label.textContent = state;
+    });
+
+    this.updateReticle(race, camera);
+
+    this.warnTime -= dt;
+    if (p.wrongWay > 1) this.warn.textContent = 'Wrong way';
+    else if (this.warnTime <= 0) this.warn.textContent = '';
+
+    this.drawMap(race);
+  }
+
+  updateReticle(race, camera) {
+    const p = race.player;
+    let target = null;
+    let label = '';
+    if (p.alive && race.state === 'racing' && !p.finished) {
+      for (let i = 0; i < 2; i++) {
+        const spec = TARGETING[p.items[i]];
+        if (!spec || p.cooldowns[i] > 0) continue;
+        target = race.findTarget(p, spec);
+        if (target) {
+          label = ITEMS[p.items[i]].name;
+          break;
+        }
+      }
+    }
+    if (!target) {
+      this.reticle.classList.remove('on');
+      return;
+    }
+    const v = target.center(this.projected).project(camera);
+    if (v.z > 1) {
+      this.reticle.classList.remove('on');
+      return;
+    }
+    const x = (v.x * 0.5 + 0.5) * innerWidth;
+    const y = (-v.y * 0.5 + 0.5) * innerHeight;
+    this.reticle.style.transform = `translate(${x}px, ${y}px)`;
+    this.reticle.dataset.label = label;
+    this.reticle.classList.add('on');
+  }
+
+  drawMap(race) {
+    const { ctx, track } = this;
+    const w = this.map.width;
+    ctx.clearRect(0, 0, w, w);
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    const path = new Path2D();
+    for (let i = 0; i <= track.N; i += 6) {
+      const [x, y] = this.toMap(track.px[i % track.N], track.pz[i % track.N]);
+      if (i === 0) path.moveTo(x, y);
+      else path.lineTo(x, y);
+    }
+    path.closePath();
+    ctx.strokeStyle = '#0E2A47';
+    ctx.lineWidth = track.halfWidth * 2 * this.mapScale + 6;
+    ctx.stroke(path);
+    ctx.strokeStyle = '#7FE6EE';
+    ctx.lineWidth = track.halfWidth * 2 * this.mapScale;
+    ctx.stroke(path);
+
+    const [sx, sy] = this.toMap(track.px[0], track.pz[0]);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.strokeStyle = '#0E2A47';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(sx, sy, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    const sorted = [...race.boats].sort((a, b) => (a.isPlayer ? 1 : 0) - (b.isPlayer ? 1 : 0));
+    for (const b of sorted) {
+      const [x, y] = this.toMap(b.pos.x, b.pos.z);
+      ctx.globalAlpha = b.alive ? 1 : 0.4;
+      ctx.fillStyle = `#${b.color.toString(16).padStart(6, '0')}`;
+      ctx.strokeStyle = '#0E2A47';
+      ctx.lineWidth = 2.5;
+      if (b.isPlayer) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(-b.heading);
+        ctx.beginPath();
+        ctx.moveTo(0, -9);
+        ctx.lineTo(7, 7);
+        ctx.lineTo(0, 3);
+        ctx.lineTo(-7, 7);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      } else {
+        ctx.beginPath();
+        ctx.arc(x, y, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+}

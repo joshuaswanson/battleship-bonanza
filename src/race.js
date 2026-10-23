@@ -1,0 +1,1063 @@
+import * as THREE from 'three';
+import { ITEMS } from './items.js';
+import { buildBoat, buildMine, buildMissile, buildHook, HULL_L } from './boatModel.js';
+import { waveHeight } from './water.js';
+import { createAI, driveAI } from './ai.js';
+import { toon, glow } from './toon.js';
+
+export const LAPS = 3;
+export const MAX_HP = 100;
+export const BASE_SPEED = 44;
+const ARMOR_SPEED = 0.76;
+const REVERSE_SPEED = 14;
+const ACCEL = 22;
+const BRAKE = 40;
+const COAST = 9;
+const TURN_RATE = 1.9;
+const GRIP = 3.6;
+const RADIUS = 2.05;
+const CIRCLE_OFFSET = 1.9;
+const HIT_RADIUS = 2.1;
+const AXIS_HALF = 3.4;
+const KO_TIME = 2.2;
+
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const approach = (v, target, step) => (v < target ? Math.min(target, v + step) : Math.max(target, v - step));
+const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+
+const VERBS = {
+  spikes: 'poked',
+  bullet: 'peppered',
+  laser: 'zapped',
+  reflect: 'bounced a laser back into',
+  saw: 'sliced',
+  missile: 'blasted',
+  mine: 'mined',
+};
+
+const ROPE_GEOMETRY = new THREE.CylinderGeometry(0.07, 0.07, 1, 6, 1, true).rotateX(Math.PI / 2).translate(0, 0, 0.5);
+const ROPE_MATERIAL = toon(0x34465e);
+
+let shadowTexture;
+function shadowMaterial() {
+  if (!shadowTexture) {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+    g.addColorStop(0, 'rgba(8,40,70,0.45)');
+    g.addColorStop(0.6, 'rgba(8,40,70,0.25)');
+    g.addColorStop(1, 'rgba(8,40,70,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 64, 64);
+    shadowTexture = new THREE.CanvasTexture(canvas);
+  }
+  return new THREE.MeshBasicMaterial({ map: shadowTexture, transparent: true, depthWrite: false });
+}
+const SHADOW_GEOMETRY = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+
+class Boat {
+  constructor(def, index, scene) {
+    this.index = index;
+    this.name = def.name;
+    this.color = def.color;
+    this.items = def.items;
+    this.isPlayer = !!def.isPlayer;
+    this.model = buildBoat(def.color, def.items);
+    scene.add(this.model.root);
+    this.shadow = new THREE.Mesh(SHADOW_GEOMETRY, shadowMaterial());
+    this.shadow.renderOrder = 1;
+    scene.add(this.shadow);
+
+    this.pos = new THREE.Vector3();
+    this.vel = new THREE.Vector3();
+    this.heading = 0;
+    this.speed = 0;
+    this.prevSpeed = 0;
+    this.yOffset = 0;
+    this.waterY = 0;
+    this.hp = MAX_HP;
+    this.cooldowns = [0, 0];
+    this.control = { throttle: 0, steer: 0 };
+    this.steerVis = 0;
+    this.skill = 1;
+    this.ai = createAI();
+
+    this.air = null;
+    this.spinTime = 0;
+    this.spinDur = 1;
+    this.stun = 0;
+    this.boost = 0;
+    this.sawDash = 0;
+    this.sawHits = new Set();
+    this.burst = 0;
+    this.burstTimer = 0;
+    this.ko = 0;
+    this.invuln = 0;
+    this.flash = 0;
+    this.squash = 0;
+    this.squashVel = 0;
+    this.wakeTimer = 0;
+    this.bumpCooldown = new Map();
+
+    this.trackIdx = 0;
+    this.trackS = 0;
+    this.dist = 0;
+    this.lap = 1;
+    this.finished = false;
+    this.finishTime = 0;
+    this.finishOrder = 0;
+    this.place = index + 1;
+    this.wrongWay = 0;
+  }
+
+  has(id) {
+    return this.items.includes(id);
+  }
+
+  get alive() {
+    return this.ko <= 0;
+  }
+
+  local(x, y, z, out = new THREE.Vector3()) {
+    const c = Math.cos(this.heading);
+    const s = Math.sin(this.heading);
+    return out.set(this.pos.x + c * x + s * z, this.waterY + 0.35 + this.yOffset + y, this.pos.z - s * x + c * z);
+  }
+
+  center(out = new THREE.Vector3()) {
+    return this.local(0, 0.9, 0, out);
+  }
+
+  distanceToAxis(point) {
+    const fx = Math.sin(this.heading);
+    const fz = Math.cos(this.heading);
+    const cy = this.waterY + 0.35 + this.yOffset + 0.9;
+    const dx = point.x - this.pos.x;
+    const dy = point.y - cy;
+    const dz = point.z - this.pos.z;
+    const along = clamp(dx * fx + dz * fz, -AXIS_HALF, AXIS_HALF);
+    return Math.hypot(dx - fx * along, dy, dz - fz * along);
+  }
+
+  distanceToAxis2D(x, z) {
+    const fx = Math.sin(this.heading);
+    const fz = Math.cos(this.heading);
+    const dx = x - this.pos.x;
+    const dz = z - this.pos.z;
+    const along = clamp(dx * fx + dz * fz, -AXIS_HALF, AXIS_HALF);
+    return Math.hypot(dx - fx * along, dz - fz * along);
+  }
+
+  bump(amount) {
+    this.squashVel -= amount;
+  }
+}
+
+export class Race {
+  constructor({ scene, track, fx, sfx, defs, attract = false, laps = LAPS }) {
+    this.scene = scene;
+    this.track = track;
+    this.fx = fx;
+    this.sfx = sfx;
+    this.attract = attract;
+    this.laps = attract ? Infinity : laps;
+    this.boats = defs.map((def, i) => new Boat(def, i, scene));
+    this.player = this.boats.find((b) => b.isPlayer) ?? null;
+    this.bullets = [];
+    this.missiles = [];
+    this.mines = [];
+    this.hooks = [];
+    this.pulses = [];
+    this.events = [];
+    this.time = 0;
+    this.clock = 0;
+    this.finishCount = 0;
+    this.state = attract ? 'racing' : 'countdown';
+    this.countdown = 4.2;
+    this.lastCount = 5;
+    this.order = [...this.boats];
+
+    this.bulletMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 8, 6), glow(0xffe066), 400);
+    this.bulletMesh.frustumCulled = false;
+    this.bulletMesh.count = 0;
+    scene.add(this.bulletMesh);
+
+    this.placeGrid();
+  }
+
+  placeGrid() {
+    const t = this.track;
+    this.boats.forEach((b, i) => {
+      const row = Math.floor(i / 2);
+      const col = i % 2;
+      const s = t.length - 20 - row * 17;
+      const idx = t.wrap(Math.round(s / t.spacing));
+      const p = t.point(idx, (col ? 1 : -1) * 10);
+      b.pos.set(p.x, 0, p.z);
+      b.heading = t.heading(idx);
+      b.trackIdx = idx;
+      b.trackS = idx * t.spacing;
+      b.dist = b.trackS - t.length;
+      b.waterY = waveHeight(p.x, p.z, 0);
+    });
+  }
+
+  emit(type, data = {}) {
+    this.events.push({ type, ...data });
+  }
+
+  update(dt, time, input) {
+    this.time = time;
+
+    if (this.state === 'countdown') {
+      this.countdown -= dt;
+      const n = Math.ceil(this.countdown);
+      if (n !== this.lastCount && n <= 3 && n >= 1) {
+        this.lastCount = n;
+        this.emit('count', { n });
+        this.sfx.play('beep');
+      }
+      if (this.countdown <= 0) {
+        this.state = 'racing';
+        this.emit('go');
+        this.sfx.play('go');
+      }
+    } else {
+      this.clock += dt;
+    }
+
+    for (const b of this.boats) {
+      if (b.isPlayer && !b.finished && input) {
+        b.control.throttle = input.throttle;
+        b.control.steer = input.steer;
+        if (input.use0) this.useItem(b, 0);
+        if (input.use1) this.useItem(b, 1);
+      } else if (b.alive) {
+        driveAI(this, b, dt);
+      }
+    }
+
+    for (const b of this.boats) this.updateBoat(b, dt);
+    this.collideBoats();
+    this.updateBullets(dt);
+    this.updateMissiles(dt);
+    this.updateMines(dt);
+    this.updateHooks(dt);
+    this.updatePulses(dt);
+    for (const b of this.boats) this.updateVisual(b, dt);
+    this.updateStandings();
+  }
+
+  updateBoat(b, dt) {
+    const t = this.track;
+    b.cooldowns[0] = Math.max(0, b.cooldowns[0] - dt);
+    b.cooldowns[1] = Math.max(0, b.cooldowns[1] - dt);
+    b.invuln = Math.max(0, b.invuln - dt);
+    b.flash = Math.max(0, b.flash - dt * 5);
+    b.stun -= dt;
+    b.boost -= dt;
+    b.prevSpeed = b.speed;
+
+    if (!b.alive) {
+      b.ko -= dt;
+      const damp = Math.exp(-3 * dt);
+      b.vel.multiplyScalar(damp);
+      b.speed *= damp;
+      b.pos.addScaledVector(b.vel, dt);
+      if (Math.random() < 0.6) this.fx.bubbles(b.pos.x, b.waterY + 0.2, b.pos.z);
+      if (b.ko <= 0) this.respawn(b);
+      return;
+    }
+
+    if (this.state === 'countdown') {
+      b.speed = 0;
+      b.vel.set(0, 0, 0);
+      return;
+    }
+
+    const controllable = b.spinTime <= 0;
+    let max = BASE_SPEED * b.skill;
+    if (b.has('armor')) max *= ARMOR_SPEED;
+    if (b.boost > 0) max *= 1.3;
+    if (b.air?.jet) max *= 1.15;
+    if (b.stun > 0) max *= 0.5;
+    if (this.isTethered(b)) max *= 0.8;
+
+    const throttle = controllable ? b.control.throttle : 0;
+    const target = throttle >= 0 ? throttle * max : throttle * REVERSE_SPEED;
+    let rate = target > b.speed ? ACCEL : BRAKE;
+    if (throttle === 0) rate = COAST;
+    if (b.boost > 0 && target > b.speed) rate *= 2;
+    b.speed = approach(b.speed, target, rate * dt);
+
+    const steer = controllable ? b.control.steer : 0;
+    b.steerVis += (steer - b.steerVis) * (1 - Math.exp(-8 * dt));
+    const speedFrac = clamp(b.speed / BASE_SPEED, 0, 1);
+    const turn = clamp(Math.abs(b.speed) / 14, 0.25, 1) * (b.air ? 0.6 : 1) * (1 - 0.2 * speedFrac);
+    b.heading -= steer * TURN_RATE * turn * dt * (b.speed < -0.5 ? -1 : 1);
+
+    const fx = Math.sin(b.heading);
+    const fz = Math.cos(b.heading);
+    const k = 1 - Math.exp(-(b.air ? 1 : GRIP) * dt);
+    b.vel.x += (fx * b.speed - b.vel.x) * k;
+    b.vel.z += (fz * b.speed - b.vel.z) * k;
+
+    if (b.burst > 0) {
+      b.burstTimer -= dt;
+      while (b.burstTimer <= 0 && b.burst > 0) {
+        this.fireBullet(b);
+        b.burst--;
+        b.burstTimer += 0.07;
+      }
+    }
+
+    if (b.sawDash > 0) {
+      b.sawDash -= dt;
+      this.sawSweep(b);
+    }
+
+    b.pos.x += b.vel.x * dt;
+    b.pos.z += b.vel.z * dt;
+
+    if (b.air) {
+      b.air.t += dt;
+      const u = b.air.t / b.air.dur;
+      b.yOffset = b.air.peak * 4 * u * (1 - u);
+      if (u >= 1) {
+        b.yOffset = 0;
+        b.air = null;
+        b.bump(5);
+        this.fx.splash(b.pos.x, b.waterY, b.pos.z, 1);
+        this.sfx.play('splash', b.pos);
+      }
+    }
+    if (b.spinTime > 0) b.spinTime -= dt;
+
+    const pr = t.project(b.pos.x, b.pos.z, b.trackIdx);
+    let ds = pr.s - b.trackS;
+    if (ds < -t.length / 2) ds += t.length;
+    else if (ds > t.length / 2) ds -= t.length;
+    b.dist += ds;
+    b.trackS = pr.s;
+    b.trackIdx = pr.idx;
+
+    const lim = t.halfWidth - 2.4;
+    if (Math.abs(pr.lateral) > lim) {
+      const sgn = Math.sign(pr.lateral);
+      const nx = t.nx[pr.idx];
+      const nz = t.nz[pr.idx];
+      const over = pr.lateral - sgn * lim;
+      b.pos.x -= nx * over;
+      b.pos.z -= nz * over;
+      const vn = (b.vel.x * nx + b.vel.z * nz) * sgn;
+      if (vn > 0) {
+        b.vel.x -= nx * sgn * vn * 1.5;
+        b.vel.z -= nz * sgn * vn * 1.5;
+        if (vn > 9) {
+          b.speed *= 0.85;
+          b.bump(3);
+          this.fx.splash(b.pos.x, b.waterY, b.pos.z, 0.6);
+          this.sfx.play('boing', b.pos);
+        }
+      }
+      b.speed *= 1 - 0.6 * dt;
+      const along = wrapAngle(t.heading(pr.idx) - b.heading);
+      if (Math.abs(along) < Math.PI / 2) b.heading += along * 2 * dt;
+    }
+
+    if (b.isPlayer) {
+      const facing = fx * t.tx[pr.idx] + fz * t.tz[pr.idx];
+      b.wrongWay = facing < -0.3 && b.speed > 4 ? b.wrongWay + dt : 0;
+    }
+  }
+
+  respawn(b) {
+    const t = this.track;
+    const idx = t.wrap(b.trackIdx - 10);
+    let lateral = 0;
+    for (const candidate of [0, -10, 10, -18, 18]) {
+      const p = t.point(idx, candidate);
+      if (this.boats.every((o) => o === b || Math.hypot(o.pos.x - p.x, o.pos.z - p.z) > 9)) {
+        lateral = candidate;
+        break;
+      }
+    }
+    const p = t.point(idx, lateral);
+    b.pos.set(p.x, 0, p.z);
+    b.heading = t.heading(idx);
+    b.vel.set(0, 0, 0);
+    b.speed = 12;
+    b.hp = MAX_HP;
+    b.invuln = 2;
+    b.air = null;
+    b.yOffset = 0;
+    b.spinTime = 0;
+    b.stun = 0;
+    b.burst = 0;
+    b.sawDash = 0;
+    const s = idx * t.spacing;
+    let ds = s - b.trackS;
+    if (ds < -t.length / 2) ds += t.length;
+    else if (ds > t.length / 2) ds -= t.length;
+    b.dist += ds;
+    b.trackS = s;
+    b.trackIdx = idx;
+    b.model.body.rotation.set(0, 0, 0);
+    b.bump(6);
+    this.fx.splash(p.x, b.waterY, p.z, 1);
+  }
+
+  collideBoats() {
+    const boats = this.boats;
+    for (let i = 0; i < boats.length; i++) {
+      const a = boats[i];
+      if (!a.alive) continue;
+      for (let j = i + 1; j < boats.length; j++) {
+        const b = boats[j];
+        if (!b.alive) continue;
+        if (Math.abs(a.yOffset - b.yOffset) > 2.5) continue;
+        let best = null;
+        for (const oa of [-CIRCLE_OFFSET, CIRCLE_OFFSET]) {
+          for (const ob of [-CIRCLE_OFFSET, CIRCLE_OFFSET]) {
+            const dx = b.pos.x + Math.sin(b.heading) * ob - (a.pos.x + Math.sin(a.heading) * oa);
+            const dz = b.pos.z + Math.cos(b.heading) * ob - (a.pos.z + Math.cos(a.heading) * oa);
+            const d2 = dx * dx + dz * dz;
+            if (d2 > 0 && (!best || d2 < best.d2)) best = { dx, dz, d2 };
+          }
+        }
+        const min = RADIUS * 2;
+        if (!best || best.d2 >= min * min) continue;
+        const d = Math.sqrt(best.d2);
+        const nx = best.dx / d;
+        const nz = best.dz / d;
+        const ma = a.has('armor') ? 2 : 1;
+        const mb = b.has('armor') ? 2 : 1;
+        const overlap = min - d;
+        a.pos.x -= nx * overlap * (mb / (ma + mb));
+        a.pos.z -= nz * overlap * (mb / (ma + mb));
+        b.pos.x += nx * overlap * (ma / (ma + mb));
+        b.pos.z += nz * overlap * (ma / (ma + mb));
+        const rel = (b.vel.x - a.vel.x) * nx + (b.vel.z - a.vel.z) * nz;
+        if (rel < 0) {
+          const impulse = (-(1.5 * rel) / (1 / ma + 1 / mb)) + 5;
+          a.vel.x -= (nx * impulse) / ma;
+          a.vel.z -= (nz * impulse) / ma;
+          b.vel.x += (nx * impulse) / mb;
+          b.vel.z += (nz * impulse) / mb;
+          if (-rel > 5) {
+            a.bump(3);
+            b.bump(3);
+            this.sfx.play('boing', a.pos);
+            this.fx.splash((a.pos.x + b.pos.x) / 2, a.waterY, (a.pos.z + b.pos.z) / 2, 0.4);
+          }
+        }
+        if (a.has('spikes')) this.spikeHit(a, b, nx, nz);
+        if (b.has('spikes')) this.spikeHit(b, a, -nx, -nz);
+      }
+    }
+  }
+
+  spikeHit(owner, victim, nx, nz) {
+    const ready = victim.bumpCooldown.get(owner) ?? 0;
+    if (this.time < ready) return;
+    victim.bumpCooldown.set(owner, this.time + 0.8);
+    this.damage(victim, 14, owner, 'spikes', { knockX: nx * 12, knockZ: nz * 12, spin: 0.6 });
+  }
+
+  damage(target, amount, source, kind, { knockX = 0, knockZ = 0, spin = 0, stun = 0, launch = 0 } = {}) {
+    if (!target.alive || target.invuln > 0 || (target.finished && !this.attract)) return false;
+    const c = target.center();
+    if (target.has('armor') && (kind === 'bullet' || kind === 'spikes' || kind === 'saw')) {
+      this.fx.sparkBurst(c.x, c.y, c.z, 0xffffff, kind === 'bullet' ? 4 : 14);
+      this.sfx.play(kind === 'bullet' ? 'tink' : 'clank', target.pos);
+      if (target.isPlayer && kind !== 'bullet') this.emit('blocked', { kind });
+      return false;
+    }
+    target.hp -= amount;
+    target.flash = 1;
+    target.bump(kind === 'bullet' ? 1.5 : 5);
+    target.vel.x += knockX;
+    target.vel.z += knockZ;
+    target.speed *= kind === 'bullet' ? 0.97 : 0.7;
+    if (spin && target.spinTime <= 0) {
+      target.spinTime = spin;
+      target.spinDur = spin;
+    }
+    if (stun) target.stun = Math.max(target.stun, stun);
+    if (launch && !target.air) target.air = { t: 0, dur: launch, peak: launch * 6, jet: false };
+    this.sfx.play('hit', target.pos);
+    if (target.isPlayer) this.emit('hurt', { amount, kind, source: source.name });
+    if (target.hp <= 0) this.knockOut(target, source, kind);
+    return true;
+  }
+
+  knockOut(b, source, kind) {
+    b.hp = 0;
+    b.ko = KO_TIME;
+    b.air = null;
+    b.yOffset = 0;
+    b.burst = 0;
+    for (const h of this.hooks) if (h.target === b || h.owner === b) h.phase = 'retract';
+    const c = b.center();
+    this.fx.explosion(c.x, c.y, c.z, 0.8);
+    this.sfx.play('pop', b.pos);
+    this.emit('feed', { text: `${source.name} ${VERBS[kind]} ${b.name}`, player: b.isPlayer || source.isPlayer });
+    if (b.isPlayer) this.emit('ko', { source: source.name });
+  }
+
+  isTethered(b) {
+    return this.hooks.some((h) => h.phase === 'attached' && h.target === b);
+  }
+
+  findTarget(b, { range, minDot, filter = null, minRange = 0 }) {
+    let best = null;
+    let bestD = range;
+    const fx = Math.sin(b.heading);
+    const fz = Math.cos(b.heading);
+    for (const o of this.boats) {
+      if (o === b || !o.alive || o.invuln > 0 || (o.finished && !this.attract)) continue;
+      const dx = o.pos.x - b.pos.x;
+      const dz = o.pos.z - b.pos.z;
+      const d = Math.hypot(dx, dz);
+      if (d > bestD || d < minRange || d === 0) continue;
+      if ((dx * fx + dz * fz) / d < minDot) continue;
+      if (filter && !filter(o)) continue;
+      best = o;
+      bestD = d;
+    }
+    return best;
+  }
+
+  useItem(b, slot) {
+    const id = b.items[slot];
+    const item = ITEMS[id];
+    if (!item || item.passive || this.state !== 'racing' || !b.alive) return false;
+    if (b.cooldowns[slot] > 0) {
+      if (b.isPlayer) this.sfx.play('nope');
+      return false;
+    }
+    if (this.actions[id].call(this, b) === false) return false;
+    b.cooldowns[slot] = item.cooldown;
+    return true;
+  }
+
+  actions = {
+    machinegun(b) {
+      b.burst = 14;
+      b.burstTimer = 0;
+    },
+
+    laser(b) {
+      const mount = b.model.laserMount;
+      const origin = b.local(mount.x, mount.y, mount.z);
+      const dir = new THREE.Vector3(Math.sin(b.heading), 0, Math.cos(b.heading));
+      const aim = this.findTarget(b, { range: 140, minDot: 0.96 });
+      if (aim) dir.copy(aim.center()).sub(origin).normalize();
+      const hit = this.raycastBoats(origin, dir, 140, b);
+      const end = origin.clone().addScaledVector(dir, hit ? hit.t : 140);
+      this.fx.beam(origin, end, 0xff4fd8, 0.5);
+      this.sfx.play('laser', b.pos);
+      if (!hit) return;
+      const victim = hit.boat;
+      if (victim.has('saw')) {
+        this.sfx.play('tink', victim.pos);
+        this.fx.sparkBurst(end.x, end.y, end.z, 0xffffff, 16);
+        if (b.has('saw')) {
+          this.fx.beam(end, end.clone().add(new THREE.Vector3(0, 60, 0).addScaledVector(dir, 30)), 0xff4fd8, 0.4);
+          return;
+        }
+        this.fx.beam(end, b.center(), 0xff4fd8, 0.5);
+        this.damage(b, 26, victim, 'reflect', { knockX: dir.x * -8, knockZ: dir.z * -8, stun: 0.5 });
+        if (victim.isPlayer) this.emit('blocked', { kind: 'laser' });
+        return;
+      }
+      this.damage(victim, 26, b, 'laser', { knockX: dir.x * 8, knockZ: dir.z * 8, stun: 0.5 });
+    },
+
+    saw(b) {
+      b.sawDash = 0.5;
+      b.sawHits.clear();
+      b.vel.x += Math.sin(b.heading) * 20;
+      b.vel.z += Math.cos(b.heading) * 20;
+      b.speed += 12;
+      this.sfx.play('saw', b.pos);
+    },
+
+    missiles(b) {
+      const target = this.findTarget(b, { range: 180, minDot: 0.25, filter: (o) => !o.has('camo') });
+      const mount = b.model.missileMount;
+      const pos = b.local(mount.x, mount.y, mount.z);
+      const mesh = buildMissile();
+      this.scene.add(mesh);
+      const dir = new THREE.Vector3(Math.sin(b.heading), 0.6, Math.cos(b.heading)).normalize();
+      this.missiles.push({ pos, dir, speed: Math.max(30, b.speed + 8), owner: b, target, life: 5, fizzle: 0, mesh });
+      this.sfx.play('missile', b.pos);
+      if (target?.isPlayer) this.emit('warning', { text: 'Missile locked on you' });
+    },
+
+    mines(b) {
+      const pos = b.local(0, 0.9, -5.6);
+      const mesh = buildMine();
+      this.scene.add(mesh);
+      const vel = new THREE.Vector3(-Math.sin(b.heading) * 4 + b.vel.x * 0.3, 4, -Math.cos(b.heading) * 4 + b.vel.z * 0.3);
+      this.mines.push({ pos, vel, owner: b, age: 0, settled: false, mesh });
+      const own = this.mines.filter((m) => m.owner === b);
+      if (own.length > 4) this.removeMine(own[0], true);
+      this.sfx.play('plop', b.pos);
+    },
+
+    grapple(b) {
+      const target = this.findTarget(b, {
+        range: 120,
+        minDot: 0.55,
+        filter: (o) => o.has('spikes') || o.has('jetpack'),
+      });
+      const mount = b.model.hookMount;
+      const mesh = buildHook();
+      const rope = new THREE.Mesh(ROPE_GEOMETRY, ROPE_MATERIAL);
+      rope.frustumCulled = false;
+      this.scene.add(mesh, rope);
+      this.hooks.push({
+        owner: b,
+        target,
+        pos: b.local(mount.x, mount.y, mount.z),
+        dir: new THREE.Vector3(Math.sin(b.heading), 0.05, Math.cos(b.heading)),
+        phase: 'fly',
+        travelled: 0,
+        time: 0,
+        mesh,
+        rope,
+      });
+      this.sfx.play('hook', b.pos);
+      if (target?.isPlayer) this.emit('warning', { text: 'Grappling hook incoming' });
+    },
+
+    emp(b) {
+      this.pulses.push({ owner: b, age: 0, life: 0.5, radius: 26 });
+      this.fx.followRing(b.pos, 0x5ff4ff, 26, 0.7);
+      this.fx.followRing(b.pos, 0xffffff, 18, 0.55);
+      this.fx.shell(b.pos, 0x5ff4ff, 26, 0.7);
+      const c = b.center();
+      for (let i = 0; i < 3; i++) this.fx.sparkBurst(c.x, c.y, c.z, 0x5ff4ff, 8);
+      this.sfx.play('emp', b.pos);
+    },
+
+    jetpack(b) {
+      if (b.air) return false;
+      b.air = { t: 0, dur: 1.5, peak: 7, jet: true };
+      b.speed += 12;
+      b.boost = Math.max(b.boost, 1.5);
+      this.fx.splash(b.pos.x, b.waterY, b.pos.z, 1.2);
+      this.sfx.play('whoosh', b.pos);
+    },
+  };
+
+  raycastBoats(origin, dir, range, ignore) {
+    const p = new THREE.Vector3();
+    for (let t = 0; t <= range; t += 0.75) {
+      p.copy(origin).addScaledVector(dir, t);
+      for (const o of this.boats) {
+        if (o === ignore || !o.alive) continue;
+        if (o.distanceToAxis(p) < HIT_RADIUS + 0.3) return { boat: o, t };
+      }
+    }
+    return null;
+  }
+
+  fireBullet(b) {
+    const mount = b.model.gunMount;
+    const origin = b.local(mount.x + (b.burst % 2 ? 0.1 : -0.1), mount.y, mount.z);
+    const dir = new THREE.Vector3(Math.sin(b.heading), 0, Math.cos(b.heading));
+    const target = this.findTarget(b, { range: 80, minDot: 0.9 });
+    if (target) {
+      const c = target.center();
+      const lead = c.distanceTo(origin) / 150;
+      c.addScaledVector(target.vel, lead).sub(origin).normalize();
+      dir.lerp(c, 0.85).normalize();
+    }
+    dir.x += (Math.random() - 0.5) * 0.04;
+    dir.y += (Math.random() - 0.5) * 0.02;
+    dir.z += (Math.random() - 0.5) * 0.04;
+    dir.normalize();
+    const vel = dir.clone().multiplyScalar(150).add(b.vel);
+    this.bullets.push({ pos: origin, prev: origin.clone(), vel, owner: b, life: 0.6 });
+    this.fx.sparkBurst(origin.x, origin.y, origin.z, 0xffe066, 2);
+    this.sfx.play('shoot', b.pos);
+  }
+
+  updateBullets(dt) {
+    const c = new THREE.Vector3();
+    const seg = new THREE.Vector3();
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const s = new THREE.Vector3(0.18, 0.18, 1.1);
+    const z = new THREE.Vector3(0, 0, 1);
+    const dir = new THREE.Vector3();
+    let n = 0;
+    this.bullets = this.bullets.filter((bullet) => {
+      bullet.life -= dt;
+      bullet.prev.copy(bullet.pos);
+      bullet.pos.addScaledVector(bullet.vel, dt);
+      seg.subVectors(bullet.pos, bullet.prev);
+      const len = seg.length();
+      seg.divideScalar(len || 1);
+      for (const o of this.boats) {
+        if (o === bullet.owner || !o.alive) continue;
+        let hit = false;
+        for (let k = 0; k <= len + 0.01 && !hit; k += 1) {
+          c.copy(bullet.prev).addScaledVector(seg, Math.min(k, len));
+          hit = o.distanceToAxis(c) < HIT_RADIUS;
+        }
+        if (hit) {
+          this.fx.sparkBurst(bullet.pos.x, bullet.pos.y, bullet.pos.z, 0xffe066, 4);
+          this.damage(o, 3, bullet.owner, 'bullet', { knockX: seg.x * 1.2, knockZ: seg.z * 1.2 });
+          return false;
+        }
+      }
+      if (bullet.life <= 0) return false;
+      if (bullet.pos.y < waveHeight(bullet.pos.x, bullet.pos.z, this.time)) {
+        this.fx.splash(bullet.pos.x, bullet.pos.y, bullet.pos.z, 0.2);
+        return false;
+      }
+      if (n < 400) {
+        dir.copy(bullet.vel).normalize();
+        q.setFromUnitVectors(z, dir);
+        m.compose(bullet.pos, q, s);
+        this.bulletMesh.setMatrixAt(n++, m);
+      }
+      return true;
+    });
+    this.bulletMesh.count = Math.min(n, 400);
+    this.bulletMesh.instanceMatrix.needsUpdate = true;
+  }
+
+  updateMissiles(dt) {
+    const desired = new THREE.Vector3();
+    const c = new THREE.Vector3();
+    this.missiles = this.missiles.filter((m) => {
+      m.life -= dt;
+      m.speed = Math.min(85, m.speed + 60 * dt);
+      if (m.fizzle > 0) {
+        m.fizzle -= dt;
+        if (m.fizzle <= 0) return this.explodeMissile(m, null, 0.5);
+      } else if (m.target && m.target.alive) {
+        desired.copy(m.target.center()).sub(m.pos).normalize();
+        const angle = m.dir.angleTo(desired);
+        const maxTurn = 3.2 * dt;
+        m.dir.lerp(desired, angle > maxTurn ? maxTurn / angle : 1).normalize();
+      } else {
+        m.target = null;
+        m.dir.y = approach(m.dir.y, -0.04, dt);
+        m.dir.normalize();
+      }
+      m.pos.addScaledVector(m.dir, m.speed * dt);
+      this.fx.smoke(m.pos.x - m.dir.x, m.pos.y - m.dir.y, m.pos.z - m.dir.z);
+      m.mesh.position.copy(m.pos);
+      m.mesh.lookAt(c.copy(m.pos).add(m.dir));
+
+      if (m.fizzle <= 0) {
+        for (const o of this.boats) {
+          if (o === m.owner || !o.alive) continue;
+          if (o.distanceToAxis(m.pos) < HIT_RADIUS + 0.4) return this.explodeMissile(m, o, 1);
+        }
+      }
+      if (m.pos.y < waveHeight(m.pos.x, m.pos.z, this.time) - 0.2) return this.explodeMissile(m, null, 0.8);
+      if (m.life <= 0) return this.explodeMissile(m, null, 0.8);
+      return true;
+    });
+  }
+
+  explodeMissile(m, victim, power) {
+    this.fx.explosion(m.pos.x, m.pos.y, m.pos.z, power);
+    this.sfx.play('boom', m.pos);
+    this.scene.remove(m.mesh);
+    if (victim) {
+      this.damage(victim, 32, m.owner, 'missile', { knockX: m.dir.x * 14, knockZ: m.dir.z * 14, spin: 0.9, launch: 0.7 });
+    }
+    return false;
+  }
+
+  removeMine(mine, puff = false) {
+    this.scene.remove(mine.mesh);
+    this.mines = this.mines.filter((m) => m !== mine);
+    if (puff) this.fx.smoke(mine.pos.x, mine.pos.y + 0.5, mine.pos.z);
+  }
+
+  updateMines(dt) {
+    for (const mine of [...this.mines]) {
+      mine.age += dt;
+      const water = waveHeight(mine.pos.x, mine.pos.z, this.time);
+      if (!mine.settled) {
+        mine.vel.y -= 25 * dt;
+        mine.pos.addScaledVector(mine.vel, dt);
+        if (mine.pos.y <= water) {
+          mine.settled = true;
+          this.fx.splash(mine.pos.x, water, mine.pos.z, 0.4);
+        }
+      } else {
+        mine.pos.y = water - 0.35;
+      }
+      mine.mesh.position.copy(mine.pos);
+      mine.mesh.rotation.y += dt * 0.6;
+      mine.mesh.rotation.z = Math.sin(this.time * 2 + mine.age) * 0.12;
+      const armed = mine.age > 0.8;
+      mine.mesh.userData.light.visible = armed ? (mine.age * 3) % 1 < 0.5 : true;
+
+      if (armed && mine.settled) {
+        for (const o of this.boats) {
+          if (!o.alive || o.yOffset > 1.6) continue;
+          if (o === mine.owner && mine.age < 2.5) continue;
+          if (o.distanceToAxis2D(mine.pos.x, mine.pos.z) < 2.6) {
+            this.fx.explosion(mine.pos.x, water + 0.5, mine.pos.z, 1.2);
+            this.sfx.play('boom', mine.pos);
+            this.damage(o, 34, mine.owner, 'mine', { spin: 1, launch: 0.9 });
+            this.removeMine(mine);
+            break;
+          }
+        }
+      }
+      if (mine.age > 45 && this.mines.includes(mine)) this.removeMine(mine, true);
+    }
+  }
+
+  updateHooks(dt) {
+    const from = new THREE.Vector3();
+    const c = new THREE.Vector3();
+    this.hooks = this.hooks.filter((h) => {
+      const o = h.owner;
+      const mount = o.model.hookMount;
+      o.local(mount.x, mount.y, mount.z, from);
+      if (!o.alive && h.phase !== 'retract') h.phase = 'retract';
+
+      if (h.phase === 'fly') {
+        if (h.target && h.target.alive) {
+          h.target.center(c);
+          h.dir.copy(c).sub(h.pos).normalize();
+          h.pos.addScaledVector(h.dir, 150 * dt);
+          if (h.target.distanceToAxis(h.pos) < HIT_RADIUS + 0.3) {
+            h.phase = 'attached';
+            h.time = 3;
+            this.sfx.play('clank', h.target.pos);
+            if (o.isPlayer) this.emit('feed', { text: `You hooked ${h.target.name}`, player: true });
+          }
+        } else {
+          h.pos.addScaledVector(h.dir, 140 * dt);
+          h.travelled += 140 * dt;
+          if (h.travelled > 70) h.phase = 'retract';
+        }
+      } else if (h.phase === 'attached') {
+        const t = h.target;
+        h.time -= dt;
+        t.center(h.pos);
+        const dx = t.pos.x - o.pos.x;
+        const dz = t.pos.z - o.pos.z;
+        const d = Math.hypot(dx, dz);
+        if (d > 10) {
+          o.vel.x += (dx / d) * 75 * dt;
+          o.vel.z += (dz / d) * 75 * dt;
+        }
+        t.vel.multiplyScalar(Math.exp(-0.6 * dt));
+        if (h.time <= 0 || d < 10 || !t.alive) {
+          h.phase = 'retract';
+          o.boost = Math.max(o.boost, 1.2);
+          o.speed += 10;
+        }
+      } else {
+        h.dir.copy(from).sub(h.pos);
+        const d = h.dir.length();
+        if (d < 2.5) {
+          this.scene.remove(h.mesh, h.rope);
+          return false;
+        }
+        h.pos.addScaledVector(h.dir.divideScalar(d), Math.min(d, 170 * dt));
+      }
+
+      h.mesh.position.copy(h.pos);
+      h.mesh.lookAt(c.copy(h.pos).sub(from).add(h.pos));
+      h.rope.position.copy(from);
+      h.rope.lookAt(h.pos);
+      h.rope.scale.set(1, 1, Math.max(0.01, from.distanceTo(h.pos)));
+      return true;
+    });
+  }
+
+  updatePulses(dt) {
+    const c = new THREE.Vector3();
+    this.pulses = this.pulses.filter((p) => {
+      p.age += dt;
+      const r = p.radius * Math.sqrt(Math.min(1, p.age / p.life));
+      const center = p.owner.center(c);
+      for (const m of this.missiles) {
+        if (m.owner === p.owner || m.fizzle > 0) continue;
+        if (m.pos.distanceTo(center) > r + 1.5) continue;
+        m.target = null;
+        m.dir.copy(m.pos).sub(center).setY(0).normalize().setY(0.7).normalize();
+        m.fizzle = 0.9;
+        this.fx.sparkBurst(m.pos.x, m.pos.y, m.pos.z, 0x5ff4ff, 10);
+      }
+      for (const h of this.hooks) {
+        if (h.owner === p.owner || h.phase === 'retract') continue;
+        if (h.target !== p.owner && h.pos.distanceTo(center) > r + 1.5) continue;
+        h.phase = 'retract';
+        const o = h.owner;
+        const dx = o.pos.x - center.x;
+        const dz = o.pos.z - center.z;
+        const d = Math.hypot(dx, dz) || 1;
+        if (d < 40) {
+          o.vel.x += (dx / d) * 16;
+          o.vel.z += (dz / d) * 16;
+        }
+        this.fx.sparkBurst(h.pos.x, h.pos.y, h.pos.z, 0x5ff4ff, 10);
+      }
+      return p.age < p.life;
+    });
+  }
+
+  sawSweep(b) {
+    const fx = Math.sin(b.heading);
+    const fz = Math.cos(b.heading);
+    for (const o of this.boats) {
+      if (o === b || !o.alive || b.sawHits.has(o)) continue;
+      if (Math.abs(o.yOffset - b.yOffset) > 2.5) continue;
+      const bowX = b.pos.x + fx * (HULL_L + 1.5);
+      const bowZ = b.pos.z + fz * (HULL_L + 1.5);
+      if (o.distanceToAxis2D(bowX, bowZ) > 3.2) continue;
+      const side = (o.pos.x - b.pos.x) * -fz + (o.pos.z - b.pos.z) * fx;
+      b.sawHits.add(o);
+      const s = Math.sign(side) || 1;
+      const hit = this.damage(o, 28, b, 'saw', {
+        knockX: fx * 16 - fz * s * 6,
+        knockZ: fz * 16 + fx * s * 6,
+        spin: 0.8,
+      });
+      if (!hit && o.has('armor')) {
+        b.vel.x -= fx * 22;
+        b.vel.z -= fz * 22;
+        b.speed *= 0.4;
+        b.sawDash = 0;
+        b.bump(4);
+      }
+    }
+  }
+
+  updateVisual(b, dt) {
+    const t = this.time;
+    const w = waveHeight(b.pos.x, b.pos.z, t);
+    b.waterY = w;
+    const { root, body, flag, saw, flames, spinners, materials } = b.model;
+    const fx = Math.sin(b.heading);
+    const fz = Math.cos(b.heading);
+
+    root.position.set(b.pos.x, w + 0.35 + b.yOffset, b.pos.z);
+    b.pos.y = root.position.y;
+    let spin = 0;
+    if (b.spinTime > 0) {
+      const k = 1 - b.spinTime / b.spinDur;
+      spin = Math.PI * 2 * (1 - (1 - k) * (1 - k));
+    }
+    root.rotation.y = b.heading + spin;
+
+    const hF = waveHeight(b.pos.x + fx * 3.4, b.pos.z + fz * 3.4, t);
+    const hB = waveHeight(b.pos.x - fx * 3.4, b.pos.z - fz * 3.4, t);
+    const lx = Math.cos(b.heading);
+    const lz = -Math.sin(b.heading);
+    const hL = waveHeight(b.pos.x + lx * 1.8, b.pos.z + lz * 1.8, t);
+    const hR = waveHeight(b.pos.x - lx * 1.8, b.pos.z - lz * 1.8, t);
+    const onWater = b.air ? 0.2 : 1;
+    const speedFrac = clamp(b.speed / BASE_SPEED, -0.3, 1.3);
+    const accel = (b.speed - b.prevSpeed) / Math.max(dt, 1e-3);
+
+    const ease = 1 - Math.exp(-8 * dt);
+    if (b.alive) {
+      const airPitch = b.air ? -0.25 * (1 - 2 * Math.min(1, b.air.t / b.air.dur)) : 0;
+      const targetPitch = -Math.atan2(hF - hB, 6.8) * onWater - 0.08 * speedFrac - clamp(accel, -20, 20) * 0.003 + airPitch;
+      const targetRoll = Math.atan2(hL - hR, 3.6) * onWater + b.steerVis * 0.2 * clamp(speedFrac, 0, 1);
+      body.rotation.x += (targetPitch - body.rotation.x) * ease;
+      body.rotation.z += (targetRoll - body.rotation.z) * ease;
+    } else {
+      const k = 1 - b.ko / KO_TIME;
+      body.rotation.z += (Math.PI * 0.95 - body.rotation.z) * ease;
+      root.position.y -= Math.max(0, k - 0.3) * 4;
+    }
+
+    b.squashVel += (-b.squash * 220 - b.squashVel * 11) * dt;
+    b.squash += b.squashVel * dt;
+    const sq = clamp(b.squash * 0.12, -0.35, 0.35);
+    body.scale.set(1 - sq * 0.6, 1 + sq, 1 - sq * 0.6);
+    body.position.y = Math.sin(t * 3 + b.index) * 0.05;
+
+    if (b.flash > 0 || materials[0].emissiveIntensity > 0) {
+      for (const m of materials) m.emissiveIntensity = b.flash * 0.7;
+    }
+    root.visible = b.invuln > 0 && b.alive ? Math.floor(b.invuln * 12) % 2 === 0 : true;
+
+    if (saw) saw.rotation.x += dt * (b.sawDash > 0 ? 45 : 7);
+    if (b.model.minigun) b.model.minigun.rotation.z += dt * (b.burst > 0 ? 30 : 1.5);
+
+    const jetOn = !!b.air?.jet;
+    for (const flame of flames) {
+      flame.visible = jetOn;
+      if (jetOn) {
+        flame.scale.set(0.32 + Math.random() * 0.1, 1.6 + Math.random() * 0.8, 0.32 + Math.random() * 0.1);
+        const p = flame.getWorldPosition(new THREE.Vector3());
+        this.fx.flame(p.x, p.y - 0.4, p.z);
+      }
+    }
+
+    for (const sp of spinners) sp.mesh.rotation[sp.axis] += sp.speed * dt;
+    flag.rotation.y = Math.sin(t * 9 + b.index) * 0.25 - b.steerVis * 0.3;
+
+    if (b.alive && !b.air && Math.abs(b.speed) > 5) {
+      b.wakeTimer -= dt;
+      if (b.wakeTimer <= 0) {
+        b.wakeTimer = 0.035;
+        const sx = -lx;
+        const sz = -lz;
+        this.fx.wake(b.pos.x - fx * (HULL_L - 0.3), w + 0.1, b.pos.z - fz * (HULL_L - 0.3), sx, sz, Math.abs(b.speed));
+      }
+    }
+
+    const h = b.yOffset;
+    const shadowSize = (b.alive ? 10.5 : 0) / (1 + h * 0.1);
+    b.shadow.position.set(b.pos.x, w + 0.12, b.pos.z);
+    b.shadow.scale.set(shadowSize * 0.5, 1, shadowSize);
+    b.shadow.rotation.y = b.heading;
+    b.shadow.material.opacity = 1 / (1 + h * 0.15);
+  }
+
+  updateStandings() {
+    const L = this.track.length;
+    for (const b of this.boats) {
+      if (!b.finished && b.dist >= this.laps * L) {
+        b.finished = true;
+        b.finishTime = this.clock;
+        b.finishOrder = ++this.finishCount;
+        if (b.isPlayer) {
+          this.emit('finish', { place: this.finishCount });
+          this.sfx.play('finish');
+        }
+      }
+      const lap = clamp(Math.floor(b.dist / L) + 1, 1, this.laps);
+      if (b.isPlayer && lap > b.lap && !b.finished) {
+        this.emit(lap === this.laps ? 'finalLap' : 'lap', { lap });
+        this.sfx.play('lap');
+      }
+      b.lap = lap;
+    }
+    this.order = [...this.boats].sort((a, b) => {
+      if (a.finished && b.finished) return a.finishOrder - b.finishOrder;
+      if (a.finished !== b.finished) return a.finished ? -1 : 1;
+      return b.dist - a.dist;
+    });
+    this.order.forEach((b, i) => (b.place = i + 1));
+  }
+
+  dispose() {
+    for (const b of this.boats) this.scene.remove(b.model.root, b.shadow);
+    for (const m of this.missiles) this.scene.remove(m.mesh);
+    for (const m of this.mines) this.scene.remove(m.mesh);
+    for (const h of this.hooks) this.scene.remove(h.mesh, h.rope);
+    this.scene.remove(this.bulletMesh);
+  }
+}

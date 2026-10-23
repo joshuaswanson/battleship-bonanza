@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0E2A47" />
+    <title>Battleship Bonanza</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <canvas id="game"></canvas>
+
+    <div id="ui">
+      <section id="screen-title" class="screen">
+        <div class="title-logo" data-logo></div>
+        <div class="title-actions">
+          <button id="btn-play" class="btn btn-big">Pick your boat</button>
+          <dl class="controls">
+            <div><dt>W A S D</dt><dd>Drive</dd></div>
+            <div><dt>Q</dt><dd>First attachment</dd></div>
+            <div><dt>E</dt><dd>Second attachment</dd></div>
+            <div><dt>Esc</dt><dd>Pause</dd></div>
+            <div><dt>M</dt><dd>Sound</dd></div>
+          </dl>
+        </div>
+      </section>
+
+      <section id="screen-loadout" class="screen hidden">
+        <div class="yard">
+          <div class="stage-col">
+            <header class="yard-head">
+              <button id="btn-back" class="btn btn-small">Back</button>
+              <div class="mini-logo" data-logo></div>
+            </header>
+            <div class="stage" id="stage">
+              <canvas id="preview"></canvas>
+              <p class="stage-hint">Drag to spin your boat. Press <kbd>Q</kbd> or <kbd>E</kbd> to test fire.</p>
+            </div>
+            <div class="boat-card">
+              <h2 class="combo" id="combo-name">The Plain Dinghy</h2>
+              <div class="boat-card-grid">
+                <div class="slots" id="slots"></div>
+                <div class="stats" id="stats"></div>
+                <label class="field">
+                  <span>Boat name</span>
+                  <input id="boat-name" maxlength="16" autocomplete="off" spellcheck="false" />
+                </label>
+                <div class="field">
+                  <span>Paint</span>
+                  <div class="swatches" id="swatches"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <aside class="tray">
+            <div class="item-groups" id="item-groups"></div>
+            <div class="item-detail" id="item-detail"></div>
+            <div class="tray-actions">
+              <button id="btn-surprise" class="btn">Surprise me</button>
+              <button id="btn-start" class="btn btn-big">Start race</button>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section id="hud" class="hidden">
+        <div class="hud-place">
+          <span class="place-num" id="hud-place">1st</span>
+          <span class="place-of" id="hud-of">of 6</span>
+        </div>
+        <div class="hud-lap" id="hud-lap">Lap 1 of 3</div>
+        <div class="hud-time" id="hud-time">0:00.0</div>
+        <ul class="hud-feed" id="hud-feed"></ul>
+        <div class="hud-center" id="hud-center"></div>
+        <div class="hud-warn" id="hud-warn"></div>
+        <div class="hud-reticle" id="hud-reticle"></div>
+        <div class="hud-bottom">
+          <div class="hull">
+            <span class="hull-label">Hull</span>
+            <div class="hull-bar"><div class="hull-fill" id="hud-hull"></div></div>
+          </div>
+          <div class="hud-slots" id="hud-slots"></div>
+        </div>
+        <canvas class="hud-map" id="hud-map" width="200" height="200"></canvas>
+        <div class="hud-flash" id="hud-flash"></div>
+      </section>
+
+      <section id="screen-pause" class="screen screen-dim hidden">
+        <div class="panel panel-narrow">
+          <h2>Paused</h2>
+          <div class="stack">
+            <button id="btn-resume" class="btn btn-big">Resume</button>
+            <button id="btn-restart" class="btn">Restart race</button>
+            <button id="btn-quit" class="btn btn-ghost">Back to boats</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="screen-results" class="screen screen-dim hidden">
+        <div class="panel">
+          <h2 id="results-title">Race over</h2>
+          <ol class="standings" id="standings"></ol>
+          <div class="row">
+            <button id="btn-again" class="btn btn-big">Race again</button>
+            <button id="btn-change" class="btn btn-ghost">Change boat</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

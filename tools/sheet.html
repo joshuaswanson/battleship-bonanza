@@ -1,0 +1,8 @@
+<body style="margin:0;background:#fff;display:grid;grid-template-columns:repeat(3,1fr);gap:6px">
+<script>
+for (const f of location.hash.slice(1).split(',')) {
+  const d = document.createElement('figure'); d.style.margin = 0;
+  d.innerHTML = `<img src="shots/${f}" style="width:100%"><figcaption style="font:14px sans-serif">${f}</figcaption>`;
+  document.body.append(d);
+}
+</script>
