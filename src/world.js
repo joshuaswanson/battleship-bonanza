@@ -333,6 +333,7 @@ function addIsland(batch, x, z, r, rand, { clearCenter = 0 } = {}) {
     const s = 0.8 + rand() * 2.6;
     batch.add('rock', ROCK, mat(x + Math.cos(a) * r * (0.75 + rand() * 0.3), 0.3, z + Math.sin(a) * r * (0.75 + rand() * 0.3), s, s * 0.75, s, rand(), rand() * 3, rand()));
   }
+  return sand;
 }
 
 function addLighthouse(batch, x, z, baseY) {
@@ -481,10 +482,11 @@ export function createWorld(scene, track) {
       islands.push({ x, z, r });
     }
   }
-  for (const island of islands) addIsland(batch, island.x, island.z, island.r, rand);
+  const shores = [];
+  for (const island of islands) shores.push(...addIsland(batch, island.x, island.z, island.r, rand));
 
   const start = track.point(0, -(half + 40));
-  addIsland(batch, start.x, start.z, 13, rand, { clearCenter: 5 });
+  shores.push(...addIsland(batch, start.x, start.z, 13, rand, { clearCenter: 5 }));
   addLighthouse(batch, start.x, start.z, 3);
 
   const scenery = new THREE.Group();
@@ -563,6 +565,7 @@ export function createWorld(scene, track) {
     water,
     sun,
     islands,
+    shores,
     update(t, dt, camera) {
       water.update(t);
       sky.position.copy(camera.position);

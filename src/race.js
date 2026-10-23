@@ -11,6 +11,9 @@ export const LAPS = 3;
 export const MAX_HP = 100;
 export const BASE_SPEED = 44;
 const ARMOR_SPEED = 0.95;
+const OFF_COURSE_SPEED = 0.35;
+const OUTER_LIMIT = 45;
+const SHORE_MARGIN = 2.2;
 const SAW_WORK = 3;
 const SAW_REST = 1.5;
 const EASY_HOOK = (o) => o.has('spikes') || o.has('jetpack');
@@ -131,6 +134,7 @@ class Boat {
     this.finishOrder = 0;
     this.place = index + 1;
     this.wrongWay = 0;
+    this.offCourse = 0;
   }
 
   has(id) {
@@ -177,7 +181,8 @@ class Boat {
 }
 
 export class Race {
-  constructor({ scene, track, fx, sfx, defs, attract = false, laps = LAPS }) {
+  constructor({ scene, track, fx, sfx, defs, shores = [], attract = false, laps = LAPS }) {
+    this.shores = shores;
     this.scene = scene;
     this.track = track;
     this.fx = fx;
@@ -321,6 +326,7 @@ export class Race {
     if (b.air?.jet) max *= 1.15;
     if (b.stun > 0) max *= 0.5;
     if (this.isTethered(b)) max *= 0.8;
+    if (b.offCourse > 0) max *= OFF_COURSE_SPEED;
 
     const throttle = controllable ? b.control.throttle : 0;
     const target = throttle >= 0 ? throttle * max : throttle * REVERSE_SPEED;
@@ -369,7 +375,11 @@ export class Race {
     b.trackS = pr.s;
     b.trackIdx = pr.idx;
 
-    const lim = t.halfWidth - 2.4;
+    b.offCourse = Math.abs(pr.lateral) > t.halfWidth + 1.5 ? b.offCourse + dt : 0;
+    if (b.offCourse > 0 && b.speed > OFF_COURSE_SPEED * BASE_SPEED) b.speed *= Math.exp(-1.5 * dt);
+    this.collideShores(b);
+
+    const lim = t.halfWidth + OUTER_LIMIT;
     if (Math.abs(pr.lateral) > lim) {
       const sgn = Math.sign(pr.lateral);
       const nx = t.nx[pr.idx];
@@ -388,15 +398,57 @@ export class Race {
           this.sfx.play('boing', b.pos);
         }
       }
-      b.speed *= 1 - 0.6 * dt;
-      const along = wrapAngle(t.heading(pr.idx) - b.heading);
-      if (Math.abs(along) < Math.PI / 2) b.heading += along * 2 * dt;
     }
 
     if (b.isPlayer) {
       const facing = fx * t.tx[pr.idx] + fz * t.tz[pr.idx];
       b.wrongWay = facing < -0.3 && b.speed > 4 ? b.wrongWay + dt : 0;
     }
+  }
+
+  collideShores(b) {
+    for (const blob of this.shores) {
+      const dx = b.pos.x - blob.x;
+      const dz = b.pos.z - blob.z;
+      if (Math.abs(dx) > blob.rx + blob.rz + 4 || Math.abs(dz) > blob.rx + blob.rz + 4) continue;
+      const c = Math.cos(blob.rot);
+      const s = Math.sin(blob.rot);
+      const lx = dx * c - dz * s;
+      const lz = dx * s + dz * c;
+      const ax = blob.rx + SHORE_MARGIN;
+      const az = blob.rz + SHORE_MARGIN;
+      const q = Math.hypot(lx / ax, lz / az);
+      if (q >= 1 || q === 0) continue;
+      const px = lx / q;
+      const pz = lz / q;
+      b.pos.x = blob.x + px * c + pz * s;
+      b.pos.z = blob.z - px * s + pz * c;
+      let gx = px / (ax * ax);
+      let gz = pz / (az * az);
+      const nx = gx * c + gz * s;
+      const nz = -gx * s + gz * c;
+      const len = Math.hypot(nx, nz);
+      const ux = nx / len;
+      const uz = nz / len;
+      const vn = b.vel.x * ux + b.vel.z * uz;
+      if (vn < 0) {
+        b.vel.x -= ux * vn * 1.6;
+        b.vel.z -= uz * vn * 1.6;
+        if (vn < -6) {
+          b.speed *= 0.6;
+          b.bump(4);
+          this.fx.splash(b.pos.x, b.waterY, b.pos.z, 0.7);
+          this.sfx.play('boing', b.pos);
+        }
+      }
+    }
+  }
+
+  courseReturnPoint(b) {
+    const t = this.track;
+    const idx = t.wrap(b.trackIdx + Math.round(12 / t.spacing));
+    const pr = t.project(b.pos.x, b.pos.z, b.trackIdx);
+    return t.point(idx, Math.sign(pr.lateral) * (t.halfWidth - 6));
   }
 
   respawn(b) {

@@ -1069,6 +1069,61 @@ kbd {
   text-shadow: 0 3px 0 var(--buoy), 0 0 10px rgba(14, 42, 71, 0.7);
 }
 
+.hud-return {
+  position: absolute;
+  top: 18%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.hud-return.on {
+  display: flex;
+}
+
+.return-text {
+  padding: 0.3rem 1.2rem 0.35rem;
+  font-family: var(--race);
+  font-weight: 900;
+  font-size: 2.2rem;
+  line-height: 1;
+  color: #ffffff;
+  -webkit-text-stroke: 2px var(--ink);
+  paint-order: stroke fill;
+  background: repeating-linear-gradient(-45deg, #ff8a1f 0 16px, #ff4141 16px 32px);
+  border: 4px solid var(--ink);
+  border-radius: 8px;
+  box-shadow: 0 5px 0 var(--ink);
+  transform: skewX(-12deg);
+  animation: return-flash 0.7s steps(2) infinite;
+}
+
+@keyframes return-flash {
+  50% {
+    background: repeating-linear-gradient(-45deg, #ffd23f 0 16px, #ff8a1f 16px 32px);
+  }
+}
+
+.return-arrow {
+  width: 84px;
+  height: 84px;
+  background: var(--ink);
+  clip-path: polygon(50% 0, 100% 55%, 68% 55%, 68% 100%, 32% 100%, 32% 55%, 0 55%);
+  filter: drop-shadow(0 0 0 var(--ink));
+  position: relative;
+}
+
+.return-arrow::before {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  background: var(--sun);
+  clip-path: polygon(50% 0, 100% 55%, 68% 55%, 68% 100%, 32% 100%, 32% 55%, 0 55%);
+}
+
 .hud-reticle {
   position: absolute;
   top: 0;

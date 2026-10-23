@@ -94,7 +94,7 @@ let shake = 0;
 
 function newRace(attract) {
   race?.dispose();
-  race = new Race({ scene, track, fx, sfx, defs: makeDefs(attract ? null : setup), attract });
+  race = new Race({ scene, track, fx, sfx, shores: world.shores, defs: makeDefs(attract ? null : setup), attract });
   cam.snap = true;
 }
 
@@ -347,7 +347,7 @@ if (import.meta.env.DEV) {
     simRace() {
       race?.dispose();
       const defs = PAINTS.map((paint, i) => ({ name: `Boat ${i + 1}`, color: paint.value, items: shuffle(ITEM_IDS).slice(0, 2) }));
-      race = new Race({ scene, track, fx, sfx, defs, attract: false });
+      race = new Race({ scene, track, fx, sfx, shores: world.shores, defs, attract: false });
       mode = 'sim';
       hud.show(false);
       showScreen(null);

@@ -35,6 +35,8 @@ export class Hud {
     this.warn = $('hud-warn');
     this.reticle = $('hud-reticle');
     this.barsEl = $('hud-bars');
+    this.returnEl = $('hud-return');
+    this.returnArrow = $('return-arrow');
     this.slotsEl = $('hud-slots');
     this.flash = $('hud-flash');
     this.map = $('hud-map');
@@ -206,7 +208,18 @@ export class Hud {
     this.updateReticle(race, camera);
 
     this.warnTime -= dt;
-    if (p.wrongWay > 1) this.warn.textContent = 'Wrong way';
+    const lost = p.alive && p.offCourse > 0.3 && !p.finished;
+    this.returnEl.classList.toggle('on', lost);
+    if (lost) {
+      const target = race.courseReturnPoint(p);
+      const dx = target.x - p.pos.x;
+      const dz = target.z - p.pos.z;
+      const camForward = camera.getWorldDirection(this.projected);
+      const camHeading = Math.atan2(camForward.x, camForward.z);
+      const angle = Math.atan2(dx, dz) - camHeading;
+      this.returnArrow.style.transform = `rotate(${-angle}rad)`;
+    }
+    if (p.wrongWay > 1 && !lost) this.warn.textContent = 'Wrong way';
     else if (this.warnTime <= 0) this.warn.textContent = '';
 
     this.updateBars(race, camera);
