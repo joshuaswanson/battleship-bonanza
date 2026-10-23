@@ -41,9 +41,7 @@ function mossyRock() {
         `#include <color_fragment>
         float edge = max(fwidth(vGreen), 1e-4);
         float covered = smoothstep(0.5 - edge, 0.5 + edge, vGreen);
-        diffuseColor.rgb = mix(diffuseColor.rgb, vMoss, covered);
-        float ink = 1.0 - smoothstep(edge * 1.6, edge * 2.6, abs(vGreen - 0.5));
-        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.0044, 0.0232, 0.063), ink);`,
+        diffuseColor.rgb = mix(diffuseColor.rgb, vMoss, covered);`,
       );
   };
   return material;
