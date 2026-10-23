@@ -185,7 +185,6 @@ function renderLanguagePicker() {
       loadout.relabel();
       renderLanguagePicker();
       document.querySelector(`.lang[data-lang="${getLang()}"]`).focus();
-      if (race?.attract) newRace(true);
     });
   }
 }
