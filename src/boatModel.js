@@ -217,24 +217,55 @@ function canvasTexture(key, draw) {
   });
 }
 
+function seeded(seed) {
+  return () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+}
+
+function blob(ctx, r, x, y, size) {
+  for (let k = 0; k < 5; k++) {
+    ctx.beginPath();
+    ctx.ellipse(x + (r() - 0.5) * size, y + (r() - 0.5) * size * 0.6, size * (0.4 + r() * 0.4), size * (0.25 + r() * 0.25), r() * Math.PI, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
 const camo = () =>
   canvasTexture('camo', (ctx) => {
-    ctx.fillStyle = '#7d9a4a';
+    ctx.fillStyle = '#7a8f45';
     ctx.fillRect(0, 0, 256, 256);
-    const colors = ['#4f6b2c', '#a68b54', '#2f4a24', '#93ad5e'];
-    let seed = 3;
-    const r = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-    for (let i = 0; i < 70; i++) {
-      ctx.fillStyle = colors[i % colors.length];
-      ctx.beginPath();
-      const x = r() * 256;
-      const y = r() * 256;
-      for (let k = 0; k < 7; k++) {
-        const a = (k / 7) * Math.PI * 2;
-        const d = 10 + r() * 18;
-        ctx.lineTo(x + Math.cos(a) * d * 1.4, y + Math.sin(a) * d);
+    const r = seeded(11);
+    const layers = [['#a08a55', 16, 34], ['#4d6a2b', 18, 30], ['#2d3f1d', 14, 22]];
+    for (const [color, count, size] of layers) {
+      ctx.fillStyle = color;
+      for (let i = 0; i < count; i++) {
+        const x = r() * 256;
+        const y = r() * 256;
+        for (const dx of [-256, 0, 256]) for (const dy of [-256, 0, 256]) blob(ctx, seeded(i * 97 + count), x + dx, y + dy, size);
       }
+    }
+  });
+
+const camoNet = () =>
+  canvasTexture('camoNet', (ctx) => {
+    ctx.fillStyle = '#5d7131';
+    ctx.fillRect(0, 0, 256, 256);
+    const r = seeded(5);
+    const leafColors = ['#7f9a3e', '#46602a', '#9b8a52', '#36502a'];
+    for (let i = 0; i < 140; i++) {
+      ctx.fillStyle = leafColors[i % leafColors.length];
+      ctx.beginPath();
+      ctx.ellipse(r() * 256, r() * 256, 5 + r() * 6, 2.5 + r() * 2.5, r() * Math.PI, 0, Math.PI * 2);
       ctx.fill();
+    }
+    ctx.strokeStyle = 'rgba(30, 40, 18, 0.85)';
+    ctx.lineWidth = 2.5;
+    for (let i = -256; i <= 512; i += 22) {
+      ctx.beginPath();
+      ctx.moveTo(i, 0);
+      ctx.lineTo(i + 256, 256);
+      ctx.moveTo(i, 256);
+      ctx.lineTo(i + 256, 0);
+      ctx.stroke();
     }
   });
 
@@ -309,9 +340,14 @@ export function buildBoat(color, items) {
     ink: toon(INK),
     white: toon(0xffffff),
   };
-  const hullMat = hasCamo ? toon(0xffffff, { map: camo() }) : hasArmor ? toon(0xffffff, { map: iron() }) : mats.paint;
-  const bumperMat = hasArmor ? mats.paint : hasCamo ? toon(0x4f6b2c) : mats.white;
-  const deckMat = hasArmor ? toon(0xffffff, { map: treadPlate() }) : toon(0xffffff, { map: planks() });
+  const camoMat = hasCamo ? toon(0xffffff, { map: camo() }) : null;
+  const hullMat = camoMat ?? (hasArmor ? toon(0xffffff, { map: iron() }) : mats.paint);
+  const bumperMat = hasArmor || hasCamo ? mats.paint : mats.white;
+  const deckMat = hasCamo
+    ? toon(0xffffff, { map: camoNet() })
+    : hasArmor
+      ? toon(0xffffff, { map: treadPlate() })
+      : toon(0xffffff, { map: planks() });
 
   part(body, 'hull', hullMat, 0, 0, 0, 1, 1, 1, 0.07);
   part(body, 'deck', deckMat, 0, 0, 0, 1, 1, 1, 0);
@@ -320,7 +356,7 @@ export function buildBoat(color, items) {
   const sternTop = sheer(-HULL_L);
   part(body, 'roundBox', mats.dark, 0, sternTop - 0.05, -HULL_L - 0.15, 0.6, 0.5, 0.35, 0.03);
   part(body, 'cylinder', mats.dark, 0, sternTop - 0.75, -HULL_L - 0.55, 0.13, 1.3, 0.13, 0.03);
-  part(body, 'roundBox', hasCamo ? toon(0x4f6b2c) : mats.paint, 0, sternTop + 0.35, -HULL_L - 0.55, 0.85, 0.95, 0.85, 0.04);
+  part(body, 'roundBox', camoMat ?? mats.paint, 0, sternTop + 0.35, -HULL_L - 0.55, 0.85, 0.95, 0.85, 0.04);
   part(body, 'roundBox', mats.white, 0, sternTop + 0.88, -HULL_L - 0.55, 0.7, 0.18, 0.7, 0.03);
 
   const flagZ = -HULL_L + 0.6;
@@ -329,10 +365,14 @@ export function buildBoat(color, items) {
   const flag = new THREE.Group();
   flag.position.set(flagX, sternTop + 1.4, flagZ);
   body.add(flag);
-  part(flag, 'cone', hasCamo ? toon(0x4f6b2c) : mats.paint, 0, 0, -0.45, 0.04, 0.9, 0.3, 0.02).rotation.x = -Math.PI / 2;
+  part(flag, 'cone', mats.paint, 0, 0, -0.45, 0.04, 0.9, 0.3, 0.02).rotation.x = -Math.PI / 2;
 
   const refs = { root, body, flag, saw: null, flames: [], spinners: [], materials: [], parts: {}, hookMarkers: [], aimers: [], heatMats: {}, swivels: [] };
 
+  if (camoMat) {
+    mats.paint = camoMat;
+    mats.white = toon(0xd8d0a8);
+  }
   for (const id of items) {
     if (MOUNTED.has(id)) continue;
     const group = new THREE.Group();
@@ -405,14 +445,21 @@ function sphereDirections(count) {
   return dirs;
 }
 
-function spikyBall(parent, mats, x, y, z, radius, count, spikeLength) {
-  part(parent, 'sphere', mats.ink, x, y, z, radius, radius, radius, 0.04);
+const MINE_BODY = toon(0x8e9aa8);
+const MINE_BAND = toon(0x5d6b7e);
+const MINE_HORN = toon(0xb8c3cf);
+
+function spikyBall(parent, x, y, z, radius, count) {
+  part(parent, 'sphere', MINE_BODY, x, y, z, radius, radius, radius, 0.04);
+  part(parent, 'ring', MINE_BAND, x, y, z, radius * 0.98, radius * 0.98, radius * 0.9, 0.02).rotation.x = Math.PI / 2;
+  const length = radius * 0.32;
   for (const dir of sphereDirections(count)) {
-    const base = radius * 0.85;
-    part(parent, 'sphere', mats.dark, x + dir.x * base, y + dir.y * base, z + dir.z * base, radius * 0.16, radius * 0.16, radius * 0.16, 0.02);
-    const mid = base + spikeLength * 0.5;
-    const spike = part(parent, 'cone', mats.metal, x + dir.x * mid, y + dir.y * mid, z + dir.z * mid, radius * 0.13, spikeLength, radius * 0.13, 0.02);
-    spike.quaternion.setFromUnitVectors(UP, dir);
+    if (Math.abs(dir.y) < 0.12) continue;
+    const mid = radius * 0.9 + length * 0.5;
+    const horn = part(parent, 'cone', MINE_HORN, x + dir.x * mid, y + dir.y * mid, z + dir.z * mid, radius * 0.13, length, radius * 0.13, 0.02);
+    horn.quaternion.setFromUnitVectors(UP, dir);
+    const tip = radius * 0.9 + length * 0.95;
+    part(parent, 'smallSphere', MINE_HORN, x + dir.x * tip, y + dir.y * tip, z + dir.z * tip, radius * 0.07, radius * 0.07, radius * 0.07, 0.015);
   }
 }
 
@@ -453,17 +500,7 @@ const HULL_MODS = {
     transom.position.z -= 0.05;
   },
 
-  camo(body) {
-    const leaf = toon(0x4f8a2e);
-    const leafDark = toon(0x3a6b22);
-    const tufts = [
-      [0.7, 2.6, 0.45], [-0.6, 2.4, 0.38], [0.9, -3.4, 0.42], [-0.85, -3.2, 0.5], [0.05, 3.2, 0.32],
-    ];
-    tufts.forEach(([x, z, r], i) => {
-      part(body, 'sphere', i % 2 ? leaf : leafDark, x, deckTop(z) + r * 0.4, z, r, r * 0.7, r, 0.04);
-      part(body, 'sphere', i % 2 ? leafDark : leaf, x + r * 0.5, deckTop(z) + r * 0.3, z - r * 0.3, r * 0.7, r * 0.5, r * 0.7, 0.04);
-    });
-  },
+  camo() {},
 };
 
 const MODULES = {
@@ -562,8 +599,8 @@ const MODULES = {
     const loaded = new THREE.Group();
     loaded.position.set(0, MINE_REST_Y, 0);
     m.add(loaded);
-    spikyBall(loaded, mats, 0, 0, 0, 0.5, 20, 0.45);
-    part(loaded, 'smallSphere', glow(RED), 0, 0.47, 0, 0.11, 0.11, 0.11, 0);
+    spikyBall(loaded, 0, 0, 0, 0.55, 14);
+    part(loaded, 'smallSphere', glow(RED), 0, 0.53, 0, 0.11, 0.11, 0.11, 0);
     refs.mineLoaded = loaded;
     return { mineMount: new THREE.Vector3(0, MINE_REST_Y, 0) };
   },
@@ -633,11 +670,10 @@ const MODULES = {
 
 export function buildMine() {
   const group = new THREE.Group();
-  const mats = { ink: toon(INK), dark: toon(DARK), metal: toon(METAL) };
-  spikyBall(group, mats, 0, 0.3, 0, 0.8, 22, 0.75);
+  spikyBall(group, 0, 0.3, 0, 0.85, 16);
   const light = new THREE.Mesh(geo.smallSphere(), glow(RED));
   light.scale.setScalar(0.2);
-  light.position.set(0, 1.05, 0);
+  light.position.set(0, 1.12, 0);
   group.add(light);
   group.userData.light = light;
   return group;
