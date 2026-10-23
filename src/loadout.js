@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GROUPS, ITEMS, ITEM_IDS, STATS, statsFor, comboName } from './items.js';
-import { buildBoat, buildItemModel, buildMine, buildMissile, buildHook, aimTurret, spendMissile, reloadMissiles, updateMissileTips, missileDirection, updateAimers, stepGun, stepLaser, newHeat, gunDirection, laserDirection, launchMine, reloadMine, updateMineHolder } from './boatModel.js';
+import { buildBoat, buildItemModel, frontFirst, buildMine, buildMissile, buildHook, aimTurret, spendMissile, reloadMissiles, updateMissileTips, missileDirection, updateAimers, stepGun, stepLaser, newHeat, gunDirection, laserDirection, launchMine, reloadMine, updateMineHolder } from './boatModel.js';
 import { createWater, waveHeight } from './water.js';
 import { Effects } from './effects.js';
 import { SUN_DIR } from './world.js';
@@ -147,6 +147,7 @@ export class Loadout {
       return;
     } else {
       items.push(id);
+      items.splice(0, items.length, ...frontFirst(items));
       this.sfx.play('pick');
       tile.classList.remove('picked');
       void tile.offsetWidth;

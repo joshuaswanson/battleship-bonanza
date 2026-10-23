@@ -15,6 +15,11 @@ const REAR_MOUNT = -2.2;
 const SOLO_MOUNT = -0.35;
 const MOUNT_RANK = { saw: -1, missiles: 0.4, mines: 0.5, jetpack: 1 };
 const mountRank = (id) => MOUNT_RANK[id] ?? 0;
+
+export function frontFirst(items) {
+  const rank = (id) => (MOUNTED.has(id) ? mountRank(id) : 2);
+  return [...items].sort((a, b) => rank(a) - rank(b));
+}
 const AIMED = new Set(['machinegun', 'laser', 'missiles', 'grapple']);
 const MODULE_SCALE = 1.3;
 

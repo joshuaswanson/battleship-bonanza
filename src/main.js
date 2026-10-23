@@ -16,6 +16,7 @@ import { Loadout, PAINTS } from './loadout.js';
 import { logoSvg, layoutLogoText } from './logo.js';
 import { TitleBoat } from './titleBoat.js';
 import { ITEMS, ITEM_IDS } from './items.js';
+import { frontFirst } from './boatModel.js';
 
 const $ = (id) => document.getElementById(id);
 for (const el of document.querySelectorAll('[data-logo]')) {
@@ -52,7 +53,7 @@ const AI_NAMES = ['Noodle', 'Dumpling', 'Pickle', 'Marshmallow', 'Waffles', 'Gum
 function loadSetup() {
   try {
     const saved = JSON.parse(localStorage.getItem('bb-setup'));
-    if (saved && Array.isArray(saved.items) && saved.items.every((id) => ITEMS[id])) return saved;
+    if (saved && Array.isArray(saved.items) && saved.items.every((id) => ITEMS[id])) return { ...saved, items: frontFirst(saved.items) };
   } catch {}
   return { name: 'Sea Biscuit', color: PAINTS[0].value, items: ['jetpack', 'machinegun'] };
 }
@@ -72,7 +73,7 @@ function randomLoadout() {
   const weapons = ITEM_IDS.filter((id) => ITEMS[id].group === 'weapons');
   const first = weapons[Math.floor(Math.random() * weapons.length)];
   const rest = ITEM_IDS.filter((id) => id !== first);
-  return [first, rest[Math.floor(Math.random() * rest.length)]];
+  return frontFirst([first, rest[Math.floor(Math.random() * rest.length)]]);
 }
 
 function makeDefs(player) {
@@ -173,13 +174,6 @@ function renderResults() {
 const loadout = new Loadout({ setup, sfx, onChange: saveSetup });
 
 $('btn-play').addEventListener('click', goLoadout);
-const soundLabel = () => ($('btn-sound').textContent = sfx.muted ? 'Sound off' : 'Sound on');
-soundLabel();
-$('btn-sound').addEventListener('click', () => {
-  sfx.unlock();
-  sfx.toggleMute();
-  soundLabel();
-});
 $('btn-howto').addEventListener('click', () => {
   showScreen('screen-howto');
   $('btn-howto-close').focus();
@@ -287,10 +281,7 @@ function frame(now) {
   const state = input.poll();
   const pressed = input.pressed;
 
-  if (pressed.has('mute')) {
-    sfx.toggleMute();
-    soundLabel();
-  }
+  if (pressed.has('mute')) sfx.toggleMute();
   if (pressed.has('pause')) {
     if (mode === 'race') pause(true);
     else if (mode === 'paused') pause(false);
@@ -346,7 +337,7 @@ if (import.meta.env.DEV) {
     loadout,
     simRace() {
       race?.dispose();
-      const defs = PAINTS.map((paint, i) => ({ name: `Boat ${i + 1}`, color: paint.value, items: shuffle(ITEM_IDS).slice(0, 2) }));
+      const defs = PAINTS.map((paint, i) => ({ name: `Boat ${i + 1}`, color: paint.value, items: frontFirst(shuffle(ITEM_IDS).slice(0, 2)) }));
       race = new Race({ scene, track, fx, sfx, shores: world.shores, defs, attract: false });
       mode = 'sim';
       hud.show(false);
