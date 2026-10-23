@@ -16,10 +16,11 @@ await page.goto(url, { waitUntil: 'networkidle0' });
 await new Promise((r) => setTimeout(r, 800));
 const results = [];
 for (let n = 0; n < races; n++) {
-  await page.evaluate(() => {
+  await page.evaluate((map) => {
     window.__bb.steps = 10;
-    window.__bb.simRace();
-  });
+    window.__bb.map = map;
+    return window.__bb.simRace();
+  }, n % 2 ? 'jungle' : 'bay');
   const t0 = Date.now();
   let done = false;
   while (!done && Date.now() - t0 < 90000) {
@@ -27,7 +28,7 @@ for (let n = 0; n < races; n++) {
     done = await page.evaluate(() => window.__bb.race.boats.every((b) => b.finished) || window.__bb.race.clock > 420);
   }
   const rows = await page.evaluate(() =>
-    window.__bb.race.order.map((b) => ({ items: b.items, place: b.place, finished: b.finished, time: b.finishTime, ...b.stats })),
+    window.__bb.race.order.map((b) => ({ map: window.__bb.race.track.map.id, items: b.items, place: b.place, finished: b.finished, time: b.finishTime, ...b.stats })),
   );
   results.push(rows);
   fs.writeFileSync(out, JSON.stringify(results));

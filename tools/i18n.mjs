@@ -1,32 +1,30 @@
-import puppeteer from 'puppeteer-core';
-const browser = await puppeteer.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: 'new', args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'], defaultViewport: { width: 1440, height: 900 } });
-const page = await browser.newPage();
-const errors = [];
-page.on('pageerror', (e) => errors.push(e.message));
-const wait = (t) => new Promise((r) => setTimeout(r, t));
-await page.goto('http://localhost:5288/', { waitUntil: 'networkidle0' });
-await wait(2200);
-for (const lang of ['fr', 'de', 'en']) {
-  await page.click(`.lang[data-lang="${lang}"]`);
-  await wait(400);
-  await page.screenshot({ path: `tools/shots/lang-${lang}-title.png` });
-  await page.click('#btn-play');
-  await wait(800);
-  const box = await (await page.$('.tile[data-id="missiles"]')).boundingBox();
-  await page.mouse.move(box.x + box.width / 2, box.y + 20);
-  await wait(300);
-  await page.screenshot({ path: `tools/shots/lang-${lang}-yard.png` });
-  await page.mouse.move(10, 10);
-  await page.evaluate(() => document.getElementById('btn-start').click());
-await new Promise((r) => setTimeout(r, 1400));
-await page.evaluate(() => document.getElementById('btn-go').click());
-await new Promise((r) => setTimeout(r, 1400));
-  await wait(5200);
-  await page.screenshot({ path: `tools/shots/lang-${lang}-race.png` });
-  await page.keyboard.press('Escape');
-  await wait(300);
-  await page.evaluate(() => document.getElementById('btn-menu').click());
-  await wait(1500);
+import { check } from './lib.mjs';
+
+globalThis.localStorage = { getItem: () => null, setItem() {} };
+globalThis.document = { documentElement: {} };
+const { ITEM_IDS } = await import('../src/items.js');
+const i18n = await import('../src/i18n.js');
+const source = (await import('node:fs')).readFileSync(new URL('../src/i18n.js', import.meta.url), 'utf8');
+
+const block = (name, lang) => {
+  const start = source.indexOf(`const ${name} = {`);
+  const at = source.indexOf(`\n  ${lang}: {`, start);
+  const end = source.indexOf('\n  },', at);
+  return [...source.slice(at, end).matchAll(/^ {4}'?([\w+]+)'?:/gm)].map((m) => m[1]);
+};
+
+const langs = i18n.LANGUAGES.map((l) => l.id);
+const english = new Set(block('STRINGS', 'en'));
+for (const lang of langs.filter((l) => l !== 'en')) {
+  const keys = new Set(block('STRINGS', lang));
+  const missing = [...english].filter((k) => !keys.has(k));
+  check(`${lang}: all interface text translated`, missing.length === 0, missing.join(', '));
 }
-console.log('errors:', errors.length ? errors.join(' | ') : 'none');
-await browser.close();
+for (const lang of langs) {
+  i18n.setLang(lang);
+  const items = ITEM_IDS.filter((id) => !i18n.itemName(id) || !i18n.itemBlurb(id));
+  check(`${lang}: every attachment has a name and description`, items.length === 0, items.join(', '));
+  const pairs = [];
+  for (const a of ITEM_IDS) for (const b of ITEM_IDS) if (a < b && !i18n.comboName([a, b])) pairs.push(`${a}+${b}`);
+  check(`${lang}: every combo has a name`, pairs.length === 0, pairs.slice(0, 5).join(', '));
+}
