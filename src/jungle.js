@@ -342,8 +342,10 @@ function buildLift(track, batch) {
   return { group, texture };
 }
 
-function addBroadleaf(batch, x, y, z, rand) {
-  const h = 9 + rand() * 9;
+const CANOPY = new THREE.SphereGeometry(1, 9, 6);
+
+function addBroadleaf(batch, x, y, z, rand, tall = 1) {
+  const h = (9 + rand() * 9) * tall;
   batch.add('bark', CYLINDER, mat(x, y + h / 2 - 1, z, 0.6 + h * 0.03, h, 0.6 + h * 0.03));
   const blobs = 3 + Math.floor(rand() * 3);
   const r = 3.4 + rand() * 2.2;
@@ -352,7 +354,17 @@ function addBroadleaf(batch, x, y, z, rand) {
     const off = i === 0 ? 0 : r * 0.6;
     const key = ['leaf', 'leafLight', 'leafDark'][Math.floor(rand() * 3)];
     const s = r * (i === 0 ? 1 : 0.7 + rand() * 0.25);
-    batch.add(key, LOW_SPHERE, mat(x + Math.cos(a) * off, y + h + (i === 0 ? 0.5 : -0.8 + rand() * 1.5), z + Math.sin(a) * off, s, s * 0.75, s));
+    batch.add(key, CANOPY, mat(x + Math.cos(a) * off, y + h + (i === 0 ? 0.5 : -0.8 + rand() * 1.5), z + Math.sin(a) * off, s, s * 0.75, s));
+  }
+}
+
+function addBush(batch, x, y, z, rand) {
+  const lumps = 2 + Math.floor(rand() * 2);
+  for (let i = 0; i < lumps; i++) {
+    const a = rand() * Math.PI * 2;
+    const s = 1.8 + rand() * 1.8;
+    const key = ['leaf', 'leafLight', 'leafDark', 'fern'][Math.floor(rand() * 4)];
+    batch.add(key, CANOPY, mat(x + Math.cos(a) * s * 0.5, y + s * 0.35, z + Math.sin(a) * s * 0.5, s, s * 0.7, s));
   }
 }
 
@@ -366,7 +378,7 @@ function addFern(batch, x, y, z, rand) {
 }
 
 export function createJungle(group, track, fx) {
-  const fog = new THREE.Fog(SKY_GREEN, 200, 780);
+  const fog = new THREE.Fog(SKY_GREEN, 130, 560);
   const sky = createSky();
   group.add(sky);
   group.add(new THREE.HemisphereLight(0xeaffea, 0x3c8f6a, 1.4));
@@ -395,27 +407,40 @@ export function createJungle(group, track, fx) {
       Math.abs(terrainHeight(surface, track, x, z + 3) - h),
     ) > 2.4;
   };
-  let trees = 0;
-  for (let tries = 0; trees < 520 && tries < 9000; tries++) {
-    const x = minX + rand() * (maxX - minX);
-    const z = minZ + rand() * (maxZ - minZ);
-    const { dist } = surface.sample(x, z);
-    if (dist < hw + 9 || dist > 240 || steep(x, z)) continue;
-    if (dist > 120 && rand() < 0.5) continue;
-    const y = terrainHeight(surface, track, x, z);
-    const roll = rand();
-    if (roll < 0.62) addBroadleaf(batch, x, y, z, rand);
-    else addPalm(batch, x, y - 0.5, z, rand, { height: 9 + rand() * 7, lean: rand() * 0.4, dir: rand() * Math.PI * 2 });
-    trees++;
+  const bankSpot = (from, to) => {
+    const idx = Math.floor(rand() * track.N);
+    const side = rand() < 0.5 ? -1 : 1;
+    const p = track.point(idx, side * (hw + from + rand() * (to - from)));
+    const { dist } = surface.sample(p.x, p.z);
+    return dist < hw + from - 0.5 || steep(p.x, p.z) ? null : p;
+  };
+  for (let n = 0, tries = 0; n < 1300 && tries < 8000; tries++) {
+    const p = bankSpot(7, 42);
+    if (!p) continue;
+    const y = terrainHeight(surface, track, p.x, p.z);
+    if (rand() < 0.7) addBroadleaf(batch, p.x, y, p.z, rand, 1 + rand() * 0.4);
+    else addPalm(batch, p.x, y - 0.5, p.z, rand, { height: 10 + rand() * 9, lean: rand() * 0.5, dir: rand() * Math.PI * 2 });
+    n++;
   }
-  let ferns = 0;
-  for (let tries = 0; ferns < 260 && tries < 6000; tries++) {
+  for (let n = 0, tries = 0; n < 1000 && tries < 6000; tries++) {
+    const p = bankSpot(3.5, 16);
+    if (!p) continue;
+    addBush(batch, p.x, terrainHeight(surface, track, p.x, p.z), p.z, rand);
+    n++;
+  }
+  for (let n = 0, tries = 0; n < 420 && tries < 4000; tries++) {
+    const p = bankSpot(5, 30);
+    if (!p) continue;
+    addFern(batch, p.x, terrainHeight(surface, track, p.x, p.z), p.z, rand);
+    n++;
+  }
+  for (let n = 0, tries = 0; n < 500 && tries < 9000; tries++) {
     const x = minX + rand() * (maxX - minX);
     const z = minZ + rand() * (maxZ - minZ);
     const { dist } = surface.sample(x, z);
-    if (dist < hw + 6 || dist > hw + 30 || steep(x, z)) continue;
-    addFern(batch, x, terrainHeight(surface, track, x, z), z, rand);
-    ferns++;
+    if (dist < hw + 42 || dist > 260 || steep(x, z)) continue;
+    addBroadleaf(batch, x, terrainHeight(surface, track, x, z), z, rand, 1.2 + rand() * 0.5);
+    n++;
   }
   const lip = track.river.falls;
   const li = Math.floor(lip / track.spacing);

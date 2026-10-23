@@ -25,7 +25,7 @@ export class TitleBoat {
     minigun.parent.rotation.x = -0.22;
     root.rotation.y = 0.5;
     body.rotation.x = -0.32;
-    root.position.y = 0.3;
+    root.position.y = -0.55;
     this.scene.add(root);
     root.add(splash());
 

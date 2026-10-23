@@ -46,6 +46,7 @@ addEventListener('resize', resize);
 resize();
 
 const fx = new Effects(scene);
+fx.camera = camera;
 const sfx = new Sfx();
 const SILENT = { play() {} };
 const input = new Input();

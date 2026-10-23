@@ -496,6 +496,10 @@ function sphereDirections(count) {
 }
 
 const CLAW_ANGLES = [114, 234, 354];
+const HOSE_RUBBER = toon(0x2e3a2f);
+const HOSE_RIB_MAT = toon(0x1c241d);
+const HOSE_CLAMP = toon(0xd8dde4);
+const HOSE_RIB = new THREE.TorusGeometry(0.08, 0.022, 6, 14);
 const MINE_BODY = toon(0x8e9aa8);
 const MINE_BAND = toon(0x5d6b7e);
 const MINE_HORN = toon(0xb8c3cf);
@@ -627,7 +631,14 @@ const MODULES = {
         new THREE.Vector3(x * 1.6, 0.62, 0.15),
         new THREE.Vector3(x * 0.75, 0.78, 0.27),
       ]);
-      m.add(outlined(new THREE.TubeGeometry(hose, 16, 0.075, 8), mats.dark, 0.02));
+      m.add(outlined(new THREE.TubeGeometry(hose, 16, 0.075, 8), HOSE_RUBBER, 0.02));
+      for (let k = 1; k < 9; k++) {
+        const u = k / 9;
+        const rib = new THREE.Mesh(HOSE_RIB, k === 1 || k === 8 ? HOSE_CLAMP : HOSE_RIB_MAT);
+        rib.position.copy(hose.getPointAt(u));
+        rib.lookAt(rib.position.clone().add(hose.getTangentAt(u)));
+        m.add(rib);
+      }
       part(m, 'cylinder', mats.metal, x, 0.6, -0.42, 0.11, 0.12, 0.11, 0.02);
     }
     part(m, 'sphere', mats.dark, 0, 0.8, 0.25, 0.32, 0.32, 0.32, 0.03);

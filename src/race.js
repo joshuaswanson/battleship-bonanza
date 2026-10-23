@@ -7,6 +7,7 @@ import { toon, glow } from './toon.js';
 import { fast } from './tuning.js';
 import { t as tr } from './i18n.js';
 import { TrackFeatures } from './features.js';
+import { Wakes } from './wake.js';
 
 export const LAPS = 3;
 export const MAX_HP = 100;
@@ -224,6 +225,7 @@ export class Race {
     }
 
     this.features = new TrackFeatures(scene, track, fx, sfx);
+    this.wakes = new Wakes(scene);
     this.placeGrid();
   }
 
@@ -295,6 +297,7 @@ export class Race {
     this.updateFlames(dt);
     this.features.update(this, dt, this.time);
     for (const b of this.boats) this.updateVisual(b, dt);
+    this.wakes.update(this.boats, this.time);
     this.updateStandings();
   }
 
@@ -1612,7 +1615,7 @@ export class Race {
     if (b.alive && !b.air && Math.abs(b.speed) > 5 && isWater(b.pos.x, b.pos.z)) {
       b.wakeTimer -= dt;
       if (b.wakeTimer <= 0) {
-        b.wakeTimer = 0.035;
+        b.wakeTimer = 0.07;
         const sx = -lx;
         const sz = -lz;
         this.fx.wake(b.pos.x - fx * (HULL_L - 0.3), w + 0.1, b.pos.z - fz * (HULL_L - 0.3), sx, sz, Math.abs(b.speed));
@@ -1680,5 +1683,6 @@ export class Race {
     for (const h of this.hooks) this.scene.remove(h.mesh, h.rope);
     this.scene.remove(this.bulletMesh, this.bulletOutline);
     this.features.dispose();
+    this.wakes.dispose();
   }
 }

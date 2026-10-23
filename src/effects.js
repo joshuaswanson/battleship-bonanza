@@ -162,6 +162,127 @@ class CasingPool {
   }
 }
 
+const BOLT_VERT = /* glsl */ `
+  attribute float aAcross;
+  attribute float aAlpha;
+  attribute vec3 aColor;
+  varying float vAcross;
+  varying float vAlpha;
+  varying vec3 vColor;
+  #include <common>
+  #include <fog_pars_vertex>
+  void main() {
+    vAcross = aAcross;
+    vAlpha = aAlpha;
+    vColor = aColor;
+    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+    gl_Position = projectionMatrix * mvPosition;
+    #include <fog_vertex>
+  }
+`;
+
+const BOLT_FRAG = /* glsl */ `
+  varying float vAcross;
+  varying float vAlpha;
+  varying vec3 vColor;
+  #include <common>
+  #include <fog_pars_fragment>
+  void main() {
+    float d = abs(vAcross);
+    float core = 1.0 - smoothstep(0.18, 0.32, d);
+    float glow = 1.0 - smoothstep(0.3, 1.0, d);
+    vec3 color = mix(vColor, vec3(1.0), core);
+    float a = max(core, glow * glow * 0.75) * vAlpha;
+    if (a < 0.01) discard;
+    gl_FragColor = vec4(color, a);
+    #include <colorspace_fragment>
+    #include <fog_fragment>
+  }
+`;
+
+class Lightning {
+  constructor(scene, max = 30000) {
+    this.max = max;
+    this.positions = new Float32Array(max * 3);
+    this.across = new Float32Array(max);
+    this.alphas = new Float32Array(max);
+    this.colors = new Float32Array(max * 3);
+    const geometry = new THREE.BufferGeometry();
+    const attr = (name, array, size) => geometry.setAttribute(name, new THREE.BufferAttribute(array, size).setUsage(THREE.DynamicDrawUsage));
+    attr('position', this.positions, 3);
+    attr('aAcross', this.across, 1);
+    attr('aAlpha', this.alphas, 1);
+    attr('aColor', this.colors, 3);
+    this.geometry = geometry;
+    const material = new THREE.ShaderMaterial({
+      uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog]),
+      vertexShader: BOLT_VERT,
+      fragmentShader: BOLT_FRAG,
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      fog: true,
+    });
+    this.mesh = new THREE.Mesh(geometry, material);
+    this.mesh.frustumCulled = false;
+    this.mesh.renderOrder = 3;
+    scene.add(this.mesh);
+    this.bolts = [];
+  }
+
+  add(points, color, width, life) {
+    this.bolts.push({ points, color: new THREE.Color(color), width, life, max: life });
+  }
+
+  update(dt, camera) {
+    this.bolts = this.bolts.filter((b) => (b.life -= dt) > 0);
+    const tangent = new THREE.Vector3();
+    const toCam = new THREE.Vector3();
+    const side = new THREE.Vector3();
+    const up = new THREE.Vector3(0, 1, 0);
+    let v = 0;
+    const put = (p, across, alpha, color) => {
+      this.positions[v * 3] = p.x;
+      this.positions[v * 3 + 1] = p.y;
+      this.positions[v * 3 + 2] = p.z;
+      this.across[v] = across;
+      this.alphas[v] = alpha;
+      this.colors[v * 3] = color.r;
+      this.colors[v * 3 + 1] = color.g;
+      this.colors[v * 3 + 2] = color.b;
+      v++;
+    };
+    for (const bolt of this.bolts) {
+      const pts = bolt.points;
+      const n = pts.length;
+      if (v + (n - 1) * 6 > this.max) break;
+      const alpha = (bolt.life / bolt.max) * (0.75 + Math.random() * 0.25);
+      const left = [];
+      const right = [];
+      for (let i = 0; i < n; i++) {
+        tangent.subVectors(pts[Math.min(n - 1, i + 1)], pts[Math.max(0, i - 1)]).normalize();
+        if (camera) toCam.subVectors(camera.position, pts[i]);
+        else toCam.copy(up);
+        side.crossVectors(tangent, toCam).normalize();
+        const taper = i === 0 || i === n - 1 ? 0.45 : 1;
+        side.multiplyScalar(bolt.width * taper);
+        left.push(pts[i].clone().add(side));
+        right.push(pts[i].clone().sub(side));
+      }
+      for (let i = 0; i < n - 1; i++) {
+        put(left[i], -1, alpha, bolt.color);
+        put(right[i], 1, alpha, bolt.color);
+        put(left[i + 1], -1, alpha, bolt.color);
+        put(left[i + 1], -1, alpha, bolt.color);
+        put(right[i], 1, alpha, bolt.color);
+        put(right[i + 1], 1, alpha, bolt.color);
+      }
+    }
+    this.geometry.setDrawRange(0, v);
+    for (const name of ['position', 'aAcross', 'aAlpha', 'aColor']) this.geometry.attributes[name].needsUpdate = true;
+  }
+}
+
 export class Effects {
   constructor(scene) {
     this.puffs = new ParticlePool(scene, toon(0xffffff, { emissive: 0x6f93ad }), 4200);
@@ -169,7 +290,8 @@ export class Effects {
     this.rings = new Transient(scene, new THREE.TorusGeometry(1, 0.12, 8, 48).rotateX(Math.PI / 2), 16, false);
     const beam = new THREE.CylinderGeometry(1, 1, 1, 10, 1, true).rotateX(Math.PI / 2).translate(0, 0, 0.5);
     this.beams = new Transient(scene, beam, 900, false);
-    this.arcs = new Transient(scene, beam, 1700, true);
+    this.lightning = new Lightning(scene);
+    this.camera = null;
     this.timers = [];
     this.clock = 0;
     this.shells = new Transient(scene, new THREE.SphereGeometry(1, 32, 20), 6, true);
@@ -188,7 +310,7 @@ export class Effects {
     this.sparks.update(dt);
     this.rings.update(dt);
     this.beams.update(dt);
-    this.arcs.update(dt);
+    this.lightning.update(dt, this.camera);
     this.clock += dt;
     if (this.timers.length) {
       const due = this.timers.filter((t) => t.at <= this.clock);
@@ -372,27 +494,15 @@ export class Effects {
     const axis = unit().cross(from).normalize();
     const sweep = 0.8 + r() * 1.8;
     const steps = 8;
-    let prev = null;
+    const points = [];
     for (let k = 0; k <= steps; k++) {
       const d = from.clone().applyAxisAngle(axis, (sweep * k) / steps);
       const lift = 1.02 + Math.sin((Math.PI * k) / steps) * reach;
       const p = center.clone().addScaledVector(d, radius * lift);
       if (k > 0 && k < steps) p.add(unit().multiplyScalar(0.06));
-      if (prev) this.arcSegment(prev, p);
-      prev = p;
+      points.push(p);
     }
-  }
-
-  arcSegment(a, b) {
-    const len = a.distanceTo(b);
-    for (const [w, c] of [[0.1, 0x3fb8ff], [0.04, 0xffffff]]) {
-      this.arcs.take(c, 0.05, (mesh) => {
-        mesh.position.copy(a);
-        mesh.lookAt(b);
-        mesh.scale.set(w, w, len);
-        mesh.material.opacity = 0.9;
-      });
-    }
+    this.lightning.add(points, 0x3fa0ff, 0.12, 0.06);
   }
 
   bolt(from, to, color = 0x2f7dff, width = 0.18, life = 0.12, fork = true) {
@@ -419,7 +529,7 @@ export class Effects {
       points = next;
       offset *= 0.55;
     }
-    for (let i = 0; i < points.length - 1; i++) this.zap(points[i], points[i + 1], color, width, life);
+    this.lightning.add(points, color, width * 2, life);
     if (!fork) return;
     for (let f = 0; f < 2; f++) {
       const at = points[1 + Math.floor(r() * (points.length - 2))];
@@ -429,23 +539,6 @@ export class Effects {
       dir.y += (r() - 0.3) * 0.6;
       const end = at.clone().addScaledVector(dir.normalize(), length * (0.2 + r() * 0.25));
       this.strike(at, end, color, width * 0.6, life, false);
-    }
-  }
-
-  zap(a, b, color, width, life) {
-    const len = a.distanceTo(b);
-    const layers = [
-      [this.arcs, color, width * 2.2, 0.14],
-      [this.beams, color, width * 0.7, 0.95],
-      [this.arcs, 0xffffff, width * 0.3, 1],
-    ];
-    for (const [pool, c, w, opacity] of layers) {
-      pool.take(c, life, (mesh, k) => {
-        mesh.position.copy(a);
-        mesh.lookAt(b);
-        mesh.scale.set(w, w, len);
-        mesh.material.opacity = opacity * (1 - k * k);
-      });
     }
   }
 

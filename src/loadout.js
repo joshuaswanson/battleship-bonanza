@@ -298,6 +298,7 @@ export class Loadout {
     }
     this.scene.add(this.floatRing);
     this.fx = new Effects(this.scene);
+    this.fx.camera = this.camera;
 
     this.time = 0;
     this.spin = 0.7;
