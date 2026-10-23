@@ -43,7 +43,6 @@ const AXIS_HALF = 3.4;
 const KO_TIME = 2.2;
 const LASER_REACH = 75;
 const DODGE_WINDOW = 0.45;
-const SAW_RANGE = 9;
 const WATCH_RANGE = 80;
 const HALF_ARC = Math.PI / 2;
 
@@ -1483,7 +1482,7 @@ export class Race {
     const slot = b.items.indexOf('saw');
     const center = slotCenter(slot);
     let target = null;
-    let best = SAW_RANGE;
+    let best = WATCH_RANGE;
     if (b.alive && this.state === 'racing' && b.disabled <= 0) {
       for (const o of this.boats) {
         if (o === b || !o.alive || (o.finished && !this.attract) || !this.willAttack(b, o)) continue;

@@ -99,7 +99,7 @@ export function createTrack(map) {
   }
 
   function pastSeam(s) {
-    return ahead(river.tunnelIn, s) > ahead(river.tunnelIn, river.seam);
+    return ahead(river.seam, s) < ahead(river.seam, river.tunnelOut) + 100;
   }
 
   return { N, length, spacing, px, pz, tx, tz, nx, nz, wrap, project, point, heading, halfWidth: map.halfWidth, map, river, level, inTunnel, pastSeam, ahead };
