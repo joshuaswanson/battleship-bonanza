@@ -14,7 +14,6 @@ const $ = (id) => document.getElementById(id);
 
 const TARGETING = {
   missiles: { range: 180, minDot: -1, filter: (o) => !o.has('camo') },
-  laser: { range: 70, minDot: 0.97 },
 };
 
 export class Hud {
@@ -366,7 +365,7 @@ export class Hud {
     if (p.alive && race.state === 'racing' && !p.finished) {
       for (let i = 0; i < 2; i++) {
         const id = p.items[i];
-        const spec = id === 'laser' ? race.gunArc(p, 'laser', 70) : id === 'grapple' ? race.hookSpec(p) : TARGETING[id];
+        const spec = id === 'grapple' ? race.hookSpec(p) : TARGETING[id];
         if (!spec || p.cooldowns[i] > 0) continue;
         target = race.findTarget(p, spec);
         if (target) {

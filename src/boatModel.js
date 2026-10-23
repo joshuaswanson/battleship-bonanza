@@ -932,6 +932,15 @@ export function stepLaser(laser, refs, dt, time) {
   return { beaming: laser.firing && laser.delay <= 0, overheatedNow };
 }
 
+export function aimLaserGun(refs, wobble, dt) {
+  const gun = refs.modules.laser;
+  if (!gun) return;
+  const k = wobble ? 1 : 1 - Math.exp(-10 * dt);
+  gun.rotation.y += ((wobble?.yaw ?? 0) - gun.rotation.y) * k;
+  gun.rotation.x += (-Math.atan(wobble?.lift ?? 0) - gun.rotation.x) * k;
+  gun.updateMatrixWorld(true);
+}
+
 export function laserWobble(time, seed) {
   const t = time + seed;
   const yaw = Math.sin(t * 6.3) * 0.13 + Math.sin(t * 15.7) * 0.05;
