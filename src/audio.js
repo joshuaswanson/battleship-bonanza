@@ -51,6 +51,8 @@ export class Sfx {
       limiter.attack.value = 0.003;
       limiter.release.value = 0.2;
       this.master.connect(limiter).connect(this.ctx.destination);
+      this.samples = {};
+      this.loadSamples('gun', ['sfx/gun1.wav', 'sfx/gun2.wav', 'sfx/gun3.wav']);
       this.noiseBuffer = this.ctx.createBuffer(1, this.ctx.sampleRate, this.ctx.sampleRate);
       const data = this.noiseBuffer.getChannelData(0);
       for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
@@ -94,6 +96,33 @@ export class Sfx {
     return 1 / (1 + d / 35);
   }
 
+  loadSamples(name, files) {
+    Promise.all(
+      files.map((file) =>
+        fetch(`${import.meta.env.BASE_URL}${file}`)
+          .then((r) => r.arrayBuffer())
+          .then((data) => this.ctx.decodeAudioData(data)),
+      ),
+    )
+      .then((buffers) => {
+        this.samples[name] = buffers;
+      })
+      .catch(() => {});
+  }
+
+  sample(name, vol, rate = 1) {
+    const buffers = this.samples[name];
+    if (!buffers?.length) return false;
+    const source = this.ctx.createBufferSource();
+    source.buffer = buffers[Math.floor(Math.random() * buffers.length)];
+    source.playbackRate.value = rate;
+    const gain = this.ctx.createGain();
+    gain.gain.value = vol;
+    source.connect(gain).connect(this.master);
+    source.start();
+    return true;
+  }
+
   tone(freq, dur, { type = 'sine', vol = 0.3, to = null, delay = 0 } = {}) {
     const ctx = this.ctx;
     const t = ctx.currentTime + delay;
@@ -132,6 +161,7 @@ export class Sfx {
     if (!(v >= 0.04)) return;
     switch (name) {
       case 'shoot':
+        if (this.sample('gun', 0.32 * v, 0.94 + Math.random() * 0.14)) break;
         this.noise(0.07, { vol: 0.22 * v, freq: 2600, type: 'bandpass', to: 700 });
         this.tone(150, 0.07, { type: 'square', vol: 0.1 * v, to: 55 });
         this.tone(2400, 0.02, { type: 'square', vol: 0.03 * v, to: 900 });

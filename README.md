@@ -5,3 +5,5 @@
 Cute boats. Big guns. Pick two attachments and race to the finish!
 
 Play it [here](https://joshuaswanson.github.io/battleship-bonanza/).
+
+Machine gun sounds are cut from [The Free Firearm Sound Library](https://opengameart.org/content/the-free-firearm-sound-library) (CC0).
