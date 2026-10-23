@@ -10,7 +10,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 await page.goto('http://localhost:5288/', { waitUntil: 'networkidle0' });
 await wait(800);
 await page.evaluate(() => { document.getElementById('ui').style.display = 'none'; window.__bb.freeCam = true; });
-const isl = await page.evaluate(() => window.__bb.world.islands.filter((o) => o.r > 12).sort((a, b) => b.r - a.r).slice(0, 12));
+const isl = await page.evaluate(() => window.__bb.world.islands.sort((a, b) => b.r - a.r).filter((_, i) => i % 6 === 0).slice(0, 12));
 const views = isl.filter((_, i) => i % 2 === 0).map((o) => [[o.x + o.r * 1.05 + 6, 5, o.z + o.r * 0.8 + 6], [o.x, 9, o.z]]);
 const unused = [
   [[60, 14, -60], [140, 6, 40]],

@@ -226,20 +226,35 @@ function addIsland(batch, x, z, r, rand, { clearCenter = 0 } = {}) {
   const kind = r < 14 && roll < 0.45 ? 'sandbar' : roll > 0.65 ? 'lush' : 'normal';
 
   const sand = [];
-  const blobCount = 1 + Math.floor(rand() * (r > 18 ? 4 : 2));
+  const blobCount = Math.min(9, 1 + Math.floor(r / 7) + Math.floor(rand() * 3));
+  let heading = rand() * Math.PI * 2;
+  const bend = (rand() - 0.5) * 1.6;
   for (let i = 0; i < blobCount; i++) {
-    const a = rand() * Math.PI * 2;
-    const off = i === 0 ? 0 : r * (0.15 + rand() * 0.2);
-    const size = r * (i === 0 ? 0.62 + rand() * 0.15 : 0.35 + rand() * 0.25);
-    const stretch = 0.75 + rand() * 0.4;
+    const size = r * (i === 0 ? 0.5 + rand() * 0.2 : 0.22 + rand() * 0.38);
+    let bx = x;
+    let bz = z;
+    if (i > 0) {
+      const parent = sand[rand() < 0.7 ? i - 1 : Math.floor(rand() * i)];
+      heading += bend + (rand() - 0.5) * 1.4;
+      const reach = (Math.max(parent.rx, parent.rz) + size) * (0.65 + rand() * 0.3);
+      bx = parent.x + Math.cos(heading) * reach;
+      bz = parent.z + Math.sin(heading) * reach;
+      const out = Math.hypot(bx - x, bz - z) + size;
+      if (out > r) {
+        const k = Math.max(0, (r - size) / Math.hypot(bx - x, bz - z));
+        bx = x + (bx - x) * k;
+        bz = z + (bz - z) * k;
+      }
+    }
+    const stretch = 0.6 + rand() * 0.8;
     sand.push({
-      x: x + Math.cos(a) * off,
-      z: z + Math.sin(a) * off,
+      x: bx,
+      z: bz,
       rx: size * stretch,
       rz: size / stretch,
       rot: rand() * Math.PI,
       y: -1,
-      h: kind === 'sandbar' ? 1.8 + rand() * 0.8 : Math.min(6, size * 0.22) + 1 + rand() * 1.5,
+      h: kind === 'sandbar' ? 1.8 + rand() * 0.8 : Math.min(7, size * 0.3) + 1 + rand() * 1.5,
     });
   }
   for (const blob of sand) {
@@ -469,15 +484,17 @@ export function createWorld(scene, track) {
   const batch = new Batcher();
   const islands = [];
   const half = track.halfWidth;
-  for (let gx = -540; gx <= 540; gx += 52) {
-    for (let gz = -480; gz <= 560; gz += 52) {
-      const x = gx + (rand() - 0.5) * 36;
-      const z = gz + (rand() - 0.5) * 36;
-      if (rand() < 0.45) continue;
+  for (let gx = -540; gx <= 540; gx += 60) {
+    for (let gz = -480; gz <= 560; gz += 60) {
+      const x = gx + (rand() - 0.5) * 44;
+      const z = gz + (rand() - 0.5) * 44;
+      if (rand() < 0.72) continue;
       const clearance = track.project(x, z).distance - half;
-      if (clearance < 24) continue;
-      const r = Math.min(44, clearance - 14) * (0.45 + rand() * 0.5);
-      if (r < 7) continue;
+      if (clearance < 20) continue;
+      const roll = rand();
+      const wanted = roll < 0.4 ? 5 + rand() * 8 : roll < 0.78 ? 13 + rand() * 15 : 28 + rand() * 45;
+      const r = Math.min(wanted, clearance - 12);
+      if (r < 5) continue;
       if (islands.some((o) => Math.hypot(o.x - x, o.z - z) < o.r + r + 8)) continue;
       islands.push({ x, z, r });
     }

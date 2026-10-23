@@ -55,7 +55,7 @@ function loadSetup() {
     const saved = JSON.parse(localStorage.getItem('bb-setup'));
     if (saved && Array.isArray(saved.items) && saved.items.every((id) => ITEMS[id])) return { ...saved, items: frontFirst(saved.items) };
   } catch {}
-  return { name: 'Sea Biscuit', color: PAINTS[0].value, items: ['jetpack', 'machinegun'] };
+  return { name: 'Sea Biscuit', color: PAINTS[0].value, items: frontFirst(['jetpack', 'machinegun']) };
 }
 const setup = loadSetup();
 const saveSetup = () => localStorage.setItem('bb-setup', JSON.stringify(setup));
