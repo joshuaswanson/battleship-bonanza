@@ -10,14 +10,8 @@
   <body>
     <canvas id="game"></canvas>
     <div class="wipe" id="wipe" aria-hidden="true">
-      <svg viewBox="0 0 1600 1000" preserveAspectRatio="none">
-        <path class="wipe-back" d="M140 0 C220 120 60 230 160 360 C260 490 80 610 170 740 C250 860 120 940 160 1000 L1440 1000 C1500 900 1380 820 1460 700 C1540 580 1360 470 1450 340 C1530 220 1400 110 1460 0 Z" />
-        <path class="wipe-front" d="M220 0 C300 140 140 250 240 380 C340 510 160 630 250 760 C330 880 200 950 240 1000 L1380 1000 C1440 910 1300 830 1390 710 C1470 590 1300 480 1390 350 C1470 230 1330 120 1400 0 Z" />
-        <path class="wipe-edge" d="M1400 0 C1330 120 1470 230 1390 350 C1300 480 1470 590 1390 710 C1300 830 1440 910 1380 1000" />
-        <path class="wipe-edge" d="M220 0 C300 140 140 250 240 380 C340 510 160 630 250 760 C330 880 200 950 240 1000" />
-        <path class="wipe-foam" d="M1400 0 C1330 120 1470 230 1390 350 C1300 480 1470 590 1390 710 C1300 830 1440 910 1380 1000" />
-        <path class="wipe-foam" d="M220 0 C300 140 140 250 240 380 C340 510 160 630 250 760 C330 880 200 950 240 1000" />
-      </svg>
+      <div class="iris"></div>
+      <div class="buoy"></div>
     </div>
 
     <div id="ui">
@@ -59,8 +53,13 @@
       <section id="screen-settings" class="screen screen-dim hidden">
         <div class="panel panel-narrow settings">
           <h2 data-i18n="settings">Settings</h2>
+          <div class="settings-toggles">
+            <div class="toggle-row"><span data-i18n="soundEffects">Sound effects</span><button class="toggle" id="toggle-sound" role="switch"></button></div>
+            <div class="toggle-row"><span data-i18n="music">Music</span><button class="toggle" id="toggle-music" role="switch"></button></div>
+          </div>
           <p class="settings-label" data-i18n="language">Language</p>
           <div class="lang-picker" id="lang-picker" role="group" aria-label="Language"></div>
+          <a class="btn btn-bug" href="https://github.com/joshuaswanson/battleship-bonanza/issues" target="_blank" rel="noopener" data-i18n="reportBug">Report a bug</a>
           <button id="btn-settings-close" class="btn btn-big" data-i18n="done">Done</button>
         </div>
       </section>

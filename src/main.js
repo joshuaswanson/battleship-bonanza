@@ -170,23 +170,17 @@ function wipe(fn) {
   sfx.play('whoosh');
   const el = $('wipe');
   el.className = 'wipe cover';
-  el.addEventListener(
-    'animationend',
-    () => {
-      fn();
+  setTimeout(() => {
+    fn();
+    setTimeout(() => {
       sfx.play('splash');
       el.className = 'wipe reveal';
-      el.addEventListener(
-        'animationend',
-        () => {
-          el.className = 'wipe';
-          wiping = false;
-        },
-        { once: true },
-      );
-    },
-    { once: true },
-  );
+      setTimeout(() => {
+        el.className = 'wipe';
+        wiping = false;
+      }, 640);
+    }, 160);
+  }, 480);
 }
 
 const MAP_CHOICES = ['bay', 'jungle', 'random'];
@@ -313,6 +307,22 @@ $('btn-go').addEventListener('click', () => wipe(startRace));
 $('btn-settings').addEventListener('click', () => {
   showScreen('screen-settings');
   document.querySelector('.lang[aria-pressed="true"]')?.focus();
+});
+function renderToggles() {
+  $('toggle-sound').setAttribute('aria-checked', String(sfx.soundOn));
+  $('toggle-music').setAttribute('aria-checked', String(sfx.musicOn));
+}
+renderToggles();
+$('toggle-sound').addEventListener('click', () => {
+  sfx.unlock();
+  sfx.setSound(!sfx.soundOn);
+  sfx.play('pick');
+  renderToggles();
+});
+$('toggle-music').addEventListener('click', () => {
+  sfx.unlock();
+  sfx.setMusic(!sfx.musicOn);
+  renderToggles();
 });
 $('btn-settings-close').addEventListener('click', () => {
   showScreen('screen-title');
