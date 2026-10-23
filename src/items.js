@@ -1,14 +1,14 @@
 export const GROUPS = [
-  { id: 'weapons', label: 'Weapons' },
-  { id: 'defense', label: 'Defense' },
-  { id: 'gadgets', label: 'Gadgets' },
+  { id: 'weapons' },
+  { id: 'defense' },
+  { id: 'gadgets' },
 ];
 
 export const STATS = [
-  { id: 'speed', label: 'Speed', color: '#1fc8d6' },
-  { id: 'tough', label: 'Toughness', color: '#4d9de0' },
-  { id: 'punch', label: 'Punch', color: '#ff4141' },
-  { id: 'tricks', label: 'Tricks', color: '#a77bf3' },
+  { id: 'speed', color: '#1fc8d6' },
+  { id: 'tough', color: '#4d9de0' },
+  { id: 'punch', color: '#ff4141' },
+  { id: 'tricks', color: '#a77bf3' },
 ];
 
 const BASE_STATS = { speed: 4, tough: 2, punch: 1, tricks: 1 };
@@ -22,160 +22,62 @@ export function statsFor(items) {
   return stats;
 }
 
-const SOLO_NAMES = {
-  spikes: 'The Pufferfish',
-  armor: 'The Tin Can',
-  camo: 'The Floating Shrub',
-  jetpack: 'The Flying Fish',
-  grapple: 'The Octopus',
-  emp: 'The Thundercloud',
-  machinegun: 'The Woodpecker',
-  laser: 'The Disco Ball',
-  saw: 'The Pizza Cutter',
-  missiles: 'The Fireworks Show',
-  mines: 'The Sea Urchin',
-};
-
-const PAIR_NAMES = {
-  'armor+camo': 'The Sneaky Turtle',
-  'armor+emp': 'The Lightning Rod',
-  'armor+grapple': 'The Iron Claw',
-  'armor+jetpack': 'The Flying Anvil',
-  'armor+laser': 'The Iron Lighthouse',
-  'armor+machinegun': 'The Rolling Fortress',
-  'armor+mines': 'The Armored Litterbug',
-  'armor+missiles': 'The Actual Battleship',
-  'armor+saw': 'The Can Opener',
-  'armor+spikes': 'The Iron Porcupine',
-  'camo+emp': 'The Electric Fern',
-  'camo+grapple': 'The Swamp Snatcher',
-  'camo+jetpack': 'The Leaping Shrub',
-  'camo+laser': 'The Sniper',
-  'camo+machinegun': 'The Jungle Commando',
-  'camo+mines': 'The Booby Trap',
-  'camo+missiles': 'The Ambush',
-  'camo+saw': 'The Lawnmower',
-  'camo+spikes': 'The Thorn Bush',
-  'emp+grapple': 'The Jellyfish',
-  'emp+jetpack': 'The Thunderbird',
-  'emp+laser': 'The Tesla Tower',
-  'emp+machinegun': 'The Thunderstorm',
-  'emp+mines': 'The Static Trap',
-  'emp+missiles': 'The Storm Chaser',
-  'emp+saw': 'The Electric Razor',
-  'emp+spikes': 'The Zappy Cactus',
-  'grapple+jetpack': 'The Trapeze Artist',
-  'grapple+laser': 'The Tractor Beam',
-  'grapple+machinegun': 'The Pirate Raider',
-  'grapple+mines': 'The Trapdoor Spider',
-  'grapple+missiles': 'The Bounty Hunter',
-  'grapple+saw': 'The Hungry Crab',
-  'grapple+spikes': 'The Harpoon Hedgehog',
-  'jetpack+laser': 'The Starfighter',
-  'jetpack+machinegun': 'The Attack Chopper',
-  'jetpack+mines': 'The Dive Bomber',
-  'jetpack+missiles': 'The Rocket Overload',
-  'jetpack+saw': 'The Flying Pizza Cutter',
-  'jetpack+spikes': 'The Flying Cactus',
-  'laser+machinegun': 'The Arcade Machine',
-  'laser+mines': 'The Trip Wire',
-  'laser+missiles': 'The Space Invader',
-  'laser+saw': 'The Lightsaber',
-  'laser+spikes': 'The Dazzling Thistle',
-  'machinegun+mines': 'The Popcorn Popper',
-  'machinegun+missiles': 'The Fourth of July',
-  'machinegun+saw': 'The Wood Chipper',
-  'machinegun+spikes': 'The Rattlesnake',
-  'mines+missiles': 'The Kaboom Express',
-  'mines+saw': 'The Junkyard Dog',
-  'mines+spikes': 'The Caltrop Trail',
-  'missiles+saw': 'The Demolition Crew',
-  'missiles+spikes': 'The Pineapple Express',
-  'saw+spikes': 'The Blender',
-};
-export function comboName(items) {
-  if (items.length === 0) return 'The Plain Dinghy';
-  if (items.length === 1) return SOLO_NAMES[items[0]];
-  return PAIR_NAMES[[...items].sort().join('+')];
-}
 
 export const ITEMS = {
   spikes: {
     stats: { tough: 1, punch: 1 },
-    name: 'Spikes',
     group: 'defense',
     passive: true,
-    blurb: 'Keep other boats at a distance AND look intimidating. Grappling hooks love them though.',
   },
   armor: {
     stats: { tough: 3, speed: -2 },
-    name: 'Armor',
     group: 'defense',
     passive: true,
-    blurb: "Turn your boat into a heavy armored bathtub. Deflects bullets, spikes and saw blades, but you won't move as fast.",
   },
   camo: {
     stats: { tough: 1, tricks: 1 },
-    name: 'Camo',
     group: 'defense',
     passive: true,
-    blurb: "Unfortunately you're still very visible out on the open ocean. Luckily, heat seeking missiles can't seem to find you.",
   },
   jetpack: {
     stats: { speed: 1, tricks: 2 },
-    name: 'Jet pack',
     group: 'gadgets',
     cooldown: 8,
-    blurb: "Who said boats can't fly? Leap over sea mines and dodge missiles and grappling hooks.",
   },
   grapple: {
     stats: { speed: 1, tricks: 2 },
-    name: 'Grappling hook',
     group: 'gadgets',
     cooldown: 7,
-    blurb: 'Snag any boat and get slingshotted right past it. Boats with spikes or a jet pack are extra easy to catch.',
   },
   emp: {
     stats: { tough: 1, tricks: 2 },
-    name: 'EMP',
     group: 'gadgets',
     cooldown: 7,
-    blurb: 'A big zappy bubble that swats away missiles and grappling hooks, and jolts anyone nearby. Rude, but effective.',
   },
   machinegun: {
     stats: { punch: 2 },
-    name: 'Machine gun',
     group: 'weapons',
     hold: true,
-    blurb: "Hold the trigger for a hailstorm of bullets. Just don't let it overheat!",
   },
   laser: {
     stats: { punch: 3 },
-    name: 'Laser',
     group: 'weapons',
     hold: true,
-    blurb: 'Hold for a sizzling beam and slice up anyone in the way. Melts armor, but saw blades deflect it.',
   },
   saw: {
     stats: { punch: 2, tough: 1 },
-    name: 'Saw blade',
     group: 'weapons',
     passive: true,
-    blurb: 'Slice up anyone who gets too close and deflect lasers wherever!',
   },
   missiles: {
     stats: { punch: 3 },
-    name: 'Heat seeking missiles',
     group: 'weapons',
     cooldown: 6,
-    blurb: "Fire and forget. They chase down the nearest boat in any direction, unless it's hiding in camo.",
   },
   mines: {
     stats: { punch: 2, tricks: 1 },
-    name: 'Sea mines',
     group: 'weapons',
     cooldown: 3,
-    blurb: 'Leave a little present behind you. Tailgaters get launched sky high.',
   },
 };
 

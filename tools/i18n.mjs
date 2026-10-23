@@ -1,0 +1,29 @@
+import puppeteer from 'puppeteer-core';
+const browser = await puppeteer.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: 'new', args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'], defaultViewport: { width: 1440, height: 900 } });
+const page = await browser.newPage();
+const errors = [];
+page.on('pageerror', (e) => errors.push(e.message));
+const wait = (t) => new Promise((r) => setTimeout(r, t));
+await page.goto('http://localhost:5288/', { waitUntil: 'networkidle0' });
+await wait(2200);
+for (const lang of ['fr', 'de', 'en']) {
+  await page.click(`.lang[data-lang="${lang}"]`);
+  await wait(400);
+  await page.screenshot({ path: `tools/shots/lang-${lang}-title.png` });
+  await page.click('#btn-play');
+  await wait(800);
+  const box = await (await page.$('.tile[data-id="missiles"]')).boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + 20);
+  await wait(300);
+  await page.screenshot({ path: `tools/shots/lang-${lang}-yard.png` });
+  await page.mouse.move(10, 10);
+  await page.evaluate(() => document.getElementById('btn-start').click());
+  await wait(5200);
+  await page.screenshot({ path: `tools/shots/lang-${lang}-race.png` });
+  await page.keyboard.press('Escape');
+  await wait(300);
+  await page.evaluate(() => document.getElementById('btn-menu').click());
+  await wait(1500);
+}
+console.log('errors:', errors.length ? errors.join(' | ') : 'none');
+await browser.close();

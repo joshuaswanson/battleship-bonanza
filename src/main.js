@@ -11,7 +11,8 @@ import { Effects } from './effects.js';
 import { Sfx } from './audio.js';
 import { Input } from './input.js';
 import { Race, BASE_SPEED } from './race.js';
-import { Hud, ordinal, formatTime } from './hud.js';
+import { Hud, formatTime } from './hud.js';
+import { LANGUAGES, t, ordinal, itemInSentence, getLang, setLang, applyStatic } from './i18n.js';
 import { Loadout, PAINTS } from './loadout.js';
 import { logoSvg, layoutLogoText } from './logo.js';
 import { TitleBoat } from './titleBoat.js';
@@ -48,7 +49,6 @@ const sfx = new Sfx();
 const input = new Input();
 const hud = new Hud(track, sfx);
 
-const AI_NAMES = ['Noodle', 'Dumpling', 'Pickle', 'Marshmallow', 'Waffles', 'Gumdrop', 'Pudding', 'Turnip', 'Meatball'];
 
 function loadSetup() {
   try {
@@ -77,7 +77,7 @@ function randomLoadout() {
 }
 
 function makeDefs(player) {
-  const names = shuffle(AI_NAMES);
+  const names = shuffle(t('aiNames'));
   const colors = shuffle(PAINTS.map((p) => p.value).filter((c) => c !== player?.color));
   const defs = [];
   for (let i = 0; i < 6; i++) {
@@ -156,11 +156,11 @@ function showResults() {
 
 function renderResults() {
   const p = race.player;
-  $('results-title').textContent = p.finished ? `You finished ${ordinal(p.finishOrder)}` : 'Race over';
+  $('results-title').textContent = p.finished ? t('youFinished', { place: ordinal(p.finishOrder), n: p.finishOrder }) : t('raceOver');
   $('standings').innerHTML = race.order
     .map((b) => {
-      const time = b.finished ? formatTime(b.finishTime) : `Lap ${b.lap}`;
-      const items = b.items.map((id) => (id === 'emp' ? 'EMP' : ITEMS[id].name.toLowerCase())).join(' and ');
+      const time = b.finished ? formatTime(b.finishTime) : t('lapN', { n: b.lap });
+      const items = b.items.map(itemInSentence).join(` ${t('and')} `);
       return `<li class="${b.isPlayer ? 'me' : ''}">
         <span class="st-place">${ordinal(b.place)}</span>
         <span class="st-dot" style="--paint:#${b.color.toString(16).padStart(6, '0')}"></span>
@@ -172,6 +172,25 @@ function renderResults() {
 }
 
 const loadout = new Loadout({ setup, sfx, onChange: saveSetup });
+
+function renderLanguagePicker() {
+  $('lang-picker').innerHTML = LANGUAGES.map(
+    (l) => `<button class="lang" data-lang="${l.id}" lang="${l.id}" aria-pressed="${l.id === getLang()}">${l.label}</button>`,
+  ).join('');
+  for (const button of document.querySelectorAll('.lang')) {
+    button.addEventListener('click', () => {
+      if (button.dataset.lang === getLang()) return;
+      setLang(button.dataset.lang);
+      applyStatic();
+      loadout.relabel();
+      renderLanguagePicker();
+      document.querySelector(`.lang[data-lang="${getLang()}"]`).focus();
+      if (race?.attract) newRace(true);
+    });
+  }
+}
+applyStatic();
+renderLanguagePicker();
 
 $('btn-play').addEventListener('click', goLoadout);
 $('btn-howto').addEventListener('click', () => {

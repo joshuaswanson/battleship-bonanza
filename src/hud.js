@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { ITEMS } from './items.js';
+import { t, ordinal, itemName } from './i18n.js';
 import { MAX_HP } from './race.js';
 
-export const ordinal = (n) => `${n}${n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th'}`;
 
 export function formatTime(seconds) {
   const m = Math.floor(seconds / 60);
@@ -71,11 +71,11 @@ export class Hud {
     this.feed.innerHTML = '';
     this.center.textContent = '';
     this.warn.textContent = '';
-    this.of.textContent = `of ${race.boats.length}`;
+    this.of.textContent = t('of', { n: race.boats.length });
     this.slotsEl.innerHTML = `<div class="ability hull-row">
           <i class="hull-dot"></i>
           <div class="ability-body">
-            <div class="ability-top"><span>Health</span><em class="hull-text"></em></div>
+            <div class="ability-top"><span>${t('health')}</span><em class="hull-text"></em></div>
             <div class="ability-track"><div class="ability-fill hull-fill"></div></div>
           </div>
         </div>` + player.items
@@ -85,7 +85,7 @@ export class Hud {
         return `<div class="ability${item.hold ? ' heat' : ''}" data-slot="${i}">
           <kbd>${i === 0 ? 'O' : 'P'}</kbd>
           <div class="ability-body">
-            <div class="ability-top"><span>${item.name}</span><em class="slot-state"></em></div>
+            <div class="ability-top"><span>${itemName(id)}</span><em class="slot-state"></em></div>
             <div class="ability-track"><div class="ability-fill"></div></div>
           </div>
         </div>`;
@@ -141,13 +141,13 @@ export class Hud {
         this.pop(String(e.n), 'count');
         break;
       case 'go':
-        this.pop('Go!', 'go');
+        this.pop(t('go'), 'go');
         break;
       case 'lap':
-        this.pop(`Lap ${e.lap}`);
+        this.pop(t('lapN', { n: e.lap }));
         break;
       case 'finalLap':
-        this.pop('Final lap');
+        this.pop(t('finalLap'));
         break;
       case 'heal':
         this.flash.className = 'hud-flash';
@@ -155,10 +155,10 @@ export class Hud {
         this.flash.className = 'hud-flash on heal';
         break;
       case 'dodge':
-        this.pop('Dodged!', 'go');
+        this.pop(t('dodged'), 'go');
         break;
       case 'finish':
-        this.pop(`You finished ${ordinal(e.place)}`, 'go');
+        this.pop(t('youFinished', { place: ordinal(e.place), n: e.place }), 'go');
         break;
       case 'feed':
         this.addFeed(e.text, e.player);
@@ -167,7 +167,7 @@ export class Hud {
         this.hurtFlash();
         break;
       case 'ko':
-        this.pop('Sunk!', 'ko');
+        this.pop(t('sunk'), 'ko');
         break;
       case 'warning':
         this.setWarning(e.text);
@@ -185,7 +185,7 @@ export class Hud {
       this.place.classList.add('bump');
       this.lastPlace = p.place;
     }
-    this.lap.textContent = p.finished ? 'Finished' : `Lap ${p.lap} of ${race.laps}`;
+    this.lap.textContent = p.finished ? t('finished') : t('lapOf', { n: p.lap, total: race.laps });
     this.time.textContent = formatTime(p.finished ? p.finishTime : race.clock);
 
     p.items.forEach((id, i) => {
@@ -197,7 +197,7 @@ export class Hud {
         this.slotFills[i].style.width = `${(1 - heat) * 100}%`;
         slot.classList.toggle('overheated', overheated);
         slot.classList.toggle('hot', !overheated && heat > 0.6);
-        const text = overheated ? 'Overheated' : heat > 0.6 ? 'Hot!' : 'Hold';
+        const text = overheated ? t('overheated') : heat > 0.6 ? t('hot') : t('hold');
         if (this.slotLabels[i].textContent !== text) this.slotLabels[i].textContent = text;
         return;
       }
@@ -205,7 +205,7 @@ export class Hud {
       const ready = cd <= 0;
       this.slotFills[i].style.width = `${(1 - cd / item.cooldown) * 100}%`;
       slot.classList.toggle('ready', ready);
-      const state = ready ? 'Ready' : `${cd.toFixed(1)}s`;
+      const state = ready ? t('ready') : `${cd.toFixed(1)}s`;
       const label = this.slotLabels[i];
       if (label.textContent !== state) label.textContent = state;
     });
@@ -224,7 +224,7 @@ export class Hud {
       const angle = Math.atan2(dx, dz) - camHeading;
       this.returnArrow.style.transform = `rotate(${-angle}rad)`;
     }
-    if (p.wrongWay > 1 && !lost) this.warn.textContent = 'Wrong way';
+    if (p.wrongWay > 1 && !lost) this.warn.textContent = t('wrongWay');
     else if (this.warnTime <= 0) this.warn.textContent = '';
 
     this.updateBars(race, camera);
@@ -319,7 +319,7 @@ export class Hud {
         if (!spec || p.cooldowns[i] > 0) continue;
         target = race.findTarget(p, spec);
         if (target) {
-          label = ITEMS[p.items[i]].name;
+          label = itemName(p.items[i]);
           break;
         }
       }

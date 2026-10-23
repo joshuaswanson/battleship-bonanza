@@ -6,6 +6,7 @@ import { createAI, driveAI } from './ai.js';
 import { toon, glow } from './toon.js';
 import { Medkits } from './medkits.js';
 import { fast } from './tuning.js';
+import { t as tr } from './i18n.js';
 import { TrackFeatures } from './features.js';
 
 export const LAPS = 3;
@@ -42,15 +43,6 @@ const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const approach = (v, target, step) => (v < target ? Math.min(target, v + step) : Math.max(target, v - step));
 const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
-const VERBS = {
-  spikes: 'poked',
-  bullet: 'peppered',
-  laser: 'zapped',
-  reflect: 'bounced a laser into',
-  saw: 'sliced',
-  missile: 'blasted',
-  mine: 'mined',
-};
 
 const ROPE_GEOMETRY = new THREE.CylinderGeometry(0.07, 0.07, 1, 6, 1, true).rotateX(Math.PI / 2).translate(0, 0, 0.5);
 const ROPE_MATERIAL = toon(0x34465e);
@@ -595,7 +587,7 @@ export class Race {
     const c = b.center();
     this.fx.explosion(c.x, c.y, c.z, 0.8);
     this.sfx.play('pop', b.pos);
-    this.emit('feed', { text: `${source.name} ${VERBS[kind]} ${b.name}`, player: b.isPlayer || source.isPlayer });
+    this.emit('feed', { text: tr(`feed_${kind}`, { a: source.name, b: b.name }), player: b.isPlayer || source.isPlayer });
     if (b.isPlayer) this.emit('ko', { source: source.name });
   }
 
@@ -677,7 +669,7 @@ export class Race {
         rope,
       });
       this.sfx.play('hook', b.pos);
-      if (target?.isPlayer) this.emit('warning', { text: 'Grappling hook incoming' });
+      if (target?.isPlayer) this.emit('warning', { text: tr('hookIncoming') });
     },
 
     emp(b) {
@@ -719,7 +711,7 @@ export class Race {
     for (let i = 0; i < shots; i++) this.fireBullet(b);
     if (overheatedNow) {
       this.sfx.play('overheat', b.pos);
-      if (b.isPlayer) this.emit('warning', { text: 'Overheated!' });
+      if (b.isPlayer) this.emit('warning', { text: tr('overheatedWarn') });
     }
     if (b.gun.overheated && Math.random() < 0.4) {
       const p = b.model.gunMount.getWorldPosition(new THREE.Vector3());
@@ -914,7 +906,7 @@ export class Race {
             h.phase = 'attached';
             h.time = 3;
             this.sfx.play('clank', h.target.pos);
-            if (o.isPlayer) this.emit('feed', { text: `You hooked ${h.target.name}`, player: true });
+            if (o.isPlayer) this.emit('feed', { text: tr('youHooked', { name: h.target.name }), player: true });
           }
         } else {
           h.pos.addScaledVector(h.dir, HOOK_SPEED * dt);
@@ -976,21 +968,21 @@ export class Race {
   tryDodge(b) {
     const dodged = this.incomingThreats(b).filter((t) => t.eta < DODGE_WINDOW);
     if (!dodged.length) return;
-    for (const t of dodged) {
-      if (t.kind === 'missile') {
-        t.m.target = null;
-        t.m.dodgedBy = b;
-        t.m.dir.y = Math.min(t.m.dir.y, -0.08);
-        t.m.dir.normalize();
+    for (const threat of dodged) {
+      if (threat.kind === 'missile') {
+        threat.m.target = null;
+        threat.m.dodgedBy = b;
+        threat.m.dir.y = Math.min(threat.m.dir.y, -0.08);
+        threat.m.dir.normalize();
       } else {
-        t.h.target = null;
-        t.h.anchor = null;
-        t.h.travelled = 45;
+        threat.h.target = null;
+        threat.h.anchor = null;
+        threat.h.travelled = 45;
       }
-      const attacker = t.kind === 'missile' ? t.m.owner : t.h.owner;
-      const what = t.kind === 'missile' ? 'missile' : 'grappling hook';
-      if (b.isPlayer) this.emit('feed', { text: `You dodged ${attacker.name}'s ${what}`, player: true });
-      else if (attacker.isPlayer) this.emit('feed', { text: `${b.name} dodged your ${what}`, player: true });
+      const attacker = threat.kind === 'missile' ? threat.m.owner : threat.h.owner;
+      const missile = threat.kind === 'missile';
+      if (b.isPlayer) this.emit('feed', { text: tr(missile ? 'youDodgedMissile' : 'youDodgedHook', { name: attacker.name }), player: true });
+      else if (attacker.isPlayer) this.emit('feed', { text: tr(missile ? 'theyDodgedMissile' : 'theyDodgedHook', { name: b.name }), player: true });
     }
     const c = b.center();
     this.fx.ring(c.x, c.y, c.z, 0xffffff, 2, 9, 0.45);
@@ -1065,7 +1057,7 @@ export class Race {
       const { beaming, overheatedNow } = stepLaser(b.laser, b.model, dt, this.time);
       if (overheatedNow) {
         this.sfx.play('overheat', b.pos);
-        if (b.isPlayer) this.emit('warning', { text: 'Overheated!' });
+        if (b.isPlayer) this.emit('warning', { text: tr('overheatedWarn') });
       }
       if (b.laser.overheated && Math.random() < 0.4) {
         const p = b.model.laserMount.getWorldPosition(new THREE.Vector3());

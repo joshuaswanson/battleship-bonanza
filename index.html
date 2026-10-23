@@ -13,32 +13,33 @@
     <div id="ui">
       <section id="screen-title" class="screen">
         <div class="title-logo" data-logo="3d"></div>
-        <a class="title-credit" href="https://joshuaswanson.github.io" target="_blank" rel="noopener">by Joshua Swanson</a>
+        <a class="title-credit" href="https://joshuaswanson.github.io" target="_blank" rel="noopener" data-i18n="credit">by Joshua Swanson</a>
         <div class="title-menu">
-          <button id="btn-play" class="btn btn-big btn-play">Play</button>
+          <button id="btn-play" class="btn btn-big btn-play" data-i18n="play">Play</button>
           <div class="title-row">
-            <button id="btn-howto" class="btn">How to play</button>
+            <button id="btn-howto" class="btn" data-i18n="howto">How to play</button>
           </div>
+          <div class="lang-picker" id="lang-picker" role="group" aria-label="Language"></div>
         </div>
       </section>
 
       <section id="screen-howto" class="screen screen-dim hidden">
         <div class="panel howto">
-          <h2>How to play</h2>
+          <h2 data-i18n="howto">How to play</h2>
           <dl class="howto-keys">
-            <div><dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd>Drive</dd></div>
-            <div><dt><kbd>O</kbd></dt><dd>First attachment</dd></div>
-            <div><dt><kbd>P</kbd></dt><dd>Second attachment</dd></div>
-            <div><dt><kbd>Esc</kbd></dt><dd>Pause</dd></div>
-            <div><dt><kbd>M</kbd></dt><dd>Sound on or off</dd></div>
+            <div><dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd data-i18n="drive">Drive</dd></div>
+            <div><dt><kbd>O</kbd></dt><dd data-i18n="firstAttachment">First attachment</dd></div>
+            <div><dt><kbd>P</kbd></dt><dd data-i18n="secondAttachment">Second attachment</dd></div>
+            <div><dt><kbd>Esc</kbd></dt><dd data-i18n="pauseKey">Pause</dd></div>
+            <div><dt><kbd>M</kbd></dt><dd data-i18n="soundKey">Sound on or off</dd></div>
           </dl>
           <ul class="howto-tips">
-            <li>Pick two attachments in the shipyard, then race three laps.</li>
-            <li>Hold the key for the machine gun and laser. Let go before they overheat.</li>
-            <li>Drive through med kit buoys to patch up your hull.</li>
-            <li>Fire the jet pack right before a missile or hook hits to dodge it.</li>
+            <li data-i18n="tip1"></li>
+            <li data-i18n="tip2"></li>
+            <li data-i18n="tip3"></li>
+            <li data-i18n="tip4"></li>
           </ul>
-          <button id="btn-howto-close" class="btn btn-big">Got it</button>
+          <button id="btn-howto-close" class="btn btn-big" data-i18n="gotIt">Got it</button>
         </div>
       </section>
 
@@ -48,7 +49,7 @@
         <div class="yard">
           <div class="stage-col">
             <header class="yard-head">
-              <button id="btn-back" class="btn btn-small">Back</button>
+              <button id="btn-back" class="btn btn-small" data-i18n="back">Back</button>
               <div class="mini-logo" data-logo="3d"></div>
             </header>
             <div class="stage" id="stage">
@@ -59,11 +60,11 @@
                 <div class="slots" id="slots"></div>
                 <div class="stats" id="stats"></div>
                 <label class="field">
-                  <span>Boat name</span>
+                  <span data-i18n="boatName">Boat name</span>
                   <input id="boat-name" maxlength="16" autocomplete="off" spellcheck="false" />
                 </label>
                 <div class="field">
-                  <span>Paint</span>
+                  <span data-i18n="paint">Paint</span>
                   <div class="swatches" id="swatches"></div>
                 </div>
               </div>
@@ -90,7 +91,7 @@
         <div class="hud-center" id="hud-center"></div>
         <div class="hud-warn" id="hud-warn"></div>
         <div class="hud-return" id="hud-return">
-          <div class="return-text">Return to the course!</div>
+          <div class="return-text" data-i18n="returnCourse"></div>
           <div class="return-arrow" id="return-arrow"></div>
         </div>
         <div class="hud-reticle" id="hud-reticle"></div>
@@ -100,19 +101,19 @@
         <div class="hud-flash" id="hud-flash"></div>
         <div class="hud-lock" id="hud-lock">
           <div class="lock-vignette" id="lock-vignette"></div>
-          <div class="lock-banner">Missile lock!</div>
+          <div class="lock-banner" data-i18n="missileLock"></div>
           <div class="lock-arrow" id="lock-arrow"></div>
         </div>
       </section>
 
       <section id="screen-pause" class="screen screen-dim hidden">
         <div class="panel panel-narrow">
-          <h2>Paused</h2>
+          <h2 data-i18n="paused">Paused</h2>
           <div class="stack">
-            <button id="btn-resume" class="btn btn-big">Resume</button>
-            <button id="btn-restart" class="btn">Restart race</button>
-            <button id="btn-quit" class="btn">Back to boats</button>
-            <button id="btn-menu" class="btn">Main menu</button>
+            <button id="btn-resume" class="btn btn-big" data-i18n="resume">Resume</button>
+            <button id="btn-restart" class="btn" data-i18n="restartRace">Restart race</button>
+            <button id="btn-quit" class="btn" data-i18n="backToBoats">Back to boats</button>
+            <button id="btn-menu" class="btn" data-i18n="mainMenu">Main menu</button>
           </div>
         </div>
       </section>
@@ -122,8 +123,8 @@
           <h2 id="results-title">Race over</h2>
           <ol class="standings" id="standings"></ol>
           <div class="row">
-            <button id="btn-again" class="btn btn-big">Race again</button>
-            <button id="btn-change" class="btn">Change boat</button>
+            <button id="btn-again" class="btn btn-big" data-i18n="raceAgain">Race again</button>
+            <button id="btn-change" class="btn" data-i18n="changeBoat">Change boat</button>
           </div>
         </div>
       </section>

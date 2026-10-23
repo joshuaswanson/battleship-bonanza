@@ -352,6 +352,39 @@ kbd {
   outline-offset: 3px;
 }
 
+.lang-picker {
+  display: flex;
+  gap: 4px;
+  margin-top: 0.4rem;
+  padding: 4px;
+  background: rgba(14, 42, 71, 0.55);
+  border-radius: 999px;
+}
+
+.lang {
+  font: 600 0.9rem var(--ui);
+  color: #ffffff;
+  padding: 0.3rem 0.85rem;
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.lang:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.lang[aria-pressed='true'] {
+  color: var(--ink);
+  background: var(--sun);
+}
+
+.lang:focus-visible {
+  outline: 3px solid #ffffff;
+  outline-offset: 2px;
+}
+
 .howto {
   width: min(520px, 92vw);
 }
@@ -541,6 +574,32 @@ kbd {
 .slot-chip img {
   width: 64px;
   height: 64px;
+}
+
+.slot-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  font: 700 1.1rem/1 var(--ui);
+  color: #ffffff;
+  background: var(--ink);
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.slot-remove:hover {
+  background: var(--buoy);
+}
+
+.slot-remove:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
 }
 
 .slot-chip kbd {

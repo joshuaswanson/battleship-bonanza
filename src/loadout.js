@@ -1,19 +1,13 @@
 import * as THREE from 'three';
-import { GROUPS, ITEMS, ITEM_IDS, STATS, statsFor, comboName } from './items.js';
+import { GROUPS, ITEMS, ITEM_IDS, STATS, statsFor } from './items.js';
+import { t, itemName, itemBlurb, comboName } from './i18n.js';
 import { buildBoat, buildItemModel, frontFirst, buildMine, buildMissile, buildHook, aimTurret, spendMissile, reloadMissiles, updateMissileTips, missileDirection, updateAimers, stepGun, stepLaser, newHeat, gunDirection, laserDirection, launchMine, reloadMine, updateMineHolder } from './boatModel.js';
 import { createWater, waveHeight } from './water.js';
 import { Effects } from './effects.js';
 import { SUN_DIR } from './world.js';
 import { toon, outlined } from './toon.js';
 
-export const PAINTS = [
-  { name: 'Coral', value: 0xff5a5f },
-  { name: 'Sunflower', value: 0xffb400 },
-  { name: 'Mint', value: 0x3ddc97 },
-  { name: 'Sky', value: 0x4d9de0 },
-  { name: 'Lilac', value: 0xb57edc },
-  { name: 'Bubblegum', value: 0xff8fc7 },
-];
+export const PAINTS = [{ value: 0xff5a5f }, { value: 0xffb400 }, { value: 0x3ddc97 }, { value: 0x4d9de0 }, { value: 0xb57edc }, { value: 0xff8fc7 }];
 
 const $ = (id) => document.getElementById(id);
 const hex = (n) => `#${n.toString(16).padStart(6, '0')}`;
@@ -76,16 +70,22 @@ export class Loadout {
     this.refresh();
   }
 
+  relabel() {
+    this.buildTray();
+    this.buildIdentity();
+    this.refresh();
+  }
+
   buildTray() {
     $('item-groups').innerHTML = GROUPS.map(
       (g) => `<section class="group">
-        <h3 class="group-label">${g.label}</h3>
+        <h3 class="group-label">${t(`group_${g.id}`)}</h3>
         <div class="tiles">
           ${ITEM_IDS.filter((id) => ITEMS[id].group === g.id)
             .map(
               (id) => `<button class="tile" data-id="${id}" aria-pressed="false">
                 <img src="${this.thumbs[id]}" alt="" draggable="false" />
-                <span class="tile-name">${ITEMS[id].name}</span>
+                <span class="tile-name">${itemName(id)}</span>
                 <span class="tile-key"></span>
               </button>`,
             )
@@ -113,7 +113,7 @@ export class Loadout {
 
   buildIdentity() {
     $('swatches').innerHTML = PAINTS.map(
-      (p) => `<button class="swatch" data-color="${p.value}" style="--paint:${hex(p.value)}" aria-label="${p.name}"></button>`,
+      (p, i) => `<button class="swatch" data-color="${p.value}" style="--paint:${hex(p.value)}" aria-label="${t('paints')[i]}"></button>`,
     ).join('');
     for (const swatch of document.querySelectorAll('.swatch')) {
       swatch.addEventListener('click', () => {
@@ -126,6 +126,8 @@ export class Loadout {
     }
     const nameInput = $('boat-name');
     nameInput.value = this.setup.name;
+    if (this.nameBound) return;
+    this.nameBound = true;
     nameInput.addEventListener('input', () => {
       this.setup.name = nameInput.value.trim() || 'Sea Biscuit';
       this.onChange();
@@ -158,9 +160,8 @@ export class Loadout {
   }
 
   showDetail(id, y) {
-    const item = ITEMS[id];
     const el = $('item-detail');
-    el.innerHTML = `<img src="${this.thumbs[id]}" alt="" /><div><h3>${item.name}</h3><p>${item.blurb}</p></div>`;
+    el.innerHTML = `<img src="${this.thumbs[id]}" alt="" /><div><h3>${itemName(id)}</h3><p>${itemBlurb(id)}</p></div>`;
     el.classList.add('on');
     this.placeDetail(y);
   }
@@ -186,7 +187,7 @@ export class Loadout {
     }
     const start = $('btn-start');
     start.disabled = items.length < 2;
-    start.textContent = items.length === 2 ? 'Start race' : `Pick ${2 - items.length} more attachment${items.length === 1 ? '' : 's'}`;
+    start.textContent = items.length === 2 ? t('startRace') : t(items.length === 1 ? 'pickOne' : 'pickTwo');
   }
 
   refresh() {
@@ -201,12 +202,22 @@ export class Loadout {
         const id = items[i];
         const key = i === 0 ? 'O' : 'P';
         return id
-          ? `<button class="slot-chip" data-slot="${i}" title="Test fire"><kbd>${key}</kbd><img src="${this.thumbs[id]}" alt="" /><span>${ITEMS[id].name}</span></button>`
-          : `<div class="slot-chip empty"><kbd>${key}</kbd><span>Empty slot</span></div>`;
+          ? `<div class="slot-chip" data-slot="${i}" role="button" tabindex="0" title="${t('testFire')}"><kbd>${key}</kbd><button class="slot-remove" data-remove="${id}" aria-label="${itemName(id)}">×</button><img src="${this.thumbs[id]}" alt="" /><span>${itemName(id)}</span></div>`
+          : `<div class="slot-chip empty"><kbd>${key}</kbd><span>${t('emptySlot')}</span></div>`;
       })
       .join('');
     for (const chip of document.querySelectorAll('.slot-chip[data-slot]')) {
       chip.addEventListener('click', () => this.demo(Number(chip.dataset.slot)));
+      chip.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') this.demo(Number(chip.dataset.slot));
+      });
+    }
+    for (const remove of document.querySelectorAll('.slot-remove')) {
+      remove.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const id = remove.dataset.remove;
+        this.toggle(id, this.tiles.find((tile) => tile.dataset.id === id));
+      });
     }
 
     const combo = $('combo-name');
@@ -225,7 +236,7 @@ export class Loadout {
         const fresh = on && i >= this.prevStats[s.id];
         return `<i class="${on ? 'on' : ''} ${fresh ? 'fresh' : ''}" style="--d:${i * 50}ms"></i>`;
       }).join('');
-      return `<div class="stat" style="--stat:${s.color}"><span>${s.label}</span><div class="pips">${pips}</div></div>`;
+      return `<div class="stat" style="--stat:${s.color}"><span>${t(`stat_${s.id}`)}</span><div class="pips">${pips}</div></div>`;
     }).join('');
     this.prevStats = stats;
 
