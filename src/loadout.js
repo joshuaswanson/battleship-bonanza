@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GROUPS, ITEMS, ITEM_IDS, STATS, statsFor } from './items.js';
 import { t, itemName, itemBlurb, comboName } from './i18n.js';
-import { buildBoat, buildItemModel, frontFirst, laserWobble, aimLaserGun, SALVO, buildMine, buildMissile, buildHook, aimTurret, spendMissile, reloadMissiles, updateMissileTips, missileDirection, updateAimers, stepGun, stepLaser, stepFlame, flameDirection, newHeat, gunDirection, laserDirection, launchMine, reloadMine, updateMineHolder } from './boatModel.js';
+import { buildBoat, buildItemModel, slotLock, slotCenter, laserWobble, aimLaserGun, SALVO, buildMine, buildMissile, buildHook, aimTurret, spendMissile, reloadMissiles, updateMissileTips, missileDirection, stepGun, stepLaser, stepFlame, stepSaw, flameDirection, newHeat, gunDirection, laserDirection, launchMine, reloadMine, updateMineHolder } from './boatModel.js';
 import { createWater, waveHeight } from './water.js';
 import { Effects } from './effects.js';
 import { SUN_DIR } from './world.js';
@@ -47,15 +47,15 @@ export class Loadout {
     this.onChange = onChange;
     this.active = false;
     this.thumbs = renderThumbnails();
-    this.prevStats = statsFor(setup.items);
+    this.prevStats = statsFor(setup.items.filter(Boolean));
 
     this.buildTray();
     this.buildIdentity();
     this.initPreview();
-    this.heat = { machinegun: newHeat(), laser: newHeat(), flamethrower: newHeat() };
+    this.heat = { machinegun: newHeat(), laser: newHeat(), flamethrower: newHeat(), saw: newHeat() };
     this.busy = {};
     this.heldSlots = new Set();
-    this.autoFire = { machinegun: 0, laser: 0, flamethrower: 0 };
+    this.autoFire = { machinegun: 0, laser: 0, flamethrower: 0, saw: 0 };
     const slotFor = { KeyO: 0, KeyP: 1 };
     addEventListener('keydown', (e) => {
       if (!this.active || e.target instanceof HTMLInputElement || e.repeat) return;
@@ -139,17 +139,15 @@ export class Loadout {
     const items = this.setup.items;
     const at = items.indexOf(id);
     if (at >= 0) {
-      items.splice(at, 1);
+      items[at] = null;
       this.sfx.play('plop');
-    } else if (items.length >= 2) {
+    } else if (!this.place(id)) {
       this.sfx.play('nope');
       tile.classList.remove('full');
       void tile.offsetWidth;
       tile.classList.add('full');
       return;
     } else {
-      items.push(id);
-      items.splice(0, items.length, ...frontFirst(items));
       this.sfx.play('pick');
       tile.classList.remove('picked');
       void tile.offsetWidth;
@@ -159,9 +157,43 @@ export class Loadout {
     this.squashVel -= 4;
   }
 
+  place(id) {
+    const items = this.setup.items;
+    const lock = slotLock(id);
+    if (lock === undefined) {
+      const free = items.indexOf(null);
+      if (free < 0) return false;
+      items[free] = id;
+      return true;
+    }
+    const other = 1 - lock;
+    if (items[lock]) {
+      if (items[other] || slotLock(items[lock]) === lock) return false;
+      items[other] = items[lock];
+    }
+    items[lock] = id;
+    return true;
+  }
+
+  canSwap() {
+    const [a, b] = this.setup.items;
+    return !!a && !!b && slotLock(a) === undefined && slotLock(b) === undefined;
+  }
+
+  swap() {
+    if (!this.canSwap()) return;
+    this.sfx.unlock();
+    this.setup.items.reverse();
+    this.sfx.play('pick');
+    this.refresh();
+    this.squashVel -= 4;
+  }
+
   showDetail(id, y) {
     const el = $('item-detail');
-    el.innerHTML = `<img src="${this.thumbs[id]}" alt="" /><div><h3>${itemName(id)}</h3><p>${itemBlurb(id)}</p></div>`;
+    const lock = slotLock(id);
+    const note = lock === undefined ? '' : `<em class="slot-lock">${t(lock === 0 ? 'frontOnly' : 'backOnly')}</em>`;
+    el.innerHTML = `<img src="${this.thumbs[id]}" alt="" /><div><h3>${itemName(id)}</h3><p>${itemBlurb(id)}</p>${note}</div>`;
     el.classList.add('on');
     this.placeDetail(y);
   }
@@ -185,9 +217,10 @@ export class Loadout {
       tile.setAttribute('aria-pressed', slot >= 0 ? 'true' : 'false');
       tile.querySelector('.tile-key').textContent = slot === 0 ? 'O' : slot === 1 ? 'P' : '';
     }
+    const count = items.filter(Boolean).length;
     const start = $('btn-start');
-    start.disabled = items.length < 2;
-    start.textContent = items.length === 2 ? t('startRace') : t(items.length === 1 ? 'pickOne' : 'pickTwo');
+    start.disabled = count < 2;
+    start.textContent = count === 2 ? t('startRace') : t(count === 1 ? 'pickOne' : 'pickTwo');
   }
 
   refresh() {
@@ -201,11 +234,13 @@ export class Loadout {
       .map((i) => {
         const id = items[i];
         const key = i === 0 ? 'O' : 'P';
+        const where = `<small class="slot-where">${t(i === 0 ? 'frontSlot' : 'backSlot')}</small>`;
         return id
-          ? `<button class="slot-chip" data-remove="${id}"><kbd>${key}</kbd><img src="${this.thumbs[id]}" alt="" /><span>${itemName(id)}</span></button>`
-          : `<div class="slot-chip empty"><kbd>${key}</kbd><span>${t('emptySlot')}</span></div>`;
+          ? `<button class="slot-chip" data-remove="${id}"><kbd>${key}</kbd>${where}<img src="${this.thumbs[id]}" alt="" /><span>${itemName(id)}</span></button>`
+          : `<div class="slot-chip empty"><kbd>${key}</kbd>${where}<span>${t('emptySlot')}</span></div>`;
       })
-      .join('');
+      .join('') + (this.canSwap() ? `<button class="slot-swap" aria-label="${t('swapSlots')}" title="${t('swapSlots')}"><svg viewBox="0 0 24 24"><path d="M4 8h13l-3-3M20 16H7l3 3" /></svg></button>` : '');
+    $('slots').querySelector('.slot-swap')?.addEventListener('click', () => this.swap());
     for (const chip of document.querySelectorAll('.slot-chip[data-remove]')) {
       chip.addEventListener('click', () => {
         const id = chip.dataset.remove;
@@ -214,7 +249,7 @@ export class Loadout {
     }
 
     const combo = $('combo-name');
-    const name = comboName(items);
+    const name = comboName(items.filter(Boolean));
     if (combo.textContent !== name) {
       combo.textContent = name;
       combo.classList.remove('pop');
@@ -222,7 +257,7 @@ export class Loadout {
       combo.classList.add('pop');
     }
 
-    const stats = statsFor(items);
+    const stats = statsFor(items.filter(Boolean));
     $('stats').innerHTML = STATS.map((s) => {
       const pips = Array.from({ length: 5 }, (_, i) => {
         const on = i < stats[s.id];
@@ -320,7 +355,7 @@ export class Loadout {
 
   rebuildBoat() {
     if (this.boat) this.scene.remove(this.boat.root);
-    this.heat = { machinegun: newHeat(), laser: newHeat(), flamethrower: newHeat() };
+    this.heat = { machinegun: newHeat(), laser: newHeat(), flamethrower: newHeat(), saw: newHeat() };
     this.boat = buildBoat(this.setup.color, this.setup.items);
     this.scene.add(this.boat.root);
   }
@@ -406,6 +441,7 @@ export class Loadout {
       }
       case 'mines': {
         if (!b.mineLoaded.visible) return;
+        const toss = slot === 0 ? 7 : -6;
         const mesh = buildMine();
         b.mineMount.getWorldPosition(mesh.position);
         this.scene.add(mesh);
@@ -417,7 +453,7 @@ export class Loadout {
         });
         this.movers.push({
           mesh,
-          vel: fwd.clone().multiplyScalar(-6).addScaledVector(up, 9),
+          vel: fwd.clone().multiplyScalar(toss).addScaledVector(up, 9),
           gravity: 20,
           life: 2.2,
           float: true,
@@ -499,11 +535,13 @@ export class Loadout {
     this.boat.swivels.forEach((s, i) => {
       if (s.id === 'jetpack') return;
       this.busy[s.id] = Math.max(0, (this.busy[s.id] ?? 0) - dt);
-      const busy = this.busy[s.id] > 0 || this.heat[s.id]?.trigger;
-      s.group.rotation.y = Math.atan2(Math.sin(s.group.rotation.y), Math.cos(s.group.rotation.y));
+      const busy = this.busy[s.id] > 0 || this.heat[s.id]?.firing;
       const wave = Math.sin(this.time * 0.8 + i * 2.1);
-      const target = busy ? 0 : 0.55 * Math.sign(wave) * Math.sqrt(Math.abs(wave));
-      s.group.rotation.y += (target - s.group.rotation.y) * (1 - Math.exp(-(busy ? 12 : 3) * dt));
+      let offset = busy ? 0 : 0.55 * Math.sign(wave) * Math.sqrt(Math.abs(wave));
+      if (busy && s.slot === 1) offset = Math.sin(this.time * 2.5 + i) * 0.9;
+      if (busy && s.id === 'saw') offset = Math.sin(this.time * 4.5) * 1.2;
+      const now = Math.atan2(Math.sin(s.group.rotation.y - s.center), Math.cos(s.group.rotation.y - s.center));
+      s.group.rotation.y = s.center + now + (offset - now) * (1 - Math.exp(-(busy ? 12 : 3) * dt));
     });
   }
 
@@ -632,14 +670,16 @@ export class Loadout {
 
     this.sawBoost = Math.max(0, this.sawBoost - dt);
     if (saw) {
-      const active = this.sawBoost > 0;
+      const sawHeat = this.heat.saw;
+      sawHeat.trigger = this.heldSlots.has(this.setup.items.indexOf('saw'));
+      const { overheatedNow } = stepSaw(sawHeat, b, dt, this.time);
+      this.afterHeat('saw', overheatedNow, b.saw);
+      const active = this.sawBoost > 0 || sawHeat.firing;
       this.sawSpin += ((active ? 42 : 0) - this.sawSpin) * (1 - Math.exp(-(active ? 6 : 2) * dt));
       saw.rotation.x += this.sawSpin * dt;
-      if (active) b.sawYaw.rotation.y += dt * 4.5;
       const glowAmount = active ? 0.55 + 0.25 * Math.sin(this.time * 45) : 0;
       b.sawShield.material.opacity += (glowAmount - b.sawShield.material.opacity) * (1 - Math.exp(-14 * dt));
     }
-    updateAimers(b, dt);
     this.swivelIdle(dt);
     updateMineHolder(b, dt);
     updateMissileTips(b, dt);

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { ITEMS } from './items.js';
-import { buildBoat, buildMine, buildMissile, buildHook, laserWobble, aimLaserGun, aimTurret, SALVO, spendMissile, reloadMissiles, updateMissileTips, missileDirection, stepGun, stepLaser, stepFlame, stepSaw, flameDirection, newHeat, gunDirection, laserDirection, launchMine, reloadMine, updateMineHolder, HULL_L } from './boatModel.js';
+import { buildBoat, buildMine, buildMissile, buildHook, laserWobble, aimLaserGun, aimTurret, SALVO, spendMissile, reloadMissiles, updateMissileTips, missileDirection, stepGun, stepLaser, stepFlame, stepSaw, slotCenter, flameDirection, newHeat, gunDirection, laserDirection, launchMine, reloadMine, updateMineHolder, HULL_L } from './boatModel.js';
 import { waveHeight } from './water.js';
 import { createAI, driveAI } from './ai.js';
 import { toon, glow } from './toon.js';
@@ -41,8 +41,8 @@ const KO_TIME = 2.2;
 const LASER_REACH = 75;
 const DODGE_WINDOW = 0.45;
 const SAW_RANGE = 9;
-const WATCH_RANGE = 70;
-const FRONT_LIMIT = 1.9;
+const WATCH_RANGE = 80;
+const HALF_ARC = Math.PI / 2;
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const approach = (v, target, step) => (v < target ? Math.min(target, v + step) : Math.max(target, v - step));
@@ -81,13 +81,8 @@ class Boat {
     scene.add(this.model.root);
     this.turrets = this.model.swivels
       .filter((s) => s.id !== 'saw' && s.id !== 'jetpack')
-      .map((s) => {
-        const aimer = this.model.aimers.find((a) => a.id === s.id);
-        if (aimer) aimer.module.rotation.y = 0;
-        const rest = aimer ? Math.PI : 0;
-        s.group.rotation.y = rest;
-        return { id: s.id, group: s.group, rest, backGun: this.model.backGuns.has(s.id), limit: s.front ? FRONT_LIMIT : Math.PI };
-      });
+      .map((s) => ({ id: s.id, group: s.group, center: s.center }));
+    this.aim = {};
     this.missileQueue = [];
     this.attackRolls = new Map();
     this.lastFired = -Infinity;
@@ -562,7 +557,8 @@ export class Race {
   damage(target, amount, source, kind, { knockX = 0, knockZ = 0, spin = 0, stun = 0, launch = 0 } = {}) {
     if (!target.alive || target.invuln > 0 || (target.finished && !this.attract)) return false;
     const c = target.center();
-    if (target.has('armor') && (kind === 'bullet' || kind === 'spikes' || kind === 'saw')) {
+    const blocked = (target.has('armor') && (kind === 'bullet' || kind === 'spikes' || kind === 'saw')) || (target.has('spikes') && kind === 'saw');
+    if (blocked) {
       this.fx.sparkBurst(c.x, c.y, c.z, 0xffffff, kind === 'bullet' ? 4 : 14);
       this.sfx.play(kind === 'bullet' ? 'tink' : 'clank', target.pos);
       return false;
@@ -625,7 +621,7 @@ export class Race {
     return this.hooks.some((h) => h.phase === 'attached' && h.target === b);
   }
 
-  findTarget(b, { range, minDot, filter = null, minRange = 0 }) {
+  findTarget(b, { range, minDot = -1, maxDot = 1, filter = null, minRange = 0 }) {
     let best = null;
     let bestD = range;
     const fx = Math.sin(b.heading);
@@ -636,7 +632,8 @@ export class Race {
       const dz = o.pos.z - b.pos.z;
       const d = Math.hypot(dx, dz);
       if (d > bestD || d < minRange || d === 0) continue;
-      if ((dx * fx + dz * fz) / d < minDot) continue;
+      const dot = (dx * fx + dz * fz) / d;
+      if (dot < minDot || dot > maxDot) continue;
       if (filter && !filter(o)) continue;
       best = o;
       bestD = d;
@@ -680,7 +677,11 @@ export class Race {
       const pos = b.model.mineMount.getWorldPosition(new THREE.Vector3());
       const mesh = buildMine();
       this.scene.add(mesh);
-      const vel = new THREE.Vector3(-Math.sin(b.heading) * 8 + b.vel.x * 0.4, 10, -Math.cos(b.heading) * 8 + b.vel.z * 0.4);
+      const front = b.items.indexOf('mines') === 0;
+      const yaw = b.heading + (front ? 0 : b.model.swivels.find((s) => s.id === 'mines').group.rotation.y);
+      const push = front ? 12 : 8;
+      const carry = front ? 1 : 0.4;
+      const vel = new THREE.Vector3(Math.sin(yaw) * push + b.vel.x * carry, 10, Math.cos(yaw) * push + b.vel.z * carry);
       launchMine(b.model);
       this.mines.push({ pos, vel, owner: b, age: 0, settled: false, mesh });
       const own = this.mines.filter((m) => m.owner === b);
@@ -1114,7 +1115,7 @@ export class Race {
       dir.normalize();
       const reach = LASER_REACH * Math.hypot(1, drop);
       const hit = this.raycastBoats(origin, dir, reach, b);
-      const shielded = hit && hit.boat.model.sawYaw;
+      const shielded = hit && hit.boat.model.sawYaw && this.inArc(hit.boat, hit.boat.items.indexOf('saw'), origin.x, origin.z);
       const end = shielded ? this.shieldAgainst(hit.boat, b) : origin.clone().addScaledVector(dir, hit ? hit.t : reach);
       this.fx.beam(origin, end, 0xff2a2a, 0.5, 0.05, 1);
       let bounce = null;
@@ -1242,7 +1243,7 @@ export class Race {
   }
 
   laserHit(b, victim, end, dir, amount, bounce) {
-    if (victim.has('saw')) {
+    if (bounce) {
       this.sfx.play('tink', victim.pos);
       this.fx.sparkBurst(end.x, end.y, end.z, 0xffffff, 16);
       this.damage(victim, amount * SAW_LEAK, b, 'laser');
@@ -1257,9 +1258,32 @@ export class Race {
   }
 
   gunArc(b, id, range) {
-    if (b.model.backGuns.has(id)) return { range: Math.min(range, WATCH_RANGE), minDot: -1 };
+    if (b.items.indexOf(id) === 1) return { range: Math.min(id === 'flamethrower' ? FLAME_REACH : range, WATCH_RANGE), maxDot: 0 };
     if (id === 'flamethrower') return { range: FLAME_REACH, minDot: 0.75 };
-    return { range, minDot: id === 'laser' ? 0.97 : 0.88 };
+    return { range, minDot: { laser: 0.97, saw: 0 }[id] ?? 0.88 };
+  }
+
+  inArc(b, slot, x, z, from = b.pos) {
+    const dot = (x - from.x) * Math.sin(b.heading) + (z - from.z) * Math.cos(b.heading);
+    return slot === 0 ? dot >= 0 : dot <= 0;
+  }
+
+  turretTarget(b, t) {
+    const slot = b.items.indexOf(t.id);
+    const wanted = b.aim[t.id];
+    const usable = (o) => o && o !== b && o.alive && this.inArc(b, slot, o.pos.x, o.pos.z) && Math.hypot(o.pos.x - b.pos.x, o.pos.z - b.pos.z) < WATCH_RANGE;
+    if (usable(wanted)) return wanted;
+    let best = null;
+    let bestD = WATCH_RANGE;
+    for (const o of this.boats) {
+      if (!usable(o)) continue;
+      const d = Math.hypot(o.pos.x - b.pos.x, o.pos.z - b.pos.z);
+      if (d < bestD) {
+        bestD = d;
+        best = o;
+      }
+    }
+    return best;
   }
 
   hookSpec(b) {
@@ -1320,43 +1344,17 @@ export class Race {
 
   updateTurrets(b, dt) {
     const busy = b.model.busy;
-    let watched = null;
-    let best = WATCH_RANGE;
-    if (b.alive) {
-      for (const o of this.boats) {
-        if (o === b || !o.alive) continue;
-        const d = Math.hypot(o.pos.x - b.pos.x, o.pos.z - b.pos.z);
-        if (d < best) {
-          best = d;
-          watched = o;
-        }
-      }
-    }
-    const watchAngle = watched ? this.relativeAngle(b, watched) : null;
     for (const t of b.turrets) {
       busy[t.id] = Math.max(0, (busy[t.id] ?? 0) - dt);
       const firing = (t.id === 'machinegun' && b.gun.trigger) || (t.id === 'laser' && b.laser.trigger) || (t.id === 'flamethrower' && b.flame.trigger);
-      let target;
-      let rate = 5;
-      if (t.id === 'missiles' && busy.missiles > 0) {
-        target = b.missileAim;
-        rate = 16;
-      } else if (firing || busy[t.id] > 0) {
-        target = t.backGun && watchAngle !== null ? watchAngle : 0;
-        rate = 16;
-      } else if (watchAngle !== null) {
-        target = watchAngle;
-      } else {
-        target = t.rest;
-      }
-      if (t.limit >= Math.PI) {
-        const current = t.group.rotation.y;
-        t.group.rotation.y = current + wrapAngle(target - current) * (1 - Math.exp(-rate * dt));
-      } else {
-        const want = clamp(wrapAngle(target), -t.limit, t.limit);
-        const now = wrapAngle(t.group.rotation.y);
-        t.group.rotation.y = now + (want - now) * (1 - Math.exp(-rate * dt));
-      }
+      const watched = b.alive ? this.turretTarget(b, t) : null;
+      const active = firing || busy[t.id] > 0;
+      let target = watched && !(active && t.center === 0) ? this.relativeAngle(b, watched) : t.center;
+      if (t.id === 'missiles' && busy.missiles > 0) target = b.missileAim;
+      const rate = active ? 16 : 5;
+      const want = clamp(wrapAngle(target - t.center), -HALF_ARC, HALF_ARC);
+      const now = wrapAngle(t.group.rotation.y - t.center);
+      t.group.rotation.y = t.center + now + (want - now) * (1 - Math.exp(-rate * dt));
     }
     for (const q of [...b.missileQueue]) {
       q.wait -= dt;
@@ -1391,12 +1389,14 @@ export class Race {
       if (b.isPlayer) this.emit('warning', { text: tr('overheatedWarn') });
     }
     if (armed) b.lastFired = this.time;
+    const slot = b.items.indexOf('saw');
+    const center = slotCenter(slot);
     let target = null;
     let best = SAW_RANGE;
     if (b.alive && this.state === 'racing' && b.disabled <= 0) {
       for (const o of this.boats) {
         if (o === b || !o.alive || (o.finished && !this.attract) || !this.willAttack(b, o)) continue;
-        if (Math.abs(o.yOffset - b.yOffset) > 3) continue;
+        if (Math.abs(o.yOffset - b.yOffset) > 3 || !this.inArc(b, slot, o.pos.x, o.pos.z, pivot)) continue;
         const d = o.distanceToAxis2D(pivot.x, pivot.z);
         if (d < best) {
           best = d;
@@ -1404,14 +1404,16 @@ export class Race {
         }
       }
     }
-    let desired = 0;
+    let desired = center;
     if (s.shield > 0) desired = s.shieldYaw;
     else if (target) {
       const dx = target.pos.x - pivot.x;
       const dz = target.pos.z - pivot.z;
       desired = Math.atan2(dx * lx + dz * lz, dx * fx + dz * fz);
     }
-    s.yaw = wrapAngle(s.yaw + wrapAngle(desired - s.yaw) * (1 - Math.exp(-(s.shield > 0 ? 20 : 9) * dt)));
+    const want = clamp(wrapAngle(desired - center), -HALF_ARC, HALF_ARC);
+    const now = clamp(wrapAngle(s.yaw - center), -HALF_ARC, HALF_ARC);
+    s.yaw = center + now + (want - now) * (1 - Math.exp(-(s.shield > 0 ? 20 : 9) * dt));
     refs.sawYaw.rotation.y = s.yaw;
 
     s.sound -= dt;

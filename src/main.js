@@ -17,7 +17,7 @@ import { Loadout, PAINTS } from './loadout.js';
 import { logoSvg, layoutLogoText } from './logo.js';
 import { TitleBoat } from './titleBoat.js';
 import { ITEMS, ITEM_IDS } from './items.js';
-import { frontFirst } from './boatModel.js';
+import { arrange } from './boatModel.js';
 
 const $ = (id) => document.getElementById(id);
 for (const el of document.querySelectorAll('[data-logo]')) {
@@ -54,9 +54,9 @@ const hud = new Hud(track, sfx);
 function loadSetup() {
   try {
     const saved = JSON.parse(localStorage.getItem('bb-setup'));
-    if (saved && Array.isArray(saved.items) && saved.items.every((id) => ITEMS[id])) return { ...saved, items: frontFirst(saved.items) };
+    if (saved && Array.isArray(saved.items) && saved.items.length === 2 && saved.items.every((id) => id === null || ITEMS[id])) return { ...saved, items: arrange(saved.items) };
   } catch {}
-  return { name: 'Sea Biscuit', color: PAINTS[0].value, items: frontFirst(['jetpack', 'machinegun']) };
+  return { name: 'Sea Biscuit', color: PAINTS[0].value, items: ['machinegun', 'jetpack'] };
 }
 const setup = loadSetup();
 const saveSetup = () => localStorage.setItem('bb-setup', JSON.stringify(setup));
@@ -74,7 +74,7 @@ function dealLoadouts(count, taken = []) {
   const byPreference = (ids) => [...shuffle(ids.filter((id) => !taken.includes(id))), ...shuffle(ids.filter((id) => taken.includes(id)))];
   const weapons = byPreference(ITEM_IDS.filter((id) => ITEMS[id].group === 'weapons'));
   const others = byPreference(ITEM_IDS.filter((id) => ITEMS[id].group !== 'weapons'));
-  return Array.from({ length: count }, (_, i) => frontFirst([weapons[i % weapons.length], others[i % others.length]]));
+  return Array.from({ length: count }, (_, i) => arrange(Math.random() < 0.5 ? [weapons[i % weapons.length], others[i % others.length]] : [others[i % others.length], weapons[i % weapons.length]]));
 }
 
 function makeDefs(player) {
@@ -129,7 +129,7 @@ function goLoadout() {
 }
 
 function startRace() {
-  if (setup.items.length < 2) return;
+  if (!setup.items.every(Boolean)) return;
   sfx.unlock();
   saveSetup();
   newRace(false);
@@ -385,7 +385,7 @@ if (import.meta.env.DEV) {
     loadout,
     simRace() {
       race?.dispose();
-      const defs = PAINTS.map((paint, i) => ({ name: `Boat ${i + 1}`, color: paint.value, items: frontFirst(shuffle(ITEM_IDS).slice(0, 2)) }));
+      const defs = PAINTS.map((paint, i) => ({ name: `Boat ${i + 1}`, color: paint.value, items: arrange(shuffle(ITEM_IDS).slice(0, 2)) }));
       race = new Race({ scene, track, fx, sfx, shores: world.shores, defs, attract: false });
       mode = 'sim';
       hud.show(false);

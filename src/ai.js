@@ -1,3 +1,6 @@
+import { ITEMS } from './items.js';
+
+const HOLD_RANGE = { machinegun: 75, laser: 70, flamethrower: 15, saw: 11 };
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
@@ -77,23 +80,25 @@ function avoidMines(race, b, ai) {
 
 function useItems(race, b, ai) {
   for (let slot = 0; slot < 2; slot++) {
+    const id = b.items[slot];
+    if (ITEMS[id].hold) b.aim[id] = race.findTarget(b, { ...race.gunArc(b, id, HOLD_RANGE[id]), filter: (o) => race.willAttack(b, o) });
     if (b.items[slot] === 'machinegun') {
-      const t = race.findTarget(b, { ...race.gunArc(b, 'machinegun', 75), filter: (o) => race.willAttack(b, o) });
+      const t = b.aim.machinegun;
       b.gun.trigger = !!t && !t.has('armor') && b.gun.heat < 0.7 && Math.random() < ai.aggression + 0.3;
       continue;
     }
     if (b.items[slot] === 'flamethrower') {
-      const t = race.findTarget(b, { ...race.gunArc(b, 'flamethrower', 15), filter: (o) => race.willAttack(b, o) });
+      const t = b.aim.flamethrower;
       b.flame.trigger = !!t && b.flame.heat < 0.75 && Math.random() < ai.aggression + 0.4;
       continue;
     }
     if (b.items[slot] === 'saw') {
-      const t = race.findTarget(b, { range: 11, minDot: -0.2, filter: (o) => race.willAttack(b, o) });
-      b.sawHeat.trigger = !!t && !t.has('armor') && b.sawHeat.heat < 0.75 && Math.random() < ai.aggression + 0.4;
+      const t = b.aim.saw;
+      b.sawHeat.trigger = !!t && !t.has('armor') && !t.has('spikes') && b.sawHeat.heat < 0.75 && Math.random() < ai.aggression + 0.4;
       continue;
     }
     if (b.items[slot] === 'laser') {
-      const t = race.findTarget(b, { ...race.gunArc(b, 'laser', 70), filter: (o) => race.willAttack(b, o) });
+      const t = b.aim.laser;
       b.laser.trigger = !!t && b.laser.heat < 0.7 && Math.random() < ai.aggression + 0.3;
       continue;
     }
@@ -128,14 +133,8 @@ function shouldUse(race, b, id, ai) {
       return straight && b.speed > 25 && r < 0.12;
     }
     case 'mines': {
-      const behind = race.boats.some((o) => {
-        if (o === b || !o.alive || !race.willAttack(b, o)) return false;
-        const dx = o.pos.x - b.pos.x;
-        const dz = o.pos.z - b.pos.z;
-        const d = Math.hypot(dx, dz);
-        return d < 45 && (dx * Math.sin(b.heading) + dz * Math.cos(b.heading)) / d < -0.7;
-      });
-      return behind ? r < ai.aggression : r < 0.03;
+      const t = race.findTarget(b, { ...race.gunArc(b, 'mines', 45), filter: (o) => race.willAttack(b, o) });
+      return t ? r < ai.aggression : r < 0.03;
     }
   }
   return false;

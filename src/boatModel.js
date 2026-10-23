@@ -12,16 +12,14 @@ const RED = 0xff4141;
 const MOUNTED = new Set(['machinegun', 'laser', 'saw', 'missiles', 'mines', 'jetpack', 'grapple', 'emp', 'flamethrower']);
 const FRONT_MOUNT = 1.5;
 const REAR_MOUNT = -2.2;
-const SOLO_MOUNT = -0.35;
-const MOUNT_RANK = { saw: -1, flamethrower: -0.5, missiles: 0.4, mines: 0.5, jetpack: 1 };
-const mountRank = (id) => MOUNT_RANK[id] ?? 0;
+const SLOT_LOCK = { grapple: 0, jetpack: 1 };
+export const slotLock = (id) => SLOT_LOCK[id];
 
-export function frontFirst(items) {
-  const rank = (id) => (MOUNTED.has(id) ? mountRank(id) : 2);
-  return [...items].sort((a, b) => rank(a) - rank(b));
+export function arrange([a, b]) {
+  return SLOT_LOCK[a] === 1 || SLOT_LOCK[b] === 0 ? [b, a] : [a, b];
 }
-const AIMED = new Set(['machinegun', 'laser', 'missiles', 'grapple', 'flamethrower']);
-const BACK_GUNS = new Set(['machinegun', 'laser', 'flamethrower']);
+
+export const slotCenter = (slot) => (slot === 0 ? 0 : Math.PI);
 const MODULE_SCALE = 1.3;
 
 export function halfWidth(z) {
@@ -417,29 +415,24 @@ export function buildBoat(color, items) {
   body.add(flag);
   part(flag, 'cone', mats.paint, 0, 0, -0.45, 0.04, 0.9, 0.3, 0.02).rotation.x = -Math.PI / 2;
 
-  const refs = { root, body, flag, towRings, saw: null, flames: [], spinners: [], materials: [], parts: {}, hookMarkers: [], aimers: [], heatMats: {}, swivels: [], busy: {}, missileTips: [], backGuns: new Set(), sags: [], modules: {} };
+  const refs = { root, body, flag, towRings, saw: null, flames: [], spinners: [], materials: [], parts: {}, hookMarkers: [], heatMats: {}, swivels: [], busy: {}, missileTips: [], sags: [], modules: {} };
 
   if (camoMat) {
     mats.paint = camoMat;
     mats.white = toon(0xd8d0a8);
   }
   for (const id of items) {
-    if (MOUNTED.has(id)) continue;
+    if (!id || MOUNTED.has(id)) continue;
     const group = new THREE.Group();
     body.add(group);
     HULL_MODS[id](group, mats, refs);
     refs.parts[id] = group;
   }
 
-  const mounted = items.filter((id) => MOUNTED.has(id)).sort((a, b) => mountRank(a) - mountRank(b));
-  const rank = mountRank(mounted[0]);
-  const soloSpot = rank < 0 ? FRONT_MOUNT : rank >= 0.5 ? REAR_MOUNT : SOLO_MOUNT;
-  const spots = mounted.length === 2 ? [FRONT_MOUNT, REAR_MOUNT] : [soloSpot];
-  mounted.forEach((id, i) => {
-    const z = spots[i];
-    const raised = mounted.length === 2 && i === 1;
-    const swivels = raised && AIMED.has(id);
-    const baseH = swivels ? 1.35 : raised ? 0.85 : 0.35;
+  items.forEach((id, slot) => {
+    if (!MOUNTED.has(id)) return;
+    const z = slot === 0 ? FRONT_MOUNT : REAR_MOUNT;
+    const baseH = slot === 1 && MOUNTED.has(items[0]) ? 0.85 : 0.35;
     const turret = new THREE.Group();
     turret.position.set(0, deckTop(z), z);
     body.add(turret);
@@ -449,8 +442,8 @@ export function buildBoat(color, items) {
     const yaw = new THREE.Group();
     yaw.position.y = baseH;
     turret.add(yaw);
-    refs.swivels.push({ id, group: yaw, front: z > 0 });
-    if (raised && BACK_GUNS.has(id)) refs.backGuns.add(id);
+    if (id !== 'jetpack') yaw.rotation.y = slotCenter(slot);
+    refs.swivels.push({ id, group: yaw, slot, center: id === 'jetpack' ? 0 : slotCenter(slot) });
     const sag = new THREE.Group();
     yaw.add(sag);
     sag.userData.id = id;
@@ -465,10 +458,6 @@ export function buildBoat(color, items) {
       marker.position.copy(v);
       module.add(marker);
       refs[key] = marker;
-    }
-    if (swivels) {
-      module.rotation.y = Math.PI;
-      refs.aimers.push({ id, module, rest: Math.PI, hold: 0 });
     }
   });
 
@@ -820,8 +809,6 @@ export function buildItemModel(id, color) {
   return turret;
 }
 
-export const AIM_DELAY = 0.3;
-
 export function spendMissile(refs, out) {
   const tip = refs.missileTips.find((t) => t.visible);
   if (!tip) return null;
@@ -886,18 +873,14 @@ export function updateMineHolder(refs, dt) {
   }
 }
 
+const AIM_DELAY = 0.3;
+
 export function aimTurret(refs, id) {
-  if (refs.backGuns.has(id)) {
-    refs.busy[id] = 1.9;
-    return 0;
-  }
-  const aimer = refs.aimers.find((a) => a.id === id);
-  const swivel = refs.swivels.find((s) => s.id === id);
-  const yaw = (swivel?.group.rotation.y ?? 0) + (aimer?.module.rotation.y ?? 0);
-  const offAxis = Math.abs(Math.atan2(Math.sin(yaw), Math.cos(yaw))) > 0.25;
-  if (aimer) aimer.hold = 1.9;
   refs.busy[id] = 1.9;
-  return offAxis ? AIM_DELAY : 0;
+  const swivel = refs.swivels.find((s) => s.id === id);
+  if (!swivel || swivel.slot === 1) return 0;
+  const yaw = swivel.group.rotation.y;
+  return Math.abs(Math.atan2(Math.sin(yaw), Math.cos(yaw))) > 0.25 ? AIM_DELAY : 0;
 }
 
 export const GUN_RATE = 0.062;
@@ -1004,11 +987,3 @@ export function gunDirection(refs, out) {
   return out.set(0, 0, 1).applyQuaternion(muzzleQuat);
 }
 
-export function updateAimers(refs, dt) {
-  for (const a of refs.aimers) {
-    a.hold -= dt;
-    const target = a.hold > 0 ? 0 : a.rest;
-    const diff = Math.atan2(Math.sin(target - a.module.rotation.y), Math.cos(target - a.module.rotation.y));
-    a.module.rotation.y += diff * (1 - Math.exp(-14 * dt));
-  }
-}

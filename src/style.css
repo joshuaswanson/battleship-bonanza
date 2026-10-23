@@ -573,6 +573,60 @@ kbd {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.5rem;
+  position: relative;
+}
+
+.slot-where {
+  position: absolute;
+  top: 7px;
+  right: 9px;
+  font: 700 0.68rem var(--ui);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.slot-swap {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  transform: translate(-50%, -50%);
+  background: #fff;
+  border: 3px solid var(--ink);
+  border-radius: 50%;
+  box-shadow: 0 3px 0 var(--ink);
+  cursor: pointer;
+  z-index: 1;
+  transition: transform 120ms ease;
+}
+
+.slot-swap:hover {
+  transform: translate(-50%, -50%) rotate(180deg);
+}
+
+.slot-swap svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.slot-lock {
+  display: block;
+  margin-top: 0.3rem;
+  font: 700 0.75rem var(--ui);
+  font-style: normal;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #d9480f;
 }
 
 .slot-chip {
