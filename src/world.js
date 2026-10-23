@@ -16,6 +16,9 @@ const COLORS = {
   bush: 0x2e9e52,
   coconut: 0x7a4a2a,
   rock: 0x9aa7b8,
+  cliff: 0xb3a59a,
+  cliffDark: 0x8f8178,
+  moss: 0x4fae4a,
   stripeRed: 0xff4141,
   stripeWhite: 0xf6f8ff,
   roof: 0x0e2a47,
@@ -200,6 +203,64 @@ function addPalm(batch, x, baseY, z, rand, { height, lean, dir }) {
     const a = spin + (i / Math.max(1, nuts)) * Math.PI * 2;
     batch.add('coconut', LOW_SPHERE, mat(top.x + Math.cos(a) * radius * 1.2, top.y - 0.45, top.z + Math.sin(a) * radius * 1.2, 0.42, 0.42, 0.42));
   }
+}
+
+function domeGeometry(radius, height, steep) {
+  const points = [];
+  const steps = 22;
+  for (let i = 0; i <= steps; i++) {
+    const k = i / steps;
+    const r = radius * Math.pow(1 - Math.pow(k, steep), 0.55) * (1 + 0.05 * Math.sin(k * 19));
+    points.push(new THREE.Vector2(Math.max(0.01, r), height * k - 2));
+  }
+  const g = new THREE.LatheGeometry(points, 28);
+  const pos = g.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const z = pos.getZ(i);
+    const y = pos.getY(i);
+    const lump = 1 + 0.07 * Math.sin(Math.atan2(z, x) * 5 + y * 0.15) + 0.04 * Math.sin(y * 0.4);
+    pos.setXYZ(i, x * lump, y, z * lump);
+  }
+  g.computeVertexNormals();
+  return g;
+}
+
+function addSeaStack(batch, x, z, rand) {
+  const roll = rand();
+  const shape = roll < 0.5 ? 'dome' : roll < 0.8 ? 'spire' : 'twin';
+  const footprint = [];
+  const peak = (px, pz, radius, height, steep, lean) => {
+    const tilt = mat(px, 0, pz, 1, 1, 1, lean * Math.cos(rand() * 6), rand() * Math.PI * 2, lean * Math.sin(rand() * 6));
+    batch.add(rand() < 0.5 ? 'cliff' : 'cliffDark', domeGeometry(radius, height, steep), tilt);
+    for (let i = 0; i < 3 + Math.floor(rand() * 4); i++) {
+      const k = 0.15 + rand() * 0.55;
+      const a = rand() * Math.PI * 2;
+      const r = radius * Math.pow(1 - Math.pow(k, steep), 0.55) * 0.92;
+      const s = radius * (0.12 + rand() * 0.14);
+      batch.add('moss', LOW_SPHERE, mat(px + Math.cos(a) * r, height * k - 2, pz + Math.sin(a) * r, s * 1.4, s * 0.55, s * 1.4));
+    }
+    batch.add('foam', RING, mat(px, 0.2, pz, radius * 1.06, 6, radius * 1.06));
+    footprint.push({ x: px, z: pz, rx: radius, rz: radius, rot: 0 });
+  };
+  if (shape === 'dome') {
+    peak(x, z, 16 + rand() * 12, 60 + rand() * 45, 2.6, 0.08);
+  } else if (shape === 'spire') {
+    peak(x, z, 7 + rand() * 5, 45 + rand() * 40, 4, 0.12);
+  } else {
+    const a = rand() * Math.PI * 2;
+    const r1 = 14 + rand() * 8;
+    const r2 = 9 + rand() * 6;
+    peak(x, z, r1, 55 + rand() * 30, 2.6, 0.06);
+    peak(x + Math.cos(a) * (r1 + r2 * 0.6), z + Math.sin(a) * (r1 + r2 * 0.6), r2, 32 + rand() * 20, 2.4, 0.1);
+  }
+  const base = footprint[0];
+  for (let i = 0; i < 2 + Math.floor(rand() * 3); i++) {
+    const a = rand() * Math.PI * 2;
+    const s = 2 + rand() * 4;
+    batch.add('rock', ROCK, mat(base.x + Math.cos(a) * (base.rx + s * 0.6), 0.2, base.z + Math.sin(a) * (base.rx + s * 0.6), s, s * 0.8, s, rand(), rand() * 3, rand()));
+  }
+  return footprint;
 }
 
 function islandSurface(blobs) {
@@ -504,6 +565,18 @@ export function createWorld(scene, track) {
 
   const start = track.point(0, -(half + 40));
   shores.push(...addIsland(batch, start.x, start.z, 13, rand, { clearCenter: 5 }));
+
+  const stacks = [];
+  for (let tries = 0; stacks.length < 9 && tries < 800; tries++) {
+    const x = (rand() - 0.5) * 1000;
+    const z = (rand() - 0.5) * 960 + 60;
+    const clearance = track.project(x, z).distance - half;
+    if (clearance < 45 || clearance > 260) continue;
+    if (islands.some((o) => Math.hypot(o.x - x, o.z - z) < o.r + 40)) continue;
+    if (stacks.some((s) => Math.hypot(s.x - x, s.z - z) < 140)) continue;
+    stacks.push({ x, z });
+    shores.push(...addSeaStack(batch, x, z, rand));
+  }
   addLighthouse(batch, start.x, start.z, 3);
 
   const scenery = new THREE.Group();
