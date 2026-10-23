@@ -71,8 +71,8 @@ export class Loadout {
     $('btn-surprise').addEventListener('click', () => this.surprise());
     addEventListener('keydown', (e) => {
       if (!this.active || e.target instanceof HTMLInputElement || e.repeat) return;
-      if (e.code === 'KeyQ') this.demo(0);
-      if (e.code === 'KeyE') this.demo(1);
+      if (e.code === 'KeyO') this.demo(0);
+      if (e.code === 'KeyP') this.demo(1);
     });
     this.refresh();
   }
@@ -225,7 +225,7 @@ export class Loadout {
     for (const tile of this.tiles) {
       const slot = items.indexOf(tile.dataset.id);
       tile.setAttribute('aria-pressed', slot >= 0 ? 'true' : 'false');
-      tile.querySelector('.tile-key').textContent = slot === 0 ? 'Q' : slot === 1 ? 'E' : '';
+      tile.querySelector('.tile-key').textContent = slot === 0 ? 'O' : slot === 1 ? 'P' : '';
     }
     $('btn-start').disabled = items.length < 2;
   }
@@ -240,7 +240,7 @@ export class Loadout {
     $('slots').innerHTML = [0, 1]
       .map((i) => {
         const id = items[i];
-        const key = i === 0 ? 'Q' : 'E';
+        const key = i === 0 ? 'O' : 'P';
         return id
           ? `<button class="slot-chip" data-slot="${i}" style="--tile:${groupOf(id).color}" title="Test fire"><kbd>${key}</kbd><img src="${this.thumbs[id]}" alt="" /><span>${ITEMS[id].name}</span></button>`
           : `<div class="slot-chip empty"><kbd>${key}</kbd><span>Empty slot</span></div>`;

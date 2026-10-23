@@ -70,7 +70,7 @@ export class Hud {
         const item = ITEMS[id];
         return `<div class="slot ${item.passive ? 'slot-passive' : ''}" data-slot="${i}">
           <div class="slot-face">${iconSvg(id)}</div>
-          <div class="slot-text"><kbd>${i === 0 ? 'Q' : 'E'}</kbd><span>${item.name}</span></div>
+          <div class="slot-text"><kbd>${i === 0 ? 'O' : 'P'}</kbd><span>${item.name}</span></div>
           <div class="slot-state">${item.passive ? 'Always on' : 'Ready'}</div>
         </div>`;
       })

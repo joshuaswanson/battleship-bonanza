@@ -25,6 +25,7 @@ async function race(items) {
       const others = r.boats.filter((b) => !b.isPlayer && b !== t);
       others.forEach((o, i) => { o.pos.set(p.pos.x + 300 + i * 20, 0, p.pos.z + 300); o.ko = 0; });
       t.items = items;
+      t.model.missileMount ??= p.pos.clone().set(0, 1.2, 0);
       const fx = Math.sin(p.heading), fz = Math.cos(p.heading);
       t.pos.set(p.pos.x + fx * dist - fz * lateral, 0, p.pos.z + fz * dist + fx * lateral);
       t.heading = p.heading; t.vel.set(0, 0, 0); t.speed = 0; t.hp = 100; p.hp = 100; t.invuln = 0; p.invuln = 0; t.ko = 0;

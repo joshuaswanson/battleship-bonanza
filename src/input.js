@@ -3,9 +3,9 @@ const BINDINGS = {
   down: ['KeyS', 'ArrowDown'],
   left: ['KeyA', 'ArrowLeft'],
   right: ['KeyD', 'ArrowRight'],
-  item0: ['KeyQ', 'KeyJ', 'ShiftLeft'],
-  item1: ['KeyE', 'KeyK', 'Space'],
-  pause: ['Escape', 'KeyP'],
+  item0: ['KeyO'],
+  item1: ['KeyP'],
+  pause: ['Escape'],
   mute: ['KeyM'],
 };
 
@@ -21,7 +21,7 @@ export class Input {
       if (e.target instanceof HTMLInputElement) return;
       if (!e.repeat) this.queued.add(e.code);
       this.held.add(e.code);
-      if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
+      if (e.code.startsWith('Arrow')) e.preventDefault();
     });
     addEventListener('keyup', (e) => this.held.delete(e.code));
     addEventListener('blur', () => this.held.clear());

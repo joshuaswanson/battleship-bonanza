@@ -16,8 +16,8 @@ Build a static copy with `npm run build`. The output goes to `dist/`.
 | Key | Action |
 | --- | --- |
 | W A S D or arrows | Drive |
-| Q | First attachment |
-| E | Second attachment |
+| O | First attachment |
+| P | Second attachment |
 | Esc | Pause |
 | M | Sound on or off |
 

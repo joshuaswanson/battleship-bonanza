@@ -36,7 +36,7 @@ export const ITEMS = {
     name: 'Spikes',
     group: 'defense',
     passive: true,
-    blurb: 'Keeps other boats at a distance AND looks intimidating. Watch out for grappling hooks though.',
+    blurb: 'Keep other boats at a distance AND look intimidating. Watch out for grappling hooks though.',
   },
   armor: {
     adj: 'Ironclad',

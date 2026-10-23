@@ -305,7 +305,7 @@ addEventListener('keydown', (e) => {
   if (e.code === 'Enter' && mode === 'title') goLoadout();
 });
 
-if (import.meta.env.DEV) window.__bb = { get race() { return race; }, setup, camera, cam, world };
+if (import.meta.env.DEV) window.__bb = { get race() { return race; }, setup, camera, cam, world, loadout };
 
 goTitle();
 requestAnimationFrame(frame);
