@@ -20,7 +20,8 @@ export class TitleBoat {
     this.camera.position.set(0, 3.4, 19);
     this.camera.lookAt(0, 0.4, 0);
 
-    const { root, body, minigun } = buildBoat(0xff5a5f, ['machinegun']);
+    const { root, body, minigun, towRings } = buildBoat(0xff5a5f, ['machinegun']);
+    for (const ring of towRings) for (const mesh of ring.userData.parts) mesh.visible = false;
     minigun.parent.rotation.x = 0;
     minigun.rotation.x = -0.22;
     root.rotation.y = 0.5;

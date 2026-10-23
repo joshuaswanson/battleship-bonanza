@@ -367,11 +367,12 @@ export function buildBoat(color, items) {
   part(body, 'roundBox', mats.white, 0, sternTop + 0.88, -HULL_L - 0.55, 0.7, 0.18, 0.7, 0.03);
 
   const towRing = (x, y, z, turn) => {
-    part(body, 'cylinder', mats.dark, x, y + 0.2, z, 0.09, 0.4, 0.09, 0.02);
+    const post = part(body, 'cylinder', mats.dark, x, y + 0.2, z, 0.09, 0.4, 0.09, 0.02);
     const ring = part(body, 'ring', mats.metal, x, y + 0.62, z, 0.3, 0.3, 0.3, 0.02);
     ring.rotation.y = turn;
     const anchor = new THREE.Object3D();
     anchor.position.set(x, y + 0.62, z);
+    anchor.userData.parts = [post, ring];
     body.add(anchor);
     return anchor;
   };
@@ -571,8 +572,8 @@ const MODULES = {
   },
 
   laser(m, mats, refs) {
-    const pink = glow(0xff4fd8);
-    const softPink = glow(0xff9ef0);
+    const pink = glow(0xff2a2a);
+    const softPink = glow(0xff8a7a);
     part(m, 'roundBox', mats.white, 0, 0.6, -0.15, 1.15, 0.85, 1.25, 0.04);
     part(m, 'roundBox', mats.paint, 0, 0.6, -0.15, 1.2, 0.24, 1.3, 0.03);
     for (const x of [-0.38, 0.38]) {
@@ -589,18 +590,18 @@ const MODULES = {
   },
 
   saw(m, mats, refs) {
-    part(m, 'cylinder', mats.dark, 0, 0.5, 0, 0.22, 1.0, 0.22, 0.03);
-    part(m, 'sphere', mats.dark, 0, 1.05, 0, 0.32, 0.32, 0.32, 0.03);
-    part(m, 'cylinder', mats.paint, 0, 1.05, 1.0, 0.15, 2.0, 0.15, 0.03).rotation.x = Math.PI / 2;
-    part(m, 'roundBox', mats.dark, 0, 1.05, 2.0, 0.34, 0.5, 0.34, 0.02);
-    const saw = part(m, 'saw', mats.metal, 0, 1.05, 2.25, 1.25, 1.25, 1.25, 0.03);
+    part(m, 'cylinder', mats.dark, 0, 0.75, 0, 0.22, 1.5, 0.22, 0.03);
+    part(m, 'sphere', mats.dark, 0, 1.55, 0, 0.32, 0.32, 0.32, 0.03);
+    part(m, 'cylinder', mats.paint, 0, 1.55, 1.0, 0.15, 2.0, 0.15, 0.03).rotation.x = Math.PI / 2;
+    part(m, 'roundBox', mats.dark, 0, 1.55, 2.0, 0.34, 0.5, 0.34, 0.02);
+    const saw = part(m, 'saw', mats.metal, 0, 1.55, 2.25, 1.25, 1.25, 1.25, 0.03);
     part(saw, 'sphere', toon(RED), 0, 0, 0, 0.26, 0.26, 0.26, 0.03);
     refs.saw = saw;
     const shield = new THREE.Mesh(
       geo.shield(),
-      new THREE.MeshBasicMaterial({ color: 0xff9ef0, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }),
+      new THREE.MeshBasicMaterial({ color: 0xff8a7a, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }),
     );
-    shield.position.set(0, 1.05, 2.25);
+    shield.position.set(0, 1.55, 2.25);
     m.add(shield);
     refs.sawShield = shield;
   },

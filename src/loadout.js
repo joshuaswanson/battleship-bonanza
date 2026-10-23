@@ -368,7 +368,7 @@ export class Loadout {
         for (let i = 0; i < 8; i++) {
           this.after(0.15 + i * 0.16, () => {
             const p = b.saw.getWorldPosition(new THREE.Vector3());
-            this.fx.sparkBurst(p.x, p.y, p.z, i % 2 ? 0xff9ef0 : 0xffe066, 8);
+            this.fx.sparkBurst(p.x, p.y, p.z, i % 2 ? 0xff8a7a : 0xffe066, 8);
           });
         }
         break;
@@ -532,7 +532,7 @@ export class Loadout {
     dir.normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), wobble.yaw);
     dir.setY(wobble.lift * 2.5 - (origin.y - 0.2) / reach).normalize();
     const end = origin.clone().addScaledVector(dir, reach * Math.hypot(1, (origin.y - 0.2) / reach));
-    this.fx.beam(origin, end, 0xff4fd8, 0.5, 0.05, 1);
+    this.fx.beam(origin, end, 0xff2a2a, 0.5, 0.05, 1);
     if (end.y < 1.5) this.fx.scorch(end.x, waveHeight(end.x, end.z, this.time) + 0.15, end.z);
   }
 

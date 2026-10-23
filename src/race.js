@@ -4,7 +4,6 @@ import { buildBoat, buildMine, buildMissile, buildHook, laserWobble, aimTurret, 
 import { waveHeight } from './water.js';
 import { createAI, driveAI } from './ai.js';
 import { toon, glow } from './toon.js';
-import { Medkits } from './medkits.js';
 import { fast } from './tuning.js';
 import { t as tr } from './i18n.js';
 import { TrackFeatures } from './features.js';
@@ -13,6 +12,8 @@ export const LAPS = 3;
 export const MAX_HP = 100;
 export const BASE_SPEED = fast(44);
 const ARMOR_SPEED = 0.95;
+const REGEN_DELAY = 3;
+const REGEN_RATE = 6;
 const OFF_COURSE_SPEED = 0.35;
 const OUTER_LIMIT = 45;
 const SHORE_MARGIN = 2.2;
@@ -84,6 +85,8 @@ class Boat {
         return { id: s.id, group: s.group, rest, backGun: this.model.backGuns.has(s.id), limit: s.front ? FRONT_LIMIT : Math.PI };
       });
     this.missileQueue = [];
+    this.lastFired = -Infinity;
+    this.regenerating = false;
     this.disabled = 0;
     this.stats = { dealt: 0, sunk: 0, kills: 0 };
     this.shadow = new THREE.Mesh(SHADOW_GEOMETRY, shadowMaterial());
@@ -212,7 +215,6 @@ export class Race {
       scene.add(mesh);
     }
 
-    this.medkits = new Medkits(scene, track, fx, sfx);
     this.features = new TrackFeatures(scene, track, fx, sfx);
     this.placeGrid();
   }
@@ -279,7 +281,6 @@ export class Race {
     this.updateHooks(dt);
     this.updatePulses(dt);
     this.updateLasers(dt);
-    this.medkits.update(this, dt, this.time);
     this.features.update(this, dt, this.time);
     for (const b of this.boats) this.updateVisual(b, dt);
     this.updateStandings();
@@ -630,6 +631,7 @@ export class Race {
     }
     if (this.actions[id].call(this, b) === false) return false;
     b.cooldowns[slot] = item.cooldown;
+    b.lastFired = this.time;
     return true;
   }
 
@@ -715,6 +717,7 @@ export class Race {
     if (this.state !== 'racing' || !b.alive || b.disabled > 0) b.gun.trigger = false;
     const { shots, overheatedNow } = stepGun(b.gun, b.model, dt, this.time);
     for (let i = 0; i < shots; i++) this.fireBullet(b);
+    if (shots) b.lastFired = this.time;
     if (overheatedNow) {
       this.sfx.play('overheat', b.pos);
       if (b.isPlayer) this.emit('warning', { text: tr('overheatedWarn') });
@@ -1075,6 +1078,7 @@ export class Race {
         b.laserHum = 0;
         continue;
       }
+      b.lastFired = this.time;
       if (b.laserHum <= 0) {
         b.laserHum = 1.25;
         this.sfx.play('laser', b.pos);
@@ -1092,7 +1096,7 @@ export class Race {
       const hit = this.raycastBoats(origin, dir, reach, b);
       const shielded = hit && hit.boat.model.sawYaw;
       const end = shielded ? this.shieldAgainst(hit.boat, b) : origin.clone().addScaledVector(dir, hit ? hit.t : reach);
-      this.fx.beam(origin, end, 0xff4fd8, 0.5, 0.05, 1);
+      this.fx.beam(origin, end, 0xff2a2a, 0.5, 0.05, 1);
       let bounce = null;
       if (shielded) {
         b.bounceDrift = (b.bounceDrift ?? Math.random() * 6) + dt * 1.3;
@@ -1101,7 +1105,7 @@ export class Race {
         const bounceDir = new THREE.Vector3(Math.sin(back), 0, Math.cos(back));
         const bounceHit = this.raycastBoats(end, bounceDir, 60, hit.boat);
         const bounceEnd = end.clone().addScaledVector(bounceDir, bounceHit ? bounceHit.t : 60);
-        this.fx.beam(end, bounceEnd, 0xff4fd8, 0.45, 0.05, bounceHit ? 6 : 1);
+        this.fx.beam(end, bounceEnd, 0xff2a2a, 0.45, 0.05, bounceHit ? 6 : 1);
         bounce = { boat: bounceHit?.boat ?? null, dir: bounceDir };
       }
       if (!hit) {
@@ -1126,7 +1130,7 @@ export class Race {
       }
       return;
     }
-    this.fx.sparkBurst(end.x, end.y, end.z, 0xff4fd8, 12);
+    this.fx.sparkBurst(end.x, end.y, end.z, 0xff2a2a, 12);
     this.damage(victim, amount, b, 'laser', { knockX: dir.x * 4, knockZ: dir.z * 4, stun: 0.4, spin: amount > 10 ? 0.5 : 0 });
   }
 
@@ -1141,6 +1145,11 @@ export class Race {
       minDot: 0.55,
       filter: (o) => EASY_HOOK(o) || Math.hypot(o.pos.x - b.pos.x, o.pos.z - b.pos.z) < 70,
     };
+  }
+
+  updateRegen(b, dt) {
+    b.regenerating = b.alive && this.state === 'racing' && b.hp < MAX_HP && this.time - b.lastFired > REGEN_DELAY;
+    if (b.regenerating) b.hp = Math.min(MAX_HP, b.hp + REGEN_RATE * dt);
   }
 
   updateSulk(b, dt) {
@@ -1275,6 +1284,7 @@ export class Race {
       if (s.tick <= 0) {
         s.tick = 0.22;
         this.damage(target, 4, b, 'saw', { stun: 0.15 });
+        b.lastFired = this.time;
         this.fx.sparkBurst(contact.x, contact.y, contact.z, 0xffa62b, 12);
         if (s.sound <= 0) {
           s.sound = 0.45;
@@ -1359,6 +1369,7 @@ export class Race {
     if (b.model.sawYaw) this.updateSaw(b, dt);
     this.updateTurrets(b, dt);
     this.updateSulk(b, dt);
+    this.updateRegen(b, dt);
     updateMineHolder(b.model, dt);
     updateMissileTips(b.model, dt);
 
@@ -1426,7 +1437,6 @@ export class Race {
     for (const m of this.mines) this.scene.remove(m.mesh);
     for (const h of this.hooks) this.scene.remove(h.mesh, h.rope);
     this.scene.remove(this.bulletMesh, this.bulletOutline);
-    this.medkits.dispose();
     this.features.dispose();
   }
 }

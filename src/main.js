@@ -175,7 +175,7 @@ const loadout = new Loadout({ setup, sfx, onChange: saveSetup });
 
 function renderLanguagePicker() {
   $('lang-picker').innerHTML = LANGUAGES.map(
-    (l) => `<button class="lang" data-lang="${l.id}" lang="${l.id}" aria-pressed="${l.id === getLang()}">${l.label}</button>`,
+    (l) => `<button class="btn lang" data-lang="${l.id}" lang="${l.id}" aria-label="${l.name}" aria-pressed="${l.id === getLang()}">${l.label}</button>`,
   ).join('');
   for (const button of document.querySelectorAll('.lang')) {
     button.addEventListener('click', () => {

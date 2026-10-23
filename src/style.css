@@ -354,35 +354,20 @@ kbd {
 
 .lang-picker {
   display: flex;
-  gap: 4px;
-  margin-top: 0.4rem;
-  padding: 4px;
-  background: rgba(14, 42, 71, 0.55);
-  border-radius: 999px;
+  gap: 0.5rem;
 }
 
-.lang {
-  font: 600 0.9rem var(--ui);
-  color: #ffffff;
-  padding: 0.3rem 0.85rem;
-  background: transparent;
-  border: 0;
-  border-radius: 999px;
-  cursor: pointer;
+.title-row {
+  align-items: center;
 }
 
-.lang:hover {
-  background: rgba(255, 255, 255, 0.18);
+.btn.lang {
+  min-width: 3.4rem;
+  padding: 0.65em 0.8em;
 }
 
-.lang[aria-pressed='true'] {
-  color: var(--ink);
+.btn.lang[aria-pressed='true'] {
   background: var(--sun);
-}
-
-.lang:focus-visible {
-  outline: 3px solid #ffffff;
-  outline-offset: 2px;
 }
 
 .howto {
@@ -1410,6 +1395,17 @@ kbd {
 
 .ability .hull-fill[data-level='low'] {
   background: #ff4141;
+}
+
+.hull-row.regen .ability-track {
+  box-shadow: 0 0 0 3px rgba(61, 220, 111, 0.55), 0 0 14px rgba(61, 220, 111, 0.8);
+  animation: regen-pulse 0.9s ease-in-out infinite;
+}
+
+@keyframes regen-pulse {
+  50% {
+    box-shadow: 0 0 0 3px rgba(61, 220, 111, 0.2), 0 0 6px rgba(61, 220, 111, 0.4);
+  }
 }
 
 .ability.disabled {

@@ -54,7 +54,7 @@ export const logoSvg = ({ boat = true, main = true, art = true } = {}) => `
 
 const ARCS = {
   top: { from: [205, 186], control: [500, -12], to: [795, 186], length: 560, size: 96, dy: 33 },
-  bottom: { from: [105, 425], control: [500, 675], to: [895, 425], length: 760, size: 236, dy: 0 },
+  bottom: { from: [105, 405], control: [500, 655], to: [895, 405], length: 760, size: 236, dy: 0 },
 };
 
 function sampleArc({ from, control, to }) {

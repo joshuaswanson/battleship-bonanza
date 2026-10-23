@@ -1,7 +1,7 @@
 export const LANGUAGES = [
-  { id: 'en', label: 'English' },
-  { id: 'fr', label: 'Français' },
-  { id: 'de', label: 'Deutsch' },
+  { id: 'en', label: 'EN', name: 'English' },
+  { id: 'fr', label: 'FR', name: 'Français' },
+  { id: 'de', label: 'DE', name: 'Deutsch' },
 ];
 
 const STRINGS = {
@@ -16,7 +16,7 @@ const STRINGS = {
     soundKey: 'Sound on or off',
     tip1: 'Pick two attachments in the shipyard, then race three laps.',
     tip2: 'Hold the key for the machine gun and laser. Let go before they overheat.',
-    tip3: 'Drive through med kit buoys to patch up your hull.',
+    tip3: 'Hold your fire for a few seconds and your hull patches itself up.',
     tip4: 'Fire the jet pack right before a missile or hook hits to dodge it.',
     gotIt: 'Got it',
     back: 'Back',
@@ -88,7 +88,7 @@ const STRINGS = {
     soundKey: 'Activer ou couper le son',
     tip1: 'Choisissez deux accessoires au chantier naval, puis faites trois tours.',
     tip2: 'Maintenez la touche pour la mitrailleuse et le laser. Relâchez avant la surchauffe.',
-    tip3: 'Passez sur les bouées de soin pour réparer votre coque.',
+    tip3: 'Arrêtez de tirer quelques secondes et votre coque se répare toute seule.',
     tip4: "Activez le jetpack juste avant l'impact d'un missile ou d'un grappin pour l'esquiver.",
     gotIt: 'Compris !',
     back: 'Retour',
@@ -160,7 +160,7 @@ const STRINGS = {
     soundKey: 'Ton an oder aus',
     tip1: 'Wähle in der Werft zwei Extras und fahr dann drei Runden.',
     tip2: 'Halte die Taste für Maschinengewehr und Laser gedrückt. Lass los, bevor sie überhitzen.',
-    tip3: 'Fahr durch Erste-Hilfe-Bojen, um deinen Rumpf zu flicken.',
+    tip3: 'Hör ein paar Sekunden auf zu feuern, dann flickt sich dein Rumpf von selbst.',
     tip4: 'Zünde das Jetpack kurz bevor eine Rakete oder ein Haken trifft, um auszuweichen.',
     gotIt: 'Verstanden!',
     back: 'Zurück',

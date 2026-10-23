@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { createWater, waveHeight } from './water.js';
 import { toon, outlineMaterial, mulberry32 } from './toon.js';
 
@@ -207,7 +207,8 @@ function addPalm(batch, x, baseY, z, rand, { height, lean, dir }) {
   }
 }
 
-const domeRadius = (radius, steep, k) => radius * Math.pow(Math.max(0, 1 - Math.pow(k, steep)), 0.55) * (1 + 0.05 * Math.sin(k * 19));
+const domeRadius = (radius, steep, k) =>
+  radius * Math.pow(Math.max(0, 1 - Math.pow(k, steep)), 0.55) * (1 + 0.05 * Math.sin(k * 19)) * (1 + 0.45 * Math.pow(1 - k, 7));
 
 function lump(g) {
   const pos = g.attributes.position;
@@ -215,33 +216,45 @@ function lump(g) {
     const x = pos.getX(i);
     const z = pos.getZ(i);
     const y = pos.getY(i);
-    const k = 1 + 0.07 * Math.sin(Math.atan2(z, x) * 5 + y * 0.15) + 0.04 * Math.sin(y * 0.4);
+    const k = 1 + 0.07 * Math.sin(Math.atan2(z, x) * 5 + y * 0.15) + 0.05 * Math.sin(y * 0.4 + Math.atan2(z, x) * 3);
     pos.setXYZ(i, x * k, y, z * k);
   }
-  g.computeVertexNormals();
   return g;
 }
 
 function domeGeometry(radius, height, steep) {
   const points = [];
-  for (let i = 0; i <= 22; i++) {
-    const k = i / 22;
+  for (let i = 0; i <= 40; i++) {
+    const k = i / 40;
     points.push(new THREE.Vector2(Math.max(0.01, domeRadius(radius, steep, k)), height * k - 2));
   }
-  return lump(new THREE.LatheGeometry(points, 28));
+  return paintRock(lump(new THREE.LatheGeometry(points, 56)));
 }
 
-function forestBand(radius, height, steep, k0, k1, grow) {
-  const points = [new THREE.Vector2(Math.max(0.01, domeRadius(radius, steep, k0) * 0.98), height * k0 - 2)];
-  for (let i = 0; i <= 8; i++) {
-    const k = k0 + (k1 - k0) * (i / 8);
-    const bulge = 1 + grow * Math.sin((i / 8) * Math.PI) + grow * 0.4;
-    points.push(new THREE.Vector2(Math.max(0.01, domeRadius(radius, steep, k) * bulge), height * k - 2));
+function paintRock(g) {
+  g.computeVertexNormals();
+  const pos = g.attributes.position;
+  const nor = g.attributes.normal;
+  const colors = [];
+  const color = new THREE.Color();
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const y = pos.getY(i);
+    const z = pos.getZ(i);
+    const ny = Math.abs(nor.getY(i));
+    const speckle = Math.sin(x * 0.7 + z * 0.5) + Math.sin(z * 0.9 - y * 0.3);
+    const band = 0.5 + 0.5 * Math.sin(y / 5 + speckle * 0.8);
+    color.copy(ROCK_TONES[0]).lerp(TOWER_ROCK, band);
+    if (y < 0.8) color.copy(ROCK_TONES[1]);
+    const green = THREE.MathUtils.smoothstep(ny, 0.42 + speckle * 0.05, 0.62 + speckle * 0.05);
+    if (green > 0) color.lerp(speckle > 0.3 ? GRASS_EDGE : GRASS_TONE, green);
+    colors.push(color.r, color.g, color.b);
   }
-  if (k1 < 1) points.push(new THREE.Vector2(Math.max(0.01, domeRadius(radius, steep, k1) * 0.98), height * k1 - 2));
-  return lump(new THREE.LatheGeometry(points, 28));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  return g;
 }
 
+const TOWER_ROCK = new THREE.Color(0x9f9182);
 const ROCK_TONES = [new THREE.Color(0xa89a8c), new THREE.Color(0x938577), new THREE.Color(0xb7aa9b)];
 const GRASS_TONE = new THREE.Color(0x6cc84f);
 const GRASS_EDGE = new THREE.Color(0x4fae4a);
@@ -256,7 +269,7 @@ function rockland(r, height, stretch, rot, rand) {
   }));
   const noise = (v) => waves.reduce((sum, w) => sum + Math.sin(v.dot(w.dir) * w.freq + w.phase) * w.amp, 0);
   const plateau = height * (0.78 + rand() * 0.12);
-  const g = new THREE.IcosahedronGeometry(1, 4);
+  const g = mergeVertices(new THREE.IcosahedronGeometry(1, 6).deleteAttribute('normal').deleteAttribute('uv'));
   const pos = g.attributes.position;
   const v = new THREE.Vector3();
   const c = Math.cos(rot);
@@ -275,26 +288,23 @@ function rockland(r, height, stretch, rot, rand) {
     pos.setXYZ(i, px * c + pz * sn, py, -px * sn + pz * c);
   }
   g.computeVertexNormals();
+  const nor = g.attributes.normal;
   const colors = [];
   const tops = [];
-  const a = new THREE.Vector3();
-  const b = new THREE.Vector3();
-  const d = new THREE.Vector3();
-  const normal = new THREE.Vector3();
-  for (let i = 0; i < pos.count; i += 3) {
-    a.fromBufferAttribute(pos, i);
-    b.fromBufferAttribute(pos, i + 1);
-    d.fromBufferAttribute(pos, i + 2);
-    const cy = (a.y + b.y + d.y) / 3;
-    normal.subVectors(b, a).cross(d.clone().sub(a)).normalize();
-    let color;
-    if (cy < 1.4) color = SAND_TONE;
-    else if (normal.y > 0.72 && cy > height * 0.3) color = cy > plateau - 2.5 ? GRASS_TONE : GRASS_EDGE;
-    else color = ROCK_TONES[Math.floor(cy / 3.2) % ROCK_TONES.length];
-    for (let k = 0; k < 3; k++) colors.push(color.r, color.g, color.b);
-    if (color === GRASS_TONE && rand() < 0.035 && tops.length < 9) {
-      tops.push({ x: (a.x + b.x + d.x) / 3, y: cy, z: (a.z + b.z + d.z) / 3 });
-    }
+  const color = new THREE.Color();
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const y = pos.getY(i);
+    const z = pos.getZ(i);
+    const ny = nor.getY(i);
+    const speckle = Math.sin(x * 0.6 + z * 0.45) + Math.sin(z * 0.8 - y * 0.35);
+    color.copy(ROCK_TONES[0]).lerp(ROCK_TONES[1], 0.5 + 0.5 * Math.sin(y / 3.5 + speckle * 0.6));
+    const grass = THREE.MathUtils.smoothstep(ny, 0.55, 0.78) * THREE.MathUtils.smoothstep(y, height * 0.25, height * 0.4);
+    if (grass > 0) color.lerp(y > plateau - 2.5 ? GRASS_TONE : GRASS_EDGE, grass);
+    const sand = 1 - THREE.MathUtils.smoothstep(y, 0.4, 2.2);
+    if (sand > 0) color.lerp(SAND_TONE, sand);
+    colors.push(color.r, color.g, color.b);
+    if (grass > 0.95 && y > plateau - 3 && rand() < 0.01 && tops.length < 9) tops.push({ x, y, z });
   }
   g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   return { geometry: g, tops };
@@ -306,29 +316,13 @@ function addSeaStack(batch, x, z, rand) {
   const footprint = [];
   const peak = (px, pz, radius, height, steep, lean, kind) => {
     const tilt = mat(px, 0, pz, 1, 1, 1, lean * Math.cos(rand() * 6), rand() * Math.PI * 2, lean * Math.sin(rand() * 6));
-    batch.add(rand() < 0.5 ? 'cliff' : 'cliffDark', domeGeometry(radius, height, steep), tilt);
-    if (kind === 'dome') {
-      const k1 = 0.16 + rand() * 0.1;
-      batch.add('moss', forestBand(radius, height, steep, 0.03, k1, 0.07), tilt);
-      const trees = 12 + Math.floor(rand() * 6);
-      for (let i = 0; i < trees; i++) {
-        const a = (i / trees) * Math.PI * 2 + rand() * 0.3;
-        const k = k1 * (0.75 + rand() * 0.35);
-        const rr = domeRadius(radius, steep, k) * 1.02;
-        const s = radius * (0.1 + rand() * 0.08);
-        const local = new THREE.Vector3(Math.cos(a) * rr, height * k - 2 + s * 0.3, Math.sin(a) * rr).applyMatrix4(tilt);
-        batch.add(i % 3 ? 'moss' : 'mossDark', LOW_SPHERE, mat(local.x, local.y, local.z, s, s * 0.85, s));
-      }
-      batch.add('mossDark', forestBand(radius, height, steep, 0.86, 1, 0.08), tilt);
-    } else {
-      batch.add('moss', forestBand(radius, height, steep, 0.9, 1, 0.12), tilt);
-      const top = new THREE.Vector3(0, height - 2, 0).applyMatrix4(tilt);
-      for (let i = 0; i < 4; i++) {
-        const a = rand() * Math.PI * 2;
-        const s = radius * (0.25 + rand() * 0.2);
-        batch.add(i % 2 ? 'moss' : 'mossDark', LOW_SPHERE, mat(top.x + Math.cos(a) * radius * 0.25, top.y + s * 0.2, top.z + Math.sin(a) * radius * 0.25, s, s * 0.7, s));
-      }
-      if (rand() < 0.6) addPalm(batch, top.x, top.y - 0.3, top.z, rand, { height: 6 + rand() * 4, lean: 0.2 + rand() * 0.3, dir: rand() * Math.PI * 2 });
+    batch.add('rockland', domeGeometry(radius, height, steep), tilt);
+    const top = new THREE.Vector3(0, height - 2.2, 0).applyMatrix4(tilt);
+    const palms = kind === 'dome' ? 1 + Math.floor(rand() * 3) : rand() < 0.7 ? 1 : 0;
+    for (let i = 0; i < palms; i++) {
+      const a = rand() * Math.PI * 2;
+      const d = radius * (kind === 'dome' ? 0.2 : 0.12) * rand();
+      addPalm(batch, top.x + Math.cos(a) * d, top.y - 0.3, top.z + Math.sin(a) * d, rand, { height: 5 + rand() * 4, lean: 0.15 + rand() * 0.3, dir: a });
     }
     batch.add('foam', RING, mat(px, 0.2, pz, radius * 1.06, 6, radius * 1.06));
     footprint.push({ x: px, z: pz, rx: radius, rz: radius, rot: 0 });

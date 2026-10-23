@@ -246,7 +246,8 @@ export class Hud {
     const hull = Math.max(0, p.hp) / MAX_HP;
     this.hullFill.style.width = `${hull * 100}%`;
     this.hullFill.dataset.level = hull > 0.6 ? 'high' : hull > 0.3 ? 'mid' : 'low';
-    const hullText = `${Math.ceil(hull * 100)}%`;
+    this.hullFill.parentElement.parentElement.parentElement.classList.toggle('regen', p.regenerating);
+    const hullText = `${p.regenerating ? '+ ' : ''}${Math.ceil(hull * 100)}%`;
     if (this.hullText.textContent !== hullText) this.hullText.textContent = hullText;
     this.updateLock(race, camera, dt);
     this.drawMap(race);
@@ -429,20 +430,6 @@ export class Hud {
       ctx.fill();
       ctx.stroke();
     }
-    for (const kit of race.medkits.active) {
-      const [kx, ky] = this.toMap(kit.x, kit.z);
-      ctx.fillStyle = '#FFFFFF';
-      ctx.strokeStyle = '#0E2A47';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(kx, ky, 5.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      ctx.fillStyle = '#FF4141';
-      ctx.fillRect(kx - 3.5, ky - 1.2, 7, 2.4);
-      ctx.fillRect(kx - 1.2, ky - 3.5, 2.4, 7);
-    }
-
     const sorted = [...race.boats].sort((a, b) => (a.isPlayer ? 1 : 0) - (b.isPlayer ? 1 : 0));
     for (const b of sorted) {
       if (!b.isPlayer && b.has('camo')) continue;

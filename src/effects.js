@@ -122,7 +122,7 @@ export class Effects {
     this.sparks = new ParticlePool(scene, glow(0xffffff), 900);
     this.rings = new Transient(scene, new THREE.TorusGeometry(1, 0.12, 8, 48).rotateX(Math.PI / 2), 16, false);
     const beam = new THREE.CylinderGeometry(1, 1, 1, 10, 1, true).rotateX(Math.PI / 2).translate(0, 0, 0.5);
-    this.beams = new Transient(scene, beam, 48, true);
+    this.beams = new Transient(scene, beam, 48, false);
     this.shells = new Transient(scene, new THREE.SphereGeometry(1, 32, 20), 6, true);
   }
 
@@ -226,7 +226,7 @@ export class Effects {
 
   scorch(x, y, z) {
     const r = Math.random;
-    this.sparks.emit(x, y, z, 0, 0, 0, 0.55 + r() * 0.2, 1.1, r() < 0.5 ? 0xff4fd8 : 0xffffff, 0, 0, 1, 0.25);
+    this.sparks.emit(x, y, z, 0, 0, 0, 0.55 + r() * 0.2, 1.1, r() < 0.5 ? 0xff2a2a : 0xffffff, 0, 0, 1, 0.25);
     if (r() < 0.35) this.puffs.emit(x, y + 0.3, z, (r() - 0.5), 2 + r() * 2, (r() - 0.5), 0.5 + r() * 0.4, 0.9, 0xffffff, -1, 1, 0);
   }
 
@@ -234,7 +234,7 @@ export class Effects {
     const a = from.clone();
     const b = to.clone();
     const length = a.distanceTo(b);
-    for (const [w, c] of [[width, color], [width * 0.4, 0xffffff]]) {
+    for (const [w, c] of [[width, color], [width * 0.3, 0xfff0e8]]) {
       this.beams.take(c, life, (mesh, k) => {
         mesh.position.copy(a);
         mesh.lookAt(b);
