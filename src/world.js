@@ -47,29 +47,146 @@ function mossyRock() {
   return material;
 }
 
+const INSTANCE_MIN = 12;
+function releaseArray() {
+  this.array = null;
+}
+
 export class Batcher {
   constructor() {
     this.groups = new Map();
   }
   add(key, geometry, matrix = IDENTITY) {
-    const g = (geometry.index ? geometry.toNonIndexed() : geometry.clone()).applyMatrix4(matrix);
-    g.deleteAttribute('uv');
     if (!this.groups.has(key)) this.groups.set(key, []);
-    this.groups.get(key).push(g);
+    let x;
+    let z;
+    let r;
+    if (matrix === IDENTITY) {
+      if (!geometry.boundingSphere) geometry.computeBoundingSphere();
+      ({ x, z } = geometry.boundingSphere.center);
+      r = geometry.boundingSphere.radius;
+    } else {
+      x = matrix.elements[12];
+      z = matrix.elements[14];
+      if (!geometry.boundingSphere) geometry.computeBoundingSphere();
+      r = geometry.boundingSphere.radius * matrix.getMaxScaleOnAxis() + geometry.boundingSphere.center.length();
+    }
+    this.groups.get(key).push({ geometry, matrix: matrix === IDENTITY ? IDENTITY : matrix.clone(), x, z, r });
   }
-  build(parent, outline = 0.12, colors = COLORS) {
+  build(parent, outline = 0.12, colors = COLORS, size = CHUNK) {
+    const steps = this.steps(parent, outline, colors, size);
+    let step = steps.next();
+    while (!step.done) step = steps.next();
+    return step.value;
+  }
+  async buildAsync(parent, outline, colors, size = CHUNK, tick) {
+    const steps = this.steps(parent, outline, colors, size);
+    let step = steps.next();
+    while (!step.done) {
+      await tick();
+      step = steps.next();
+    }
+    return step.value;
+  }
+  *steps(parent, outline, colors, size) {
+    const cells = new Map();
     for (const [key, list] of this.groups) {
-      const geometry = mergeGeometries(list);
+      for (const entry of list) {
+        const id = `${Math.floor(entry.x / size)},${Math.floor(entry.z / size)}`;
+        if (!cells.has(id)) cells.set(id, []);
+        cells.get(id).push({ ...entry, key });
+      }
+    }
+    const chunks = [];
+    for (const [id, entries] of cells) {
+      const [cx, cz] = id.split(',').map((n) => (Number(n) + 0.5) * size);
+      const group = new THREE.Group();
+      let radius = 0;
+      for (const e of entries) radius = Math.max(radius, Math.hypot(e.x - cx, e.z - cz) + e.r);
+      this.buildChunk(group, entries, outline, colors);
+      parent.add(group);
+      chunks.push({ group, x: cx, z: cz, radius });
+      yield;
+    }
+    return chunks;
+  }
+  buildChunk(parent, entries, outline, colors) {
+    const shapes = new Map();
+    for (const e of entries) {
+      if (!shapes.has(e.geometry)) shapes.set(e.geometry, []);
+      shapes.get(e.geometry).push(e);
+    }
+    const merged = { lined: [], plain: [], mossy: [] };
+    const tint = new THREE.Color();
+    for (const [geometry, list] of shapes) {
+      const mossy = geometry.hasAttribute('aGreen');
       const painted = geometry.hasAttribute('color');
-      const material = geometry.hasAttribute('aGreen')
-        ? mossyRock()
-        : painted
-          ? toon(0xffffff, { vertexColors: true })
-          : toon(colors[key]);
-      parent.add(new THREE.Mesh(geometry, material));
-      if (outline && key !== 'foam') parent.add(new THREE.Mesh(geometry, outlineMaterial(outline)));
+      if (list.length < INSTANCE_MIN || painted || mossy) {
+        for (const e of list) {
+          const g = (geometry.index ? geometry.toNonIndexed() : geometry.clone()).applyMatrix4(e.matrix);
+          g.deleteAttribute('uv');
+          if (!g.hasAttribute('normal')) g.computeVertexNormals();
+          if (mossy) {
+            merged.mossy.push(g);
+            continue;
+          }
+          if (!painted) {
+            tint.set(colors[e.key]);
+            const n = g.attributes.position.count;
+            const rgb = new Float32Array(n * 3);
+            for (let k = 0; k < n; k++) rgb.set([tint.r, tint.g, tint.b], k * 3);
+            g.setAttribute('color', new THREE.BufferAttribute(rgb, 3));
+          }
+          (NO_OUTLINE.has(e.key) ? merged.plain : merged.lined).push(g);
+        }
+        continue;
+      }
+      const mesh = new THREE.InstancedMesh(geometry, WHITE_TOON(), list.length);
+      list.forEach((e, k) => {
+        mesh.setMatrixAt(k, e.matrix);
+        mesh.setColorAt(k, tint.set(colors[e.key]));
+      });
+      mesh.computeBoundingSphere();
+      parent.add(mesh);
+      if (outline) {
+        const line = new THREE.InstancedMesh(geometry, outlineMaterial(outline), list.length);
+        line.instanceMatrix = mesh.instanceMatrix;
+        line.boundingSphere = mesh.boundingSphere;
+        parent.add(line);
+      }
+    }
+    for (const [kind, list] of Object.entries(merged)) {
+      if (!list.length) continue;
+      const geometry = mergeGeometries(list);
+      for (const g of list) g.dispose();
+      geometry.computeBoundingSphere();
+      for (const attribute of Object.values(geometry.attributes)) attribute.onUpload(releaseArray);
+      parent.add(new THREE.Mesh(geometry, kind === 'mossy' ? mossyRock() : VERTEX_TOON()));
+      if (outline && kind !== 'plain') parent.add(new THREE.Mesh(geometry, outlineMaterial(outline)));
     }
   }
+}
+
+const NO_OUTLINE = new Set(['foam']);
+let whiteToon = null;
+const WHITE_TOON = () => (whiteToon ??= toon(0xffffff));
+let vertexToon = null;
+const VERTEX_TOON = () => (vertexToon ??= toon(0xffffff, { vertexColors: true }));
+
+const CHUNK = 220;
+
+export function slicer(budget = 6) {
+  let start = performance.now();
+  return async () => {
+    if (performance.now() - start < budget) return;
+    await new Promise((r) => setTimeout(r, 0));
+    start = performance.now();
+  };
+}
+
+export function cullChunks(chunks, camera, far) {
+  const { x, z } = camera.position;
+  for (const c of chunks) c.group.visible = Math.hypot(c.x - x, c.z - z) - c.radius < far;
 }
 
 const m4 = new THREE.Matrix4();
@@ -697,7 +814,7 @@ export function createWorld(scene, track) {
   addLighthouse(batch, start.x, start.z, 3);
 
   const scenery = new THREE.Group();
-  batch.build(scenery);
+  const chunks = batch.build(scenery);
   scene.add(scenery);
 
   const buoySpacing = 15;
@@ -765,6 +882,7 @@ export function createWorld(scene, track) {
     stacks,
     update(t, dt, camera) {
       water.update(t);
+      cullChunks(chunks, camera, fog.far);
       sky.position.copy(camera.position);
       for (let i = 0; i < buoyPositions.length; i++) {
         const p = buoyPositions[i];

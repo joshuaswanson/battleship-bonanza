@@ -46,6 +46,34 @@ function resize() {
 addEventListener('resize', resize);
 resize();
 
+const MAX_RATIO = Math.min(devicePixelRatio, 2);
+const quality = { ratio: MAX_RATIO, frames: 0, total: 0, calm: 0 };
+function adaptResolution(dt) {
+  if (document.hidden || dt <= 0) return;
+  quality.frames++;
+  quality.total += dt;
+  if (quality.frames < 90) return;
+  const avg = quality.total / quality.frames;
+  quality.frames = 0;
+  quality.total = 0;
+  let next = quality.ratio;
+  if (avg > 1 / 50 && quality.ratio > 0.75) {
+    next = Math.max(0.75, quality.ratio - 0.25);
+    quality.calm = 0;
+  } else if (avg < 1 / 58 && quality.ratio < MAX_RATIO) {
+    quality.calm++;
+    if (quality.calm >= 4) {
+      next = Math.min(MAX_RATIO, quality.ratio + 0.25);
+      quality.calm = 0;
+    }
+  }
+  if (next !== quality.ratio) {
+    quality.ratio = next;
+    renderer.setPixelRatio(next);
+    resize();
+  }
+}
+
 const fx = new Effects(scene);
 fx.camera = camera;
 const sfx = new Sfx();
@@ -53,16 +81,31 @@ const SILENT = { play() {} };
 const input = new Input();
 
 const venues = {};
+const building = {};
 function venue(id) {
-  if (!venues[id]) {
+  return venues[id];
+}
+
+function prepareVenue(id) {
+  if (venues[id]) return Promise.resolve(venues[id]);
+  building[id] ??= (async () => {
     const track = createTrack(MAPS[id]);
     const group = new THREE.Group();
     group.visible = false;
+    const world = id === 'jungle' ? await createJungle(group, track, fx) : createWorld(group, track);
     scene.add(group);
-    const world = id === 'jungle' ? createJungle(group, track, fx) : createWorld(group, track);
     venues[id] = { track, world, group };
-  }
-  return venues[id];
+    return venues[id];
+  })();
+  return building[id];
+}
+
+{
+  const track = createTrack(MAPS.bay);
+  const group = new THREE.Group();
+  group.visible = false;
+  scene.add(group);
+  venues.bay = { track, world: createWorld(group, track), group };
 }
 let current = venue('bay');
 const hud = new Hud(current.track, sfx);
@@ -134,13 +177,13 @@ const HURT_SHAKE = { bullet: 0.25, laser: 0.3, reflect: 0.3, saw: 0.5, flame: 0,
 let recorder = null;
 let replay = null;
 
-function newRace(attract) {
+function newRace(attract, map = pickMap(attract)) {
   recorder?.detach();
   recorder = null;
   replay = null;
   $('replay-ui').classList.add('hidden');
   race?.dispose();
-  useVenue(pickMap(attract));
+  useVenue(map);
   race = new Race({ scene, track: current.track, fx, sfx: attract ? SILENT : sfx, shores: current.world.shores, defs: makeDefs(attract ? null : setup), attract });
   if (!attract) recorder = new Recorder(race, fx);
   cam.snap = true;
@@ -261,7 +304,7 @@ async function wipe(fn) {
   sfx.play('whoosh');
   wipeCanvas.classList.add('on');
   await animateIris(1.05, 0, 420, easeIn, 0, -3.5);
-  fn();
+  await fn();
   await new Promise((r) => setTimeout(r, 120));
   sfx.play('splash');
   await animateIris(0, 1.05, 520, easeOut, -3.5, -7);
@@ -300,12 +343,14 @@ function goMaps() {
   document.querySelector('.map-card[aria-checked="true"]')?.focus();
 }
 
-function startRace() {
+async function startRace() {
   if (!setup.items.every(Boolean)) return;
   sfx.unlock();
   sfx.playMusic(false);
   saveSetup();
-  newRace(false);
+  const map = pickMap(false);
+  await prepareVenue(map);
+  newRace(false, map);
   mode = 'race';
   resultsTimer = 0;
   hud.setup(race);
@@ -567,6 +612,7 @@ function frame(now) {
   }
 
   renderer.render(scene, camera);
+  adaptResolution(dt);
   if (mode === 'loadout') loadout.render(dt);
   requestAnimationFrame(frame);
 }
@@ -593,6 +639,7 @@ if (import.meta.env.DEV) {
     sfx,
     scene,
     THREE,
+    renderer,
     camera,
     cam,
     get recorder() {
@@ -603,10 +650,12 @@ if (import.meta.env.DEV) {
     },
     map: null,
     loadout,
-    simRace() {
+    async simRace() {
+      const map = pickMap(false);
+      await prepareVenue(map);
       race?.dispose();
       const defs = PAINTS.map((paint, i) => ({ name: `Boat ${i + 1}`, color: paint.value, items: arrange(shuffle(ITEM_IDS).slice(0, 2)) }));
-      useVenue(pickMap(false));
+      useVenue(map);
       race = new Race({ scene, track: current.track, fx, sfx, shores: current.world.shores, defs, attract: false });
       mode = 'sim';
       hud.show(false);
@@ -617,4 +666,4 @@ if (import.meta.env.DEV) {
 
 goTitle();
 requestAnimationFrame(frame);
-setTimeout(() => venue('jungle'), 1500);
+setTimeout(() => prepareVenue('jungle'), 1500);

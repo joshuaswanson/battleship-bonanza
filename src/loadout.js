@@ -297,7 +297,7 @@ export class Loadout {
       this.floatRing.add(mesh);
     }
     this.scene.add(this.floatRing);
-    this.fx = new Effects(this.scene);
+    this.fx = new Effects(this.scene, waveHeight);
     this.fx.camera = this.camera;
 
     this.time = 0;

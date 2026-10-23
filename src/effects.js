@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { toon, glow } from './toon.js';
+import { waveHeight } from './water.js';
 
 class ParticlePool {
   constructor(scene, material, max) {
@@ -7,13 +8,13 @@ class ParticlePool {
     this.mesh = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 10, 8), material, max);
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.mesh.frustumCulled = false;
-    const white = new THREE.Color(1, 1, 1);
-    for (let i = 0; i < max; i++) this.mesh.setColorAt(i, white);
-    this.zero = new THREE.Matrix4().makeScale(0, 0, 0);
-    for (let i = 0; i < max; i++) this.mesh.setMatrixAt(i, this.zero);
+    this.mesh.setColorAt(0, new THREE.Color(1, 1, 1));
+    this.mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
+    this.mesh.count = 0;
     scene.add(this.mesh);
     this.p = new Float32Array(max * 3);
     this.v = new Float32Array(max * 3);
+    this.rgb = new Float32Array(max * 3);
     this.life = new Float32Array(max);
     this.maxLife = new Float32Array(max);
     this.size = new Float32Array(max);
@@ -42,19 +43,21 @@ class ParticlePool {
     this.drag[i] = drag;
     this.shape[i] = shape;
     this.flat[i] = flat;
-    this.mesh.setColorAt(i, this.c.set(color));
-    this.mesh.instanceColor.needsUpdate = true;
+    this.c.set(color);
+    this.rgb[i * 3] = this.c.r;
+    this.rgb[i * 3 + 1] = this.c.g;
+    this.rgb[i * 3 + 2] = this.c.b;
   }
 
   update(dt) {
-    const { p, v, m } = this;
+    const { p, v, rgb } = this;
+    const matrices = this.mesh.instanceMatrix.array;
+    const colors = this.mesh.instanceColor.array;
+    let n = 0;
     for (let i = 0; i < this.max; i++) {
       if (this.life[i] <= 0) continue;
       this.life[i] -= dt;
-      if (this.life[i] <= 0) {
-        this.mesh.setMatrixAt(i, this.zero);
-        continue;
-      }
+      if (this.life[i] <= 0) continue;
       const k = 1 - this.life[i] / this.maxLife[i];
       const damp = Math.exp(-this.drag[i] * dt);
       v[i * 3] *= damp;
@@ -68,11 +71,23 @@ class ParticlePool {
       else if (this.shape[i] === 1) s = 1 - k;
       else s = (0.35 + k * 0.65) * (1 - k * k * k);
       s *= this.size[i];
-      m.makeScale(s, s * this.flat[i], s);
-      m.setPosition(p[i * 3], p[i * 3 + 1], p[i * 3 + 2]);
-      this.mesh.setMatrixAt(i, m);
+      const o = n * 16;
+      matrices.fill(0, o, o + 16);
+      matrices[o] = s;
+      matrices[o + 5] = s * this.flat[i];
+      matrices[o + 10] = s;
+      matrices[o + 12] = p[i * 3];
+      matrices[o + 13] = p[i * 3 + 1];
+      matrices[o + 14] = p[i * 3 + 2];
+      matrices[o + 15] = 1;
+      colors[n * 3] = rgb[i * 3];
+      colors[n * 3 + 1] = rgb[i * 3 + 1];
+      colors[n * 3 + 2] = rgb[i * 3 + 2];
+      n++;
     }
+    this.mesh.count = n;
     this.mesh.instanceMatrix.needsUpdate = true;
+    this.mesh.instanceColor.needsUpdate = true;
   }
 }
 
@@ -127,6 +142,7 @@ class CasingPool {
     for (let i = 0; i < max; i++) this.mesh.setMatrixAt(i, this.zero);
     scene.add(this.mesh);
     this.items = Array.from({ length: max }, () => ({ pos: new THREE.Vector3(), vel: new THREE.Vector3(), spin: new THREE.Vector3(), rot: new THREE.Euler(), life: 0 }));
+    this.time = 0;
     this.next = 0;
     this.m = new THREE.Matrix4();
     this.q = new THREE.Quaternion();
@@ -144,7 +160,8 @@ class CasingPool {
   }
 
   update(dt, onWater) {
-    this.items.forEach((c, i) => {
+    let n = 0;
+    this.items.forEach((c) => {
       if (c.life <= 0) return;
       c.life -= dt;
       c.vel.y -= 30 * dt;
@@ -152,12 +169,14 @@ class CasingPool {
       c.rot.x += c.spin.x * dt;
       c.rot.y += c.spin.y * dt;
       c.rot.z += c.spin.z * dt;
-      if (c.pos.y < 0.1 && c.vel.y < 0) {
+      if (c.vel.y < 0 && c.pos.y < this.surface(c.pos.x, c.pos.z, this.time) + 0.1) {
         onWater(c.pos);
         c.life = 0;
       }
-      this.mesh.setMatrixAt(i, c.life > 0 ? this.m.compose(c.pos, this.q.setFromEuler(c.rot), this.one) : this.zero);
+      if (c.life > 0) this.mesh.setMatrixAt(n++, this.m.compose(c.pos, this.q.setFromEuler(c.rot), this.one));
     });
+    this.time += dt;
+    this.mesh.count = n;
     this.mesh.instanceMatrix.needsUpdate = true;
   }
 }
@@ -311,7 +330,7 @@ class Lightning {
 }
 
 export class Effects {
-  constructor(scene) {
+  constructor(scene, surface = waveHeight) {
     this.puffs = new ParticlePool(scene, toon(0xffffff, { emissive: 0x6f93ad }), 4200);
     this.sparks = new ParticlePool(scene, glow(0xffffff), 900);
     this.rings = new Transient(scene, new THREE.TorusGeometry(1, 0.12, 8, 48).rotateX(Math.PI / 2), 16, false);
@@ -323,6 +342,7 @@ export class Effects {
     this.clock = 0;
     this.shells = new Transient(scene, new THREE.SphereGeometry(1, 32, 20), 6, true);
     this.casings = new CasingPool(scene, 240);
+    this.casings.surface = surface;
   }
 
   casing(pos, side, carry) {
@@ -345,7 +365,7 @@ export class Effects {
       for (const t of due) t.fn();
     }
     this.shells.update(dt);
-    this.casings.update(dt, (p) => this.puffs.emit(p.x, 0.2, p.z, 0, 1.5, 0, 0.14, 0.35, 0xffffff, 6, 1, 1));
+    this.casings.update(dt, (p) => this.puffs.emit(p.x, p.y + 0.1, p.z, 0, 1.5, 0, 0.14, 0.35, 0xffffff, 6, 1, 1));
   }
 
   wake(x, y, z, sideX, sideZ, speed) {

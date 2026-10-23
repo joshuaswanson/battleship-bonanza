@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { toon, glow, outlined, cachedGeometry, INK } from './toon.js';
 
 export const HULL_L = 4.2;
@@ -492,7 +493,57 @@ export function buildBoat(color, items) {
     m.emissive = new THREE.Color(0xff5a1f);
     m.emissiveIntensity = 0;
   }
+  flattenStatic(root, refs);
   return refs;
+}
+
+function referenced(refs) {
+  const keep = new Set();
+  const visit = (v, depth) => {
+    if (!v || depth > 3) return;
+    if (v.isObject3D) keep.add(v);
+    else if (Array.isArray(v)) for (const x of v) visit(x, depth + 1);
+    else if (typeof v === 'object' && !v.isMaterial && !v.isBufferGeometry) for (const x of Object.values(v)) visit(x, depth + 1);
+  };
+  for (const v of Object.values(refs)) visit(v, 0);
+  for (const ring of refs.towRings) for (const mesh of ring.userData.parts ?? []) keep.add(mesh);
+  return keep;
+}
+
+const isOutline = (o) => o.isMesh && o.material?.uniforms?.uThickness;
+
+function flattenStatic(root, refs) {
+  const keep = referenced(refs);
+  const parents = [];
+  root.traverse((o) => parents.push(o));
+  for (const parent of parents) {
+    const groups = new Map();
+    for (const child of parent.children) {
+      if (!child.isMesh || keep.has(child) || isOutline(child) || !child.visible) continue;
+      if (!child.children.every(isOutline)) continue;
+      const line = child.children[0];
+      const uv = child.geometry.hasAttribute('uv') && !!child.material.map;
+      const id = `${child.material.uuid}|${line ? line.material.uniforms.uThickness.value : 'none'}|${uv}`;
+      if (!groups.has(id)) groups.set(id, { material: child.material, line: line?.material, uv, list: [] });
+      groups.get(id).list.push(child);
+    }
+    for (const { material, line, uv, list } of groups.values()) {
+      if (list.length < 2) continue;
+      const parts = list.map((child) => {
+        child.updateMatrix();
+        const g = (child.geometry.index ? child.geometry.toNonIndexed() : child.geometry.clone()).applyMatrix4(child.matrix);
+        for (const name of Object.keys(g.attributes)) if (name !== 'position' && name !== 'normal' && !(uv && name === 'uv')) g.deleteAttribute(name);
+        return g;
+      });
+      const geometry = mergeGeometries(parts);
+      for (const g of parts) g.dispose();
+      if (!geometry) continue;
+      const mesh = new THREE.Mesh(geometry, material);
+      if (line) mesh.add(new THREE.Mesh(geometry, line));
+      for (const child of list) parent.remove(child);
+      parent.add(mesh);
+    }
+  }
 }
 
 const UP = new THREE.Vector3(0, 1, 0);

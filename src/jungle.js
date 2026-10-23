@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { createWater } from './water.js';
 import { toon, glow, outlined, mulberry32 } from './toon.js';
-import { Batcher, COLORS, mat, LOW_SPHERE, CYLINDER, CONE, ROCK, addPalm, createSky, createCloud, createArch, SUN_DIR } from './world.js';
+import { Batcher, cullChunks, slicer, COLORS, mat, LOW_SPHERE, CYLINDER, CONE, ROCK, addPalm, createSky, createCloud, createArch, SUN_DIR } from './world.js';
 
 const CELL = 3;
 const MARGIN = 340;
@@ -47,7 +47,7 @@ function noise(x, z) {
   );
 }
 
-export function riverSurface(track) {
+export async function riverSurface(track, tick) {
   let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
   for (let i = 0; i < track.N; i++) {
     minX = Math.min(minX, track.px[i]);
@@ -65,6 +65,7 @@ export function riverSurface(track) {
   const { N, px, pz, tx, tz, wrap, spacing } = track;
   const step = 4;
   for (let r = 0; r < rows; r++) {
+    await tick();
     const z = minZ + r * CELL;
     for (let c = 0; c < cols; c++) {
       const x = minX + c * CELL;
@@ -144,7 +145,7 @@ function terrainHeight(surface, track, x, z) {
   return normal + (Math.max(normal, ridge) - normal) * weight;
 }
 
-function buildTerrain(surface, track) {
+async function buildTerrain(surface, track, tick) {
   const { minX, maxX, minZ, maxZ } = surface.bounds;
   const step = 4;
   const cols = Math.ceil((maxX - minX) / step) + 1;
@@ -154,6 +155,7 @@ function buildTerrain(surface, track) {
   const holes = new Uint8Array(cols * rows);
   const shade = new Float32Array(cols * rows);
   for (let r = 0; r < rows; r++) {
+    await tick();
     for (let c = 0; c < cols; c++) {
       const x = minX + c * step;
       const z = minZ + r * step;
@@ -196,6 +198,7 @@ function buildTerrain(surface, track) {
     }
   };
   for (let r = 0; r < rows - 1; r++) {
+    await tick();
     for (let c = 0; c < cols - 1; c++) {
       const i = r * cols + c;
       tri(i, i + cols, i + 1, i);
@@ -502,7 +505,7 @@ function buildTunnel(track) {
   mouthRocks(batch, track, kIn, low, -1, rand);
   mouthRocks(batch, track, kOut, high, 1, rand);
   const details = new THREE.Group();
-  batch.build(details, 0.08, JUNGLE_COLORS);
+  group.userData.chunks = batch.build(details, 0.08, JUNGLE_COLORS);
   group.add(details);
   group.add(buildCrystals(track, kIn, kOut, low));
   group.add(buildCrystals(track, kSeam - GHOST, kOut, high));
@@ -787,7 +790,8 @@ function addFern(batch, x, y, z, rand) {
   }
 }
 
-export function createJungle(group, track, fx) {
+export async function createJungle(group, track, fx) {
+  const tick = slicer();
   const fog = new THREE.Fog(SKY_GREEN, 130, 560);
   const sky = createSky();
   group.add(sky);
@@ -796,13 +800,17 @@ export function createJungle(group, track, fx) {
   sun.position.copy(SUN_DIR).multiplyScalar(100);
   group.add(sun);
 
-  const surface = riverSurface(track);
-  group.add(buildTerrain(surface, track));
+  const surface = await riverSurface(track, tick);
+  group.add(await buildTerrain(surface, track, tick));
+  await tick();
   const water = buildRiver(track);
   group.add(water.mesh);
   const falls = track.river.drops.map((drop) => buildFalls(track, drop));
   for (const f of falls) group.add(f.mesh);
-  group.add(buildTunnel(track));
+  await tick();
+  const tunnel = buildTunnel(track);
+  await tick();
+  group.add(tunnel);
   const kExit = Math.round(track.river.tunnelOut / track.spacing);
   const curtains = [buildCurtain(track, kExit, lowLevel(track)), buildCurtain(track, kExit, copyLevel(track))];
   for (const c of curtains) {
@@ -832,23 +840,25 @@ export function createJungle(group, track, fx) {
     p.river = { x: -side * track.nx[i], z: -side * track.nz[i] };
     return p;
   };
-  const place = (count, from, to, plant) => {
+  const place = async (count, from, to, plant) => {
     for (let n = 0, tries = 0; n < count && tries < count * 6; tries++) {
+      await tick();
       const p = bankSpot(from, to);
       if (!p) continue;
       plant(p.x, terrainHeight(surface, track, p.x, p.z), p.z, p.river);
       n++;
     }
   };
-  place(300, 9, 50, (x, y, z, river) => addGiant(batch, x, y, z, rand, 1, river));
-  place(850, 6, 40, (x, y, z, river) => addBroadleaf(batch, x, y, z, rand, 0.9 + rand() * 0.5, river));
-  place(500, 6, 45, (x, y, z) => addBanana(batch, x, y, z, rand, true));
-  place(180, 5, 30, (x, y, z) => addPalm(batch, x, y - 0.5, z, rand, { height: 4 + rand() * 4, lean: rand() * 0.2, dir: rand() * Math.PI * 2 }));
-  place(160, 6, 30, (x, y, z) => addPalm(batch, x, y - 0.5, z, rand, { height: 11 + rand() * 8, lean: rand() * 0.5, dir: rand() * Math.PI * 2 }));
-  place(800, 3, 22, (x, y, z) => addBanana(batch, x, y, z, rand));
-  place(700, 3.5, 16, (x, y, z) => addBush(batch, x, y, z, rand));
-  place(400, 5, 30, (x, y, z) => addFern(batch, x, y, z, rand));
+  await place(300, 9, 50, (x, y, z, river) => addGiant(batch, x, y, z, rand, 1, river));
+  await place(850, 6, 40, (x, y, z, river) => addBroadleaf(batch, x, y, z, rand, 0.9 + rand() * 0.5, river));
+  await place(500, 6, 45, (x, y, z) => addBanana(batch, x, y, z, rand, true));
+  await place(180, 5, 30, (x, y, z) => addPalm(batch, x, y - 0.5, z, rand, { height: 4 + rand() * 4, lean: rand() * 0.2, dir: rand() * Math.PI * 2 }));
+  await place(160, 6, 30, (x, y, z) => addPalm(batch, x, y - 0.5, z, rand, { height: 11 + rand() * 8, lean: rand() * 0.5, dir: rand() * Math.PI * 2 }));
+  await place(800, 3, 22, (x, y, z) => addBanana(batch, x, y, z, rand));
+  await place(700, 3.5, 16, (x, y, z) => addBush(batch, x, y, z, rand));
+  await place(400, 5, 30, (x, y, z) => addFern(batch, x, y, z, rand));
   for (let n = 0, tries = 0; n < 300 && tries < 9000; tries++) {
+    await tick();
     const x = minX + rand() * (maxX - minX);
     const z = minZ + rand() * (maxZ - minZ);
     const { dist } = surface.sample(x, z);
@@ -869,7 +879,7 @@ export function createJungle(group, track, fx) {
     }
   }
   const scenery = new THREE.Group();
-  batch.build(scenery, 0.1, JUNGLE_COLORS);
+  const chunks = await batch.buildAsync(scenery, 0.1, JUNGLE_COLORS, undefined, tick);
   group.add(scenery);
 
   group.add(createArch(track, hw));
@@ -893,6 +903,8 @@ export function createJungle(group, track, fx) {
     shores: [],
     update(t, dt, camera) {
       water.update(t);
+      cullChunks(chunks, camera, fog.far);
+      cullChunks(tunnel.userData.chunks, camera, fog.far);
       for (const f of falls) f.material.uniforms.uTime.value = t;
       sky.position.copy(camera.position);
       for (const cloud of clouds) {

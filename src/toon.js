@@ -27,11 +27,13 @@ const OUTLINE_VERT = /* glsl */ `
   #include <common>
   #include <fog_pars_vertex>
   void main() {
-    vec4 mvPosition = vec4(position + normal * uThickness, 1.0);
+    vec3 p = position;
+    vec3 n = normal;
     #ifdef USE_INSTANCING
-      mvPosition = instanceMatrix * mvPosition;
+      p = (instanceMatrix * vec4(p, 1.0)).xyz;
+      n = normalize(transpose(inverse(mat3(instanceMatrix))) * n);
     #endif
-    mvPosition = modelViewMatrix * mvPosition;
+    vec4 mvPosition = modelViewMatrix * vec4(p + n * uThickness, 1.0);
     gl_Position = projectionMatrix * mvPosition;
     #include <fog_vertex>
   }
