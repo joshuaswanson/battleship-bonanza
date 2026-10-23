@@ -16,7 +16,7 @@ export class TitleBoat {
     sun.position.copy(SUN_DIR).multiplyScalar(10);
     this.scene.add(sun);
     this.camera = new THREE.PerspectiveCamera(28, 1, 0.1, 200);
-    this.camera.position.set(0, 3.4, 21);
+    this.camera.position.set(0, 3.4, 19);
     this.camera.lookAt(0, 0.4, 0);
 
     const { root, body } = buildBoat(0xff5a5f, ['machinegun']);
@@ -24,7 +24,7 @@ export class TitleBoat {
     body.rotation.x = -0.32;
     root.position.y = 0.3;
     this.scene.add(root);
-    this.scene.add(splash());
+    root.add(splash());
 
     new ResizeObserver(() => {
       const { clientWidth: w, clientHeight: h } = this.canvas;
@@ -39,24 +39,26 @@ export class TitleBoat {
 
 function splash() {
   const group = new THREE.Group();
+  group.position.set(0, -0.85, -0.6);
   const rand = mulberry32(7);
-  const ball = new THREE.SphereGeometry(1, 16, 12);
+  const cone = new THREE.ConeGeometry(1, 1, 10).translate(0, 0.5, 0);
   const white = toon(0xffffff);
   const aqua = toon(0x7fe6ee);
-  const add = (x, y, z, r, material) => {
-    const mesh = outlined(ball, material, 0.08);
-    mesh.position.set(x, y, z);
-    mesh.scale.setScalar(r);
-    group.add(mesh);
-  };
-  for (let i = 0; i < 16; i++) {
-    const a = (i / 16) * Math.PI * 2;
-    add(Math.cos(a) * 3.4, -1.3 + rand() * 0.4, Math.sin(a) * 2.2, 0.55 + rand() * 0.35, i % 3 ? white : aqua);
+  const up = new THREE.Vector3(0, 1, 0);
+  const petals = 22;
+  for (let i = 0; i < petals; i++) {
+    const a = (i / petals) * Math.PI * 2 + rand() * 0.15;
+    const x = Math.cos(a) * 2.25;
+    const z = Math.sin(a) * 3.9;
+    const height = 0.8 + rand() * 1.1 + (i % 2 ? 0 : 0.5);
+    const width = 0.32 + rand() * 0.14;
+    const petal = outlined(cone.clone().scale(width, height, width), i % 3 ? white : aqua, 0.05);
+    petal.position.set(x, 0, z);
+    const out = new THREE.Vector3(Math.cos(a) * 0.55, 1, Math.sin(a) * 0.4).normalize();
+    petal.quaternion.setFromUnitVectors(up, out);
+    group.add(petal);
   }
-  for (let i = 0; i < 14; i++) {
-    const a = rand() * Math.PI * 2;
-    const d = 4 + rand() * 2.6;
-    add(Math.cos(a) * d, -0.6 + rand() * 3, Math.sin(a) * d * 0.5, 0.15 + rand() * 0.22, rand() < 0.5 ? white : aqua);
-  }
+  const foam = outlined(new THREE.TorusGeometry(1, 0.32, 10, 48).rotateX(Math.PI / 2).scale(2.3, 1, 3.95), white, 0.05);
+  group.add(foam);
   return group;
 }
