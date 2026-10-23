@@ -440,12 +440,12 @@ export class Effects {
   blaze(x, y, z, carry) {
     const r = Math.random;
     const color = r() < 0.12 ? 0xffffff : r() < 0.5 ? 0xffd23f : r() < 0.85 ? 0xff8a1f : 0xff4a2a;
-    this.sparks.emit(x, y, z, carry.x * 0.8 + (r() - 0.5) * 2, 3 + r() * 4, carry.z * 0.8 + (r() - 0.5) * 2, 0.8 + r() * 0.8, 0.4 + r() * 0.3, color, -9, 2, 2);
+    this.sparks.emit(x, y, z, carry.x + (r() - 0.5) * 1.2, 1.5 + r() * 2.5, carry.z + (r() - 0.5) * 1.2, 0.7 + r() * 0.7, 0.28 + r() * 0.2, color, -7, 0, 2);
   }
 
   blackSmoke(x, y, z, carry) {
     const r = Math.random;
-    this.puffs.emit(x, y, z, carry.x * 0.5 + (r() - 0.5) * 1.5, 3 + r() * 2, carry.z * 0.5 + (r() - 0.5) * 1.5, 0.9 + r() * 0.7, 1.4 + r() * 0.6, r() < 0.5 ? 0x3d3f46 : 0x5c5f68, -2, 1, 0);
+    this.puffs.emit(x, y, z, carry.x * 0.9 + (r() - 0.5) * 1.5, 3 + r() * 2, carry.z * 0.9 + (r() - 0.5) * 1.5, 0.8 + r() * 0.6, 1 + r() * 0.4, r() < 0.5 ? 0x3d3f46 : 0x5c5f68, -2, 0.3, 0);
   }
 
   bubbles(x, y, z) {

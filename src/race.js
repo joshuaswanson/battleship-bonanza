@@ -1292,7 +1292,7 @@ export class Race {
         b.vel,
       );
     }
-    if (Math.random() < 0.7) this.fx.blackSmoke(c.x, c.y + 3 + Math.random() * 1.5, c.z, b.vel);
+    if (Math.random() < (b.isPlayer ? 0.3 : 0.7)) this.fx.blackSmoke(c.x, c.y + 3 + Math.random() * 1.5, c.z, b.vel);
     if (Math.random() < 0.25) this.fx.sparkBurst(c.x, c.y + 1.5, c.z, 0xffa62b, 2);
     if (b.burn.tick <= 0) {
       b.burn.tick = 0.25;

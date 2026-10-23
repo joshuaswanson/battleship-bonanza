@@ -1935,6 +1935,28 @@ kbd {
   display: block;
 }
 
+.burn-vignette {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  box-shadow: inset 0 0 140px 40px rgba(255, 120, 20, 0.8);
+  transition: opacity 250ms ease;
+}
+
+.burn-vignette.on {
+  animation: burn-flicker 420ms ease-in-out infinite alternate;
+}
+
+@keyframes burn-flicker {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 0.95;
+  }
+}
+
 .lock-vignette {
   position: absolute;
   inset: 0;

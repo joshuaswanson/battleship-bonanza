@@ -21,6 +21,7 @@ export class Hud {
     this.sfx = sfx;
     this.lock = $('hud-lock');
     this.lockVignette = $('lock-vignette');
+    this.burnVignette = $('burn-vignette');
     this.lockArrow = $('lock-arrow');
     this.lockPhase = 0;
     this.lockBeep = 0;
@@ -247,6 +248,7 @@ export class Hud {
     });
 
     this.updateReticle(race, camera);
+    this.burnVignette.classList.toggle('on', !!p.burn && p.alive);
 
     this.warnTime -= dt;
     const lost = p.alive && p.offCourse > 0.3 && !p.finished;
