@@ -27,7 +27,6 @@ const BANK_MARGIN = 2.5;
 const FALL_GRAVITY = 42;
 const SHORE_MARGIN = 2.2;
 const SAW_LEAK = 0.4;
-const EASY_HOOK = (o) => o.has('spikes') || o.has('jetpack');
 const REVERSE_SPEED = fast(14);
 const ACCEL = fast(22);
 const BRAKE = fast(40);
@@ -1463,9 +1462,8 @@ export class Race {
 
   hookSpec(b) {
     return {
-      range: 120,
+      range: 70,
       minDot: 0.55,
-      filter: (o) => EASY_HOOK(o) || Math.hypot(o.pos.x - b.pos.x, o.pos.z - b.pos.z) < 70,
     };
   }
 

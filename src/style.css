@@ -445,6 +445,51 @@ kbd {
   pointer-events: auto;
 }
 
+.replay-ui {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.replay-badge {
+  position: absolute;
+  top: 22px;
+  left: 24px;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.3rem 1rem 0.35rem 0.8rem;
+  font-family: var(--race);
+  font-weight: 900;
+  font-size: 1.8rem;
+  line-height: 1;
+  color: #ffffff;
+  background: var(--ink);
+  border-radius: 10px;
+  transform: skewX(-10deg);
+}
+
+.replay-badge i {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ff4141;
+  animation: rec-blink 1s steps(2, start) infinite;
+}
+
+@keyframes rec-blink {
+  to {
+    visibility: hidden;
+  }
+}
+
+#btn-replay-exit {
+  position: absolute;
+  right: 24px;
+  bottom: 24px;
+  pointer-events: auto;
+}
+
 .btn-bug {
   margin-top: 1.1rem;
   text-decoration: none;

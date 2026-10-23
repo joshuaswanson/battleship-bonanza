@@ -9,6 +9,7 @@ import { createTrack } from './track.js';
 import { createWorld } from './world.js';
 import { createJungle } from './jungle.js';
 import { MAPS } from './maps.js';
+import { Recorder, Replay } from './replay.js';
 import { setSurface } from './water.js';
 import { Effects } from './effects.js';
 import { Sfx } from './audio.js';
@@ -130,11 +131,42 @@ let time = 0;
 let shake = 0;
 const HURT_SHAKE = { bullet: 0.25, laser: 0.3, reflect: 0.3, saw: 0.5, flame: 0, fire: 0 };
 
+let recorder = null;
+let replay = null;
+
 function newRace(attract) {
+  recorder?.detach();
+  recorder = null;
+  replay = null;
+  $('replay-ui').classList.add('hidden');
   race?.dispose();
   useVenue(pickMap(attract));
   race = new Race({ scene, track: current.track, fx, sfx: attract ? SILENT : sfx, shores: current.world.shores, defs: makeDefs(attract ? null : setup), attract });
+  if (!attract) recorder = new Recorder(race, fx);
   cam.snap = true;
+}
+
+function startReplay() {
+  if (!recorder?.frames.length) return;
+  recorder.detach();
+  replay = new Replay(recorder, scene, sfx);
+  race.wakes.trails.clear();
+  mode = 'replay';
+  showScreen(null);
+  hud.show(false);
+  $('replay-ui').classList.remove('hidden');
+  cam.focusTime = 0;
+  document.activeElement?.blur();
+}
+
+function endReplay() {
+  for (const b of race.boats) b.air = null;
+  race.frozen = true;
+  mode = 'results';
+  $('replay-ui').classList.add('hidden');
+  showScreen('screen-results');
+  renderResults();
+  $('btn-replay').focus();
 }
 
 const screens = ['screen-title', 'screen-howto', 'screen-settings', 'screen-loadout', 'screen-maps', 'screen-pause', 'screen-results'];
@@ -212,7 +244,7 @@ function animateIris(from, to, ms, ease, spinFrom, spinTo) {
   return new Promise((done) => {
     const start = performance.now();
     const step = (now) => {
-      const u = Math.min(1, (now - start) / ms);
+      const u = Math.min(1, Math.max(0, (now - start) / ms));
       const k = ease(u);
       drawIris(from + (to - from) * k, spinFrom + (spinTo - spinFrom) * k);
       if (u < 1) requestAnimationFrame(step);
@@ -388,6 +420,8 @@ $('btn-quit').addEventListener('click', goLoadout);
 $('btn-menu').addEventListener('click', goTitle);
 $('btn-pause').addEventListener('click', () => pause(true));
 $('btn-again').addEventListener('click', startRace);
+$('btn-replay').addEventListener('click', () => wipe(startReplay));
+$('btn-replay-exit').addEventListener('click', () => wipe(endReplay));
 $('btn-change').addEventListener('click', () => wipe(goLoadout));
 addEventListener('pointerdown', () => sfx.unlock(), { once: true });
 addEventListener('keydown', () => sfx.unlock(), { once: true });
@@ -409,15 +443,21 @@ function updateCamera(dt) {
   const k = (rate) => (cam.snap ? 1 : 1 - Math.exp(-rate * dt));
   let fov = 66;
 
-  if (race.attract || !race.player) {
+  if (race.attract || !race.player || mode === 'replay') {
     cam.focusTime -= dt;
     if (cam.focusTime <= 0) {
-      cam.focus = Math.floor(Math.random() * race.boats.length);
+      const pickPlayer = mode === 'replay' && Math.random() < 0.6;
+      cam.focus = pickPlayer ? race.boats.indexOf(race.player) : Math.floor(Math.random() * race.boats.length);
       cam.focusTime = 7;
       cam.orbit = Math.random() * Math.PI * 2;
       cam.snap = true;
     }
     const b = race.boats[cam.focus];
+    if (cam.lastY !== undefined && Math.abs(b.waterY - cam.lastY) > 10) {
+      cam.pos.y += b.waterY - cam.lastY;
+      cam.look.y += b.waterY - cam.lastY;
+    }
+    cam.lastY = b.waterY;
     cam.orbit += dt * 0.18;
     const desired = new THREE.Vector3(b.pos.x + Math.cos(cam.orbit) * 34, b.waterY + 12, b.pos.z + Math.sin(cam.orbit) * 30);
     cam.pos.lerp(desired, k(3));
@@ -487,6 +527,7 @@ function frame(now) {
   if (pressed.has('pause') && $('screen-howto').classList.contains('hidden')) {
     if (mode === 'race') pause(true);
     else if (mode === 'paused') pause(false);
+    else if (mode === 'replay') endReplay();
   }
 
   if (mode !== 'paused') {
@@ -495,8 +536,16 @@ function frame(now) {
       ? { throttle: state.throttle, steer: state.steer, use0: pressed.has('item0'), use1: pressed.has('item1'), hold0: state.hold0, hold1: state.hold1 }
       : null;
     const steps = import.meta.env.DEV ? (window.__bb?.steps ?? 1) : 1;
-    for (let i = 0; i < steps; i++) race.update(dt, time + (i * dt), import.meta.env.DEV && window.__bb?.autopilot ? null : playerInput);
-    time += (steps - 1) * dt;
+    if (mode === 'replay') {
+      replay.step(dt);
+      if (replay.done) endReplay();
+    } else if (!race.frozen) {
+      for (let i = 0; i < steps; i++) {
+        race.update(dt, time + (i * dt), import.meta.env.DEV && window.__bb?.autopilot ? null : playerInput);
+        recorder?.capture();
+      }
+      time += (steps - 1) * dt;
+    }
     handleEvents();
     fx.update(dt);
     current.world.update(time, dt, camera);
@@ -508,7 +557,7 @@ function frame(now) {
   }
 
   updateCamera(dt);
-  if (race.player && !race.attract) {
+  if (race.player && !race.attract && mode !== 'replay') {
     hud.update(race, camera, dt);
     sfx.listener = race.player.pos;
     sfx.setEngine(Math.abs(race.player.speed) / BASE_SPEED, mode === 'race');
@@ -546,6 +595,9 @@ if (import.meta.env.DEV) {
     THREE,
     camera,
     cam,
+    get recorder() {
+      return recorder;
+    },
     get world() {
       return current.world;
     },

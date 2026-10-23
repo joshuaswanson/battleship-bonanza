@@ -1,0 +1,34 @@
+import puppeteer from 'puppeteer-core';
+const map = process.argv[2] ?? 'bay';
+const browser = await puppeteer.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: 'new', args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist', '--enable-precise-memory-info'], defaultViewport: { width: 1280, height: 760 } });
+const page = await browser.newPage();
+page.on('pageerror', (e) => console.log('[pageerror]', e.message));
+const wait = (t) => new Promise((r) => setTimeout(r, t));
+await page.goto('http://localhost:5288/', { waitUntil: 'networkidle0' });
+await page.evaluate((m) => { window.__bb.map = m; }, map);
+await page.evaluate(() => document.getElementById('btn-play').click());
+await wait(1500);
+await page.evaluate(() => document.getElementById('btn-start').click());
+await wait(1500);
+await page.evaluate(() => document.getElementById('btn-go').click());
+await wait(1500);
+await page.evaluate(() => { window.__bb.autopilot = true; window.__bb.steps = 6; });
+await page.waitForFunction(() => !document.getElementById('screen-results').classList.contains('hidden'), { timeout: 240000, polling: 1000 });
+await page.evaluate(() => { window.__bb.steps = 1; window.__bb.autopilot = false; });
+console.log(await page.evaluate(() => `heap ${(performance.memory.usedJSHeapSize / 1e6).toFixed(0)}MB`));
+console.log(await page.evaluate(() => { const r = window.__bb.recorder; if (!r) return 'no recorder handle'; const kinds = {}; for (const e of r.events) { const k = e.sound ? 'sound' : e.name + ':' + (e.pool.constructor.name); kinds[k] = (kinds[k] ?? 0) + 1; } return `frames ${r.frames.length} size ${r.size} nodes ${r.nodes.length} events ${r.events.length} ${JSON.stringify(kinds)} loose ${r.frames.reduce((n, f) => n + f.loose.length, 0)}`; }));
+await page.click('#btn-replay');
+await wait(1500);
+for (let i = 0; i < 4; i++) {
+  await page.screenshot({ path: `tools/shots/replay-${map}-${i}.png` });
+  await wait(i === 1 ? 20000 : 3000);
+}
+const fps = await page.evaluate(() => new Promise((res) => { let n = 0; const t0 = performance.now(); const f = () => { n++; if (performance.now() - t0 < 2000) requestAnimationFrame(f); else res(n / 2); }; requestAnimationFrame(f); }));
+console.log('replay fps', fps);
+await page.click('#btn-replay-exit');
+await wait(1500);
+console.log('results visible', await page.evaluate(() => !document.getElementById('screen-results').classList.contains('hidden')));
+await page.click('#btn-again');
+await wait(3000);
+console.log('new race mode ok', await page.evaluate(() => window.__bb.race.state));
+await browser.close();
