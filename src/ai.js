@@ -24,7 +24,9 @@ export function driveAI(race, b, dt) {
 
   const look = Math.round((16 + Math.abs(b.speed) * 0.5) / track.spacing);
   const idx = track.wrap(b.trackIdx + look);
-  const lane = clamp(ai.lane + Math.sin(ai.laneT) * 6 + ai.dodge, -(half - 5), half - 5);
+  const kit = b.hp < 65 ? race.medkits.nearestAhead(b, 90) : null;
+  const wanted = kit ? kit.lateral : ai.lane + Math.sin(ai.laneT) * 6;
+  const lane = clamp(wanted + ai.dodge, -(half - 5), half - 5);
   const target = track.point(idx, lane);
   const desired = Math.atan2(target.x - b.pos.x, target.z - b.pos.z);
   const diff = wrapAngle(desired - b.heading);

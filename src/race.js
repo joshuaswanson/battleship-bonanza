@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import { ITEMS } from './items.js';
-import { buildBoat, buildMine, buildMissile, buildHook, updateAimers, aimTurret, stepGun, stepLaser, newHeat, gunDirection, laserDirection, reloadMine, updateMineHolder, HULL_L } from './boatModel.js';
+import { buildBoat, buildMine, buildMissile, buildHook, updateAimers, aimTurret, stepGun, stepLaser, newHeat, gunDirection, laserDirection, launchMine, reloadMine, updateMineHolder, HULL_L } from './boatModel.js';
 import { waveHeight } from './water.js';
 import { createAI, driveAI } from './ai.js';
 import { toon, glow } from './toon.js';
+import { Medkits } from './medkits.js';
 
 export const LAPS = 3;
 export const MAX_HP = 100;
@@ -187,6 +188,7 @@ export class Race {
     this.bulletMesh.count = 0;
     scene.add(this.bulletMesh);
 
+    this.medkits = new Medkits(scene, track, fx, sfx);
     this.placeGrid();
   }
 
@@ -252,14 +254,18 @@ export class Race {
     this.updateHooks(dt);
     this.updatePulses(dt);
     this.updateLasers(dt);
+    this.medkits.update(this, dt, this.time);
     for (const b of this.boats) this.updateVisual(b, dt);
     this.updateStandings();
   }
 
   updateBoat(b, dt) {
     const t = this.track;
-    b.cooldowns[0] = Math.max(0, b.cooldowns[0] - dt);
-    b.cooldowns[1] = Math.max(0, b.cooldowns[1] - dt);
+    for (let i = 0; i < 2; i++) {
+      const was = b.cooldowns[i];
+      b.cooldowns[i] = Math.max(0, was - dt);
+      if (was > 0 && b.cooldowns[i] === 0 && b.items[i] === 'mines') reloadMine(b.model);
+    }
     b.invuln = Math.max(0, b.invuln - dt);
     b.flash = Math.max(0, b.flash - dt * 5);
     b.stun -= dt;
@@ -569,7 +575,6 @@ export class Race {
       const dir = new THREE.Vector3(Math.sin(b.heading), 0.6, Math.cos(b.heading)).normalize();
       this.missiles.push({ pos, dir, speed: Math.max(30, b.speed + 8), owner: b, target, life: 5, fizzle: 0, mesh });
       this.sfx.play('missile', b.pos);
-      if (target?.isPlayer) this.emit('warning', { text: 'Missile locked on you' });
     },
 
     mines(b) {
@@ -577,7 +582,7 @@ export class Race {
       const mesh = buildMine();
       this.scene.add(mesh);
       const vel = new THREE.Vector3(-Math.sin(b.heading) * 8 + b.vel.x * 0.4, 10, -Math.cos(b.heading) * 8 + b.vel.z * 0.4);
-      reloadMine(b.model);
+      launchMine(b.model);
       this.mines.push({ pos, vel, owner: b, age: 0, settled: false, mesh });
       const own = this.mines.filter((m) => m.owner === b);
       if (own.length > 4) this.removeMine(own[0], true);
@@ -1178,5 +1183,6 @@ export class Race {
     for (const m of this.mines) this.scene.remove(m.mesh);
     for (const h of this.hooks) this.scene.remove(h.mesh, h.rope);
     this.scene.remove(this.bulletMesh);
+    this.medkits.dispose();
   }
 }
