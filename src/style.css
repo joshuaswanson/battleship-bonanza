@@ -1308,6 +1308,49 @@ kbd {
   background: #ff4141;
 }
 
+.hud-dmg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.dmg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  font-family: var(--race);
+  font-weight: 900;
+  font-size: 1.7rem;
+  line-height: 1;
+  color: #ffe066;
+  -webkit-text-stroke: 4px var(--ink);
+  paint-order: stroke fill;
+  text-shadow: 0 3px 0 var(--ink);
+  white-space: nowrap;
+  will-change: transform, opacity;
+}
+
+.dmg[data-size='mid'] {
+  font-size: 2.2rem;
+  color: #ffa62b;
+}
+
+.dmg[data-size='big'] {
+  font-size: 2.9rem;
+  color: #ff5a3a;
+}
+
+.dmg.bump {
+  animation: dmg-bump 220ms cubic-bezier(0.2, 1.8, 0.4, 1);
+}
+
+@keyframes dmg-bump {
+  from {
+    scale: 1.5;
+  }
+}
+
 .hud-abilities {
   position: absolute;
   top: 0;

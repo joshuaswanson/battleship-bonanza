@@ -35,6 +35,8 @@ export class Hud {
     this.warn = $('hud-warn');
     this.reticle = $('hud-reticle');
     this.barsEl = $('hud-bars');
+    this.dmgEl = $('hud-dmg');
+    this.popups = [];
     this.returnEl = $('hud-return');
     this.returnArrow = $('return-arrow');
     this.slotsEl = $('hud-slots');
@@ -69,6 +71,8 @@ export class Hud {
     this.race = race;
     const player = race.player;
     this.feed.innerHTML = '';
+    this.dmgEl.innerHTML = '';
+    this.popups = [];
     this.center.textContent = '';
     this.warn.textContent = '';
     this.of.textContent = t('of', { n: race.boats.length });
@@ -149,6 +153,9 @@ export class Hud {
       case 'finalLap':
         this.pop(t('finalLap'));
         break;
+      case 'dmg':
+        this.addDamage(e.target, e.amount);
+        break;
       case 'heal':
         this.flash.className = 'hud-flash';
         void this.flash.offsetWidth;
@@ -228,6 +235,7 @@ export class Hud {
     else if (this.warnTime <= 0) this.warn.textContent = '';
 
     this.updateBars(race, camera);
+    this.updateDamage(camera, dt);
     this.placeAbilities(p, camera);
     const hull = Math.max(0, p.hp) / MAX_HP;
     this.hullFill.style.width = `${hull * 100}%`;
@@ -244,6 +252,42 @@ export class Hud {
     const y = (-v.y * 0.5 + 0.5) * innerHeight;
     this.slotsEl.style.transform = `translate(${Math.round(x + 100)}px, ${Math.round(y - 60)}px)`;
     this.slotsEl.classList.toggle('dim', !p.alive);
+  }
+
+  addDamage(target, amount) {
+    const el = document.createElement('div');
+    el.className = 'dmg';
+    this.dmgEl.append(el);
+    const popup = { target, amount, el, age: 0, drift: (Math.random() - 0.5) * 16, rise: 90 + Math.random() * 40, offset: (Math.random() - 0.5) * 18 };
+    this.popups.push(popup);
+    this.paintDamage(popup);
+  }
+
+  paintDamage(popup) {
+    const shown = Math.max(1, Math.round(popup.amount));
+    popup.el.textContent = `-${shown}`;
+    popup.el.dataset.size = shown >= 25 ? 'big' : shown >= 10 ? 'mid' : 'small';
+    popup.el.classList.add('bump');
+  }
+
+  updateDamage(camera, dt) {
+    this.popups = this.popups.filter((p) => {
+      p.age += dt;
+      if (p.age > 0.9) {
+        p.el.remove();
+        return false;
+      }
+      const v = this.projected.set(p.target.pos.x, p.target.pos.y + 2.5, p.target.pos.z).project(camera);
+      if (v.z > 1) {
+        p.el.style.opacity = 0;
+        return true;
+      }
+      const x = (v.x * 0.5 + 0.5) * innerWidth + p.offset + p.drift * p.age;
+      const y = (-v.y * 0.5 + 0.5) * innerHeight - p.age * p.rise;
+      p.el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`;
+      p.el.style.opacity = p.age < 0.6 ? 1 : 1 - (p.age - 0.6) / 0.3;
+      return true;
+    });
   }
 
   updateBars(race, camera) {

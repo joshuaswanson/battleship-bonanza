@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { ITEMS } from './items.js';
-import { buildBoat, buildMine, buildMissile, buildHook, aimTurret, spendMissile, reloadMissiles, updateMissileTips, missileDirection, stepGun, stepLaser, newHeat, gunDirection, laserDirection, launchMine, reloadMine, updateMineHolder, HULL_L } from './boatModel.js';
+import { buildBoat, buildMine, buildMissile, buildHook, laserWobble, aimTurret, spendMissile, reloadMissiles, updateMissileTips, missileDirection, stepGun, stepLaser, newHeat, gunDirection, laserDirection, launchMine, reloadMine, updateMineHolder, HULL_L } from './boatModel.js';
 import { waveHeight } from './water.js';
 import { createAI, driveAI } from './ai.js';
 import { toon, glow } from './toon.js';
@@ -557,6 +557,7 @@ export class Race {
     }
     target.hp -= amount;
     if (source !== target) source.stats.dealt += amount;
+    if (source.isPlayer && source !== target) this.emit('dmg', { target, amount });
     target.flash = 1;
     target.bump(kind === 'bullet' ? 1.5 : 5);
     target.vel.x += knockX;
@@ -729,11 +730,11 @@ export class Race {
       const c = target.center();
       const lead = c.distanceTo(origin) / BULLET_SPEED;
       c.addScaledVector(target.vel, lead).sub(origin).normalize();
-      dir.lerp(c, 0.45).normalize();
+      dir.lerp(c, 0.15).normalize();
     }
-    dir.x += (Math.random() - 0.5) * 0.16;
-    dir.y += (Math.random() - 0.3) * 0.06;
-    dir.z += (Math.random() - 0.5) * 0.16;
+    dir.x += (Math.random() - 0.5) * 0.34;
+    dir.y += (Math.random() - 0.35) * 0.1;
+    dir.z += (Math.random() - 0.5) * 0.34;
     dir.normalize();
     const vel = dir.clone().multiplyScalar(BULLET_SPEED).add(b.vel);
     this.bullets.push({ pos: origin, prev: origin.clone(), start: origin.clone(), vel, owner: b, life: 0.48 });
@@ -1076,8 +1077,10 @@ export class Race {
       const dir = laserDirection(b.model, new THREE.Vector3());
       dir.y = 0;
       dir.normalize();
+      const wobble = laserWobble(this.time, b.index * 3.7);
+      dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), wobble.yaw);
       const drop = (origin.y - b.waterY) / LASER_REACH;
-      dir.y = -drop;
+      dir.y = wobble.lift - drop;
       dir.normalize();
       const reach = LASER_REACH * Math.hypot(1, drop);
       const hit = this.raycastBoats(origin, dir, reach, b);
@@ -1096,7 +1099,7 @@ export class Race {
         bounce = { boat: bounceHit?.boat ?? null, dir: bounceDir };
       }
       if (!hit) {
-        this.fx.scorch(end.x, waveHeight(end.x, end.z, this.time) + 0.15, end.z);
+        if (end.y < waveHeight(end.x, end.z, this.time) + 2) this.fx.scorch(end.x, waveHeight(end.x, end.z, this.time) + 0.15, end.z);
         continue;
       }
       const last = b.laserTicks.get(hit.boat) ?? -Infinity;
