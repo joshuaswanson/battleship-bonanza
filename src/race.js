@@ -810,10 +810,10 @@ export class Race {
       if (m.fizzle > 0) {
         m.fizzle -= dt;
         if (m.fizzle <= 0) return this.explodeMissile(m, null, 0.5);
-      } else if (m.target && m.target.alive) {
+      } else if (m.target && m.target.alive && (m.lockTime -= dt) > 0) {
         desired.copy(m.target.center()).sub(m.pos).normalize();
         const angle = m.dir.angleTo(desired);
-        const maxTurn = 3.2 * dt;
+        const maxTurn = 2.5 * dt;
         m.dir.lerp(desired, angle > maxTurn ? maxTurn / angle : 1).normalize();
       } else {
         m.target = null;
@@ -1118,7 +1118,6 @@ export class Race {
     if (victim.has('saw')) {
       this.sfx.play('tink', victim.pos);
       this.fx.sparkBurst(end.x, end.y, end.z, 0xffffff, 16);
-      if (victim.isPlayer) this.emit('blocked', { kind: 'laser' });
       this.damage(victim, amount * SAW_LEAK, b, 'laser', { stun: 0.2 });
       const stray = bounce?.boat;
       if (stray && !(stray.has('saw') && stray !== b)) {
@@ -1198,7 +1197,7 @@ export class Race {
       const mesh = buildMissile();
       this.scene.add(mesh);
       spendMissile(b.model);
-      this.missiles.push({ pos, dir, speed: Math.max(fast(30), b.speed + fast(8)), owner: b, target: q.target, life: 5, fizzle: 0, mesh });
+      this.missiles.push({ pos, dir, speed: Math.max(fast(30), b.speed + fast(8)), owner: b, target: q.target, life: 5, fizzle: 0, mesh, lockTime: Math.random() < 0.35 ? 0.5 + Math.random() : Infinity });
       this.sfx.play('missile', b.pos);
     }
   }

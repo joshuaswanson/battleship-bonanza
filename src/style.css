@@ -1207,14 +1207,6 @@ kbd {
   will-change: transform;
 }
 
-.boat-bar i {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--paint);
-  border: 2.5px solid var(--ink);
-}
-
 .boat-bar-track {
   width: 84px;
   height: 14px;
@@ -1314,12 +1306,7 @@ kbd {
 
 .hull-dot {
   flex: none;
-  width: 22px;
-  height: 22px;
-  margin: 0 2px;
-  border-radius: 50%;
-  background: var(--paint);
-  border: 3px solid var(--ink);
+  width: 26px;
 }
 
 .ability .hull-fill {

@@ -73,7 +73,7 @@ export class Hud {
     this.warn.textContent = '';
     this.of.textContent = `of ${race.boats.length}`;
     this.slotsEl.innerHTML = `<div class="ability hull-row">
-          <i class="hull-dot" style="--paint:#${player.color.toString(16).padStart(6, '0')}"></i>
+          <i class="hull-dot"></i>
           <div class="ability-body">
             <div class="ability-top"><span>Hull</span><em class="hull-text"></em></div>
             <div class="ability-track"><div class="ability-fill hull-fill"></div></div>
@@ -96,7 +96,7 @@ export class Hud {
     this.slots = [];
     for (const el of this.slotsEl.querySelectorAll('.ability[data-slot]')) this.slots[Number(el.dataset.slot)] = el;
     this.barsEl.innerHTML = race.boats
-      .map((b) => `<div class="boat-bar${b.isPlayer ? ' me' : ''}" style="--paint:#${b.color.toString(16).padStart(6, '0')}"><i></i><div class="boat-bar-track"><div class="boat-bar-fill"></div></div></div>`)
+      .map((b) => `<div class="boat-bar"><div class="boat-bar-track"><div class="boat-bar-fill"></div></div></div>`)
       .join('');
     this.bars = [...this.barsEl.children].map((el) => {
       el.style.display = 'none';
@@ -171,9 +171,6 @@ export class Hud {
         break;
       case 'warning':
         this.setWarning(e.text);
-        break;
-      case 'blocked':
-        this.setWarning('Your saw is deflecting a laser', 1.1);
         break;
     }
   }
@@ -273,7 +270,7 @@ export class Hud {
 
   updateLock(race, camera, dt) {
     const p = race.player;
-    const threats = p.alive && !p.finished ? race.incomingThreats(p).filter((t) => t.kind === 'missile') : [];
+    const threats = p.alive && !p.finished ? race.incomingThreats(p).filter((t) => t.kind === 'missile' && t.m.lockTime > 0) : [];
     if (!threats.length) {
       this.lock.classList.remove('on');
       this.lockBeep = 0;

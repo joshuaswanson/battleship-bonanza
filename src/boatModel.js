@@ -811,7 +811,13 @@ export function updateMineHolder(refs, dt) {
   const rise = 1 + 2.4 * Math.pow(k - 1, 3) + 1.4 * Math.pow(k - 1, 2);
   mine.position.y = MINE_REST_Y - 2.4 * (1 - rise);
   mine.rotation.y = (1 - k) * 4;
-  if (k >= 1) refs.mineReload = null;
+  const grow = Math.min(1, Math.max(0, (k - 0.5) / 0.5));
+  const pop = 1 + 2.7 * Math.pow(grow - 1, 3) + 1.7 * Math.pow(grow - 1, 2);
+  mine.scale.setScalar(0.4 + 0.6 * pop);
+  if (k >= 1) {
+    mine.scale.setScalar(1);
+    refs.mineReload = null;
+  }
 }
 
 export function aimTurret(refs, id) {
