@@ -19,6 +19,7 @@ const COLORS = {
   cliff: 0xb3a59a,
   cliffDark: 0x8f8178,
   moss: 0x4fae4a,
+  mossDark: 0x3a8f3e,
   stripeRed: 0xff4141,
   stripeWhite: 0xf6f8ff,
   roof: 0x0e2a47,
@@ -205,54 +206,110 @@ function addPalm(batch, x, baseY, z, rand, { height, lean, dir }) {
   }
 }
 
-function domeGeometry(radius, height, steep) {
-  const points = [];
-  const steps = 22;
-  for (let i = 0; i <= steps; i++) {
-    const k = i / steps;
-    const r = radius * Math.pow(1 - Math.pow(k, steep), 0.55) * (1 + 0.05 * Math.sin(k * 19));
-    points.push(new THREE.Vector2(Math.max(0.01, r), height * k - 2));
-  }
-  const g = new THREE.LatheGeometry(points, 28);
+const domeRadius = (radius, steep, k) => radius * Math.pow(Math.max(0, 1 - Math.pow(k, steep)), 0.55) * (1 + 0.05 * Math.sin(k * 19));
+
+function lump(g) {
   const pos = g.attributes.position;
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i);
     const z = pos.getZ(i);
     const y = pos.getY(i);
-    const lump = 1 + 0.07 * Math.sin(Math.atan2(z, x) * 5 + y * 0.15) + 0.04 * Math.sin(y * 0.4);
-    pos.setXYZ(i, x * lump, y, z * lump);
+    const k = 1 + 0.07 * Math.sin(Math.atan2(z, x) * 5 + y * 0.15) + 0.04 * Math.sin(y * 0.4);
+    pos.setXYZ(i, x * k, y, z * k);
   }
   g.computeVertexNormals();
   return g;
 }
 
+function domeGeometry(radius, height, steep) {
+  const points = [];
+  for (let i = 0; i <= 22; i++) {
+    const k = i / 22;
+    points.push(new THREE.Vector2(Math.max(0.01, domeRadius(radius, steep, k)), height * k - 2));
+  }
+  return lump(new THREE.LatheGeometry(points, 28));
+}
+
+function forestBand(radius, height, steep, k0, k1, grow) {
+  const points = [new THREE.Vector2(Math.max(0.01, domeRadius(radius, steep, k0) * 0.98), height * k0 - 2)];
+  for (let i = 0; i <= 8; i++) {
+    const k = k0 + (k1 - k0) * (i / 8);
+    const bulge = 1 + grow * Math.sin((i / 8) * Math.PI) + grow * 0.4;
+    points.push(new THREE.Vector2(Math.max(0.01, domeRadius(radius, steep, k) * bulge), height * k - 2));
+  }
+  if (k1 < 1) points.push(new THREE.Vector2(Math.max(0.01, domeRadius(radius, steep, k1) * 0.98), height * k1 - 2));
+  return lump(new THREE.LatheGeometry(points, 28));
+}
+
 function addSeaStack(batch, x, z, rand) {
   const roll = rand();
-  const shape = roll < 0.5 ? 'dome' : roll < 0.8 ? 'spire' : 'twin';
+  const shape = roll < 0.3 ? 'dome' : roll < 0.55 ? 'spire' : roll < 0.7 ? 'twin' : 'crag';
   const footprint = [];
-  const peak = (px, pz, radius, height, steep, lean) => {
+  const peak = (px, pz, radius, height, steep, lean, kind) => {
     const tilt = mat(px, 0, pz, 1, 1, 1, lean * Math.cos(rand() * 6), rand() * Math.PI * 2, lean * Math.sin(rand() * 6));
     batch.add(rand() < 0.5 ? 'cliff' : 'cliffDark', domeGeometry(radius, height, steep), tilt);
-    for (let i = 0; i < 3 + Math.floor(rand() * 4); i++) {
-      const k = 0.15 + rand() * 0.55;
-      const a = rand() * Math.PI * 2;
-      const r = radius * Math.pow(1 - Math.pow(k, steep), 0.55) * 0.92;
-      const s = radius * (0.12 + rand() * 0.14);
-      batch.add('moss', LOW_SPHERE, mat(px + Math.cos(a) * r, height * k - 2, pz + Math.sin(a) * r, s * 1.4, s * 0.55, s * 1.4));
+    if (kind === 'dome') {
+      const k1 = 0.16 + rand() * 0.1;
+      batch.add('moss', forestBand(radius, height, steep, 0.03, k1, 0.07), tilt);
+      const trees = 12 + Math.floor(rand() * 6);
+      for (let i = 0; i < trees; i++) {
+        const a = (i / trees) * Math.PI * 2 + rand() * 0.3;
+        const k = k1 * (0.75 + rand() * 0.35);
+        const rr = domeRadius(radius, steep, k) * 1.02;
+        const s = radius * (0.1 + rand() * 0.08);
+        const local = new THREE.Vector3(Math.cos(a) * rr, height * k - 2 + s * 0.3, Math.sin(a) * rr).applyMatrix4(tilt);
+        batch.add(i % 3 ? 'moss' : 'mossDark', LOW_SPHERE, mat(local.x, local.y, local.z, s, s * 0.85, s));
+      }
+      batch.add('mossDark', forestBand(radius, height, steep, 0.86, 1, 0.08), tilt);
+    } else {
+      batch.add('moss', forestBand(radius, height, steep, 0.9, 1, 0.12), tilt);
+      const top = new THREE.Vector3(0, height - 2, 0).applyMatrix4(tilt);
+      for (let i = 0; i < 4; i++) {
+        const a = rand() * Math.PI * 2;
+        const s = radius * (0.25 + rand() * 0.2);
+        batch.add(i % 2 ? 'moss' : 'mossDark', LOW_SPHERE, mat(top.x + Math.cos(a) * radius * 0.25, top.y + s * 0.2, top.z + Math.sin(a) * radius * 0.25, s, s * 0.7, s));
+      }
+      if (rand() < 0.6) addPalm(batch, top.x, top.y - 0.3, top.z, rand, { height: 6 + rand() * 4, lean: 0.2 + rand() * 0.3, dir: rand() * Math.PI * 2 });
     }
     batch.add('foam', RING, mat(px, 0.2, pz, radius * 1.06, 6, radius * 1.06));
     footprint.push({ x: px, z: pz, rx: radius, rz: radius, rot: 0 });
   };
   if (shape === 'dome') {
-    peak(x, z, 16 + rand() * 12, 60 + rand() * 45, 2.6, 0.08);
+    peak(x, z, 16 + rand() * 12, 60 + rand() * 45, 2.6, 0.08, 'dome');
   } else if (shape === 'spire') {
-    peak(x, z, 7 + rand() * 5, 45 + rand() * 40, 4, 0.12);
-  } else {
+    peak(x, z, 7 + rand() * 5, 45 + rand() * 40, 4, 0.12, 'spire');
+  } else if (shape === 'twin') {
     const a = rand() * Math.PI * 2;
     const r1 = 14 + rand() * 8;
     const r2 = 9 + rand() * 6;
-    peak(x, z, r1, 55 + rand() * 30, 2.6, 0.06);
-    peak(x + Math.cos(a) * (r1 + r2 * 0.6), z + Math.sin(a) * (r1 + r2 * 0.6), r2, 32 + rand() * 20, 2.4, 0.1);
+    peak(x, z, r1, 55 + rand() * 30, 2.6, 0.06, 'dome');
+    peak(x + Math.cos(a) * (r1 + r2 * 0.6), z + Math.sin(a) * (r1 + r2 * 0.6), r2, 32 + rand() * 20, 2.4, 0.1, 'spire');
+  } else {
+    const count = 4 + Math.floor(rand() * 4);
+    const spread = 18 + rand() * 14;
+    let highest = null;
+    for (let i = 0; i < count; i++) {
+      const a = rand() * Math.PI * 2;
+      const d = i === 0 ? 0 : spread * (0.3 + rand() * 0.6);
+      const size = (i === 0 ? 14 : 7) + rand() * 9;
+      const height = size * (0.9 + rand() * 0.8);
+      const bx = x + Math.cos(a) * d;
+      const bz = z + Math.sin(a) * d;
+      batch.add(rand() < 0.5 ? 'cliff' : 'cliffDark', ROCK, mat(bx, height * 0.35, bz, size, height, size, rand() * 0.4, rand() * 3, rand() * 0.4));
+      batch.add(i % 2 ? 'grass' : 'moss', SPHERE, mat(bx, height * 0.35 + height * 0.82, bz, size * 0.62, size * 0.2, size * 0.62));
+      batch.add('foam', RING, mat(bx, 0.2, bz, size * 1.15, 5, size * 1.15));
+      footprint.push({ x: bx, z: bz, rx: size, rz: size, rot: 0 });
+      if (!highest || height > highest.height) highest = { bx, bz, height, size };
+    }
+    const palms = 1 + Math.floor(rand() * 3);
+    for (let i = 0; i < palms; i++) {
+      const a = rand() * Math.PI * 2;
+      addPalm(batch, highest.bx + Math.cos(a) * highest.size * 0.25, highest.height * 1.15, highest.bz + Math.sin(a) * highest.size * 0.25, rand, {
+        height: 7 + rand() * 5,
+        lean: 0.2 + rand() * 0.4,
+        dir: a,
+      });
+    }
   }
   const base = footprint[0];
   for (let i = 0; i < 2 + Math.floor(rand() * 3); i++) {
@@ -567,13 +624,13 @@ export function createWorld(scene, track) {
   shores.push(...addIsland(batch, start.x, start.z, 13, rand, { clearCenter: 5 }));
 
   const stacks = [];
-  for (let tries = 0; stacks.length < 9 && tries < 800; tries++) {
+  for (let tries = 0; stacks.length < 12 && tries < 900; tries++) {
     const x = (rand() - 0.5) * 1000;
     const z = (rand() - 0.5) * 960 + 60;
     const clearance = track.project(x, z).distance - half;
     if (clearance < 45 || clearance > 260) continue;
     if (islands.some((o) => Math.hypot(o.x - x, o.z - z) < o.r + 40)) continue;
-    if (stacks.some((s) => Math.hypot(s.x - x, s.z - z) < 140)) continue;
+    if (stacks.some((s) => Math.hypot(s.x - x, s.z - z) < 120)) continue;
     stacks.push({ x, z });
     shores.push(...addSeaStack(batch, x, z, rand));
   }
