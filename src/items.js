@@ -154,14 +154,14 @@ export const ITEMS = {
     name: 'Laser',
     group: 'weapons',
     hold: true,
-    blurb: 'Hold for a sizzling beam and steer to slice up anyone in the way. Melts armor, but saw blades bounce it back at you.',
+    blurb: 'Hold for a sizzling beam and slice up anyone in the way. Melts armor, but saw blades deflect it.',
   },
   saw: {
     stats: { punch: 2, tough: 1 },
     name: 'Saw blade',
     group: 'weapons',
     passive: true,
-    blurb: 'Slice up anyone who gets too close and deflect lasers!',
+    blurb: 'Slice up anyone who gets too close and deflect lasers wherever!',
   },
   missiles: {
     stats: { punch: 3 },

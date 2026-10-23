@@ -165,7 +165,7 @@ export class Hud {
         this.setWarning(e.text);
         break;
       case 'blocked':
-        this.setWarning('Laser bounced off your saw', 1.1);
+        this.setWarning('Your saw is deflecting a laser', 1.1);
         break;
     }
   }

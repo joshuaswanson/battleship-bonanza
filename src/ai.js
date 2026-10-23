@@ -83,8 +83,7 @@ function useItems(race, b, ai) {
     }
     if (b.items[slot] === 'laser') {
       const t = race.findTarget(b, race.gunArc('laser', 70));
-      const bounces = t?.has('saw') && !b.has('saw');
-      b.laser.trigger = !!t && !bounces && b.laser.heat < 0.7 && Math.random() < ai.aggression + 0.3;
+      b.laser.trigger = !!t && b.laser.heat < 0.7 && Math.random() < ai.aggression + 0.3;
       continue;
     }
     if (b.cooldowns[slot] > 0) continue;

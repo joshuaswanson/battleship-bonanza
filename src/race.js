@@ -17,6 +17,7 @@ const OUTER_LIMIT = 45;
 const SHORE_MARGIN = 2.2;
 const SAW_WORK = 3;
 const SAW_REST = 1.5;
+const SAW_LEAK = 0.4;
 const EASY_HOOK = (o) => o.has('spikes') || o.has('jetpack');
 const REVERSE_SPEED = fast(14);
 const ACCEL = fast(22);
@@ -45,7 +46,7 @@ const VERBS = {
   spikes: 'poked',
   bullet: 'peppered',
   laser: 'zapped',
-  reflect: 'bounced a laser back into',
+  reflect: 'bounced a laser into',
   saw: 'sliced',
   missile: 'blasted',
   mine: 'mined',
@@ -1091,9 +1092,16 @@ export class Race {
       const shielded = hit && hit.boat.model.sawYaw;
       const end = shielded ? this.shieldAgainst(hit.boat, b) : origin.clone().addScaledVector(dir, hit ? hit.t : reach);
       this.fx.beam(origin, end, 0xff4fd8, 0.5, 0.05, 1);
+      let bounce = null;
       if (shielded) {
-        const back = b.has('saw') ? end.clone().add(new THREE.Vector3(0, 40, 0).addScaledVector(dir, -20)) : b.center();
-        this.fx.beam(end, back, 0xff4fd8, 0.45, 0.05, 2);
+        b.bounceDrift = (b.bounceDrift ?? Math.random() * 6) + dt * 1.3;
+        const swing = Math.sin(b.bounceDrift) * 1.4 + Math.sin(b.bounceDrift * 2.7) * 0.5;
+        const back = Math.atan2(-dir.x, -dir.z) + swing;
+        const bounceDir = new THREE.Vector3(Math.sin(back), 0, Math.cos(back));
+        const bounceHit = this.raycastBoats(end, bounceDir, 60, hit.boat);
+        const bounceEnd = end.clone().addScaledVector(bounceDir, bounceHit ? bounceHit.t : 60);
+        this.fx.beam(end, bounceEnd, 0xff4fd8, 0.45, 0.05, bounceHit ? 6 : 1);
+        bounce = { boat: bounceHit?.boat ?? null, dir: bounceDir };
       }
       if (!hit) {
         this.fx.scorch(end.x, waveHeight(end.x, end.z, this.time) + 0.15, end.z);
@@ -1102,17 +1110,20 @@ export class Race {
       const last = b.laserTicks.get(hit.boat) ?? -Infinity;
       if (this.time - last < 0.35) continue;
       b.laserTicks.set(hit.boat, this.time);
-      this.laserHit(b, hit.boat, end, dir, this.time - last > 1 ? 14 : 7);
+      this.laserHit(b, hit.boat, end, dir, this.time - last > 1 ? 14 : 7, bounce);
     }
   }
 
-  laserHit(b, victim, end, dir, amount) {
+  laserHit(b, victim, end, dir, amount, bounce) {
     if (victim.has('saw')) {
       this.sfx.play('tink', victim.pos);
       this.fx.sparkBurst(end.x, end.y, end.z, 0xffffff, 16);
       if (victim.isPlayer) this.emit('blocked', { kind: 'laser' });
-      if (b.has('saw')) return;
-      this.damage(b, amount, victim, 'reflect', { knockX: dir.x * -4, knockZ: dir.z * -4, stun: 0.3 });
+      this.damage(victim, amount * SAW_LEAK, b, 'laser', { stun: 0.2 });
+      const stray = bounce?.boat;
+      if (stray && !(stray.has('saw') && stray !== b)) {
+        this.damage(stray, amount * SAW_LEAK, victim, 'reflect', { knockX: bounce.dir.x * 2, knockZ: bounce.dir.z * 2, stun: 0.2 });
+      }
       return;
     }
     this.fx.sparkBurst(end.x, end.y, end.z, 0xff4fd8, 12);
