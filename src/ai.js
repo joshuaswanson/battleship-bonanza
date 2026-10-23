@@ -39,10 +39,7 @@ export function driveAI(race, b, dt) {
   b.control.throttle = Math.abs(diff) > 0.9 ? 0.5 : 1;
 
   avoidMines(race, b, ai);
-  if (b.gun.heat > 0.85) b.gun.trigger = false;
-  if (b.laser.heat > 0.85) b.laser.trigger = false;
-  if (b.flame.heat > 0.85) b.flame.trigger = false;
-  if (b.sawHeat.heat > 0.85) b.sawHeat.trigger = false;
+  for (const heat of Object.values(b.heat)) if (heat.heat > 0.85) heat.trigger = false;
 
   if (race.player && !race.attract && !b.isPlayer) {
     const gap = race.player.dist - b.dist;
@@ -84,22 +81,22 @@ function useItems(race, b, ai) {
     if (ITEMS[id].hold) b.aim[id] = race.findTarget(b, { ...race.gunArc(b, id, HOLD_RANGE[id]), filter: (o) => race.willAttack(b, o) });
     if (b.items[slot] === 'machinegun') {
       const t = b.aim.machinegun;
-      b.gun.trigger = !!t && !t.has('armor') && b.gun.heat < 0.7 && Math.random() < ai.aggression + 0.3;
+      b.heat.machinegun.trigger = !!t && !t.has('armor') && b.heat.machinegun.heat < 0.7 && Math.random() < ai.aggression + 0.3;
       continue;
     }
     if (b.items[slot] === 'flamethrower') {
       const t = b.aim.flamethrower;
-      b.flame.trigger = !!t && b.flame.heat < 0.75 && Math.random() < ai.aggression + 0.4;
+      b.heat.flamethrower.trigger = !!t && b.heat.flamethrower.heat < 0.75 && Math.random() < ai.aggression + 0.4;
       continue;
     }
     if (b.items[slot] === 'saw') {
       const t = b.aim.saw;
-      b.sawHeat.trigger = !!t && !t.has('armor') && !t.has('spikes') && b.sawHeat.heat < 0.75 && Math.random() < ai.aggression + 0.4;
+      b.heat.saw.trigger = !!t && !t.has('armor') && !t.has('spikes') && b.heat.saw.heat < 0.75 && Math.random() < ai.aggression + 0.4;
       continue;
     }
     if (b.items[slot] === 'laser') {
       const t = b.aim.laser;
-      b.laser.trigger = !!t && b.laser.heat < 0.7 && Math.random() < ai.aggression + 0.3;
+      b.heat.laser.trigger = !!t && b.heat.laser.heat < 0.7 && Math.random() < ai.aggression + 0.3;
       continue;
     }
     if (b.cooldowns[slot] > 0) continue;

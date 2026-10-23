@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GROUPS, ITEMS, ITEM_IDS, STATS, statsFor } from './items.js';
 import { t, itemName, itemBlurb, comboName } from './i18n.js';
-import { buildBoat, buildItemModel, slotLock, slotCenter, laserWobble, aimLaserGun, buildMine, buildMissile, buildHook, aimTurret, spendMissile, reloadMissile, updateMissileTips, missileDirection, stepGun, stepLaser, stepFlame, stepSaw, flameDirection, newHeat, gunDirection, laserDirection, launchMine, reloadMine, updateMineHolder } from './boatModel.js';
+import { buildBoat, buildItemModel, slotLock, laserWobble, aimLaserGun, buildMine, buildMissile, buildHook, aimTurret, spendMissile, reloadMissile, updateMissileTips, missileDirection, stepGun, stepLaser, stepFlame, stepSaw, flameDirection, newHeat, gunDirection, laserDirection, launchMine, reloadMine, updateMineHolder } from './boatModel.js';
 import { createWater, seaWaves as waveHeight } from './water.js';
 import { Effects } from './effects.js';
 import { SUN_DIR } from './world.js';

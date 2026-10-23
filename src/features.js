@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { toon, outlined, INK } from './toon.js';
+import { toon, outlined } from './toon.js';
 import { waveHeight } from './water.js';
 import { fast } from './tuning.js';
 

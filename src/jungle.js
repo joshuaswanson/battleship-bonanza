@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { createWater } from './water.js';
-import { toon, glow, outlined, mulberry32 } from './toon.js';
-import { Batcher, cullChunks, slicer, COLORS, mat, LOW_SPHERE, CYLINDER, CONE, ROCK, addPalm, createSky, createCloud, createArch, SUN_DIR } from './world.js';
+import { toon, glow, mulberry32 } from './toon.js';
+import { Batcher, cullChunks, slicer, COLORS, mat, CONE, ROCK, addPalm, createSky, createCloud, createArch, SUN_DIR } from './world.js';
 
 const CELL = 3;
 const MARGIN = 340;
@@ -489,7 +489,7 @@ function buildCrystals(track, from, to, levelAt) {
 const CRYSTAL = new THREE.OctahedronGeometry(1, 0);
 
 function buildTunnel(track) {
-  const { river, spacing, N } = track;
+  const { river, spacing } = track;
   const kIn = Math.round(river.tunnelIn / spacing);
   const kOut = Math.round(river.tunnelOut / spacing);
   const kSeam = Math.round(river.seam / spacing);
