@@ -19,7 +19,13 @@ const TARGETING = {
 };
 
 export class Hud {
-  constructor(track) {
+  constructor(track, sfx) {
+    this.sfx = sfx;
+    this.lock = $('hud-lock');
+    this.lockVignette = $('lock-vignette');
+    this.lockArrow = $('lock-arrow');
+    this.lockPhase = 0;
+    this.lockBeep = 0;
     this.root = $('hud');
     this.place = $('hud-place');
     this.of = $('hud-of');
@@ -29,7 +35,7 @@ export class Hud {
     this.center = $('hud-center');
     this.warn = $('hud-warn');
     this.reticle = $('hud-reticle');
-    this.hull = $('hud-hull');
+    this.barsEl = $('hud-bars');
     this.slotsEl = $('hud-slots');
     this.flash = $('hud-flash');
     this.map = $('hud-map');
@@ -76,6 +82,13 @@ export class Hud {
       })
       .join('');
     this.slots = [...this.slotsEl.querySelectorAll('.slot')];
+    this.barsEl.innerHTML = race.boats
+      .map((b) => `<div class="boat-bar${b.isPlayer ? ' me' : ''}" style="--paint:#${b.color.toString(16).padStart(6, '0')}"><i></i><div class="boat-bar-track"><div class="boat-bar-fill"></div></div></div>`)
+      .join('');
+    this.bars = [...this.barsEl.children].map((el) => {
+      el.style.display = 'none';
+      return { el, fill: el.querySelector('.boat-bar-fill'), shown: false };
+    });
     this.slotLabels = this.slots.map((slot) => slot.querySelector('.slot-state'));
     this.lastPlace = 0;
   }
@@ -122,6 +135,11 @@ export class Hud {
       case 'finalLap':
         this.pop('Final lap');
         break;
+      case 'heal':
+        this.flash.className = 'hud-flash';
+        void this.flash.offsetWidth;
+        this.flash.className = 'hud-flash on heal';
+        break;
       case 'dodge':
         this.pop('Dodged!', 'go');
         break;
@@ -158,9 +176,6 @@ export class Hud {
     }
     this.lap.textContent = p.finished ? 'Finished' : `Lap ${p.lap} of ${race.laps}`;
     this.time.textContent = formatTime(p.finished ? p.finishTime : race.clock);
-    const hp = Math.max(0, p.hp) / MAX_HP;
-    this.hull.style.width = `${hp * 100}%`;
-    this.hull.classList.toggle('low', hp < 0.35);
 
     p.items.forEach((id, i) => {
       const item = ITEMS[id];
@@ -190,7 +205,71 @@ export class Hud {
     if (p.wrongWay > 1) this.warn.textContent = 'Wrong way';
     else if (this.warnTime <= 0) this.warn.textContent = '';
 
+    this.updateBars(race, camera);
+    this.updateLock(race, camera, dt);
     this.drawMap(race);
+  }
+
+  updateBars(race, camera) {
+    race.boats.forEach((b, i) => {
+      const bar = this.bars[i];
+      const v = this.projected.set(b.pos.x, b.pos.y + 4.8, b.pos.z);
+      const dist = v.distanceTo(camera.position);
+      v.project(camera);
+      const visible = b.alive && !b.finished && v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1 && dist < 170;
+      if (visible !== bar.shown) {
+        bar.el.style.display = visible ? 'flex' : 'none';
+        bar.shown = visible;
+      }
+      if (!visible) return;
+      const scale = Math.min(1.15, Math.max(0.45, 26 / dist));
+      const x = (v.x * 0.5 + 0.5) * innerWidth;
+      const y = (-v.y * 0.5 + 0.5) * innerHeight;
+      bar.el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -100%) scale(${scale})`;
+      const hp = Math.max(0, b.hp) / MAX_HP;
+      bar.fill.style.width = `${hp * 100}%`;
+      bar.fill.dataset.level = hp > 0.6 ? 'high' : hp > 0.3 ? 'mid' : 'low';
+    });
+  }
+
+  updateLock(race, camera, dt) {
+    const p = race.player;
+    const threats = p.alive && !p.finished ? race.incomingThreats(p).filter((t) => t.kind === 'missile') : [];
+    if (!threats.length) {
+      this.lock.classList.remove('on');
+      this.lockBeep = 0;
+      return;
+    }
+    const nearest = threats.reduce((a, b) => (a.eta < b.eta ? a : b));
+    const urgency = Math.min(1, Math.max(0, 1 - nearest.eta / 3));
+    this.lock.classList.add('on');
+    this.lockPhase += dt * (4 + urgency * 22);
+    const pulse = 0.5 + 0.5 * Math.sin(this.lockPhase);
+    this.lockVignette.style.opacity = (0.35 + urgency * 0.4) + pulse * (0.25 + urgency * 0.2);
+    this.lock.classList.toggle('flash', pulse > 0.5);
+
+    this.lockBeep -= dt;
+    if (this.lockBeep <= 0) {
+      this.lockBeep = Math.max(0.06, 0.5 - urgency * 0.44);
+      this.sfx.play(urgency > 0.8 ? 'lockHigh' : 'lock');
+    }
+    if (urgency > 0.5) race.emit('lockShake', { amount: (urgency - 0.5) * 0.5 });
+
+    const v = this.projected.copy(nearest.m.pos).project(camera);
+    let x = v.x;
+    let y = v.y;
+    if (v.z > 1) {
+      x = -x;
+      y = -y;
+    }
+    if (Math.abs(x) < 0.02 && Math.abs(y) < 0.02) y = -1;
+    const angle = Math.atan2(-y * innerHeight, x * innerWidth);
+    const rx = innerWidth * 0.42;
+    const ry = innerHeight * 0.38;
+    const px = innerWidth / 2 + Math.cos(angle) * rx;
+    const py = innerHeight / 2 + Math.sin(angle) * ry;
+    const bob = 1 + pulse * 0.15;
+    this.lockArrow.style.transform = `translate(${px}px, ${py}px) rotate(${angle}rad) scale(${bob})`;
   }
 
   updateReticle(race, camera) {
@@ -252,6 +331,20 @@ export class Hud {
     ctx.arc(sx, sy, 4, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
+
+    for (const kit of race.medkits.active) {
+      const [kx, ky] = this.toMap(kit.x, kit.z);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.strokeStyle = '#0E2A47';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(kx, ky, 5.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#FF4141';
+      ctx.fillRect(kx - 3.5, ky - 1.2, 7, 2.4);
+      ctx.fillRect(kx - 1.2, ky - 3.5, 2.4, 7);
+    }
 
     const sorted = [...race.boats].sort((a, b) => (a.isPlayer ? 1 : 0) - (b.isPlayer ? 1 : 0));
     for (const b of sorted) {

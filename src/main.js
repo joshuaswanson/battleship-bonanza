@@ -38,7 +38,7 @@ const world = createWorld(scene, track);
 const fx = new Effects(scene);
 const sfx = new Sfx();
 const input = new Input();
-const hud = new Hud(track);
+const hud = new Hud(track, sfx);
 
 const AI_NAMES = ['Noodle', 'Dumpling', 'Pickle', 'Marshmallow', 'Waffles', 'Gumdrop', 'Pudding', 'Turnip', 'Meatball'];
 
@@ -252,6 +252,7 @@ function handleEvents() {
     hud.handle(e);
     if (e.type === 'hurt') shake = Math.max(shake, e.kind === 'bullet' ? 0.25 : 1.2);
     if (e.type === 'ko') shake = 1.6;
+    if (e.type === 'lockShake') shake = Math.max(shake, e.amount);
     if (e.type === 'finish') resultsTimer = 3.5;
   }
   race.events.length = 0;
