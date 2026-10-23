@@ -1,3 +1,6 @@
+const RACE_VOLUME = 0.2;
+const SFX_VOLUME = 0.85;
+
 function track(file, volume) {
   const audio = new Audio(`${import.meta.env.BASE_URL}${file}`);
   audio.loop = true;
@@ -11,7 +14,7 @@ export class Sfx {
     this.soundOn = localStorage.getItem('bb-sound') !== '0';
     this.musicOn = localStorage.getItem('bb-music') !== '0';
     this.listener = null;
-    this.tracks = { menu: track('menu-music.mp3', 0.45), race: track('race-music.mp3', 0.35) };
+    this.tracks = { menu: track('menu-music.mp3', 0.45), race: track('race-music.mp3', RACE_VOLUME) };
     this.musicWanted = null;
     this.music = this.tracks.menu;
   }
@@ -28,15 +31,21 @@ export class Sfx {
   }
 
   duckMusic(on) {
-    this.tracks.race.volume = on ? 0.12 : 0.35;
+    this.tracks.race.volume = on ? RACE_VOLUME * 0.35 : RACE_VOLUME;
   }
 
   unlock() {
     if (!this.ctx) {
       this.ctx = new AudioContext();
       this.master = this.ctx.createGain();
-      this.master.gain.value = this.soundOn ? 0.5 : 0;
-      this.master.connect(this.ctx.destination);
+      this.master.gain.value = this.soundOn ? SFX_VOLUME : 0;
+      const limiter = this.ctx.createDynamicsCompressor();
+      limiter.threshold.value = -14;
+      limiter.knee.value = 8;
+      limiter.ratio.value = 6;
+      limiter.attack.value = 0.003;
+      limiter.release.value = 0.2;
+      this.master.connect(limiter).connect(this.ctx.destination);
       this.noiseBuffer = this.ctx.createBuffer(1, this.ctx.sampleRate, this.ctx.sampleRate);
       const data = this.noiseBuffer.getChannelData(0);
       for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
@@ -57,7 +66,7 @@ export class Sfx {
   setSound(on) {
     this.soundOn = on;
     localStorage.setItem('bb-sound', on ? '1' : '0');
-    if (this.master) this.master.gain.value = on ? 0.5 : 0;
+    if (this.master) this.master.gain.value = on ? SFX_VOLUME : 0;
   }
 
   setMusic(on) {
@@ -118,13 +127,17 @@ export class Sfx {
     if (!(v >= 0.04)) return;
     switch (name) {
       case 'shoot':
-        this.tone(900, 0.05, { type: 'square', vol: 0.06 * v, to: 300 });
+        this.noise(0.07, { vol: 0.22 * v, freq: 2600, type: 'bandpass', to: 700 });
+        this.tone(150, 0.07, { type: 'square', vol: 0.1 * v, to: 55 });
+        this.tone(2400, 0.02, { type: 'square', vol: 0.03 * v, to: 900 });
         break;
       case 'laser':
-        this.tone(2200, 0.15, { type: 'sine', vol: 0.12 * v, to: 700 });
-        this.tone(170, 1.3, { type: 'sawtooth', vol: 0.07 * v, to: 330 });
-        this.tone(1300, 1.3, { type: 'sine', vol: 0.04 * v, to: 900 });
-        this.noise(1.3, { vol: 0.08 * v, freq: 3200, type: 'bandpass', to: 1800 });
+        this.tone(3200, 0.25, { type: 'sawtooth', vol: 0.12 * v, to: 400 });
+        this.tone(55, 1.3, { type: 'sawtooth', vol: 0.16 * v, to: 62 });
+        this.tone(110, 1.3, { type: 'square', vol: 0.07 * v, to: 124 });
+        this.tone(880, 1.3, { type: 'sawtooth', vol: 0.035 * v, to: 940 });
+        this.noise(1.3, { vol: 0.12 * v, freq: 2400, type: 'bandpass', to: 1600 });
+        this.noise(0.3, { vol: 0.2 * v, freq: 600, to: 120 });
         break;
       case 'boom':
         this.noise(0.7, { vol: 0.5 * v, freq: 900, to: 80 });
@@ -222,10 +235,10 @@ export class Sfx {
         this.tone(140, 0.09, { type: 'square', vol: 0.06 });
         break;
       case 'beep':
-        this.tone(520, 0.18, { type: 'square', vol: 0.12 });
+        this.tone(520, 0.22, { type: 'square', vol: 0.22 });
         break;
       case 'go':
-        this.tone(1040, 0.5, { type: 'square', vol: 0.12 });
+        this.tone(1040, 0.6, { type: 'square', vol: 0.22 });
         break;
       case 'lap':
         [660, 880, 1320].forEach((f, i) => this.tone(f, 0.16, { type: 'triangle', vol: 0.15, delay: i * 0.08 }));

@@ -23,6 +23,7 @@ import * as course from './race/course.js';
 import * as visuals from './race/visuals.js';
 
 export { LAPS, MAX_HP, BASE_SPEED } from './race/shared.js';
+export const COUNTDOWN = 3.7;
 
 const MODULES = [machinegun, missiles, mines, grapple, emp, jetpack, laser, flamethrower, saw, spikes, aiming, course, visuals];
 
@@ -49,7 +50,7 @@ export class Race {
     this.clock = 0;
     this.finishCount = 0;
     this.state = attract ? 'racing' : 'countdown';
-    this.countdown = 4.2;
+    this.countdown = COUNTDOWN;
     this.lastCount = 5;
     this.order = [...this.boats];
 

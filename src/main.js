@@ -10,11 +10,12 @@ import { createWorld } from './world.js';
 import { createJungle } from './jungle.js';
 import { MAPS } from './maps.js';
 import { Recorder, Replay } from './replay.js';
+import { Hints } from './hints.js';
 import { setSurface, waveHeight } from './water.js';
 import { Effects } from './effects.js';
 import { Sfx } from './audio.js';
 import { Input } from './input.js';
-import { Race, BASE_SPEED } from './race.js';
+import { Race, BASE_SPEED, COUNTDOWN } from './race.js';
 import { Hud, formatTime } from './hud.js';
 import { LANGUAGES, t, ordinal, itemInSentence, getLang, setLang, applyStatic } from './i18n.js';
 import { Loadout, PAINTS } from './loadout.js';
@@ -190,6 +191,7 @@ function newRace(attract, map = pickMap(attract)) {
 }
 
 function startReplay() {
+  hints.stop();
   if (!recorder?.frames.length) return;
   recorder.detach();
   replay = new Replay(recorder, scene, sfx);
@@ -346,7 +348,7 @@ function goMaps() {
 async function startRace() {
   if (!setup.items.every(Boolean)) return;
   sfx.unlock();
-  sfx.playMusic('race');
+  sfx.playMusic(null);
   sfx.duckMusic(false);
   saveSetup();
   const map = pickMap(false);
@@ -355,6 +357,7 @@ async function startRace() {
   mode = 'race';
   resultsTimer = 0;
   hud.setup(race);
+  hints.start(race, touchOnly);
   hud.show(true);
   showScreen(null);
   document.activeElement?.blur();
@@ -419,6 +422,7 @@ function renderLanguagePicker() {
 applyStatic();
 renderLanguagePicker();
 const touchOnly = matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches;
+const hints = new Hints($('hud-hint'));
 document.body.classList.toggle('touch-only', touchOnly);
 input.bindTouch($('touch-pad'));
 input.touchMode = touchOnly;
@@ -582,7 +586,7 @@ function updateCamera(dt) {
     const chase = new THREE.Vector3(b.pos.x - fx * back, b.waterY + 6 + b.yOffset * (b.air?.fall ? 0.95 : 0.6), b.pos.z - fz * back);
     let desired = chase;
     if (race.state === 'countdown') {
-      const u = Math.min(1, Math.max(0, (4.2 - race.countdown) / 3.2));
+      const u = Math.min(1, Math.max(0, (COUNTDOWN - race.countdown) / (COUNTDOWN - 1)));
       const e = u * u * (3 - 2 * u);
       const a = 0.25 * Math.PI + e * 0.75 * Math.PI;
       const radius = 15 + e * (back - 15);
@@ -623,6 +627,7 @@ function handleEvents() {
       cam.look.y += e.dy;
     }
     if (e.type === 'finish') resultsTimer = 3.5;
+    if (e.type === 'go') sfx.playMusic('race');
   }
   race.events.length = 0;
 }
@@ -657,6 +662,7 @@ function frame(now) {
       time += (steps - 1) * dt;
     }
     handleEvents();
+    if (mode === 'race') hints.update(dt, race, state, pressed);
     fx.update(dt);
     current.world.update(time, dt, camera);
     if (resultsTimer > 0) {
