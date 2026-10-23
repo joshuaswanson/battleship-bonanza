@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { ITEMS } from './items.js';
-import { buildBoat, buildMine, buildMissile, buildHook, laserWobble, aimTurret, spendMissile, reloadMissiles, updateMissileTips, missileDirection, stepGun, stepLaser, newHeat, gunDirection, laserDirection, launchMine, reloadMine, updateMineHolder, HULL_L } from './boatModel.js';
+import { buildBoat, buildMine, buildMissile, buildHook, laserWobble, aimTurret, SALVO, spendMissile, reloadMissiles, updateMissileTips, missileDirection, stepGun, stepLaser, newHeat, gunDirection, laserDirection, launchMine, reloadMine, updateMineHolder, HULL_L } from './boatModel.js';
 import { waveHeight } from './water.js';
 import { createAI, driveAI } from './ai.js';
 import { toon, glow } from './toon.js';
@@ -640,7 +640,7 @@ export class Race {
       const target = this.findTarget(b, { range: 180, minDot: -1, filter: (o) => !o.has('camo') });
       b.model.busy.missiles = 1.4;
       b.missileAim = target ? this.relativeAngle(b, target) : 0;
-      b.missileQueue.push({ target, wait: 0.28 });
+      for (let i = 0; i < SALVO; i++) b.missileQueue.push({ target, wait: 0.28 + i * 0.13 });
     },
 
     mines(b) {
@@ -839,11 +839,11 @@ export class Race {
   }
 
   explodeMissile(m, victim, power) {
-    this.fx.explosion(m.pos.x, m.pos.y, m.pos.z, power);
+    this.fx.explosion(m.pos.x, m.pos.y, m.pos.z, power * 0.7);
     this.sfx.play('boom', m.pos);
     this.scene.remove(m.mesh);
     if (victim) {
-      this.damage(victim, 32, m.owner, 'missile', { knockX: m.dir.x * 14, knockZ: m.dir.z * 14, spin: 0.9, launch: 0.7 });
+      this.damage(victim, 11, m.owner, 'missile', { knockX: m.dir.x * 6, knockZ: m.dir.z * 6, stun: 0.2 });
     }
     return false;
   }
@@ -1219,11 +1219,14 @@ export class Race {
       if (q.wait > 0) continue;
       b.missileQueue.splice(b.missileQueue.indexOf(q), 1);
       if (!b.alive) continue;
-      const pos = b.model.missileMount.getWorldPosition(new THREE.Vector3());
+      const pos = spendMissile(b.model, new THREE.Vector3()) ?? b.model.missileMount.getWorldPosition(new THREE.Vector3());
       const dir = missileDirection(b.model, new THREE.Vector3());
+      dir.x += (Math.random() - 0.5) * 0.25;
+      dir.z += (Math.random() - 0.5) * 0.25;
+      dir.normalize();
       const mesh = buildMissile();
+      mesh.scale.setScalar(0.75);
       this.scene.add(mesh);
-      spendMissile(b.model);
       this.missiles.push({ pos, dir, speed: Math.max(fast(30), b.speed + fast(8)), owner: b, target: q.target, life: 5, fizzle: 0, mesh, lockTime: Math.random() < 0.35 ? 0.5 + Math.random() : Infinity });
       this.sfx.play('missile', b.pos);
     }

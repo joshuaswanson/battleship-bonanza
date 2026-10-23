@@ -767,10 +767,15 @@ export function buildItemModel(id, color) {
 
 export const AIM_DELAY = 0.3;
 
-export function spendMissile(refs) {
+export function spendMissile(refs, out) {
   const tip = refs.missileTips.find((t) => t.visible);
-  if (tip) tip.visible = false;
+  if (!tip) return null;
+  tip.getWorldPosition(out);
+  tip.visible = false;
+  return out;
 }
+
+export const SALVO = 3;
 
 export function reloadMissiles(refs) {
   for (const tip of refs.missileTips) {
