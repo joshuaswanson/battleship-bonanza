@@ -386,6 +386,8 @@ kbd {
 
 .toggle {
   position: relative;
+  box-sizing: border-box;
+  flex: none;
   width: 62px;
   height: 34px;
   padding: 0;
@@ -400,10 +402,11 @@ kbd {
 .toggle::after {
   content: '';
   position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 22px;
-  height: 22px;
+  box-sizing: border-box;
+  top: 2px;
+  left: 2px;
+  width: 24px;
+  height: 24px;
   background: #ffffff;
   border: 3px solid var(--ink);
   border-radius: 50%;
@@ -415,7 +418,7 @@ kbd {
 }
 
 .toggle[aria-checked='true']::after {
-  transform: translateX(26px);
+  transform: translateX(28px);
 }
 
 .settings-label {

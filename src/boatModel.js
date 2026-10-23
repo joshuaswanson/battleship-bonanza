@@ -547,11 +547,11 @@ const HULL_MODS = {
         const w = halfWidth(z);
         const slope = (halfWidth(z + 0.1) - halfWidth(z - 0.1)) / 0.2;
         const dir = new THREE.Vector3(side * 0.85, 0.65, -side * slope * 0.85).normalize();
-        spike(new THREE.Vector3(side * (w + 0.12), sheer(z) + 0.12, z), dir, 0.2, 1.75);
+        spike(new THREE.Vector3(side * (w + 0.12), sheer(z) + 0.12, z), dir, 0.17, 1.35);
       }
-      spike(new THREE.Vector3(side * (halfWidth(-HULL_L) - 0.1), sheer(-HULL_L) + 0.15, -HULL_L + 0.1), new THREE.Vector3(side * 0.5, 0.55, -0.7).normalize(), 0.2, 1.6);
+      spike(new THREE.Vector3(side * (halfWidth(-HULL_L) - 0.1), sheer(-HULL_L) + 0.15, -HULL_L + 0.1), new THREE.Vector3(side * 0.5, 0.55, -0.7).normalize(), 0.17, 1.25);
     }
-    spike(new THREE.Vector3(0, sheer(HULL_L) - 0.1, HULL_L - 0.05), new THREE.Vector3(0, 0.18, 1).normalize(), 0.36, 2.4);
+    spike(new THREE.Vector3(0, sheer(HULL_L) - 0.1, HULL_L - 0.05), new THREE.Vector3(0, 0.18, 1).normalize(), 0.3, 1.9);
   },
 
   armor(body, mats) {

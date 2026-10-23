@@ -9,6 +9,6 @@ await wait(300);
 await page.evaluate((items) => window.__bb.setup.items.splice(0, 2, ...items.map((i) => i || null)), items);
 await page.evaluate(() => document.getElementById('btn-play').click());
 await page.evaluate(() => window.__bb.loadout.refresh());
-await wait(1500);
+await wait(3000);
 await page.screenshot({ path: `tools/shots/${out}.png`, clip: { x: 0, y: 60, width: 780, height: 420 } });
 await browser.close();
