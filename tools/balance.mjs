@@ -3,6 +3,7 @@ import fs from 'node:fs';
 
 const races = Number(process.argv[2] ?? 40);
 const out = process.argv[3] ?? 'tools/balance-results.json';
+const url = process.argv[4] ?? 'http://localhost:5288/';
 const browser = await puppeteer.launch({
   executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: 'new',
@@ -11,7 +12,7 @@ const browser = await puppeteer.launch({
 });
 const page = await browser.newPage();
 page.on('pageerror', (e) => console.log('[pageerror]', e.message));
-await page.goto('http://localhost:5288/', { waitUntil: 'networkidle0' });
+await page.goto(url, { waitUntil: 'networkidle0' });
 await new Promise((r) => setTimeout(r, 800));
 const results = [];
 for (let n = 0; n < races; n++) {
