@@ -216,7 +216,7 @@ function updateCamera(dt) {
   const k = (rate) => (cam.snap ? 1 : 1 - Math.exp(-rate * dt));
   let fov = 66;
 
-  if (race.attract) {
+  if (race.attract || !race.player) {
     cam.focusTime -= dt;
     if (cam.focusTime <= 0) {
       cam.focus = Math.floor(Math.random() * race.boats.length);
@@ -334,7 +334,26 @@ addEventListener('keydown', (e) => {
   if (e.code === 'Escape' && !$('screen-howto').classList.contains('hidden')) $('btn-howto-close').click();
 });
 
-if (import.meta.env.DEV) window.__bb = { get race() { return race; }, setup, camera, cam, world, loadout };
+if (import.meta.env.DEV) {
+  window.__bb = {
+    get race() {
+      return race;
+    },
+    setup,
+    camera,
+    cam,
+    world,
+    loadout,
+    simRace() {
+      race?.dispose();
+      const defs = PAINTS.map((paint, i) => ({ name: `Boat ${i + 1}`, color: paint.value, items: shuffle(ITEM_IDS).slice(0, 2) }));
+      race = new Race({ scene, track, fx, sfx, defs, attract: false });
+      mode = 'sim';
+      hud.show(false);
+      showScreen(null);
+    },
+  };
+}
 
 goTitle();
 requestAnimationFrame(frame);

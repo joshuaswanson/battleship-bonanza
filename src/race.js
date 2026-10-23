@@ -85,6 +85,7 @@ class Boat {
         return { id: s.id, group: s.group, rest, limit: s.front ? FRONT_LIMIT : Math.PI };
       });
     this.missileQueue = [];
+    this.stats = { dealt: 0, sunk: 0, kills: 0 };
     this.shadow = new THREE.Mesh(SHADOW_GEOMETRY, shadowMaterial());
     this.shadow.renderOrder = 1;
     scene.add(this.shadow);
@@ -507,6 +508,7 @@ export class Race {
       this.sfx.play('clank', target.pos);
     }
     target.hp -= amount;
+    if (source !== target) source.stats.dealt += amount;
     target.flash = 1;
     target.bump(kind === 'bullet' ? 1.5 : 5);
     target.vel.x += knockX;
@@ -527,6 +529,8 @@ export class Race {
   knockOut(b, source, kind) {
     b.hp = 0;
     b.ko = KO_TIME;
+    b.stats.sunk++;
+    if (source !== b) source.stats.kills++;
     b.air = null;
     b.yOffset = 0;
     b.gun.trigger = false;
