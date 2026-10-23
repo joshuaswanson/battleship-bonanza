@@ -46,6 +46,7 @@ const track = createTrack();
 const world = createWorld(scene, track);
 const fx = new Effects(scene);
 const sfx = new Sfx();
+const SILENT = { play() {} };
 const input = new Input();
 const hud = new Hud(track, sfx);
 
@@ -69,20 +70,21 @@ const shuffle = (xs) => {
   return a;
 };
 
-function randomLoadout() {
-  const weapons = ITEM_IDS.filter((id) => ITEMS[id].group === 'weapons');
-  const first = weapons[Math.floor(Math.random() * weapons.length)];
-  const rest = ITEM_IDS.filter((id) => id !== first);
-  return frontFirst([first, rest[Math.floor(Math.random() * rest.length)]]);
+function dealLoadouts(count, taken = []) {
+  const byPreference = (ids) => [...shuffle(ids.filter((id) => !taken.includes(id))), ...shuffle(ids.filter((id) => taken.includes(id)))];
+  const weapons = byPreference(ITEM_IDS.filter((id) => ITEMS[id].group === 'weapons'));
+  const others = byPreference(ITEM_IDS.filter((id) => ITEMS[id].group !== 'weapons'));
+  return Array.from({ length: count }, (_, i) => frontFirst([weapons[i % weapons.length], others[i % others.length]]));
 }
 
 function makeDefs(player) {
   const names = shuffle(t('aiNames'));
   const colors = shuffle(PAINTS.map((p) => p.value).filter((c) => c !== player?.color));
+  const loadouts = dealLoadouts(player ? 5 : 6, player?.items);
   const defs = [];
   for (let i = 0; i < 6; i++) {
     if (player && i === 3) defs.push({ name: player.name, color: player.color, items: [...player.items], isPlayer: true });
-    else defs.push({ name: names.pop(), color: colors.pop() ?? PAINTS[i].value, items: randomLoadout() });
+    else defs.push({ name: names.pop(), color: colors.pop() ?? PAINTS[i].value, items: loadouts.pop() });
   }
   return defs;
 }
@@ -95,7 +97,7 @@ let shake = 0;
 
 function newRace(attract) {
   race?.dispose();
-  race = new Race({ scene, track, fx, sfx, shores: world.shores, defs: makeDefs(attract ? null : setup), attract });
+  race = new Race({ scene, track, fx, sfx: attract ? SILENT : sfx, shores: world.shores, defs: makeDefs(attract ? null : setup), attract });
   cam.snap = true;
 }
 
