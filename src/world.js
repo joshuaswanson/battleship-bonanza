@@ -472,7 +472,7 @@ export function createWorld(scene, track) {
     for (let gz = -480; gz <= 560; gz += 52) {
       const x = gx + (rand() - 0.5) * 36;
       const z = gz + (rand() - 0.5) * 36;
-      if (rand() < 0.3) continue;
+      if (rand() < 0.45) continue;
       const clearance = track.project(x, z).distance - half;
       if (clearance < 24) continue;
       const r = Math.min(44, clearance - 14) * (0.45 + rand() * 0.5);
