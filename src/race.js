@@ -84,6 +84,7 @@ class Boat {
         return { id: s.id, group: s.group, rest, backGun: this.model.backGuns.has(s.id), limit: s.front ? FRONT_LIMIT : Math.PI };
       });
     this.missileQueue = [];
+    this.disabled = 0;
     this.stats = { dealt: 0, sunk: 0, kills: 0 };
     this.shadow = new THREE.Mesh(SHADOW_GEOMETRY, shadowMaterial());
     this.shadow.renderOrder = 1;
@@ -619,6 +620,10 @@ export class Race {
     const id = b.items[slot];
     const item = ITEMS[id];
     if (!item || item.passive || item.hold || this.state !== 'racing' || !b.alive) return false;
+    if (b.disabled > 0) {
+      if (b.isPlayer) this.sfx.play('nope');
+      return false;
+    }
     if (b.cooldowns[slot] > 0) {
       if (b.isPlayer) this.sfx.play('nope');
       return false;
@@ -707,7 +712,7 @@ export class Race {
   }
 
   updateGun(b, dt) {
-    if (this.state !== 'racing' || !b.alive) b.gun.trigger = false;
+    if (this.state !== 'racing' || !b.alive || b.disabled > 0) b.gun.trigger = false;
     const { shots, overheatedNow } = stepGun(b.gun, b.model, dt, this.time);
     for (let i = 0; i < shots; i++) this.fireBullet(b);
     if (overheatedNow) {
@@ -1043,6 +1048,7 @@ export class Race {
         if (o.center(new THREE.Vector3()).distanceTo(center) > r + 1.5) continue;
         p.jolted.add(o);
         o.stun = Math.max(o.stun, 1.1);
+        o.disabled = Math.max(o.disabled, 1.6);
         o.flash = 0.6;
         const oc = o.center();
         this.fx.sparkBurst(oc.x, oc.y, oc.z, 0x5ff4ff, 12);
@@ -1054,7 +1060,7 @@ export class Race {
   updateLasers(dt) {
     for (const b of this.boats) {
       if (!b.has('laser')) continue;
-      if (this.state !== 'racing' || !b.alive) b.laser.trigger = false;
+      if (this.state !== 'racing' || !b.alive || b.disabled > 0) b.laser.trigger = false;
       const { beaming, overheatedNow } = stepLaser(b.laser, b.model, dt, this.time);
       if (overheatedNow) {
         this.sfx.play('overheat', b.pos);
@@ -1137,6 +1143,22 @@ export class Race {
     };
   }
 
+  updateSulk(b, dt) {
+    b.disabled = Math.max(0, b.disabled - dt);
+    const off = b.disabled > 0;
+    const k = 1 - Math.exp(-(off ? 7 : 5) * dt);
+    b.model.sags.forEach((sag, i) => {
+      const droop = off ? 0.6 + Math.sin(this.time * 3 + i) * 0.06 : 0;
+      const slump = off ? Math.sin(this.time * 2.2 + i * 2) * 0.12 : 0;
+      sag.rotation.x += (droop - sag.rotation.x) * k;
+      sag.rotation.z += (slump - sag.rotation.z) * k;
+      if (off && Math.random() < 0.12) {
+        const p = sag.getWorldPosition(new THREE.Vector3());
+        this.fx.sparkBurst(p.x, p.y + 1, p.z, 0x5ff4ff, 3);
+      }
+    });
+  }
+
   relativeAngle(b, o) {
     const dx = o.pos.x - b.pos.x;
     const dz = o.pos.z - b.pos.z;
@@ -1208,7 +1230,7 @@ export class Race {
     const lz = -Math.sin(b.heading);
     let target = null;
     let best = SAW_RANGE;
-    if (b.alive && this.state === 'racing') {
+    if (b.alive && this.state === 'racing' && b.disabled <= 0) {
       for (const o of this.boats) {
         if (o === b || !o.alive || (o.finished && !this.attract)) continue;
         if (Math.abs(o.yOffset - b.yOffset) > 3) continue;
@@ -1241,7 +1263,7 @@ export class Race {
       for (let i = 0; i < 3; i++) this.fx.smoke(blade.x, blade.y + 0.4, blade.z);
     }
     s.chop = cutting ? (s.chop ?? 0) + dt : 0;
-    const arm = refs.sawYaw.children[0];
+    const arm = refs.modules.saw;
     const pitch = cutting ? Math.sin(s.chop * 16) * 0.2 + 0.08 : 0;
     arm.rotation.x += (pitch - arm.rotation.x) * (1 - Math.exp(-25 * dt));
     if (cutting) {
@@ -1336,6 +1358,7 @@ export class Race {
 
     if (b.model.sawYaw) this.updateSaw(b, dt);
     this.updateTurrets(b, dt);
+    this.updateSulk(b, dt);
     updateMineHolder(b.model, dt);
     updateMissileTips(b.model, dt);
 

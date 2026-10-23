@@ -576,32 +576,6 @@ kbd {
   height: 64px;
 }
 
-.slot-remove {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  font: 700 1.1rem/1 var(--ui);
-  color: #ffffff;
-  background: var(--ink);
-  border: 2px solid #ffffff;
-  border-radius: 50%;
-  cursor: pointer;
-}
-
-.slot-remove:hover {
-  background: var(--buoy);
-}
-
-.slot-remove:focus-visible {
-  outline: 3px solid var(--ink);
-  outline-offset: 2px;
-}
-
 .slot-chip kbd {
   position: absolute;
   top: 6px;
@@ -1436,6 +1410,15 @@ kbd {
 
 .ability .hull-fill[data-level='low'] {
   background: #ff4141;
+}
+
+.ability.disabled {
+  opacity: 0.55;
+}
+
+.ability.disabled .ability-fill {
+  background: #5ff4ff;
+  animation: blink 0.3s steps(2) infinite;
 }
 
 .ability.ready .ability-fill {

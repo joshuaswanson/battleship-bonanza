@@ -199,6 +199,12 @@ export class Hud {
       const item = ITEMS[id];
       if (item.passive) return;
       const slot = this.slots[i];
+      const off = p.disabled > 0;
+      slot.classList.toggle('disabled', off);
+      if (off) {
+        if (this.slotLabels[i].textContent !== t('disabled')) this.slotLabels[i].textContent = t('disabled');
+        return;
+      }
       if (item.hold) {
         const { heat, overheated } = id === 'laser' ? p.laser : p.gun;
         this.slotFills[i].style.width = `${(1 - heat) * 100}%`;
