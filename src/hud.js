@@ -15,7 +15,7 @@ const $ = (id) => document.getElementById(id);
 const TARGETING = {
   missiles: { range: 180, minDot: 0.25, filter: (o) => !o.has('camo') },
   grapple: { range: 120, minDot: 0.55, filter: (o) => o.has('spikes') || o.has('jetpack') },
-  laser: { range: 140, minDot: 0.96 },
+  laser: { range: 70, minDot: 0.97 },
 };
 
 export class Hud {
@@ -71,7 +71,7 @@ export class Hud {
         return `<div class="slot ${item.passive ? 'slot-passive' : ''}" data-slot="${i}">
           <div class="slot-face">${iconSvg(id)}</div>
           <div class="slot-text"><kbd>${i === 0 ? 'O' : 'P'}</kbd><span>${item.name}</span></div>
-          <div class="slot-state">${item.passive ? 'Always on' : 'Ready'}</div>
+          <div class="slot-state">${item.passive ? 'Always on' : item.hold ? 'Hold to fire' : 'Ready'}</div>
         </div>`;
       })
       .join('');
@@ -163,6 +163,15 @@ export class Hud {
       const item = ITEMS[id];
       if (item.passive) return;
       const slot = this.slots[i];
+      if (item.hold) {
+        const { heat, overheated } = id === 'laser' ? p.laser : p.gun;
+        slot.style.setProperty('--cd', heat);
+        slot.classList.toggle('ready', !overheated);
+        slot.classList.add('heat');
+        const text = overheated ? 'Overheated' : heat > 0.6 ? 'Hot!' : 'Hold to fire';
+        if (this.slotLabels[i].textContent !== text) this.slotLabels[i].textContent = text;
+        return;
+      }
       const cd = p.cooldowns[i];
       const ready = cd <= 0;
       slot.style.setProperty('--cd', ready ? 0 : cd / item.cooldown);

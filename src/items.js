@@ -1,7 +1,7 @@
 export const GROUPS = [
+  { id: 'weapons', label: 'Weapons', color: '#ff6b5e' },
   { id: 'defense', label: 'Defense', color: '#3fb7f0' },
   { id: 'gadgets', label: 'Gadgets', color: '#a77bf3' },
-  { id: 'weapons', label: 'Weapons', color: '#ff6b5e' },
 ];
 
 export const STATS = [
@@ -89,8 +89,8 @@ export const ITEMS = {
     stats: { punch: 2 },
     name: 'Machine gun',
     group: 'weapons',
-    cooldown: 3.5,
-    blurb: 'Nothing like a hailstorm of bullets to keep other racers away from you. Armor just shrugs it off.',
+    hold: true,
+    blurb: 'Hold the trigger for a hailstorm of bullets. Let go before it overheats! Armor just shrugs it off.',
   },
   laser: {
     adj: 'Dazzling',
@@ -98,8 +98,8 @@ export const ITEMS = {
     stats: { punch: 3 },
     name: 'Laser',
     group: 'weapons',
-    cooldown: 4.5,
-    blurb: 'Pew! Hits hard from way back and melts right through armor. Saw blades bounce it back in your face.',
+    hold: true,
+    blurb: 'Hold for a sizzling beam and steer to slice up anyone in the way. Melts armor, but saw blades bounce it back at you.',
   },
   saw: {
     adj: 'Slicing',

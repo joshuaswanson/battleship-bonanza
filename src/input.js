@@ -57,6 +57,8 @@ export class Input {
 
     this.state.throttle = throttle;
     this.state.steer = steer;
+    this.state.hold0 = this.isHeld('item0') || !!pad?.buttons[0]?.pressed || !!pad?.buttons[4]?.pressed;
+    this.state.hold1 = this.isHeld('item1') || !!pad?.buttons[1]?.pressed || !!pad?.buttons[5]?.pressed;
     this.pressed = pressed;
     return this.state;
   }

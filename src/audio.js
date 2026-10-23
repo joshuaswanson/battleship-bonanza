@@ -89,8 +89,10 @@ export class Sfx {
         this.tone(900, 0.05, { type: 'square', vol: 0.06 * v, to: 300 });
         break;
       case 'laser':
-        this.tone(1800, 0.3, { type: 'sawtooth', vol: 0.12 * v, to: 160 });
-        this.tone(2400, 0.2, { type: 'sine', vol: 0.1 * v, to: 600 });
+        this.tone(2200, 0.15, { type: 'sine', vol: 0.12 * v, to: 700 });
+        this.tone(170, 1.3, { type: 'sawtooth', vol: 0.07 * v, to: 330 });
+        this.tone(1300, 1.3, { type: 'sine', vol: 0.04 * v, to: 900 });
+        this.noise(1.3, { vol: 0.08 * v, freq: 3200, type: 'bandpass', to: 1800 });
         break;
       case 'boom':
         this.noise(0.7, { vol: 0.5 * v, freq: 900, to: 80 });
@@ -138,6 +140,10 @@ export class Sfx {
       case 'pop':
         this.tone(700, 0.08, { vol: 0.25 * v, to: 1400 });
         this.tone(500, 0.5, { type: 'triangle', vol: 0.15 * v, to: 100, delay: 0.08 });
+        break;
+      case 'overheat':
+        this.noise(0.9, { vol: 0.3 * v, freq: 4000, type: 'highpass', to: 1500 });
+        this.tone(900, 0.5, { type: 'square', vol: 0.06 * v, to: 120 });
         break;
       case 'tick':
         this.tone(1300, 0.03, { type: 'square', vol: 0.05 });

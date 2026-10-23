@@ -13,8 +13,9 @@ const MOUNTED = new Set(['machinegun', 'laser', 'saw', 'missiles', 'mines', 'jet
 const FRONT_MOUNT = 1.5;
 const REAR_MOUNT = -2.2;
 const SOLO_MOUNT = -0.35;
-const MOUNT_RANK = { saw: -1, mines: 0.5, jetpack: 1 };
+const MOUNT_RANK = { saw: -1, missiles: 0.4, mines: 0.5, jetpack: 1 };
 const mountRank = (id) => MOUNT_RANK[id] ?? 0;
+const AIMED = new Set(['machinegun', 'laser', 'missiles', 'grapple']);
 const MODULE_SCALE = 1.3;
 
 export function halfWidth(z) {
@@ -173,7 +174,18 @@ const geo = {
   cone: () => cachedGeometry('cone', () => new THREE.ConeGeometry(1, 1, 12)),
   roundBox: () => cachedGeometry('roundBox', () => new RoundedBoxGeometry(1, 1, 1, 3, 0.2)),
   ring: () => cachedGeometry('ring', () => new THREE.TorusGeometry(1, 0.1, 8, 32)),
-  claw: () => cachedGeometry('claw', () => new THREE.TorusGeometry(0.4, 0.09, 8, 16, Math.PI * 1.2)),
+  handle: () => cachedGeometry('handle', () => new THREE.TorusGeometry(0.34, 0.07, 8, 16, Math.PI)),
+  octa: () => cachedGeometry('octa', () => new THREE.OctahedronGeometry(1, 0)),
+  prong: () =>
+    cachedGeometry('prong', () => {
+      const curve = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(0, 0, 0.08),
+        new THREE.Vector3(0.28, 0, 0.14),
+        new THREE.Vector3(0.52, 0, -0.04),
+        new THREE.Vector3(0.58, 0, -0.32),
+      ]);
+      return new THREE.TubeGeometry(curve, 14, 0.075, 8);
+    }),
   saw: () => cachedGeometry('saw', sawGeometry),
   flame: () =>
     cachedGeometry('flame', () => {
@@ -314,10 +326,12 @@ export function buildBoat(color, items) {
   const flagZ = -HULL_L + 0.6;
   const flagX = halfWidth(flagZ) - 0.35;
   part(body, 'cylinder', mats.dark, flagX, sternTop + 0.8, flagZ, 0.05, 1.6, 0.05, 0.02);
-  const flag = part(body, 'cone', hasCamo ? toon(0x4f6b2c) : mats.paint, flagX, sternTop + 1.4, flagZ - 0.45, 0.04, 0.9, 0.3, 0.02);
-  flag.rotation.x = -Math.PI / 2;
+  const flag = new THREE.Group();
+  flag.position.set(flagX, sternTop + 1.4, flagZ);
+  body.add(flag);
+  part(flag, 'cone', hasCamo ? toon(0x4f6b2c) : mats.paint, 0, 0, -0.45, 0.04, 0.9, 0.3, 0.02).rotation.x = -Math.PI / 2;
 
-  const refs = { root, body, flag, saw: null, flames: [], spinners: [], materials: [], parts: {} };
+  const refs = { root, body, flag, saw: null, flames: [], spinners: [], materials: [], parts: {}, hookMarkers: [], aimers: [], heatMats: {} };
 
   for (const id of items) {
     if (MOUNTED.has(id)) continue;
@@ -329,12 +343,13 @@ export function buildBoat(color, items) {
 
   const mounted = items.filter((id) => MOUNTED.has(id)).sort((a, b) => mountRank(a) - mountRank(b));
   const rank = mountRank(mounted[0]);
-  const soloSpot = rank < 0 ? FRONT_MOUNT : rank > 0 ? REAR_MOUNT : SOLO_MOUNT;
+  const soloSpot = rank < 0 ? FRONT_MOUNT : rank >= 0.5 ? REAR_MOUNT : SOLO_MOUNT;
   const spots = mounted.length === 2 ? [FRONT_MOUNT, REAR_MOUNT] : [soloSpot];
   mounted.forEach((id, i) => {
     const z = spots[i];
     const raised = mounted.length === 2 && i === 1;
-    const baseH = raised ? 0.85 : 0.35;
+    const swivels = raised && AIMED.has(id);
+    const baseH = swivels ? 1.35 : raised ? 0.85 : 0.35;
     const turret = new THREE.Group();
     turret.position.set(0, deckTop(z), z);
     body.add(turret);
@@ -347,15 +362,28 @@ export function buildBoat(color, items) {
     turret.add(module);
     const mounts = MODULES[id](module, mats, refs);
     for (const [key, v] of Object.entries(mounts ?? {})) {
-      refs[key] = v.multiplyScalar(MODULE_SCALE).add(new THREE.Vector3(0, deckTop(z) + baseH, z));
+      const marker = new THREE.Object3D();
+      marker.position.copy(v);
+      module.add(marker);
+      refs[key] = marker;
+    }
+    if (swivels) {
+      module.rotation.y = Math.PI;
+      refs.aimers.push({ id, module, rest: Math.PI, hold: 0 });
     }
   });
 
   body.traverse((o) => {
     if (o.isMesh && o.material.isMeshToonMaterial && !refs.materials.includes(o.material)) refs.materials.push(o.material);
   });
+  const heated = Object.values(refs.heatMats).flat();
+  refs.materials = refs.materials.filter((m) => !heated.includes(m));
   for (const m of refs.materials) {
     m.emissive = new THREE.Color(0xffffff);
+    m.emissiveIntensity = 0;
+  }
+  for (const m of heated) {
+    m.emissive = new THREE.Color(0xff5a1f);
     m.emissiveIntensity = 0;
   }
   return refs;
@@ -386,8 +414,12 @@ function spikyBall(parent, mats, x, y, z, radius, count, spikeLength) {
 }
 
 const HULL_MODS = {
-  spikes(body, mats) {
+  spikes(body, mats, refs) {
     const spike = (base, dir, radius, length) => {
+      const anchor = new THREE.Object3D();
+      anchor.position.copy(base).addScaledVector(dir, length * 0.4);
+      body.add(anchor);
+      refs.hookMarkers.push(anchor);
       part(body, 'sphere', mats.dark, base.x, base.y, base.z, radius * 1.25, radius * 1.25, radius * 1.25, 0.03);
       const mesh = part(body, 'cone', mats.metal, base.x + dir.x * length * 0.5, base.y + dir.y * length * 0.5, base.z + dir.z * length * 0.5, radius, length, radius, 0.035);
       mesh.quaternion.setFromUnitVectors(UP, dir);
@@ -432,8 +464,13 @@ const HULL_MODS = {
 };
 
 const MODULES = {
-  machinegun(m, mats, refs) {
+  machinegun(module, mats, refs) {
     const gold = toon(0xffd23f);
+    const m = new THREE.Group();
+    module.add(m);
+    refs.gunSwivel = m;
+    const barrelMat = toon(METAL);
+    refs.heatMats.machinegun = [barrelMat];
     part(m, 'roundBox', mats.dark, 0, 0.55, -0.15, 1.0, 0.85, 1.1, 0.04);
     part(m, 'roundBox', mats.paint, 0, 1.02, -0.15, 0.78, 0.2, 0.9, 0.03);
     for (const x of [-0.32, 0.32]) {
@@ -447,7 +484,7 @@ const MODULES = {
     part(barrels, 'cylinder', mats.dark, 0, 0, 0.75, 0.13, 1.6, 0.13, 0.02).rotation.x = Math.PI / 2;
     for (let i = 0; i < 6; i++) {
       const a = (i / 6) * Math.PI * 2;
-      part(barrels, 'cylinder', mats.metal, Math.cos(a) * 0.24, Math.sin(a) * 0.24, 0.8, 0.085, 1.6, 0.085, 0.02).rotation.x = Math.PI / 2;
+      part(barrels, 'cylinder', barrelMat, Math.cos(a) * 0.24, Math.sin(a) * 0.24, 0.92, 0.085, 1.84, 0.085, 0.02).rotation.x = Math.PI / 2;
     }
     for (const z of [0.25, 1.15]) part(barrels, 'ring', mats.dark, 0, 0, z, 0.36, 0.36, 1.4, 0.02);
     part(barrels, 'cylinder', mats.paint, 0, 0, 1.6, 0.38, 0.14, 0.38, 0.02).rotation.x = Math.PI / 2;
@@ -459,18 +496,28 @@ const MODULES = {
     for (let i = 0; i < 4; i++) {
       part(m, 'capsule', gold, 0.62 - i * 0.12, 0.85 + Math.sin(i * 0.9) * 0.05, 0.25 + i * 0.03, 0.12, 0.22, 0.12, 0.02).rotation.z = Math.PI / 2;
     }
-    return { gunMount: new THREE.Vector3(0, 0.55, 2.1) };
+    const muzzle = new THREE.Object3D();
+    muzzle.position.set(0, 0.55, 2.3);
+    m.add(muzzle);
+    refs.gunMount = muzzle;
   },
 
-  laser(m, mats) {
+  laser(m, mats, refs) {
     const pink = glow(0xff4fd8);
-    part(m, 'sphere', mats.white, 0, 0.45, 0, 0.68, 0.6, 0.72, 0.04);
-    part(m, 'cylinder', mats.white, 0, 0.6, 1.2, 0.27, 2.0, 0.27, 0.04).rotation.x = Math.PI / 2;
-    part(m, 'ring', pink, 0, 0.6, 1.5, 0.34, 0.34, 0.6, 0.02);
-    part(m, 'ring', pink, 0, 0.6, 2.05, 0.34, 0.34, 0.6, 0.02);
-    part(m, 'sphere', glow(0xff9ef0), 0, 0.6, 2.25, 0.22, 0.22, 0.22, 0);
-    part(m, 'roundBox', mats.paint, 0, 1.0, -0.15, 0.5, 0.25, 0.6, 0.03);
-    return { laserMount: new THREE.Vector3(0, 0.6, 2.45) };
+    const softPink = glow(0xff9ef0);
+    part(m, 'roundBox', mats.white, 0, 0.6, -0.15, 1.15, 0.85, 1.25, 0.04);
+    part(m, 'roundBox', mats.paint, 0, 0.6, -0.15, 1.2, 0.24, 1.3, 0.03);
+    for (const x of [-0.38, 0.38]) {
+      part(m, 'roundBox', mats.dark, x, 0.6, 0.95, 0.18, 0.55, 1.5, 0.03);
+      part(m, 'roundBox', pink, x * 0.86, 0.6, 1.25, 0.05, 0.3, 0.8, 0);
+    }
+    part(m, 'ring', pink, 0, 0.6, 0.5, 0.26, 0.26, 0.6, 0.02);
+    const crystal = part(m, 'octa', softPink, 0, 0.6, 1.3, 0.2, 0.34, 0.2, 0);
+    refs.spinners.push({ mesh: crystal, axis: 'y', speed: 3 });
+    const ventMat = toon(DARK);
+    refs.heatMats.laser = [ventMat];
+    for (const z of [-0.5, -0.15, 0.2]) part(m, 'roundBox', ventMat, 0, 1.1, z, 0.85, 0.16, 0.14, 0.02);
+    return { laserMount: new THREE.Vector3(0, 0.6, 1.55) };
   },
 
   saw(m, mats, refs) {
@@ -499,29 +546,58 @@ const MODULES = {
     return { missileMount: new THREE.Vector3(0, 1.2, 1.0) };
   },
 
-  mines(m, mats) {
-    part(m, 'roundBox', mats.metal, 0, 0.12, 0, 1.2, 0.25, 2.0, 0.03);
-    for (const x of [-0.5, 0.5]) part(m, 'cylinder', mats.dark, x, 0.45, 0, 0.07, 0.6, 0.07, 0.02);
-    for (const z of [-0.62, 0, 0.62]) {
-      spikyBall(m, mats, 0, 0.62, z, 0.3, 14, 0.28);
-      part(m, 'smallSphere', glow(RED), 0, 0.95, z, 0.07, 0.07, 0.07, 0);
+  mines(m, mats, refs) {
+    part(m, 'cylinder', mats.dark, 0, 0.25, 0, 0.5, 0.5, 0.5, 0.03);
+    const cup = part(m, 'ring', mats.paint, 0, 0.55, 0, 0.6, 0.6, 1.8, 0.03);
+    cup.rotation.x = Math.PI / 2;
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2;
+      const claw = part(m, 'roundBox', mats.metal, Math.cos(a) * 0.62, 0.85, Math.sin(a) * 0.62, 0.14, 0.6, 0.14, 0.02);
+      claw.rotation.set(0, -a, 0);
+      claw.rotateZ(0.35);
     }
+    const loaded = new THREE.Group();
+    loaded.position.set(0, MINE_REST_Y, 0);
+    m.add(loaded);
+    spikyBall(loaded, mats, 0, 0, 0, 0.5, 20, 0.45);
+    part(loaded, 'smallSphere', glow(RED), 0, 0.47, 0, 0.11, 0.11, 0.11, 0);
+    refs.mineLoaded = loaded;
+    return { mineMount: new THREE.Vector3(0, MINE_REST_Y, 0) };
   },
 
   jetpack(m, mats, refs) {
     const red = toon(RED);
-    part(m, 'roundBox', mats.metal, 0, 0.75, -0.1, 1.5, 0.3, 0.45, 0.03);
-    for (const x of [-0.55, 0.55]) {
-      const tank = part(m, 'capsule', red, x, 0.95, -0.25, 0.85, 0.85, 0.85, 0.04);
-      tank.rotation.x = -0.35;
-      const nozzle = part(m, 'cone', mats.dark, x, 0.15, 0.05, 0.3, 0.45, 0.3, 0.03);
-      nozzle.rotation.x = Math.PI - 0.35;
-      part(m, 'sphere', mats.white, x, 1.65, -0.5, 0.2, 0.2, 0.2, 0.03);
+    const glowCore = glow(0xffb02e);
+    part(m, 'roundBox', mats.metal, 0, 0.2, -0.1, 1.7, 0.25, 1.1, 0.03);
+    for (const x of [-0.6, 0.6]) part(m, 'roundBox', mats.dark, x, 0.4, -0.1, 0.3, 0.4, 0.5, 0.02);
+    part(m, 'cylinder', mats.metal, 0, 0.75, -0.1, 0.24, 1.3, 0.24, 0.03).rotation.x = Math.PI / 2;
+    part(m, 'sphere', mats.white, 0, 1.0, 0.15, 0.14, 0.1, 0.14, 0.02);
+    part(m, 'smallSphere', red, 0.03, 1.08, 0.18, 0.04, 0.03, 0.04, 0);
+    part(m, 'handle', mats.metal, 0, 0.95, -0.4, 1, 1, 1, 0.02);
+    const grip = new THREE.Object3D();
+    grip.position.set(0, 1.29, -0.4);
+    m.add(grip);
+    refs.hookMarkers.push(grip);
+    for (const x of [-0.6, 0.6]) {
+      const rocket = new THREE.Group();
+      rocket.position.set(x, 0.9, -0.1);
+      rocket.rotation.x = Math.PI / 2 - 0.12;
+      m.add(rocket);
+      part(rocket, 'capsule', mats.white, 0, 0.1, 0, 0.8, 0.95, 0.8, 0.04);
+      part(rocket, 'cone', red, 0, 1.05, 0, 0.32, 0.55, 0.32, 0.03);
+      part(rocket, 'cylinder', mats.paint, 0, 0.15, 0, 0.43, 0.22, 0.43, 0.02);
+      part(rocket, 'cylinder', mats.paint, 0, -0.25, 0, 0.42, 0.08, 0.42, 0.02);
+      for (let i = 0; i < 3; i++) {
+        const a = (i / 3) * Math.PI * 2 + Math.PI / 2;
+        const fin = part(rocket, 'roundBox', red, Math.cos(a) * 0.42, -0.5, Math.sin(a) * 0.42, 0.08, 0.6, 0.38, 0.02);
+        fin.rotation.y = -a;
+      }
+      part(rocket, 'cone', mats.dark, 0, -0.85, 0, 0.32, 0.4, 0.32, 0.03);
+      part(rocket, 'cylinder', glowCore, 0, -1.04, 0, 0.24, 0.04, 0.24, 0);
       const flame = new THREE.Mesh(geo.flame(), glow(0xffa62b, { transparent: true, opacity: 0.9 }));
-      flame.position.set(x, -0.05, 0.12);
-      flame.rotation.x = -0.35;
+      flame.position.set(0, -1.05, 0);
       flame.visible = false;
-      m.add(flame);
+      rocket.add(flame);
       refs.flames.push(flame);
     }
   },
@@ -532,12 +608,10 @@ const MODULES = {
     barrel.rotation.x = Math.PI / 2 - 0.25;
     const hook = new THREE.Group();
     hook.position.set(0, 0.97, 1.65);
-    hook.scale.setScalar(1.4);
+    hook.rotation.x = -0.25;
+    hook.scale.setScalar(1.3);
     m.add(hook);
-    for (let i = 0; i < 3; i++) {
-      part(hook, 'claw', mats.metal, 0, 0, 0, 1, 1, 1, 0.03).rotation.set(0, (i * Math.PI * 2) / 3, Math.PI * 0.9);
-    }
-    part(hook, 'sphere', mats.dark, 0, 0, 0, 0.2, 0.2, 0.2, 0.03);
+    hookHead(hook, mats.metal, mats.dark);
     part(m, 'ring', toon(0xc0874f), 0.75, 0.25, -0.2, 0.4, 0.4, 1.4, 0.03).rotation.x = Math.PI / 2;
     return { hookMount: new THREE.Vector3(0, 0.97, 1.7) };
   },
@@ -559,8 +633,8 @@ export function buildMine() {
   const mats = { ink: toon(INK), dark: toon(DARK), metal: toon(METAL) };
   spikyBall(group, mats, 0, 0.3, 0, 0.8, 22, 0.75);
   const light = new THREE.Mesh(geo.smallSphere(), glow(RED));
-  light.scale.setScalar(0.22);
-  light.position.set(0, 1.12, 0);
+  light.scale.setScalar(0.2);
+  light.position.set(0, 1.05, 0);
   group.add(light);
   group.userData.light = light;
   return group;
@@ -578,14 +652,24 @@ export function buildMissile() {
   return group;
 }
 
+function hookHead(group, metal, dark) {
+  part(group, 'cylinder', metal, 0, 0, -0.4, 0.08, 0.9, 0.08, 0.02).rotation.x = Math.PI / 2;
+  part(group, 'ring', dark, 0, 0, -0.92, 0.14, 0.14, 0.8, 0.02).rotation.y = Math.PI / 2;
+  part(group, 'sphere', dark, 0, 0, 0.06, 0.16, 0.16, 0.16, 0.03);
+  for (let i = 0; i < 4; i++) {
+    const prong = new THREE.Group();
+    prong.rotation.z = (i / 4) * Math.PI * 2 + Math.PI / 4;
+    group.add(prong);
+    part(prong, 'prong', metal, 0, 0, 0, 1, 1, 1, 0.025);
+    const tip = part(prong, 'cone', metal, 0.59, 0, -0.42, 0.1, 0.24, 0.1, 0.02);
+    tip.quaternion.setFromUnitVectors(UP, new THREE.Vector3(0.15, 0, -1).normalize());
+  }
+}
+
 export function buildHook() {
   const group = new THREE.Group();
-  group.scale.setScalar(1.4);
-  const mat = toon(METAL);
-  for (let i = 0; i < 3; i++) {
-    part(group, 'claw', mat, 0, 0, 0, 1, 1, 1, 0.03).rotation.set(0, (i * Math.PI * 2) / 3, Math.PI * 0.9);
-  }
-  part(group, 'sphere', toon(DARK), 0, 0, 0, 0.22, 0.22, 0.22, 0.04);
+  group.scale.setScalar(1.5);
+  hookHead(group, toon(METAL), toon(DARK));
   return group;
 }
 
@@ -596,4 +680,108 @@ export function buildItemModel(id, color) {
   turret.removeFromParent();
   turret.position.set(0, 0, 0);
   return turret;
+}
+
+export const AIM_DELAY = 0.3;
+const MINE_REST_Y = 1.05;
+
+export function reloadMine(refs) {
+  if (refs.mineLoaded) refs.mineReload = 0;
+}
+
+export function updateMineHolder(refs, dt) {
+  const mine = refs.mineLoaded;
+  if (!mine || refs.mineReload == null) return;
+  refs.mineReload += dt;
+  const t = refs.mineReload;
+  mine.visible = t > 0.45;
+  const k = Math.min(1, Math.max(0, (t - 0.45) / 0.55));
+  const rise = 1 + 2.4 * Math.pow(k - 1, 3) + 1.4 * Math.pow(k - 1, 2);
+  mine.position.y = MINE_REST_Y - 2.4 * (1 - rise);
+  mine.rotation.y = (1 - k) * 4;
+  if (k >= 1) refs.mineReload = null;
+}
+
+export function aimTurret(refs, id) {
+  const aimer = refs.aimers.find((a) => a.id === id);
+  if (!aimer) return 0;
+  const idle = aimer.hold <= 0;
+  aimer.hold = 1.9;
+  return idle ? AIM_DELAY : 0;
+}
+
+export const GUN_RATE = 0.075;
+const HEAT_TIME = 2.5;
+
+export function newHeat() {
+  return { trigger: false, firing: false, heat: 0, overheated: false, timer: 0, delay: 0 };
+}
+
+function stepHeat(h, refs, id, dt, time) {
+  let overheatedNow = false;
+  if (h.trigger && !h.overheated) {
+    const delay = aimTurret(refs, id);
+    if (!h.firing) h.delay = delay;
+    h.firing = true;
+    h.delay = Math.max(0, h.delay - dt);
+    if (h.delay <= 0) h.heat += dt / HEAT_TIME;
+    if (h.heat >= 1) {
+      h.heat = 1;
+      h.overheated = true;
+      h.firing = false;
+      overheatedNow = true;
+    }
+  } else {
+    h.firing = false;
+    h.heat = Math.max(0, h.heat - dt * (h.overheated ? 0.45 : 0.7));
+    if (h.overheated && h.heat <= 0) h.overheated = false;
+  }
+  const glowAmount = h.heat * h.heat * 0.9 * (h.overheated ? 0.75 + Math.sin(time * 30) * 0.25 : 1);
+  for (const m of refs.heatMats[id] ?? []) m.emissiveIntensity = glowAmount;
+  return overheatedNow;
+}
+
+export function stepGun(gun, refs, dt, time) {
+  const overheatedNow = stepHeat(gun, refs, 'machinegun', dt, time);
+  let shots = 0;
+  if (gun.firing && gun.delay <= 0) {
+    gun.timer -= dt;
+    while (gun.timer <= 0) {
+      shots++;
+      gun.timer += GUN_RATE;
+    }
+  } else {
+    gun.timer = 0;
+  }
+  if (refs.minigun) refs.minigun.rotation.z += dt * (gun.firing ? 32 : 1.5);
+  if (refs.gunSwivel) {
+    const sway = gun.firing ? Math.sin(time * 11) * 0.14 + Math.sin(time * 23) * 0.05 : 0;
+    refs.gunSwivel.rotation.y += (sway - refs.gunSwivel.rotation.y) * (1 - Math.exp(-20 * dt));
+  }
+  return { shots, overheatedNow };
+}
+
+export function stepLaser(laser, refs, dt, time) {
+  const overheatedNow = stepHeat(laser, refs, 'laser', dt, time);
+  return { beaming: laser.firing && laser.delay <= 0, overheatedNow };
+}
+
+export function laserDirection(refs, out) {
+  refs.laserMount.parent.getWorldQuaternion(muzzleQuat);
+  return out.set(0, 0, 1).applyQuaternion(muzzleQuat);
+}
+
+const muzzleQuat = new THREE.Quaternion();
+export function gunDirection(refs, out) {
+  refs.gunSwivel.getWorldQuaternion(muzzleQuat);
+  return out.set(0, 0, 1).applyQuaternion(muzzleQuat);
+}
+
+export function updateAimers(refs, dt) {
+  for (const a of refs.aimers) {
+    a.hold -= dt;
+    const target = a.hold > 0 ? 0 : a.rest;
+    const diff = Math.atan2(Math.sin(target - a.module.rotation.y), Math.cos(target - a.module.rotation.y));
+    a.module.rotation.y += diff * (1 - Math.exp(-14 * dt));
+  }
 }

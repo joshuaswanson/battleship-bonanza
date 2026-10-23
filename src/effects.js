@@ -122,7 +122,7 @@ export class Effects {
     this.sparks = new ParticlePool(scene, glow(0xffffff), 900);
     this.rings = new Transient(scene, new THREE.TorusGeometry(1, 0.12, 8, 48).rotateX(Math.PI / 2), 16, false);
     const beam = new THREE.CylinderGeometry(1, 1, 1, 10, 1, true).rotateX(Math.PI / 2).translate(0, 0, 0.5);
-    this.beams = new Transient(scene, beam, 12, true);
+    this.beams = new Transient(scene, beam, 48, true);
     this.shells = new Transient(scene, new THREE.SphereGeometry(1, 32, 20), 6, true);
   }
 
@@ -187,9 +187,9 @@ export class Effects {
     this.puffs.emit(x, y, z, (r() - 0.5) * 1.5, 0.5 + r(), (r() - 0.5) * 1.5, 0.5 + r() * 0.4, 0.8 + r() * 0.4, r() < 0.5 ? 0xffffff : 0xdfe6ee, -0.5, 1, 0);
   }
 
-  flame(x, y, z) {
+  flame(x, y, z, vx = 0, vy = -8, vz = 0) {
     const r = Math.random;
-    this.sparks.emit(x, y, z, (r() - 0.5) * 2, -6 - r() * 4, (r() - 0.5) * 2, 0.35 + r() * 0.3, 0.25, r() < 0.5 ? 0xffd23f : 0xff8a1f, 0, 2, 1);
+    this.sparks.emit(x, y, z, vx + (r() - 0.5) * 2, vy + (r() - 0.5) * 2, vz + (r() - 0.5) * 2, 0.35 + r() * 0.3, 0.25, r() < 0.5 ? 0xffd23f : 0xff8a1f, 0, 2, 1);
   }
 
   bubbles(x, y, z) {
@@ -224,7 +224,13 @@ export class Effects {
     });
   }
 
-  beam(from, to, color, width = 0.35, life = 0.4) {
+  scorch(x, y, z) {
+    const r = Math.random;
+    this.sparks.emit(x, y, z, 0, 0, 0, 0.55 + r() * 0.2, 1.1, r() < 0.5 ? 0xff4fd8 : 0xffffff, 0, 0, 1, 0.25);
+    if (r() < 0.35) this.puffs.emit(x, y + 0.3, z, (r() - 0.5), 2 + r() * 2, (r() - 0.5), 0.5 + r() * 0.4, 0.9, 0xffffff, -1, 1, 0);
+  }
+
+  beam(from, to, color, width = 0.35, life = 0.4, sparks = 6) {
     const a = from.clone();
     const b = to.clone();
     const length = a.distanceTo(b);
@@ -237,7 +243,7 @@ export class Effects {
         mesh.material.opacity = 1 - k * k;
       });
     }
-    this.sparkBurst(b.x, b.y, b.z, color, 6);
+    if (sparks) this.sparkBurst(b.x, b.y, b.z, color, sparks);
   }
 }
 

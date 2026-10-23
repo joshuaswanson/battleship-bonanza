@@ -33,6 +33,8 @@ export function driveAI(race, b, dt) {
   b.control.throttle = Math.abs(diff) > 0.9 ? 0.5 : 1;
 
   avoidMines(race, b, ai);
+  if (b.gun.heat > 0.85) b.gun.trigger = false;
+  if (b.laser.heat > 0.85) b.laser.trigger = false;
 
   if (race.player && !race.attract && !b.isPlayer) {
     const gap = race.player.dist - b.dist;
@@ -70,6 +72,17 @@ function avoidMines(race, b, ai) {
 
 function useItems(race, b, ai) {
   for (let slot = 0; slot < 2; slot++) {
+    if (b.items[slot] === 'machinegun') {
+      const t = race.findTarget(b, { range: 75, minDot: 0.85 });
+      b.gun.trigger = !!t && !t.has('armor') && b.gun.heat < 0.7 && Math.random() < ai.aggression + 0.3;
+      continue;
+    }
+    if (b.items[slot] === 'laser') {
+      const t = race.findTarget(b, { range: 70, minDot: 0.97 });
+      const bounces = t?.has('saw') && !b.has('saw');
+      b.laser.trigger = !!t && !bounces && b.laser.heat < 0.7 && Math.random() < ai.aggression + 0.3;
+      continue;
+    }
     if (b.cooldowns[slot] > 0) continue;
     if (shouldUse(race, b, b.items[slot], ai)) race.useItem(b, slot);
   }
@@ -78,16 +91,6 @@ function useItems(race, b, ai) {
 function shouldUse(race, b, id, ai) {
   const r = Math.random();
   switch (id) {
-    case 'machinegun': {
-      const t = race.findTarget(b, { range: 75, minDot: 0.9 });
-      return !!t && !t.has('armor') && r < ai.aggression;
-    }
-    case 'laser': {
-      const t = race.findTarget(b, { range: 130, minDot: 0.96 });
-      if (!t) return false;
-      if (t.has('saw') && !b.has('saw')) return r < 0.08;
-      return r < ai.aggression;
-    }
     case 'saw': {
       const t = race.findTarget(b, { range: 10, minDot: 0.75 });
       return !!t && !t.has('armor');
