@@ -240,7 +240,7 @@ const ITEM_TEXT = {
     machinegun: ['Machine gun', "Hold the trigger for a hailstorm of bullets. Just don't let it overheat!"],
     laser: ['Laser', 'Hold for a sizzling beam and slice up anyone in the way. Melts armor, but saw blades deflect it.'],
     saw: ['Saw blade', 'Slice up anyone who gets too close and deflect lasers wherever!'],
-    missiles: ['Heat seeking missiles', "Fire a salvo of three and forget. They chase down the nearest boat in any direction, unless it's hiding in camo."],
+    missiles: ['Heat seeking missiles', "Fire and forget. They chase down the nearest boat in any direction, unless it's hiding in camo."],
     mines: ['Sea mines', 'Leave a little present behind you. Tailgaters get launched sky high.'],
   },
   fr: {
@@ -253,7 +253,7 @@ const ITEM_TEXT = {
     machinegun: ['Mitrailleuse', 'Maintenez la gâchette pour une pluie de balles. Mais attention à la surchauffe !'],
     laser: ['Laser', 'Maintenez pour un rayon brûlant qui découpe tout sur son passage. Fait fondre le blindage, mais les scies le dévient.'],
     saw: ['Scie circulaire', "Découpez tous ceux qui s'approchent trop et renvoyez les lasers n'importe où !"],
-    missiles: ['Missiles à tête chercheuse', "Tirez une salve de trois et oubliez. Ils poursuivent le bateau le plus proche, dans n'importe quelle direction, sauf s'il est camouflé."],
+    missiles: ['Missiles à tête chercheuse', "Tirez et oubliez. Ils poursuivent le bateau le plus proche, dans n'importe quelle direction, sauf s'il est camouflé."],
     mines: ['Mines marines', "Laissez un petit cadeau derrière vous. Ceux qui vous collent s'envolent jusqu'au ciel."],
   },
   de: {
@@ -266,7 +266,7 @@ const ITEM_TEXT = {
     machinegun: ['Maschinengewehr', 'Halt den Abzug gedrückt für einen Kugelhagel. Lass es nur nicht überhitzen!'],
     laser: ['Laser', 'Halt gedrückt für einen glühenden Strahl, der alles im Weg zerschneidet. Schmilzt Panzerung, aber Kreissägen lenken ihn ab.'],
     saw: ['Kreissäge', 'Zersäg alle, die zu nah kommen, und lenk Laser irgendwohin ab!'],
-    missiles: ['Lenkraketen', 'Eine Dreiersalve abfeuern und vergessen. Sie jagen das nächste Boot in jeder Richtung, außer es ist getarnt.'],
+    missiles: ['Lenkraketen', 'Abfeuern und vergessen. Sie jagen das nächste Boot in jeder Richtung, außer es ist getarnt.'],
     mines: ['Seeminen', 'Hinterlass ein kleines Geschenk. Drängler fliegen hoch in die Luft.'],
   },
 };
