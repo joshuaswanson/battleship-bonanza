@@ -39,10 +39,11 @@ const OUTLINE_VERT = /* glsl */ `
 
 const OUTLINE_FRAG = /* glsl */ `
   uniform vec3 uColor;
+  uniform float uOpacity;
   #include <common>
   #include <fog_pars_fragment>
   void main() {
-    gl_FragColor = vec4(uColor, 1.0);
+    gl_FragColor = vec4(uColor, uOpacity);
     #include <colorspace_fragment>
     #include <fog_fragment>
   }
@@ -55,7 +56,7 @@ export function outlineMaterial(thickness) {
     material = new THREE.ShaderMaterial({
       uniforms: THREE.UniformsUtils.merge([
         THREE.UniformsLib.fog,
-        { uThickness: { value: thickness }, uColor: { value: new THREE.Color(INK) } },
+        { uThickness: { value: thickness }, uColor: { value: new THREE.Color(INK) }, uOpacity: { value: 1 } },
       ]),
       vertexShader: OUTLINE_VERT,
       fragmentShader: OUTLINE_FRAG,

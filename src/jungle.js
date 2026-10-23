@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { createWater } from './water.js';
-import { toon, outlined, mulberry32 } from './toon.js';
+import { toon, glow, outlined, mulberry32 } from './toon.js';
 import { Batcher, COLORS, mat, LOW_SPHERE, CYLINDER, CONE, ROCK, addPalm, createSky, createCloud, createArch, SUN_DIR } from './world.js';
 
 const CELL = 3;
@@ -92,20 +92,48 @@ export function riverSurface(track) {
       const s = i * spacing + along;
       out.s = s;
       out.level = track.level(s);
-      out.amp = track.onLift(s) ? 0 : RIVER_AMP;
+      out.amp = track.inTunnel(s) ? 0.2 : RIVER_AMP;
       out.dist = Math.hypot(x - px[i], z - pz[i]);
       return out;
     },
   };
 }
 
+const ARCH_TOP = 16;
+const ARCH_FLOOR = -5;
+const LID = 18;
+
+function highLevel(track, s) {
+  let d = track.ahead(track.river.seam, s);
+  if (d > track.length / 2) d -= track.length;
+  return track.river.top - track.river.slope * d;
+}
+
+function tunnelMask(track, s) {
+  if (track.inTunnel(s)) return 1;
+  const r = track.river;
+  const toEntrance = track.ahead(s, r.tunnelIn);
+  const fromExit = track.ahead(r.tunnelOut, s);
+  return Math.max(0, 1 - smooth(0, 60, toEntrance), 1 - smooth(0, 60, fromExit));
+}
+
+function isHole(surface, track, x, z) {
+  const { s, dist } = surface.sample(x, z);
+  return track.inTunnel(s) && dist < track.halfWidth + 10;
+}
+
 function terrainHeight(surface, track, x, z) {
-  const { level, dist } = surface.sample(x, z);
+  const { level, dist, s } = surface.sample(x, z);
   const hw = track.halfWidth;
   const bank = smooth(hw - 4, hw + 7, dist);
   const hills = smooth(hw + 7, hw + 70, dist) * (2 + 7 * noise(x, z));
   const mountains = smooth(140, 330, dist) * 70 * (0.5 + 0.6 * noise(x * 1.7 + 300, z * 1.7));
-  return level - 4 + bank * 8.5 + hills + mountains;
+  const normal = level - 4 + bank * 8.5 + hills + mountains;
+  const mask = tunnelMask(track, s);
+  if (mask <= 0) return normal;
+  const ridge = highLevel(track, s) + LID + 4 + 14 * noise(x * 2.3, z * 2.3) * smooth(hw + 10, hw + 40, dist);
+  const weight = mask * smooth(hw + 6, hw + 11, dist);
+  return normal + (Math.max(normal, ridge) - normal) * weight;
 }
 
 function buildTerrain(surface, track) {
@@ -115,12 +143,14 @@ function buildTerrain(surface, track) {
   const rows = Math.ceil((maxZ - minZ) / step) + 1;
   const heights = new Float32Array(cols * rows);
   const levels = new Float32Array(cols * rows);
+  const holes = new Uint8Array(cols * rows);
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const x = minX + c * step;
       const z = minZ + r * step;
       heights[r * cols + c] = terrainHeight(surface, track, x, z);
       levels[r * cols + c] = surface.sample(x, z).level;
+      holes[r * cols + c] = isHole(surface, track, x, z) ? 1 : 0;
     }
   }
   const positions = [];
@@ -136,6 +166,7 @@ function buildTerrain(surface, track) {
   const c3 = new THREE.Vector3();
   const n = new THREE.Vector3();
   const tri = (i0, i1, i2, cIdx) => {
+    if (holes[i0] || holes[i1] || holes[i2]) return;
     for (const [v, idx] of [[a, i0], [b, i1], [c3, i2]]) {
       const rr = Math.floor(idx / cols);
       const cc = idx % cols;
@@ -166,36 +197,204 @@ function buildTerrain(surface, track) {
   return new THREE.Mesh(geometry, toon(0xffffff, { vertexColors: true }));
 }
 
-function buildRiver(track) {
+function ribbon(track, from, to, levelAt, positions) {
   const hw = track.halfWidth + 8;
-  const { N, spacing, river } = track;
-  const positions = [];
   const lanes = 10;
-  const at = (i, lane) => {
-    const k = track.wrap(i);
+  const at = (k, lane) => {
+    const i = track.wrap(k);
     const lat = -hw + (2 * hw * lane) / lanes;
-    return [track.px[k] + track.nx[k] * lat, track.pz[k] + track.nz[k] * lat];
+    return [track.px[i] + track.nx[i] * lat, track.pz[i] + track.nz[i] * lat];
   };
-  for (let i = 0; i < N; i++) {
-    const s0 = i * spacing;
-    const s1 = (i + 1) * spacing;
-    if (track.ahead(s0, river.falls) < spacing) continue;
-    if (track.onLift(s0) && track.level(s0) > 0.5) continue;
-    if (track.onLift(s1) && track.level(s1) > 0.5) continue;
-    const y0 = track.level(s0);
-    const y1 = track.level(s1);
+  for (let k = from; k < to; k++) {
+    const s0 = k * track.spacing;
+    const s1 = (k + 1) * track.spacing;
+    if (track.river.drops.some((d) => track.ahead(s0, d.s) < track.spacing)) continue;
+    const y0 = levelAt(s0);
+    const y1 = levelAt(s1);
     for (let lane = 0; lane < lanes; lane++) {
-      const [ax, az] = at(i, lane);
-      const [bx, bz] = at(i, lane + 1);
-      const [cx, cz] = at(i + 1, lane);
-      const [dx, dz] = at(i + 1, lane + 1);
+      const [ax, az] = at(k, lane);
+      const [bx, bz] = at(k, lane + 1);
+      const [cx, cz] = at(k + 1, lane);
+      const [dx, dz] = at(k + 1, lane + 1);
       positions.push(ax, y0, az, cx, y1, cz, bx, y0, bz);
       positions.push(bx, y0, bz, cx, y1, cz, dx, y1, dz);
     }
   }
+}
+
+const lowLevel = (track) => (s) => track.level(s, track.inTunnel(s) && track.pastSeam(s) ? 1 : 0);
+const copyLevel = (track) => (s) => highLevel(track, s);
+
+function buildRiver(track) {
+  const { river, spacing, N } = track;
+  const kIn = Math.round(river.tunnelIn / spacing);
+  const kOut = Math.round(river.tunnelOut / spacing);
+  const kSeam = Math.round(river.seam / spacing);
+  const positions = [];
+  ribbon(track, kOut, kIn + N, (s) => track.level(s), positions);
+  ribbon(track, kIn, kOut, lowLevel(track), positions);
+  ribbon(track, kSeam - GHOST, kOut, copyLevel(track), positions);
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   return createWater({ geometry, flat: true, amp: RIVER_AMP, deep: 0x1c8f86, shallow: 0x4fd6b4 });
+}
+
+const GHOST = 45;
+
+function archPoint(track, k, theta, levelAt, extra = 0) {
+  const i = track.wrap(k);
+  const w = track.halfWidth + 7 + extra;
+  const lat = Math.cos(theta) * w;
+  const y = levelAt(k * track.spacing) + ARCH_FLOOR + (ARCH_TOP - ARCH_FLOOR) * Math.sin(theta);
+  return new THREE.Vector3(track.px[i] + track.nx[i] * lat, y, track.pz[i] + track.nz[i] * lat);
+}
+
+function buildTube(track, from, to, levelAt) {
+  const steps = 16;
+  const positions = [];
+  const colors = [];
+  const dark = new THREE.Color(0x4a4038);
+  const light = new THREE.Color(0x7d6d5c);
+  const moss = new THREE.Color(0x3f6f3a);
+  const c = new THREE.Color();
+  for (let k = from; k < to; k++) {
+    for (let j = 0; j < steps; j++) {
+      const t0 = (j / steps) * Math.PI;
+      const t1 = ((j + 1) / steps) * Math.PI;
+      const quad = [archPoint(track, k, t0, levelAt), archPoint(track, k + 1, t0, levelAt), archPoint(track, k, t1, levelAt), archPoint(track, k + 1, t1, levelAt)];
+      for (const idx of [0, 1, 2, 2, 1, 3]) {
+        const p = quad[idx];
+        const up = Math.sin(idx < 2 ? t0 : t1);
+        c.copy(dark).lerp(light, up);
+        if (noise(p.x * 4, p.z * 4 + p.y * 3) > 0.72) c.lerp(moss, 0.6);
+        positions.push(p.x, p.y, p.z);
+        colors.push(c.r, c.g, c.b);
+      }
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  geometry.computeVertexNormals();
+  return new THREE.Mesh(geometry, toon(0xffffff, { vertexColors: true, side: THREE.DoubleSide }));
+}
+
+function buildShell(track, from, to) {
+  const positions = [];
+  const hw = track.halfWidth + 10;
+  const corner = (k, lat, y) => {
+    const i = track.wrap(k);
+    return [track.px[i] + track.nx[i] * lat, y, track.pz[i] + track.nz[i] * lat];
+  };
+  const lowAt = lowLevel(track);
+  for (let k = from; k < to; k++) {
+    const lid0 = highLevel(track, k * track.spacing) + LID;
+    const lid1 = highLevel(track, (k + 1) * track.spacing) + LID;
+    const base0 = lowAt(k * track.spacing) + ARCH_FLOOR - 2;
+    const base1 = lowAt((k + 1) * track.spacing) + ARCH_FLOOR - 2;
+    for (const side of [-1, 1]) {
+      const a = corner(k, side * hw, base0);
+      const b = corner(k + 1, side * hw, base1);
+      const c = corner(k, side * hw, lid0);
+      const d = corner(k + 1, side * hw, lid1);
+      positions.push(...a, ...b, ...c, ...c, ...b, ...d);
+    }
+    const a = corner(k, -hw, lid0);
+    const b = corner(k + 1, -hw, lid1);
+    const c = corner(k, hw, lid0);
+    const d = corner(k + 1, hw, lid1);
+    positions.push(...a, ...b, ...c, ...c, ...b, ...d);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.computeVertexNormals();
+  return new THREE.Mesh(geometry, toon(0x8b7d6e, { side: THREE.DoubleSide }));
+}
+
+function buildMouth(track, k, levelAt, top) {
+  const hw = track.halfWidth + 10;
+  const i = track.wrap(k);
+  const base = levelAt(k * track.spacing);
+  const shape = new THREE.Shape();
+  shape.moveTo(-hw, base + ARCH_FLOOR - 2);
+  shape.lineTo(hw, base + ARCH_FLOOR - 2);
+  shape.lineTo(hw, top);
+  shape.lineTo(-hw, top);
+  shape.closePath();
+  const hole = new THREE.Path();
+  for (let j = 0; j <= 24; j++) {
+    const theta = (j / 24) * Math.PI;
+    const w = track.halfWidth + 7;
+    const x = Math.cos(theta) * w;
+    const y = base + ARCH_FLOOR + (ARCH_TOP - ARCH_FLOOR) * Math.sin(theta);
+    if (j === 0) hole.moveTo(x, y);
+    else hole.lineTo(x, y);
+  }
+  shape.holes.push(hole);
+  const geometry = new THREE.ShapeGeometry(shape);
+  const mesh = outlined(geometry, toon(0x8b7d6e, { side: THREE.DoubleSide }), 0);
+  const basis = new THREE.Matrix4().makeBasis(
+    new THREE.Vector3(track.nx[i], 0, track.nz[i]),
+    new THREE.Vector3(0, 1, 0),
+    new THREE.Vector3(track.tx[i], 0, track.tz[i]),
+  );
+  mesh.applyMatrix4(basis);
+  mesh.position.set(track.px[i], 0, track.pz[i]);
+  return mesh;
+}
+
+function buildCap(track, k, levelAt, color) {
+  const i = track.wrap(k);
+  const w = track.halfWidth + 8;
+  const geometry = new THREE.PlaneGeometry(w * 2, ARCH_TOP - ARCH_FLOOR + 2);
+  const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide, fog: false }));
+  mesh.position.set(track.px[i], levelAt(k * track.spacing) + (ARCH_TOP + ARCH_FLOOR) / 2, track.pz[i]);
+  mesh.rotation.y = track.heading(i);
+  return mesh;
+}
+
+function buildCrystals(track, from, to, levelAt) {
+  const group = new THREE.Group();
+  const materials = [glow(0x6cf2ff), glow(0xff7ad9), glow(0xb6ff6c)];
+  for (let k = from; k < to; k++) {
+    if (k % 11 !== 0) continue;
+    for (const side of [-1, 1]) {
+      const theta = side < 0 ? Math.PI - 0.5 : 0.5;
+      const p = archPoint(track, k, theta, levelAt, -0.6);
+      for (let n = 0; n < 3; n++) {
+        const seed = Math.sin((k * 7 + n * 13 + side * 5) * 12.9898) * 43758.5453;
+        const r = seed - Math.floor(seed);
+        const mesh = new THREE.Mesh(CRYSTAL, materials[(k + n + (side > 0 ? 1 : 0)) % 3]);
+        mesh.position.set(p.x + (r - 0.5) * 1.6, p.y - 0.4 + n * 0.3, p.z + (r - 0.5) * 1.6);
+        mesh.scale.set(0.35 + r * 0.25, 0.9 + r * 0.9, 0.35 + r * 0.25);
+        mesh.rotation.set((r - 0.5) * 0.8, r * 3, (n - 1) * 0.5 * side);
+        group.add(mesh);
+      }
+    }
+  }
+  return group;
+}
+
+const CRYSTAL = new THREE.OctahedronGeometry(1, 0);
+
+function buildTunnel(track) {
+  const { river, spacing, N } = track;
+  const kIn = Math.round(river.tunnelIn / spacing);
+  const kOut = Math.round(river.tunnelOut / spacing);
+  const kSeam = Math.round(river.seam / spacing);
+  const low = lowLevel(track);
+  const high = copyLevel(track);
+  const group = new THREE.Group();
+  group.add(buildTube(track, kIn, kOut, low));
+  group.add(buildTube(track, kSeam - GHOST, kOut, high));
+  group.add(buildCrystals(track, kIn, kOut, low));
+  group.add(buildCrystals(track, kSeam - GHOST, kOut, high));
+  group.add(buildShell(track, kIn, kOut));
+  group.add(buildMouth(track, kIn, low, highLevel(track, river.tunnelIn) + LID));
+  group.add(buildMouth(track, kOut, high, highLevel(track, river.tunnelOut) + LID));
+  group.add(buildCap(track, kOut, low, SKY_GREEN));
+  group.add(buildCap(track, kSeam - GHOST, high, 0x15110d));
+  return group;
 }
 
 const FALL_VERT = /* glsl */ `
@@ -228,11 +427,12 @@ const FALL_FRAG = /* glsl */ `
   }
 `;
 
-function buildFalls(track) {
-  const s = track.river.falls;
+function buildFalls(track, drop) {
+  const s = drop.s;
   const i = Math.floor(s / track.spacing);
   const px = track.px[i], pz = track.pz[i], tx = track.tx[i], tz = track.tz[i], nx = track.nx[i], nz = track.nz[i];
-  const height = track.map.height;
+  const height = drop.height;
+  const bottom = track.level(s + 1);
   const hw = track.halfWidth + 8;
   const cols = 24;
   const rows = 14;
@@ -241,8 +441,8 @@ function buildFalls(track) {
   const indices = [];
   for (let r = 0; r <= rows; r++) {
     const u = r / rows;
-    const along = 1 + 9 * Math.sqrt(u);
-    const y = height * (1 - u) + 0.3 * (1 - u);
+    const along = 1 + (height > 8 ? 9 : 3) * Math.sqrt(u);
+    const y = bottom + height * (1 - u) + 0.3 * (1 - u);
     for (let c = 0; c <= cols; c++) {
       const lat = -hw + (2 * hw * c) / cols;
       positions.push(px + tx * along + nx * lat, y, pz + tz * along + nz * lat);
@@ -267,83 +467,7 @@ function buildFalls(track) {
     fog: true,
   });
   const mesh = new THREE.Mesh(geometry, material);
-  return { mesh, material, base: { x: px + tx * 10, z: pz + tz * 10, nx, nz, hw: track.halfWidth } };
-}
-
-function beltTexture() {
-  const canvas = document.createElement('canvas');
-  canvas.width = 128;
-  canvas.height = 128;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#39424f';
-  ctx.fillRect(0, 0, 128, 128);
-  ctx.fillStyle = '#2b323c';
-  for (let y = 0; y < 128; y += 16) ctx.fillRect(0, y, 128, 5);
-  ctx.lineJoin = 'round';
-  ctx.beginPath();
-  ctx.moveTo(24, 92);
-  ctx.lineTo(64, 48);
-  ctx.lineTo(104, 92);
-  ctx.lineTo(104, 70);
-  ctx.lineTo(64, 26);
-  ctx.lineTo(24, 70);
-  ctx.closePath();
-  ctx.fillStyle = '#FFD23F';
-  ctx.fill();
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-  return texture;
-}
-
-function buildLift(track, batch) {
-  const { river, spacing } = track;
-  const start = Math.floor(river.liftStart / spacing) - 3;
-  const end = Math.ceil(river.liftEnd / spacing) + 2;
-  const hw = track.halfWidth;
-  const positions = [];
-  const uvs = [];
-  const sides = [];
-  let v = 0;
-  for (let k = start; k < end; k++) {
-    const i0 = track.wrap(k);
-    const i1 = track.wrap(k + 1);
-    const y0 = track.level(k * spacing) - 0.08;
-    const y1 = track.level((k + 1) * spacing) - 0.08;
-    const corner = (i, lat, y) => [track.px[i] + track.nx[i] * lat, y, track.pz[i] + track.nz[i] * lat];
-    const a = corner(i0, -hw, y0);
-    const b = corner(i0, hw, y0);
-    const c = corner(i1, -hw, y1);
-    const d = corner(i1, hw, y1);
-    const v1 = v + spacing / 9;
-    positions.push(...a, ...c, ...b, ...b, ...c, ...d);
-    uvs.push(0, v, 0, v1, (hw * 2) / 9, v, (hw * 2) / 9, v, 0, v1, (hw * 2) / 9, v1);
-    for (const [p, q] of [[a, c], [d, b]]) {
-      sides.push(...p, ...q, p[0], p[1] - 1.6, p[2], p[0], p[1] - 1.6, p[2], ...q, q[0], q[1] - 1.6, q[2]);
-    }
-    v = v1;
-    if (k % 4 === 0) {
-      for (const side of [-1, 1]) {
-        const [x, y, z] = corner(i0, side * (hw + 0.6), y0);
-        batch.add(k % 8 === 0 ? 'railYellow' : 'railDark', new THREE.BoxGeometry(1, 1.4, spacing * 4.1), mat(x, y + 0.7, z, 1, 1, 1, 0, track.heading(i0), 0));
-        if (k % 12 === 0) batch.add('pillar', CYLINDER, mat(x, y - 6, z, 1.1, 12, 1.1));
-      }
-    }
-  }
-  const texture = beltTexture();
-  texture.repeat.set(1, 1);
-  const deckGeometry = new THREE.BufferGeometry();
-  deckGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  deckGeometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-  deckGeometry.computeVertexNormals();
-  const deck = new THREE.Mesh(deckGeometry, toon(0xffffff, { map: texture, side: THREE.DoubleSide }));
-  const sideGeometry = new THREE.BufferGeometry();
-  sideGeometry.setAttribute('position', new THREE.Float32BufferAttribute(sides, 3));
-  sideGeometry.computeVertexNormals();
-  const skirt = new THREE.Mesh(sideGeometry, toon(0x2b3440, { side: THREE.DoubleSide }));
-  const group = new THREE.Group();
-  group.add(deck, skirt);
-  return { group, texture };
+  return { mesh, material, base: { x: px + tx * 10, y: bottom, z: pz + tz * 10, nx, nz, hw: track.halfWidth }, big: height > 8, lip: { i, top: bottom + height } };
 }
 
 const CANOPY = new THREE.SphereGeometry(1, 9, 6);
@@ -449,12 +573,11 @@ export function createJungle(group, track, fx) {
   group.add(buildTerrain(surface, track));
   const water = buildRiver(track);
   group.add(water.mesh);
-  const falls = buildFalls(track);
-  group.add(falls.mesh);
+  const falls = track.river.drops.map((drop) => buildFalls(track, drop));
+  for (const f of falls) group.add(f.mesh);
+  group.add(buildTunnel(track));
 
   const batch = new Batcher();
-  const lift = buildLift(track, batch);
-  group.add(lift.group);
 
   const rand = mulberry32(7203);
   const hw = track.halfWidth;
@@ -470,8 +593,8 @@ export function createJungle(group, track, fx) {
     const idx = Math.floor(rand() * track.N);
     const side = rand() < 0.5 ? -1 : 1;
     const p = track.point(idx, side * (hw + from + rand() * (to - from)));
-    const { dist } = surface.sample(p.x, p.z);
-    return dist < hw + from - 0.5 || steep(p.x, p.z) ? null : p;
+    const { dist, s } = surface.sample(p.x, p.z);
+    return dist < hw + from - 0.5 || tunnelMask(track, s) > 0 || steep(p.x, p.z) ? null : p;
   };
   const place = (count, from, to, plant) => {
     for (let n = 0, tries = 0; n < count && tries < count * 6; tries++) {
@@ -496,8 +619,8 @@ export function createJungle(group, track, fx) {
     addGiant(batch, x, terrainHeight(surface, track, x, z), z, rand, 1 + rand() * 0.3);
     n++;
   }
-  const lip = track.river.falls;
-  const li = Math.floor(lip / track.spacing);
+  const big = falls.find((f) => f.big);
+  const li = big.lip.i;
   for (const side of [-1, 1]) {
     for (let k = 0; k < 4; k++) {
       const lat = side * (hw + 2 + k * 3);
@@ -505,7 +628,7 @@ export function createJungle(group, track, fx) {
       const x = track.px[li] + track.nx[li] * lat + track.tx[li] * along;
       const z = track.pz[li] + track.nz[li] * lat + track.tz[li] * along;
       const s = 3 + rand() * 3;
-      batch.add('rock', ROCK, mat(x, track.map.height + s * 0.3 - (along > 2 ? 4 : 0), z, s, s * 0.8, s, rand(), rand(), rand()));
+      batch.add('rock', ROCK, mat(x, big.lip.top + s * 0.3 - (along > 2 ? 4 : 0), z, s, s * 0.8, s, rand(), rand(), rand()));
     }
   }
   const scenery = new THREE.Group();
@@ -525,7 +648,7 @@ export function createJungle(group, track, fx) {
     group.add(cloud);
   }
 
-  const base = falls.base;
+  const base = big.base;
   return {
     fog,
     water,
@@ -534,8 +657,7 @@ export function createJungle(group, track, fx) {
     shores: [],
     update(t, dt, camera) {
       water.update(t);
-      falls.material.uniforms.uTime.value = t;
-      lift.texture.offset.y -= dt * 2.2;
+      for (const f of falls) f.material.uniforms.uTime.value = t;
       sky.position.copy(camera.position);
       for (const cloud of clouds) {
         cloud.position.x += cloud.userData.speed * dt;
@@ -544,7 +666,7 @@ export function createJungle(group, track, fx) {
       for (let i = 0; i < 3; i++) {
         if (Math.random() > dt * 30) continue;
         const lat = (Math.random() - 0.5) * 2 * (base.hw + 4);
-        fx.mist(base.x + base.nx * lat, 0.5, base.z + base.nz * lat);
+        fx.mist(base.x + base.nx * lat, base.y + 0.5, base.z + base.nz * lat);
       }
     },
   };

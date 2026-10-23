@@ -438,18 +438,15 @@ export class Race {
     const t = this.track;
     const level = t.level(s);
     const before = b.surfaceLevel ?? level;
+    if (level - before > 10 && b.isPlayer) this.emit('warp', { dy: level - before });
     if (before - level > 2) {
       let vy = 3;
       if (b.air?.fall) vy = b.air.vy;
       else if (b.air) vy = (b.air.peak * 4 * (1 - (2 * b.air.t) / b.air.dur)) / b.air.dur;
       b.air = { fall: true, y: before + b.yOffset, vy };
-      if (b.isPlayer) this.emit('falls');
+      if (b.isPlayer && before - level > 8) this.emit('falls');
     }
     b.surfaceLevel = level;
-    if (t.onLift(s) && !b.air) {
-      b.speed = Math.max(b.speed, BASE_SPEED * 1.05);
-      b.boost = Math.max(b.boost, 0.15);
-    }
   }
 
   collideShores(b) {
@@ -1284,10 +1281,7 @@ export class Race {
     for (let i = 0; i < 4; i++) this.fx.sparkBurst(c.x, c.y + 1, c.z, i % 2 ? 0xffd23f : 0xff5a3a, 20);
     this.sfx.play('boom', b.pos);
     this.sfx.play('boom', b.pos);
-    if (this.player) {
-      const near = 1 - Math.hypot(this.player.pos.x - c.x, this.player.pos.z - c.z) / 200;
-      if (near > 0) this.emit('quake', { amount: 1 + 4 * near * near });
-    }
+    if (this.player && Math.hypot(this.player.pos.x - c.x, this.player.pos.z - c.z) < 120) this.emit('blast');
     for (const o of this.boats) {
       if (o === b || !o.alive) continue;
       const dx = o.pos.x - b.pos.x;

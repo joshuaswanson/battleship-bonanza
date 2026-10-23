@@ -163,7 +163,7 @@ export class Hud {
         void this.flash.offsetWidth;
         this.flash.className = 'hud-flash on heal';
         break;
-      case 'quake':
+      case 'blast':
         this.flash.className = 'hud-flash';
         void this.flash.offsetWidth;
         this.flash.className = 'hud-flash on blast';

@@ -72,30 +72,35 @@ export function createTrack(map) {
   }
 
   const ahead = (from, s) => (((s - from) % length) + length) % length;
-  const river = map.height
-    ? {
-        falls: project(...map.falls).s,
-        liftStart: project(...map.lift[0]).s,
-        liftEnd: project(...map.lift[1]).s,
-      }
-    : null;
+  let river = null;
+  if (map.river) {
+    const [tunnelIn, seam, tunnelOut] = map.river.tunnel.map((f) => f * length);
+    const drops = map.river.drops.map(([f, height]) => ({ s: f * length, height }));
+    river = {
+      slope: map.river.slope,
+      drops,
+      tunnelIn,
+      seam,
+      tunnelOut,
+      top: map.river.slope * length + drops.reduce((sum, d) => sum + d.height, 0),
+    };
+  }
 
-  function level(s) {
+  function level(s, lap = 0) {
     if (!river) return 0;
-    const lower = ahead(river.falls, river.liftStart);
-    const climb = ahead(river.liftStart, river.liftEnd);
-    const sinceFalls = ahead(river.falls, s);
-    if (sinceFalls < lower) return 0;
-    if (sinceFalls < lower + climb) {
-      const u = (sinceFalls - lower) / climb;
-      return map.height * u * u * (3 - 2 * u);
-    }
-    return map.height;
+    const d = ahead(river.seam, s) + lap * length;
+    let h = river.top - river.slope * d;
+    for (const drop of river.drops) if (d > ahead(river.seam, drop.s)) h -= drop.height;
+    return h;
   }
 
-  function onLift(s) {
-    return !!river && ahead(river.liftStart, s) < ahead(river.liftStart, river.liftEnd);
+  function inTunnel(s) {
+    return !!river && ahead(river.tunnelIn, s) < ahead(river.tunnelIn, river.tunnelOut);
   }
 
-  return { N, length, spacing, px, pz, tx, tz, nx, nz, wrap, project, point, heading, halfWidth: map.halfWidth, map, river, level, onLift, ahead };
+  function pastSeam(s) {
+    return ahead(river.tunnelIn, s) > ahead(river.tunnelIn, river.seam);
+  }
+
+  return { N, length, spacing, px, pz, tx, tz, nx, nz, wrap, project, point, heading, halfWidth: map.halfWidth, map, river, level, inTunnel, pastSeam, ahead };
 }

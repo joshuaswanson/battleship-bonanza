@@ -630,7 +630,24 @@ export class Loadout {
       m.opacity = opacity;
     }
     this.boat.body.traverse((o) => {
-      if (o.isMesh && o.material.isShaderMaterial) o.visible = !fading;
+      if (!o.isMesh || !o.material.isShaderMaterial) return;
+      if (!o.material.uniforms.uOpacity) {
+        o.visible = !fading;
+        return;
+      }
+      if (fading && !o.userData.solid) {
+        o.userData.solid = o.material;
+        o.material = o.material.clone();
+        o.material.transparent = true;
+        o.material.depthWrite = false;
+      }
+      if (!o.userData.solid) return;
+      if (fading) o.material.uniforms.uOpacity.value = opacity;
+      else {
+        o.material.dispose();
+        o.material = o.userData.solid;
+        delete o.userData.solid;
+      }
     });
   }
 

@@ -121,16 +121,16 @@ export class Sfx {
         this.tone(300, 0.3, { type: 'square', vol: 0.05 * v, to: 600 });
         break;
       case 'crackle':
-        for (let i = 0; i < 3; i++) this.noise(0.03 + Math.random() * 0.04, { vol: 0.07 * v, freq: 4000 + Math.random() * 3000, type: 'highpass' });
+        for (let i = 0; i < 2; i++) this.noise(0.03 + Math.random() * 0.03, { vol: 0.035 * v, freq: 2200 + Math.random() * 800, type: 'bandpass' });
         break;
       case 'zap':
-        this.noise(0.25, { vol: 0.22 * v, freq: 3500, type: 'bandpass', to: 6000 });
-        this.tone(90, 0.2, { type: 'square', vol: 0.08 * v, to: 60 });
+        this.noise(0.14, { vol: 0.09 * v, freq: 1600, type: 'bandpass', to: 900 });
+        this.tone(260, 0.16, { type: 'triangle', vol: 0.06 * v, to: 110 });
         break;
       case 'emp':
-        this.noise(0.4, { vol: 0.25 * v, freq: 5000, type: 'bandpass', to: 1500 });
-        this.tone(160, 0.5, { vol: 0.3 * v, to: 1400 });
-        this.tone(1400, 0.4, { type: 'triangle', vol: 0.08 * v, to: 200, delay: 0.1 });
+        this.tone(220, 0.6, { vol: 0.3 * v, to: 55 });
+        this.noise(0.5, { vol: 0.14 * v, freq: 700, to: 150 });
+        this.tone(520, 0.45, { type: 'triangle', vol: 0.04 * v, to: 260, delay: 0.05 });
         break;
       case 'hook':
         this.tone(400, 0.14, { type: 'square', vol: 0.08 * v, to: 1100 });
