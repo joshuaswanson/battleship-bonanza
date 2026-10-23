@@ -1,5 +1,5 @@
 export const COUNT_LAND = 0.11;
-const RACE_VOLUME = 0.2;
+const RACE_VOLUME = 0.45;
 const SFX_VOLUME = 0.85;
 
 function track(file, volume) {
