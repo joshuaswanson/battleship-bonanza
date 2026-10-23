@@ -10,11 +10,15 @@ const SKY_GREEN = 0xd2f2dc;
 
 const JUNGLE_COLORS = {
   ...COLORS,
-  bark: 0x8a5a33,
-  leaf: 0x3fae4a,
-  leafLight: 0x6fcf55,
-  leafDark: 0x23894a,
+  bark: 0x7a5230,
+  barkLight: 0x9c7046,
+  leaf: 0x2f9a45,
+  leafLight: 0x56c04f,
+  leafDark: 0x1d7a3e,
   fern: 0x4cbf5a,
+  vine: 0x3f7a2c,
+  banana: 0x62d04c,
+  bananaDark: 0x3aa843,
   rock: 0x9a958c,
   pillar: 0x5b4636,
   railYellow: 0xffd23f,
@@ -343,18 +347,73 @@ function buildLift(track, batch) {
 }
 
 const CANOPY = new THREE.SphereGeometry(1, 9, 6);
+const TRUNK = new THREE.CylinderGeometry(0.62, 1, 1, 10);
+const LEAF = new THREE.SphereGeometry(1, 8, 4).scale(0.5, 0.07, 1.25).translate(0, 0, 1.2);
+const STEM = new THREE.CylinderGeometry(0.06, 0.09, 1, 5).translate(0, 0.5, 0);
+
+const tilted = (x, y, z, sx, sy, sz, pitch, yaw) =>
+  new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(pitch, yaw, 0, 'YXZ')), new THREE.Vector3(sx, sy, sz));
+
+const canopyKey = (rand) => ['leaf', 'leafLight', 'leafDark'][Math.floor(rand() * 3)];
+
+function addVines(batch, x, y, z, spread, count, rand) {
+  for (let i = 0; i < count; i++) {
+    const a = rand() * Math.PI * 2;
+    const d = spread * (0.4 + rand() * 0.6);
+    const len = 3 + rand() * 9;
+    batch.add('vine', CYLINDER, mat(x + Math.cos(a) * d, y - len / 2, z + Math.sin(a) * d, 0.09, len, 0.09));
+    if (rand() < 0.6) batch.add(canopyKey(rand), CANOPY, mat(x + Math.cos(a) * d, y - len, z + Math.sin(a) * d, 0.35, 0.45, 0.35));
+  }
+}
+
+function addGiant(batch, x, y, z, rand, scale = 1) {
+  const h = (20 + rand() * 12) * scale;
+  const girth = 1.1 + rand() * 0.4;
+  batch.add(rand() < 0.5 ? 'bark' : 'barkLight', TRUNK, mat(x, y + h / 2 - 1, z, girth, h, girth));
+  const fins = 3 + Math.floor(rand() * 2);
+  const spin = rand() * Math.PI;
+  for (let i = 0; i < fins; i++) {
+    const a = spin + (i / fins) * Math.PI * 2;
+    batch.add('bark', CONE, mat(x + Math.cos(a) * girth * 0.9, y + 1.2, z + Math.sin(a) * girth * 0.9, 0.22, 3.6, 1.7, 0, -a, 0));
+  }
+  const spread = 6 + rand() * 4;
+  const layers = [[h, spread], [h - 3.5, spread * 0.8]];
+  for (const [top, r] of layers) {
+    const blobs = 4 + Math.floor(rand() * 3);
+    for (let i = 0; i < blobs; i++) {
+      const a = (i / blobs) * Math.PI * 2 + rand();
+      const off = i === 0 ? 0 : r * (0.45 + rand() * 0.3);
+      const size = r * (0.5 + rand() * 0.25);
+      batch.add(canopyKey(rand), CANOPY, mat(x + Math.cos(a) * off, y + top + rand() * 1.2, z + Math.sin(a) * off, size, size * 0.36, size));
+    }
+  }
+  addVines(batch, x, y + h - 4, z, spread * 0.8, 4 + Math.floor(rand() * 4), rand);
+}
 
 function addBroadleaf(batch, x, y, z, rand, tall = 1) {
-  const h = (9 + rand() * 9) * tall;
-  batch.add('bark', CYLINDER, mat(x, y + h / 2 - 1, z, 0.6 + h * 0.03, h, 0.6 + h * 0.03));
+  const h = (9 + rand() * 8) * tall;
+  batch.add('bark', TRUNK, mat(x, y + h / 2 - 1, z, 0.55 + h * 0.025, h, 0.55 + h * 0.025));
   const blobs = 3 + Math.floor(rand() * 3);
-  const r = 3.4 + rand() * 2.2;
+  const r = 3.6 + rand() * 2.4;
   for (let i = 0; i < blobs; i++) {
     const a = rand() * Math.PI * 2;
-    const off = i === 0 ? 0 : r * 0.6;
-    const key = ['leaf', 'leafLight', 'leafDark'][Math.floor(rand() * 3)];
+    const off = i === 0 ? 0 : r * 0.65;
     const s = r * (i === 0 ? 1 : 0.7 + rand() * 0.25);
-    batch.add(key, CANOPY, mat(x + Math.cos(a) * off, y + h + (i === 0 ? 0.5 : -0.8 + rand() * 1.5), z + Math.sin(a) * off, s, s * 0.75, s));
+    batch.add(canopyKey(rand), CANOPY, mat(x + Math.cos(a) * off, y + h + (i === 0 ? 0.5 : -0.8 + rand() * 1.5), z + Math.sin(a) * off, s, s * 0.5, s));
+  }
+  if (rand() < 0.5) addVines(batch, x, y + h - 1, z, r * 0.8, 1 + Math.floor(rand() * 3), rand);
+}
+
+function addBanana(batch, x, y, z, rand) {
+  const leaves = 5 + Math.floor(rand() * 4);
+  const size = 1.1 + rand() * 1.2;
+  const stem = 1 + rand() * 1.6;
+  for (let i = 0; i < leaves; i++) {
+    const yaw = (i / leaves) * Math.PI * 2 + rand() * 0.5;
+    const pitch = -0.2 - rand() * 0.6;
+    const h = stem * (0.6 + rand() * 0.6);
+    batch.add('vine', STEM, tilted(x, y, z, 1, h, 1, Math.sin(yaw) * 0.25, 0));
+    batch.add(rand() < 0.5 ? 'banana' : 'bananaDark', LEAF, tilted(x, y + h, z, size, size, size * (1 + rand() * 0.6), -pitch, yaw));
   }
 }
 
@@ -414,32 +473,27 @@ export function createJungle(group, track, fx) {
     const { dist } = surface.sample(p.x, p.z);
     return dist < hw + from - 0.5 || steep(p.x, p.z) ? null : p;
   };
-  for (let n = 0, tries = 0; n < 1300 && tries < 8000; tries++) {
-    const p = bankSpot(7, 42);
-    if (!p) continue;
-    const y = terrainHeight(surface, track, p.x, p.z);
-    if (rand() < 0.7) addBroadleaf(batch, p.x, y, p.z, rand, 1 + rand() * 0.4);
-    else addPalm(batch, p.x, y - 0.5, p.z, rand, { height: 10 + rand() * 9, lean: rand() * 0.5, dir: rand() * Math.PI * 2 });
-    n++;
-  }
-  for (let n = 0, tries = 0; n < 1000 && tries < 6000; tries++) {
-    const p = bankSpot(3.5, 16);
-    if (!p) continue;
-    addBush(batch, p.x, terrainHeight(surface, track, p.x, p.z), p.z, rand);
-    n++;
-  }
-  for (let n = 0, tries = 0; n < 420 && tries < 4000; tries++) {
-    const p = bankSpot(5, 30);
-    if (!p) continue;
-    addFern(batch, p.x, terrainHeight(surface, track, p.x, p.z), p.z, rand);
-    n++;
-  }
-  for (let n = 0, tries = 0; n < 500 && tries < 9000; tries++) {
+  const place = (count, from, to, plant) => {
+    for (let n = 0, tries = 0; n < count && tries < count * 6; tries++) {
+      const p = bankSpot(from, to);
+      if (!p) continue;
+      plant(p.x, terrainHeight(surface, track, p.x, p.z), p.z);
+      n++;
+    }
+  };
+  place(320, 9, 50, (x, y, z) => addGiant(batch, x, y, z, rand));
+  place(1000, 6, 40, (x, y, z) => addBroadleaf(batch, x, y, z, rand, 0.9 + rand() * 0.5));
+  place(180, 5, 30, (x, y, z) => addPalm(batch, x, y - 0.5, z, rand, { height: 4 + rand() * 4, lean: rand() * 0.2, dir: rand() * Math.PI * 2 }));
+  place(160, 6, 30, (x, y, z) => addPalm(batch, x, y - 0.5, z, rand, { height: 11 + rand() * 8, lean: rand() * 0.5, dir: rand() * Math.PI * 2 }));
+  place(800, 3, 22, (x, y, z) => addBanana(batch, x, y, z, rand));
+  place(700, 3.5, 16, (x, y, z) => addBush(batch, x, y, z, rand));
+  place(400, 5, 30, (x, y, z) => addFern(batch, x, y, z, rand));
+  for (let n = 0, tries = 0; n < 420 && tries < 9000; tries++) {
     const x = minX + rand() * (maxX - minX);
     const z = minZ + rand() * (maxZ - minZ);
     const { dist } = surface.sample(x, z);
     if (dist < hw + 42 || dist > 260 || steep(x, z)) continue;
-    addBroadleaf(batch, x, terrainHeight(surface, track, x, z), z, rand, 1.2 + rand() * 0.5);
+    addGiant(batch, x, terrainHeight(surface, track, x, z), z, rand, 1 + rand() * 0.3);
     n++;
   }
   const lip = track.river.falls;
