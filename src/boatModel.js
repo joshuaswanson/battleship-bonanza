@@ -331,7 +331,7 @@ export function buildBoat(color, items) {
   body.add(flag);
   part(flag, 'cone', hasCamo ? toon(0x4f6b2c) : mats.paint, 0, 0, -0.45, 0.04, 0.9, 0.3, 0.02).rotation.x = -Math.PI / 2;
 
-  const refs = { root, body, flag, saw: null, flames: [], spinners: [], materials: [], parts: {}, hookMarkers: [], aimers: [], heatMats: {} };
+  const refs = { root, body, flag, saw: null, flames: [], spinners: [], materials: [], parts: {}, hookMarkers: [], aimers: [], heatMats: {}, swivels: [] };
 
   for (const id of items) {
     if (MOUNTED.has(id)) continue;
@@ -356,10 +356,13 @@ export function buildBoat(color, items) {
     refs.parts[id] = turret;
     part(turret, 'cylinder', mats.metal, 0, 0, 0, 1.15, 0.14, 1.15, 0.03);
     part(turret, 'cylinder', mats.dark, 0, baseH / 2, 0, 0.95, baseH, 0.95, 0.03);
+    const yaw = new THREE.Group();
+    yaw.position.y = baseH;
+    turret.add(yaw);
+    refs.swivels.push({ id, group: yaw });
     const module = new THREE.Group();
-    module.position.y = baseH;
     module.scale.setScalar(MODULE_SCALE);
-    turret.add(module);
+    yaw.add(module);
     const mounts = MODULES[id](module, mats, refs);
     for (const [key, v] of Object.entries(mounts ?? {})) {
       const marker = new THREE.Object3D();

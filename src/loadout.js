@@ -61,6 +61,7 @@ export class Loadout {
     this.buildIdentity();
     this.initPreview();
     this.heat = { machinegun: newHeat(), laser: newHeat() };
+    this.busy = {};
     this.heldSlots = new Set();
     this.autoFire = { machinegun: 0, laser: 0 };
     const slotFor = { KeyO: 0, KeyP: 1 };
@@ -343,6 +344,7 @@ export class Loadout {
     const id = this.setup.items[slot];
     if (!id || !this.boat) return;
     this.sfx.unlock();
+    this.busy[id] = 2.2;
     const b = this.boat;
     const fwd = this.forward();
     const up = new THREE.Vector3(0, 1, 0);
@@ -458,6 +460,16 @@ export class Loadout {
     }
   }
 
+  swivelIdle(dt) {
+    this.boat.swivels.forEach((s, i) => {
+      this.busy[s.id] = Math.max(0, (this.busy[s.id] ?? 0) - dt);
+      const busy = this.busy[s.id] > 0 || this.heat[s.id]?.trigger;
+      const wave = Math.sin(this.time * 0.8 + i * 2.1);
+      const target = busy ? 0 : 0.55 * Math.sign(wave) * Math.sqrt(Math.abs(wave));
+      s.group.rotation.y += (target - s.group.rotation.y) * (1 - Math.exp(-(busy ? 12 : 3) * dt));
+    });
+  }
+
   stepGun(dt) {
     const b = this.boat;
     const gun = this.heat.machinegun;
@@ -566,6 +578,7 @@ export class Loadout {
     this.sawBoost = Math.max(0, this.sawBoost - dt);
     if (saw) saw.rotation.x += dt * (this.sawBoost > 0 ? 45 : 6);
     updateAimers(b, dt);
+    this.swivelIdle(dt);
     updateMineHolder(b, dt);
     for (const id of ['machinegun', 'laser']) {
       this.autoFire[id] = Math.max(0, this.autoFire[id] - dt);
