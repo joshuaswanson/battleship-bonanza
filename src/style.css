@@ -844,6 +844,25 @@ kbd {
   flex: 1;
   min-height: 300px;
   pointer-events: none;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 0.9rem;
+}
+
+.try-hint {
+  margin: 0;
+  padding: 0.35rem 0.9rem;
+  font-weight: 600;
+  color: var(--ink);
+  background: rgba(244, 251, 255, 0.92);
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  box-shadow: 0 3px 0 var(--ink);
+}
+
+.try-hint kbd {
+  margin: 0 0.1rem;
 }
 
 #preview {
