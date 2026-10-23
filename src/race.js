@@ -1062,12 +1062,21 @@ export class Race {
 
     s.sound -= dt;
     const blade = refs.saw.getWorldPosition(new THREE.Vector3());
-    if (target && s.shield <= 0 && target.distanceToAxis2D(blade.x, blade.z) < HIT_RADIUS + 0.7) {
+    const cutting = target && s.shield <= 0 && target.distanceToAxis2D(blade.x, blade.z) < HIT_RADIUS + 0.7;
+    s.chop = cutting ? (s.chop ?? 0) + dt : 0;
+    const arm = refs.sawYaw.children[0];
+    const pitch = cutting ? Math.sin(s.chop * 16) * 0.2 + 0.08 : 0;
+    arm.rotation.x += (pitch - arm.rotation.x) * (1 - Math.exp(-25 * dt));
+    if (cutting) {
+      const toward = target.center().sub(blade).setY(0).normalize();
+      const contact = blade.clone().addScaledVector(toward, 1.5);
+      contact.y -= 0.5;
+      if (Math.random() < 0.7) this.fx.sparkBurst(contact.x, contact.y, contact.z, Math.random() < 0.5 ? 0xffe066 : 0xffffff, 3);
       s.tick -= dt;
       if (s.tick <= 0) {
         s.tick = 0.22;
         this.damage(target, 5, b, 'saw', { stun: 0.15 });
-        this.fx.sparkBurst(blade.x, blade.y, blade.z, 0xffe066, 10);
+        this.fx.sparkBurst(contact.x, contact.y, contact.z, 0xffa62b, 12);
         if (s.sound <= 0) {
           s.sound = 0.45;
           this.sfx.play('saw', b.pos);
