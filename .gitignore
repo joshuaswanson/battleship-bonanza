@@ -2,3 +2,4 @@ node_modules
 dist
 .claude
 tools/shots
+tools/balance-results.json
