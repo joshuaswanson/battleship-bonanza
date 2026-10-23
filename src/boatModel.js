@@ -688,8 +688,14 @@ export function buildItemModel(id, color) {
 export const AIM_DELAY = 0.3;
 const MINE_REST_Y = 1.05;
 
+export function launchMine(refs) {
+  if (!refs.mineLoaded) return;
+  refs.mineLoaded.visible = false;
+  refs.mineReload = null;
+}
+
 export function reloadMine(refs) {
-  if (refs.mineLoaded) refs.mineReload = 0;
+  if (refs.mineLoaded && !refs.mineLoaded.visible) refs.mineReload = 0.45;
 }
 
 export function updateMineHolder(refs, dt) {

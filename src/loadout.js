@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GROUPS, ITEMS, ITEM_IDS, STATS, statsFor, comboName } from './items.js';
-import { buildBoat, buildItemModel, buildMine, buildMissile, buildHook, aimTurret, updateAimers, stepGun, stepLaser, newHeat, gunDirection, laserDirection, reloadMine, updateMineHolder } from './boatModel.js';
+import { buildBoat, buildItemModel, buildMine, buildMissile, buildHook, aimTurret, updateAimers, stepGun, stepLaser, newHeat, gunDirection, laserDirection, launchMine, reloadMine, updateMineHolder } from './boatModel.js';
 import { createWater, waveHeight } from './water.js';
 import { Effects } from './effects.js';
 import { SUN_DIR } from './world.js';
@@ -385,12 +385,16 @@ export class Loadout {
         break;
       }
       case 'mines': {
-        if (b.mineReload != null) return;
+        if (!b.mineLoaded.visible) return;
         const mesh = buildMine();
         b.mineMount.getWorldPosition(mesh.position);
         this.scene.add(mesh);
-        reloadMine(b);
-        this.after(0.5, () => this.sfx.play('clank'));
+        launchMine(b);
+        this.after(ITEMS.mines.cooldown, () => {
+          if (this.boat !== b) return;
+          reloadMine(b);
+          this.after(0.5, () => this.sfx.play('clank'));
+        });
         this.movers.push({
           mesh,
           vel: fwd.clone().multiplyScalar(-6).addScaledVector(up, 9),

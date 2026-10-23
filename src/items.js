@@ -63,7 +63,7 @@ export const ITEMS = {
     name: 'Jet pack',
     group: 'gadgets',
     cooldown: 6,
-    blurb: "Who said boats can't fly? Leap over sea mines, and time it just right to dodge missiles and grappling hooks.",
+    blurb: "Who said boats can't fly? Leap over sea mines and dodge missiles and grappling hooks.",
   },
   grapple: {
     adj: 'Grabby',
