@@ -24,6 +24,7 @@ import * as visuals from './race/visuals.js';
 
 export { LAPS, MAX_HP, BASE_SPEED } from './race/shared.js';
 export const COUNTDOWN = 3.7;
+const KIND_ITEM = { bullet: 'machinegun', saw: 'saw', laser: 'laser', reflect: 'saw', flame: 'flamethrower', fire: 'flamethrower', propane: 'flamethrower', missile: 'missiles', mine: 'mines', spikes: 'spikes' };
 
 const MODULES = [machinegun, missiles, mines, grapple, emp, jetpack, laser, flamethrower, saw, spikes, aiming, course, visuals];
 
@@ -383,7 +384,13 @@ export class Race {
       this.sfx.play('clank', target.pos);
     }
     target.hp -= amount;
-    if (source !== target) source.stats.dealt += amount;
+    target.stats.taken += amount;
+    if (source !== target) {
+      source.stats.dealt += amount;
+      const item = KIND_ITEM[kind] ?? kind;
+      source.stats.byItem[item] = (source.stats.byItem[item] ?? 0) + amount;
+      source.stats.top = Math.max(source.stats.top, source.stats.dealt);
+    }
     if (source.isPlayer && source !== target) this.emit('dmg', { target, amount });
     target.flash = 1;
     const light = kind === 'bullet' || kind === 'flame' || kind === 'fire';

@@ -2321,6 +2321,74 @@ kbd {
   font-weight: 500;
 }
 
+.standings li {
+  grid-template-columns: 3.2rem 1.2rem 1fr auto auto;
+}
+
+.st-mini {
+  min-width: 4.6rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+  color: #4b6889;
+}
+
+.standings li.st-head {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.st-head .st-mini {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.st-mini i {
+  font-style: normal;
+  opacity: 0.5;
+}
+
+.race-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  margin: 0.9rem 0 0.4rem;
+}
+
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.45rem 0.6rem;
+  background: #ffffff;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+}
+
+.stat-card span {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #4b6889;
+}
+
+.stat-card b {
+  font-family: var(--race);
+  font-weight: 900;
+  font-size: 1.45rem;
+  line-height: 1.05;
+}
+
+.stat-card b small {
+  font-family: var(--ui);
+  font-weight: 500;
+  font-size: 0.8rem;
+  color: #4b6889;
+}
+
 @media (max-width: 1000px) {
   .yard {
     grid-template-columns: 1fr;

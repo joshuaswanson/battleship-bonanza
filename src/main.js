@@ -17,7 +17,7 @@ import { Sfx } from './audio.js';
 import { Input } from './input.js';
 import { Race, BASE_SPEED, COUNTDOWN } from './race.js';
 import { Hud, formatTime } from './hud.js';
-import { LANGUAGES, t, ordinal, itemInSentence, getLang, setLang, applyStatic } from './i18n.js';
+import { LANGUAGES, t, ordinal, itemInSentence, itemName, getLang, setLang, applyStatic } from './i18n.js';
 import { Loadout, PAINTS } from './loadout.js';
 import { logoSvg, layoutLogoText } from './logo.js';
 import { TitleBoat } from './titleBoat.js';
@@ -381,13 +381,13 @@ function showResults() {
   mode = 'results';
   showScreen('screen-results');
   renderResults();
-  $('btn-again').focus();
+  $('btn-continue').focus();
 }
 
 function renderResults() {
   const p = race.player;
   $('results-title').textContent = p.finished ? t('youFinished', { place: ordinal(p.finishOrder), n: p.finishOrder }) : t('raceOver');
-  $('standings').innerHTML = race.order
+  $('standings').innerHTML = `<li class="st-head"><span></span><span></span><span></span><span></span><span class="st-mini">${t('colDmg')} <i>·</i> ${t('colKo')} <i>·</i> ${t('colSunk')}</span></li>` + race.order
     .map((b) => {
       const time = b.finished ? formatTime(b.finishTime) : t('lapN', { n: b.lap });
       const items = b.items.map(itemInSentence).join(` ${t('and')} `);
@@ -396,9 +396,22 @@ function renderResults() {
         <span class="st-dot" style="--paint:#${b.color.toString(16).padStart(6, '0')}"></span>
         <span class="st-name">${b.name}<small>${items}</small></span>
         <span class="st-time">${time}</span>
+        <span class="st-mini" title="${t('statDealt')} / ${t('statKills')} / ${t('statSunk')}">${Math.round(b.stats.dealt)} <i>·</i> ${b.stats.kills} <i>·</i> ${b.stats.sunk}</span>
       </li>`;
     })
     .join('');
+  const me = p.stats;
+  const best = Object.entries(me.byItem).sort((x, y) => y[1] - x[1])[0];
+  const mvp = race.boats.reduce((a, b) => (b.stats.kills > a.stats.kills || (b.stats.kills === a.stats.kills && b.stats.dealt > a.stats.dealt) ? b : a));
+  const cards = [
+    [t('statDealt'), Math.round(me.dealt)],
+    [t('statTaken'), Math.round(me.taken)],
+    [t('statKills'), me.kills],
+    [t('statSunk'), me.sunk],
+    [t('statBest'), best ? `${itemName(best[0])} <small>${Math.round(best[1])}</small>` : '-'],
+    [t('statMvp'), `${mvp.name} <small>${mvp.stats.kills} ${t('statKillsShort')}</small>`],
+  ];
+  $('race-stats').innerHTML = cards.map(([label, value]) => `<div class="stat-card"><span>${label}</span><b>${value}</b></div>`).join('');
 }
 
 const loadout = new Loadout({ setup, sfx, onChange: saveSetup });
@@ -473,10 +486,9 @@ $('btn-restart').addEventListener('click', startRace);
 $('btn-quit').addEventListener('click', goLoadout);
 $('btn-menu').addEventListener('click', goTitle);
 $('btn-pause').addEventListener('click', () => pause(true));
-$('btn-again').addEventListener('click', startRace);
+$('btn-continue').addEventListener('click', () => wipe(goLoadout));
 $('btn-replay').addEventListener('click', () => wipe(startReplay));
 $('btn-replay-exit').addEventListener('click', () => wipe(endReplay));
-$('btn-change').addEventListener('click', () => wipe(goLoadout));
 function unlockAudio() {
   sfx.unlock();
   $('sound-nudge').classList.add('hidden');
