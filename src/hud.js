@@ -111,6 +111,13 @@ export class Hud {
     });
     this.slotLabels = this.slots.map((slot) => slot.querySelector('.slot-state'));
     this.slotFills = this.slots.map((slot) => slot.querySelector('.ability-fill'));
+    this.touchItems = [0, 1].map((i) => document.querySelector(`.touch-item[data-touch="item${i}"]`));
+    this.touchItems.forEach((button, i) => {
+      const id = player.items[i];
+      button.querySelector('.touch-name').textContent = itemName(id);
+      button.classList.toggle('passive', !!ITEMS[id].passive);
+      button.style.setProperty('--fill', 1);
+    });
     this.segFills = this.slots.map((slot) => [...slot.querySelectorAll('.ability-segs .ability-fill')]);
     this.lastPlace = 0;
   }
@@ -247,6 +254,18 @@ export class Hud {
       if (label.textContent !== state) label.textContent = state;
     });
 
+    p.items.forEach((id, i) => {
+      const button = this.touchItems[i];
+      const item = ITEMS[id];
+      if (item.passive) return;
+      let fill;
+      if (item.hold) fill = 1 - p.heat[id].heat;
+      else if (item.charges) fill = (p.charges[i].left + p.charges[i].refill) / item.charges;
+      else fill = 1 - p.cooldowns[i] / item.cooldown;
+      button.style.setProperty('--fill', fill.toFixed(3));
+      button.classList.toggle('ready', item.hold ? !p.heat[id].overheated : item.charges ? p.charges[i].left > 0 : p.cooldowns[i] <= 0);
+      button.classList.toggle('off', p.disabled > 0 && item.group === 'weapons');
+    });
     this.updateReticle(race, camera);
     this.burnVignette.classList.toggle('on', !!p.burn && p.alive);
 

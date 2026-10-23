@@ -685,12 +685,46 @@ kbd {
   transform: skewX(-10deg);
 }
 
-.touch-only .mobile-note {
+.rotate-note {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: #0f8fb8;
+}
+
+.rotate-note .mobile-note {
   display: block;
 }
 
-.touch-only .title-menu {
-  display: none;
+.rotate-phone {
+  width: 46px;
+  height: 78px;
+  margin: 0 auto 0.9rem;
+  border: 4px solid var(--ink);
+  border-radius: 10px;
+  background: #ffffff;
+  animation: rotate-phone 2.2s ease-in-out infinite;
+}
+
+@keyframes rotate-phone {
+  0%,
+  25% {
+    transform: rotate(0deg);
+  }
+  60%,
+  100% {
+    transform: rotate(-90deg);
+  }
+}
+
+@media (orientation: portrait) {
+  .touch-only .rotate-note {
+    display: flex;
+  }
 }
 
 @media (max-width: 600px) {
@@ -2169,6 +2203,385 @@ kbd {
   .hud-map {
     width: 130px;
     height: 130px;
+  }
+}
+
+@media (max-height: 560px) and (orientation: landscape) {
+  #screen-title {
+    gap: 0.4rem;
+    padding: 0.6rem;
+  }
+  .title-logo {
+    width: min(64vh, 60vw);
+  }
+  .title-credit {
+    margin: -1.2rem 0 0.4rem;
+    font-size: 1.05rem;
+  }
+  .btn-play {
+    min-width: 200px;
+    font-size: 1.7rem;
+  }
+  .title-menu {
+    gap: 0.5rem;
+  }
+  .btn {
+    font-size: 0.9rem;
+    padding: 0.5em 0.9em;
+  }
+
+  .yard {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 44vw);
+    min-height: 0;
+    gap: 0.6rem;
+    padding: 0.5rem 0.6rem 0.6rem;
+  }
+  .mini-logo {
+    display: none;
+  }
+  .stage {
+    min-height: 0;
+    padding-bottom: 0.4rem;
+  }
+  .try-hint {
+    font-size: 0.75rem;
+    padding: 0.2rem 0.6rem;
+  }
+  .boat-card {
+    padding: 0.5rem 0.6rem 0.55rem;
+    border-radius: 16px;
+  }
+  .combo {
+    margin-bottom: 0.4rem;
+    font-size: 1.3rem;
+    -webkit-text-stroke: 2px var(--ink);
+  }
+  .boat-card-grid {
+    grid-template-columns: 1fr;
+    gap: 0.4rem;
+  }
+  .boat-card .stats,
+  .boat-card .field:has(#boat-name) {
+    display: none;
+  }
+  .slot-chip {
+    height: 62px;
+    font-size: 0.75rem;
+    flex-direction: row;
+    gap: 0.4rem;
+  }
+  .slot-chip img {
+    width: 34px;
+    height: 34px;
+  }
+  .slot-where {
+    top: 3px;
+    right: 6px;
+    font-size: 0.55rem;
+  }
+  .slot-chip kbd {
+    display: none;
+  }
+  .swatch {
+    width: 26px;
+    height: 26px;
+  }
+  .tray-col {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-height: 0;
+  }
+  .tray {
+    flex: 1;
+    padding: 0.5rem;
+    border-radius: 16px;
+  }
+  .item-groups {
+    gap: 0.8rem;
+  }
+  .group-label {
+    font-size: 1rem;
+    margin-bottom: 0.35rem;
+  }
+  .tiles {
+    gap: 0.4rem;
+  }
+  .tile {
+    border-radius: 12px;
+    padding: 0.2rem 0.2rem 0.3rem;
+  }
+  .tile img {
+    width: 48px;
+    height: 48px;
+  }
+  .tile-name {
+    font-size: 0.7rem;
+  }
+  .btn-launch {
+    font-size: 1.15rem;
+    padding: 0.35em 0.8em;
+    border-radius: 14px;
+  }
+  .item-detail {
+    width: 260px;
+    font-size: 0.8rem;
+  }
+  .item-detail img {
+    width: 48px;
+    height: 48px;
+  }
+
+  .maps {
+    gap: 0.7rem;
+    padding: 0.6rem;
+  }
+  .maps-title {
+    font-size: 1.8rem;
+  }
+  .map-cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.7rem;
+  }
+  .map-card {
+    border-radius: 14px;
+  }
+  .map-text {
+    padding: 0.4rem 0.6rem 0.5rem;
+  }
+  .map-text h3 {
+    font-size: 1.1rem;
+  }
+  .map-text p {
+    font-size: 0.75rem;
+  }
+  .map-art.random::after {
+    font-size: 3rem;
+  }
+  #btn-go {
+    min-width: 0;
+    font-size: 1.1rem;
+    padding: 0.45em 1.6em;
+  }
+
+  .panel {
+    padding: 0.8rem 1rem;
+    max-height: 94vh;
+    overflow-y: auto;
+  }
+}
+
+.touch-pad,
+.touch-howto {
+  display: none;
+}
+
+.touch-only .touch-hide {
+  display: none;
+}
+
+.touch-only .touch-howto {
+  display: block;
+  line-height: 1.45;
+  font-weight: 500;
+}
+
+.touch-only .touch-pad {
+  display: block;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.touch-btn {
+  pointer-events: auto;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  font-family: var(--ui);
+  font-weight: 700;
+  color: var(--ink);
+  background: rgba(244, 251, 255, 0.82);
+  border: 3px solid var(--ink);
+  border-radius: 50%;
+  box-shadow: 0 4px 0 var(--ink);
+}
+
+.touch-btn.down {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--ink);
+  background: #ffffff;
+}
+
+.touch-steer {
+  position: absolute;
+  left: max(18px, env(safe-area-inset-left));
+  bottom: 18px;
+  display: flex;
+  gap: 14px;
+}
+
+.touch-arrow {
+  width: 84px;
+  height: 84px;
+  display: grid;
+  place-items: center;
+}
+
+.touch-arrow i {
+  width: 0;
+  height: 0;
+  border-top: 16px solid transparent;
+  border-bottom: 16px solid transparent;
+}
+
+.arrow-left {
+  border-right: 24px solid var(--ink);
+  margin-right: 6px;
+}
+
+.arrow-right {
+  border-left: 24px solid var(--ink);
+  margin-left: 6px;
+}
+
+.touch-actions {
+  position: absolute;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: 18px;
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-template-rows: auto auto;
+  gap: 10px 12px;
+  align-items: end;
+}
+
+.touch-brake {
+  grid-column: 1;
+  grid-row: 2;
+  width: 64px;
+  height: 64px;
+  font-size: 0.72rem;
+}
+
+.touch-item {
+  position: relative;
+  overflow: hidden;
+  width: 92px;
+  height: 92px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  background: rgba(14, 42, 71, 0.55);
+  color: #ffffff;
+}
+
+.touch-item:not(.touch-front) {
+  grid-column: 1;
+  grid-row: 1;
+  width: 78px;
+  height: 78px;
+}
+
+.touch-front {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  width: 108px;
+  height: 108px;
+}
+
+.touch-fill {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: #9fb3c8;
+  transform-origin: bottom;
+  transform: scaleY(var(--fill, 1));
+}
+
+.touch-item.ready .touch-fill {
+  background: var(--sun);
+}
+
+.touch-item.off .touch-fill {
+  background: #5ff4ff;
+}
+
+.touch-item.passive {
+  display: none;
+}
+
+.touch-where,
+.touch-name {
+  position: relative;
+  z-index: 1;
+  color: var(--ink);
+  text-align: center;
+  line-height: 1.05;
+}
+
+.touch-where {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.75;
+}
+
+.touch-name {
+  font-size: 0.78rem;
+}
+
+.touch-only .hud-abilities {
+  transform: none !important;
+  top: 250px;
+  left: max(22px, env(safe-area-inset-left));
+  zoom: 0.62;
+}
+
+.touch-only .hud-abilities .ability[data-slot] {
+  display: none;
+}
+
+.touch-only .hud-map {
+  top: 70px;
+  bottom: auto;
+  right: max(16px, env(safe-area-inset-right));
+  width: 112px;
+  height: 112px;
+  border-radius: 16px;
+}
+
+@media (min-height: 700px) {
+  .touch-only .touch-steer,
+  .touch-only .touch-actions {
+    zoom: 1.35;
+  }
+}
+
+@media (max-height: 560px) {
+  .touch-only .hud-place {
+    zoom: 0.62;
+    top: 10px;
+  }
+  .touch-only .hud-lap {
+    top: 78px;
+    font-size: 0.95rem;
+  }
+  .touch-only .hud-abilities {
+    top: 175px;
+  }
+  .touch-only .hud-time {
+    top: 12px;
+    font-size: 26px;
+  }
+  .touch-only .hud-pause {
+    top: 10px;
+    width: 42px;
+    height: 42px;
   }
 }
 

@@ -23,7 +23,41 @@ export class Input {
       if (e.code.startsWith('Arrow')) e.preventDefault();
     });
     addEventListener('keyup', (e) => this.held.delete(e.code));
-    addEventListener('blur', () => this.held.clear());
+    addEventListener('blur', () => {
+      this.held.clear();
+      this.touch.clear();
+    });
+    this.touch = new Set();
+    this.touchQueued = new Set();
+    this.touchMode = false;
+  }
+
+  bindTouch(root) {
+    const pointers = new Map();
+    const refresh = () => {
+      this.touch.clear();
+      for (const action of pointers.values()) this.touch.add(action);
+    };
+    for (const button of root.querySelectorAll('[data-touch]')) {
+      const action = button.dataset.touch;
+      button.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        button.setPointerCapture(e.pointerId);
+        this.touchMode = true;
+        pointers.set(e.pointerId, action);
+        this.touchQueued.add(action);
+        button.classList.add('down');
+        refresh();
+      });
+      const release = (e) => {
+        pointers.delete(e.pointerId);
+        button.classList.remove('down');
+        refresh();
+      };
+      button.addEventListener('pointerup', release);
+      button.addEventListener('pointercancel', release);
+      button.addEventListener('contextmenu', (e) => e.preventDefault());
+    }
   }
 
   isHeld(action) {
@@ -36,6 +70,8 @@ export class Input {
       if (codes.some((code) => this.queued.has(code))) pressed.add(action);
     }
     this.queued.clear();
+    for (const action of this.touchQueued) if (action === 'item0' || action === 'item1') pressed.add(action);
+    this.touchQueued.clear();
 
     let throttle = (this.isHeld('up') ? 1 : 0) - (this.isHeld('down') ? 1 : 0);
     let steer = (this.isHeld('right') ? 1 : 0) - (this.isHeld('left') ? 1 : 0);
@@ -54,10 +90,14 @@ export class Input {
       }
     }
 
+    if (this.touchMode) {
+      if (!throttle) throttle = this.touch.has('brake') ? -1 : 1;
+      if (!steer) steer = (this.touch.has('right') ? 1 : 0) - (this.touch.has('left') ? 1 : 0);
+    }
     this.state.throttle = throttle;
     this.state.steer = steer;
-    this.state.hold0 = this.isHeld('item0') || !!pad?.buttons[0]?.pressed || !!pad?.buttons[4]?.pressed;
-    this.state.hold1 = this.isHeld('item1') || !!pad?.buttons[1]?.pressed || !!pad?.buttons[5]?.pressed;
+    this.state.hold0 = this.isHeld('item0') || this.touch.has('item0') || !!pad?.buttons[0]?.pressed || !!pad?.buttons[4]?.pressed;
+    this.state.hold1 = this.isHeld('item1') || this.touch.has('item1') || !!pad?.buttons[1]?.pressed || !!pad?.buttons[5]?.pressed;
     this.pressed = pressed;
     return this.state;
   }

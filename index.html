@@ -10,15 +10,18 @@
   <body>
     <canvas id="game"></canvas>
     <canvas class="wipe" id="wipe" aria-hidden="true"></canvas>
+    <div class="rotate-note">
+      <div class="mobile-note">
+        <div class="rotate-phone"></div>
+        <p class="mobile-title" data-i18n="mobileTitle"></p>
+        <p data-i18n="mobileBody"></p>
+      </div>
+    </div>
 
     <div id="ui">
       <section id="screen-title" class="screen">
         <div class="title-logo" data-logo="3d"></div>
         <a class="title-credit" href="https://joshuaswanson.github.io" target="_blank" rel="noopener" data-i18n="credit">by Joshua Swanson</a>
-        <div class="mobile-note">
-          <p class="mobile-title" data-i18n="mobileTitle"></p>
-          <p data-i18n="mobileBody"></p>
-        </div>
         <div class="title-menu">
           <button id="btn-play" class="btn btn-big btn-play" data-i18n="play">Play</button>
           <div class="title-row">
@@ -31,7 +34,8 @@
       <section id="screen-howto" class="screen screen-dim hidden">
         <div class="panel howto">
           <h2 data-i18n="howto">How to play</h2>
-          <div class="howto-keys">
+          <p class="touch-howto" data-i18n="touchHowto"></p>
+          <div class="howto-keys touch-hide">
             <div class="key-group">
               <div class="key-t"><kbd class="k-w">W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></div>
               <span data-i18n="drive">Drive</span>
@@ -92,7 +96,7 @@
               <div class="mini-logo" data-logo="3d"></div>
             </header>
             <div class="stage" id="stage">
-              <p class="try-hint"><span data-i18n="tryPress">Press</span> <kbd>O</kbd> <span data-i18n="tryOr">or</span> <kbd>P</kbd> <span data-i18n="tryRest">to take your attachments for a spin</span></p>
+              <p class="try-hint touch-hide"><span data-i18n="tryPress">Press</span> <kbd>O</kbd> <span data-i18n="tryOr">or</span> <kbd>P</kbd> <span data-i18n="tryRest">to take your attachments for a spin</span></p>
             </div>
             <div class="boat-card">
               <h2 class="combo" id="combo-name">The Plain Dinghy</h2>
@@ -140,6 +144,17 @@
         <div class="hud-bars" id="hud-bars"></div>
         <div class="hud-dmg" id="hud-dmg"></div>
         <div class="hud-flash" id="hud-flash"></div>
+        <div class="touch-pad" id="touch-pad">
+          <div class="touch-steer">
+            <button class="touch-btn touch-arrow" data-touch="left" aria-label="Left"><i class="arrow-left"></i></button>
+            <button class="touch-btn touch-arrow" data-touch="right" aria-label="Right"><i class="arrow-right"></i></button>
+          </div>
+          <div class="touch-actions">
+            <button class="touch-btn touch-brake" data-touch="brake" data-i18n="brake">Brake</button>
+            <button class="touch-btn touch-item" data-touch="item1"><span class="touch-where" data-i18n="backSlot">Back</span><b class="touch-name"></b><i class="touch-fill"></i></button>
+            <button class="touch-btn touch-item touch-front" data-touch="item0"><span class="touch-where" data-i18n="frontSlot">Front</span><b class="touch-name"></b><i class="touch-fill"></i></button>
+          </div>
+        </div>
         <div class="burn-vignette" id="burn-vignette"></div>
         <div class="hud-lock" id="hud-lock">
           <div class="lock-vignette" id="lock-vignette"></div>

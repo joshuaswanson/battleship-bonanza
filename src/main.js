@@ -219,7 +219,7 @@ function showScreen(id) {
 }
 
 function goTitle() {
-  sfx.playMusic(true);
+  sfx.playMusic('menu');
   mode = 'title';
   newRace(true);
   hud.show(false);
@@ -229,7 +229,7 @@ function goTitle() {
 
 function goLoadout() {
   sfx.unlock();
-  sfx.playMusic(true);
+  sfx.playMusic('menu');
   if (!race?.attract) newRace(true);
   mode = 'loadout';
   hud.show(false);
@@ -346,7 +346,8 @@ function goMaps() {
 async function startRace() {
   if (!setup.items.every(Boolean)) return;
   sfx.unlock();
-  sfx.playMusic(false);
+  sfx.playMusic('race');
+  sfx.duckMusic(false);
   saveSetup();
   const map = pickMap(false);
   await prepareVenue(map);
@@ -362,10 +363,12 @@ async function startRace() {
 function pause(on) {
   if (on && mode === 'race') {
     mode = 'paused';
+    sfx.duckMusic(true);
     showScreen('screen-pause');
     $('btn-resume').focus();
   } else if (!on && mode === 'paused') {
     mode = 'race';
+    sfx.duckMusic(false);
     showScreen(null);
     document.activeElement?.blur();
   }
@@ -417,6 +420,8 @@ applyStatic();
 renderLanguagePicker();
 const touchOnly = matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches;
 document.body.classList.toggle('touch-only', touchOnly);
+input.bindTouch($('touch-pad'));
+input.touchMode = touchOnly;
 
 $('btn-play').addEventListener('click', () => wipe(goLoadout));
 let howtoOpener = null;
@@ -697,6 +702,7 @@ if (import.meta.env.DEV) {
     },
     setup,
     sfx,
+    input,
     scene,
     THREE,
     renderer,

@@ -1,20 +1,34 @@
+function track(file, volume) {
+  const audio = new Audio(`${import.meta.env.BASE_URL}${file}`);
+  audio.loop = true;
+  audio.volume = volume;
+  return audio;
+}
+
 export class Sfx {
   constructor() {
     this.ctx = null;
     this.soundOn = localStorage.getItem('bb-sound') !== '0';
     this.musicOn = localStorage.getItem('bb-music') !== '0';
     this.listener = null;
-    this.music = new Audio(`${import.meta.env.BASE_URL}menu-music.mp3`);
-    this.music.loop = true;
-    this.music.volume = 0.45;
-    this.musicWanted = false;
+    this.tracks = { menu: track('menu-music.mp3', 0.45), race: track('race-music.mp3', 0.35) };
+    this.musicWanted = null;
+    this.music = this.tracks.menu;
   }
 
-  playMusic(on) {
-    if (on && !this.musicWanted) this.music.currentTime = 0;
-    this.musicWanted = on;
-    if (on && this.musicOn && this.ctx) this.music.play().catch(() => {});
+  playMusic(name) {
+    if (name !== this.musicWanted) {
+      for (const audio of Object.values(this.tracks)) audio.pause();
+      if (name) this.tracks[name].currentTime = 0;
+    }
+    this.musicWanted = name;
+    if (name) this.music = this.tracks[name];
+    if (name && this.musicOn && this.ctx) this.music.play().catch(() => {});
     else this.music.pause();
+  }
+
+  duckMusic(on) {
+    this.tracks.race.volume = on ? 0.12 : 0.35;
   }
 
   unlock() {
