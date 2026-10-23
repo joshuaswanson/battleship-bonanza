@@ -13,7 +13,7 @@ import { Input } from './input.js';
 import { Race, BASE_SPEED } from './race.js';
 import { Hud, ordinal, formatTime } from './hud.js';
 import { Loadout, PAINTS } from './loadout.js';
-import { logoSvg } from './logo.js';
+import { logoSvg, layoutLogoText } from './logo.js';
 import { TitleBoat } from './titleBoat.js';
 import { ITEMS, ITEM_IDS } from './items.js';
 
@@ -23,6 +23,7 @@ for (const el of document.querySelectorAll('[data-logo]')) {
   el.innerHTML = logoSvg({ boat: false, main: false });
   new TitleBoat(el);
   el.insertAdjacentHTML('beforeend', logoSvg({ art: false }).replace('class="logo"', 'class="logo logo-front" aria-hidden="true"'));
+  layoutLogoText(el);
 }
 
 const canvas = $('game');

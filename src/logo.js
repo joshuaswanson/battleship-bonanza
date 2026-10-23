@@ -41,9 +41,6 @@ export const logoSvg = ({ boat = true, main = true, art = true } = {}) => `
       <stop offset="1" stop-color="#FF8A1F"/>
     </radialGradient>
   </defs>
-  <path id="lg-arc-top" d="M 116.5 254.3 Q 500.0 -80.3 883.5 254.3" fill="none" />
-  <path id="lg-arc-bottom" d="M 105 425 Q 500 675 895 425" fill="none" />
-  <path id="lg-arc-bottom-shadow" d="M 117 437 Q 512 687 907 437" fill="none" />
   ${art ? `  <g transform="translate(500 300)">
     <g class="lg-burst-pop"><g class="lg-burst">
       <polygon points="${starburst(20, 300, 222)}" fill="url(#logo-burst)" stroke="${INK}" stroke-width="10" stroke-linejoin="round" />
@@ -53,15 +50,71 @@ export const logoSvg = ({ boat = true, main = true, art = true } = {}) => `
   <g class="lg-top">
     <path d="M 205 186 Q 500 -12 795 186" fill="none" stroke="${INK}" stroke-width="112" />
     <path d="M 205 186 Q 500 -12 795 186" fill="none" stroke="#FF4141" stroke-width="92" />
-    <text class="logo-top" dy="33"><textPath href="#lg-arc-top" startOffset="50%" text-anchor="middle" textLength="560" lengthAdjust="spacingAndGlyphs">BATTLESHIP</textPath></text>
+    <g class="logo-top" data-arc="top" data-text="BATTLESHIP"></g>
   </g>
   <g transform="translate(500 268)">
     <g class="lg-boat-in"><g class="lg-boat">${boat ? BOAT : ''}</g></g>
   </g>
 ` : ''}
   ${main ? `  <g class="lg-main">
-    <text class="logo-main logo-shadow"><textPath href="#lg-arc-bottom-shadow" startOffset="52.4%" text-anchor="middle" textLength="760" lengthAdjust="spacingAndGlyphs">BONANZA</textPath></text>
-    <text class="logo-main"><textPath href="#lg-arc-bottom" startOffset="52.4%" text-anchor="middle" textLength="760" lengthAdjust="spacingAndGlyphs">BONANZA</textPath></text>
+    <g class="logo-main logo-shadow" data-arc="bottom" data-text="BONANZA" transform="translate(12 12)"></g>
+    <g class="logo-main" data-arc="bottom" data-text="BONANZA"></g>
   </g>
 ` : ''}
 </svg>`;
+
+const ARCS = {
+  top: { from: [205, 186], control: [500, -12], to: [795, 186], length: 560, size: 96, dy: 33 },
+  bottom: { from: [105, 425], control: [500, 675], to: [895, 425], length: 760, size: 236, dy: 0 },
+};
+
+function sampleArc({ from, control, to }) {
+  const points = [];
+  let total = 0;
+  for (let i = 0; i <= 600; i++) {
+    const t = i / 600;
+    const x = (1 - t) ** 2 * from[0] + 2 * (1 - t) * t * control[0] + t * t * to[0];
+    const y = (1 - t) ** 2 * from[1] + 2 * (1 - t) * t * control[1] + t * t * to[1];
+    if (i) total += Math.hypot(x - points[i - 1].x, y - points[i - 1].y);
+    points.push({ x, y, s: total });
+  }
+  return { points, total };
+}
+
+function pointAt({ points }, s) {
+  let i = 1;
+  while (i < points.length - 1 && points[i].s < s) i++;
+  const a = points[i - 1];
+  const b = points[i];
+  const k = (s - a.s) / (b.s - a.s || 1);
+  return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, angle: Math.atan2(b.y - a.y, b.x - a.x) };
+}
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+export async function layoutLogoText(root) {
+  await Promise.all([document.fonts.load('900 96px "Saira Condensed"'), document.fonts.load('900 236px "Saira Condensed"')]);
+  const ctx = document.createElement('canvas').getContext('2d');
+  for (const group of root.querySelectorAll('[data-arc]')) {
+    const arc = ARCS[group.dataset.arc];
+    const sampled = sampleArc(arc);
+    ctx.font = `900 ${arc.size}px "Saira Condensed"`;
+    const letters = [...group.dataset.text];
+    const widths = letters.map((ch) => ctx.measureText(ch).width);
+    const natural = widths.reduce((sum, w) => sum + w, 0);
+    const squeeze = arc.length / natural;
+    let s = (sampled.total - arc.length) / 2;
+    group.replaceChildren();
+    letters.forEach((ch, i) => {
+      const advance = widths[i] * squeeze;
+      const p = pointAt(sampled, s + advance / 2);
+      s += advance;
+      const text = document.createElementNS(SVG_NS, 'text');
+      text.setAttribute('text-anchor', 'middle');
+      text.setAttribute('y', arc.dy);
+      text.setAttribute('transform', `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)}) rotate(${((p.angle * 180) / Math.PI).toFixed(2)}) scale(${squeeze.toFixed(3)} 1)`);
+      text.textContent = ch;
+      group.append(text);
+    });
+  }
+}
