@@ -10,7 +10,7 @@ import { createWorld } from './world.js';
 import { createJungle } from './jungle.js';
 import { MAPS } from './maps.js';
 import { Recorder, Replay } from './replay.js';
-import { setSurface } from './water.js';
+import { setSurface, waveHeight } from './water.js';
 import { Effects } from './effects.js';
 import { Sfx } from './audio.js';
 import { Input } from './input.js';
@@ -483,12 +483,72 @@ const cam = {
 
 const lerpAngle = (a, b, k) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * k;
 
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const RIVER_SHOTS = ['chase', 'lead', 'bank', 'chase', 'lead'];
+
+function riverShot(dt, k) {
+  const t = race.track;
+  cam.focusTime -= dt;
+  const b = race.boats[cam.focus] ?? race.player;
+  const hit = t.project(b.pos.x, b.pos.z, cam.focusTime > 0 ? cam.idx ?? -1 : -1);
+  cam.idx = hit.idx;
+  const big = t.river.drops.find((d) => d.height > 8);
+  const toFalls = t.ahead(hit.s, big.s);
+  if (cam.focusTime <= 0 || (cam.shot !== 'falls' && toFalls < 45 && toFalls > 25)) {
+    cam.focus = Math.random() < 0.6 ? race.boats.indexOf(race.player) : Math.floor(Math.random() * race.boats.length);
+    const focus = race.boats[cam.focus];
+    const at = t.project(focus.pos.x, focus.pos.z);
+    cam.idx = at.idx;
+    const nearFalls = t.ahead(at.s, big.s) < 45;
+    cam.shot = nearFalls ? 'falls' : RIVER_SHOTS[Math.floor(Math.random() * RIVER_SHOTS.length)];
+    cam.focusTime = nearFalls ? 3.5 : 5 + Math.random() * 3;
+    cam.side = Math.random() < 0.5 ? -1 : 1;
+    cam.anchor = null;
+    cam.snap = true;
+  }
+  const f = race.boats[cam.focus];
+  const level = f.waterY;
+  const hw = t.halfWidth;
+  let desired;
+  const nearExit = t.ahead(hit.s, t.river.tunnelOut) < 40 || t.ahead(t.river.tunnelOut, hit.s) < 15;
+  if (cam.shot === 'chase' && nearExit) cam.shot = 'lead';
+  if (cam.shot === 'chase' || cam.shot === 'lead') {
+    const ahead = cam.shot === 'chase' ? -14 : 16;
+    const p = t.point(cam.idx + Math.round(ahead / t.spacing), clamp(t.project(f.pos.x, f.pos.z, cam.idx).lateral * 0.6 + cam.side * 4, -hw + 4, hw - 4));
+    desired = new THREE.Vector3(p.x, level + (cam.shot === 'chase' ? 6 : 5), p.z);
+  } else if (cam.shot === 'bank') {
+    if (!cam.anchor) {
+      const p = t.point(cam.idx + Math.round(45 / t.spacing), cam.side * (hw - 3));
+      cam.anchor = new THREE.Vector3(p.x, waveHeight(p.x, p.z, 0) + 3, p.z);
+    }
+    desired = cam.anchor.clone();
+  } else {
+    if (!cam.anchor) {
+      const p = t.point(Math.round(big.s / t.spacing) + Math.round(34 / t.spacing), cam.side * 8);
+      cam.anchor = new THREE.Vector3(p.x, waveHeight(p.x, p.z, 0) + 5, p.z);
+    }
+    desired = cam.anchor.clone();
+  }
+  cam.pos.lerp(desired, k(cam.shot === 'chase' || cam.shot === 'lead' ? 6 : 20));
+  cam.look.lerp(new THREE.Vector3(f.pos.x, f.pos.y + 1, f.pos.z), k(8));
+}
+
 function updateCamera(dt) {
   if (import.meta.env.DEV && window.__bb?.freeCam) return;
   const k = (rate) => (cam.snap ? 1 : 1 - Math.exp(-rate * dt));
   let fov = 66;
 
-  if (race.attract || !race.player || mode === 'replay') {
+  if (mode === 'replay' && race.track.river) {
+    const b = race.boats[cam.focus];
+    if (b && cam.lastY !== undefined && Math.abs(b.waterY - cam.lastY) > 30) {
+      const dy = b.waterY - cam.lastY;
+      cam.pos.y += dy;
+      cam.look.y += dy;
+      if (cam.anchor) cam.anchor.y += dy;
+    }
+    riverShot(dt, k);
+    cam.lastY = race.boats[cam.focus].waterY;
+  } else if (race.attract || !race.player || mode === 'replay') {
     cam.focusTime -= dt;
     if (cam.focusTime <= 0) {
       const pickPlayer = mode === 'replay' && Math.random() < 0.6;
@@ -498,7 +558,7 @@ function updateCamera(dt) {
       cam.snap = true;
     }
     const b = race.boats[cam.focus];
-    if (cam.lastY !== undefined && Math.abs(b.waterY - cam.lastY) > 10) {
+    if (cam.lastY !== undefined && Math.abs(b.waterY - cam.lastY) > 30) {
       cam.pos.y += b.waterY - cam.lastY;
       cam.look.y += b.waterY - cam.lastY;
     }
@@ -582,7 +642,7 @@ function frame(now) {
       : null;
     const steps = import.meta.env.DEV ? (window.__bb?.steps ?? 1) : 1;
     if (mode === 'replay') {
-      replay.step(dt);
+      for (let i = 0; i < steps; i++) replay.step(dt);
       if (replay.done) endReplay();
     } else if (!race.frozen) {
       for (let i = 0; i < steps; i++) {

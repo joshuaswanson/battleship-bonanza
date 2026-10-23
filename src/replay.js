@@ -193,7 +193,7 @@ export class Replay {
     for (const m of mats) writeMat(m, a.data[o++]);
     for (const boat of this.race.boats) {
       const lerp = (i) => a.data[o + i] + (b.data[o + i] - a.data[o + i]) * k;
-      const jump = Math.abs(b.data[o + 3] - a.data[o + 3]) > 5;
+      const jump = Math.abs(b.data[o + 3] - a.data[o + 3]) > 30;
       boat.pos.set(lerp(0), jump ? a.data[o + 1] : lerp(1), lerp(2));
       boat.waterY = jump ? a.data[o + 3] : lerp(3);
       boat.heading = a.data[o + 4];
