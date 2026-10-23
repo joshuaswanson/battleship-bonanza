@@ -453,6 +453,7 @@ export function buildBoat(color, items) {
     if (raised && BACK_GUNS.has(id)) refs.backGuns.add(id);
     const sag = new THREE.Group();
     yaw.add(sag);
+    sag.userData.id = id;
     refs.sags.push(sag);
     const module = new THREE.Group();
     module.scale.setScalar(MODULE_SCALE);

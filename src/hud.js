@@ -199,7 +199,7 @@ export class Hud {
       const item = ITEMS[id];
       if (item.passive) return;
       const slot = this.slots[i];
-      const off = p.disabled > 0;
+      const off = p.disabled > 0 && item.group === 'weapons';
       slot.classList.toggle('disabled', off);
       if (off) {
         if (this.slotLabels[i].textContent !== t('disabled')) this.slotLabels[i].textContent = t('disabled');

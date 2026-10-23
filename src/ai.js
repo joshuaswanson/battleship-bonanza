@@ -102,10 +102,11 @@ function shouldUse(race, b, id, ai) {
       return !!t && r < ai.aggression;
     }
     case 'emp': {
-      const threatened =
-        race.missiles.some((m) => m.target === b && m.fizzle <= 0 && m.pos.distanceTo(b.pos) < 40) ||
-        race.hooks.some((h) => h.target === b && h.phase !== 'retract');
-      return threatened && r < 0.85;
+      const incoming = race.missiles.some((m) => m.target === b && m.fizzle <= 0 && m.pos.distanceTo(b.pos) < 40);
+      const armedNearby = race.boats.some(
+        (o) => o !== b && o.alive && o.disabled <= 0 && Math.hypot(o.pos.x - b.pos.x, o.pos.z - b.pos.z) < 20 && o.items.some((id) => ['machinegun', 'laser', 'saw'].includes(id)),
+      );
+      return (incoming && r < 0.85) || (armedNearby && r < 0.25);
     }
     case 'jetpack': {
       const threat = race.incomingThreats(b).some((t) => t.eta < 0.4);

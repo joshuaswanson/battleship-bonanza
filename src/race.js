@@ -622,7 +622,7 @@ export class Race {
     const id = b.items[slot];
     const item = ITEMS[id];
     if (!item || item.passive || item.hold || this.state !== 'racing' || !b.alive) return false;
-    if (b.disabled > 0) {
+    if (b.disabled > 0 && item.group === 'weapons') {
       if (b.isPlayer) this.sfx.play('nope');
       return false;
     }
@@ -1033,20 +1033,6 @@ export class Race {
         m.fizzle = 0.9;
         this.fx.sparkBurst(m.pos.x, m.pos.y, m.pos.z, 0x5ff4ff, 10);
       }
-      for (const h of this.hooks) {
-        if (h.owner === p.owner || h.phase === 'retract') continue;
-        if (h.target !== p.owner && h.pos.distanceTo(center) > r + 1.5) continue;
-        h.phase = 'retract';
-        const o = h.owner;
-        const dx = o.pos.x - center.x;
-        const dz = o.pos.z - center.z;
-        const d = Math.hypot(dx, dz) || 1;
-        if (d < 40) {
-          o.vel.x += (dx / d) * 16;
-          o.vel.z += (dz / d) * 16;
-        }
-        this.fx.sparkBurst(h.pos.x, h.pos.y, h.pos.z, 0x5ff4ff, 10);
-      }
       for (const o of this.boats) {
         if (o === p.owner || !o.alive || p.jolted.has(o)) continue;
         if (o.center(new THREE.Vector3()).distanceTo(center) > r + 1.5) continue;
@@ -1158,6 +1144,7 @@ export class Race {
     const off = b.disabled > 0;
     const k = 1 - Math.exp(-(off ? 7 : 5) * dt);
     b.model.sags.forEach((sag, i) => {
+      if (ITEMS[sag.userData.id].group !== 'weapons') return;
       const droop = off ? 0.6 + Math.sin(this.time * 3 + i) * 0.06 : 0;
       const slump = off ? Math.sin(this.time * 2.2 + i * 2) * 0.12 : 0;
       sag.rotation.x += (droop - sag.rotation.x) * k;
