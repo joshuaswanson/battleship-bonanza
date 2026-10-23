@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { ITEMS, iconSvg } from './items.js';
+import { ITEMS } from './items.js';
 import { MAX_HP } from './race.js';
 
 export const ordinal = (n) => `${n}${n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th'}`;
@@ -14,7 +14,6 @@ const $ = (id) => document.getElementById(id);
 
 const TARGETING = {
   missiles: { range: 180, minDot: -1, filter: (o) => !o.has('camo') },
-  grapple: { range: 120, minDot: 0.55, filter: (o) => o.has('spikes') || o.has('jetpack') },
   laser: { range: 70, minDot: 0.97 },
 };
 
@@ -75,15 +74,17 @@ export class Hud {
       .map((id, i) => {
         const item = ITEMS[id];
         if (item.passive) return '';
-        return `<div class="slot" data-slot="${i}">
-          <div class="slot-face">${iconSvg(id)}</div>
-          <div class="slot-text"><kbd>${i === 0 ? 'O' : 'P'}</kbd><span>${item.name}</span></div>
-          <div class="slot-state">${item.passive ? 'Always on' : item.hold ? 'Hold to fire' : 'Ready'}</div>
+        return `<div class="ability${item.hold ? ' heat' : ''}" data-slot="${i}">
+          <kbd>${i === 0 ? 'O' : 'P'}</kbd>
+          <div class="ability-body">
+            <div class="ability-top"><span>${item.name}</span><em class="slot-state"></em></div>
+            <div class="ability-track"><div class="ability-fill"></div></div>
+          </div>
         </div>`;
       })
       .join('');
     this.slots = [];
-    for (const el of this.slotsEl.querySelectorAll('.slot')) this.slots[Number(el.dataset.slot)] = el;
+    for (const el of this.slotsEl.querySelectorAll('.ability')) this.slots[Number(el.dataset.slot)] = el;
     this.barsEl.innerHTML = race.boats
       .map((b) => `<div class="boat-bar${b.isPlayer ? ' me' : ''}" style="--paint:#${b.color.toString(16).padStart(6, '0')}"><i></i><div class="boat-bar-track"><div class="boat-bar-fill"></div></div></div>`)
       .join('');
@@ -92,6 +93,7 @@ export class Hud {
       return { el, fill: el.querySelector('.boat-bar-fill'), shown: false };
     });
     this.slotLabels = this.slots.map((slot) => slot.querySelector('.slot-state'));
+    this.slotFills = this.slots.map((slot) => slot.querySelector('.ability-fill'));
     this.lastPlace = 0;
   }
 
@@ -185,16 +187,16 @@ export class Hud {
       const slot = this.slots[i];
       if (item.hold) {
         const { heat, overheated } = id === 'laser' ? p.laser : p.gun;
-        slot.style.setProperty('--cd', heat);
-        slot.classList.toggle('ready', !overheated);
-        slot.classList.add('heat');
-        const text = overheated ? 'Overheated' : heat > 0.6 ? 'Hot!' : 'Hold to fire';
+        this.slotFills[i].style.width = `${heat * 100}%`;
+        slot.classList.toggle('overheated', overheated);
+        slot.classList.toggle('hot', !overheated && heat > 0.6);
+        const text = overheated ? 'Overheated' : heat > 0.6 ? 'Hot!' : 'Hold';
         if (this.slotLabels[i].textContent !== text) this.slotLabels[i].textContent = text;
         return;
       }
       const cd = p.cooldowns[i];
       const ready = cd <= 0;
-      slot.style.setProperty('--cd', ready ? 0 : cd / item.cooldown);
+      this.slotFills[i].style.width = `${(1 - cd / item.cooldown) * 100}%`;
       slot.classList.toggle('ready', ready);
       const state = ready ? 'Ready' : `${cd.toFixed(1)}s`;
       const label = this.slotLabels[i];
@@ -208,8 +210,17 @@ export class Hud {
     else if (this.warnTime <= 0) this.warn.textContent = '';
 
     this.updateBars(race, camera);
+    this.placeAbilities(p, camera);
     this.updateLock(race, camera, dt);
     this.drawMap(race);
+  }
+
+  placeAbilities(p, camera) {
+    const v = this.projected.set(p.pos.x, p.pos.y + 1, p.pos.z).project(camera);
+    const x = (v.x * 0.5 + 0.5) * innerWidth;
+    const y = (-v.y * 0.5 + 0.5) * innerHeight;
+    this.slotsEl.style.transform = `translate(${Math.round(x + 95)}px, ${Math.round(y - 20)}px)`;
+    this.slotsEl.classList.toggle('dim', !p.alive);
   }
 
   updateBars(race, camera) {
@@ -281,7 +292,7 @@ export class Hud {
     if (p.alive && race.state === 'racing' && !p.finished) {
       for (let i = 0; i < 2; i++) {
         const id = p.items[i];
-        const spec = id === 'laser' ? race.gunArc('laser', 70) : TARGETING[id];
+        const spec = id === 'laser' ? race.gunArc('laser', 70) : id === 'grapple' ? race.hookSpec(p) : TARGETING[id];
         if (!spec || p.cooldowns[i] > 0) continue;
         target = race.findTarget(p, spec);
         if (target) {
@@ -361,6 +372,7 @@ export class Hud {
 
     const sorted = [...race.boats].sort((a, b) => (a.isPlayer ? 1 : 0) - (b.isPlayer ? 1 : 0));
     for (const b of sorted) {
+      if (!b.isPlayer && b.has('camo')) continue;
       const [x, y] = this.toMap(b.pos.x, b.pos.z);
       ctx.globalAlpha = b.alive ? 1 : 0.4;
       ctx.fillStyle = `#${b.color.toString(16).padStart(6, '0')}`;
