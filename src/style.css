@@ -316,26 +316,6 @@ kbd {
   cursor: grabbing;
 }
 
-.stage-hint {
-  position: absolute;
-  left: 50%;
-  bottom: 0.25rem;
-  transform: translateX(-50%);
-  margin: 0;
-  padding: 0.35rem 0.85rem;
-  white-space: nowrap;
-  font-weight: 500;
-  font-size: 0.9rem;
-  color: #ffffff;
-  background: rgba(14, 42, 71, 0.72);
-  border-radius: 999px;
-  pointer-events: none;
-}
-
-.stage-hint kbd {
-  font-size: 0.75rem;
-}
-
 .boat-card {
   padding: 0.9rem 1.1rem 1rem;
   background: var(--foam);
