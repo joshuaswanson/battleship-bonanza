@@ -662,22 +662,42 @@ const MODULES = {
   },
 
   laser(m, mats, refs) {
-    const pink = glow(0xff2a2a);
-    const softPink = glow(0xff8a7a);
-    part(m, 'roundBox', mats.white, 0, 0.6, -0.15, 1.15, 0.85, 1.25, 0.04);
-    part(m, 'roundBox', mats.paint, 0, 0.6, -0.15, 1.2, 0.24, 1.3, 0.03);
-    for (const x of [-0.38, 0.38]) {
-      part(m, 'roundBox', mats.dark, x, 0.6, 0.95, 0.18, 0.55, 1.5, 0.03);
-      part(m, 'roundBox', pink, x * 0.86, 0.6, 1.25, 0.05, 0.3, 0.8, 0);
-    }
-    part(m, 'cylinder', mats.dark, 0, 0.6, 0.95, 0.17, 0.9, 0.17, 0.03).rotation.x = Math.PI / 2;
-    for (const z of [0.68, 0.92, 1.16]) part(m, 'ring', pink, 0, 0.6, z, 0.2, 0.2, 0.9, 0.02);
-    part(m, 'cylinder', mats.metal, 0, 0.6, 1.42, 0.21, 0.12, 0.21, 0.03).rotation.x = Math.PI / 2;
-    part(m, 'cylinder', softPink, 0, 0.6, 1.49, 0.14, 0.03, 0.14, 0).rotation.x = Math.PI / 2;
+    const core = glow(0xff2a2a);
+    const hot = glow(0xffd0c8);
+    const shell = mats.white;
+    part(m, 'cylinder', mats.dark, 0, 0.32, -0.2, 0.42, 0.5, 0.42, 0.03);
+    part(m, 'roundBox', shell, 0, 0.75, -0.35, 0.95, 0.72, 1.15, 0.04);
+    part(m, 'roundBox', mats.paint, 0, 1.13, -0.35, 0.6, 0.1, 0.95, 0.03);
     const ventMat = toon(DARK);
     refs.heatMats.laser = [ventMat];
-    for (const z of [-0.5, -0.15, 0.2]) part(m, 'roundBox', ventMat, 0, 1.1, z, 0.85, 0.16, 0.14, 0.02);
-    return { laserMount: new THREE.Vector3(0, 0.6, 1.55) };
+    for (const x of [-0.5, 0.5]) {
+      for (const z of [-0.7, -0.45, -0.2]) part(m, 'roundBox', ventMat, x, 0.78, z, 0.08, 0.5, 0.14, 0.02);
+    }
+    const cell = part(m, 'capsule', core, 0, 0.75, -0.95, 0.34, 0.34, 0.34, 0);
+    cell.rotation.x = Math.PI / 2;
+    part(m, 'ring', mats.dark, 0, 0.75, -0.95, 0.3, 0.3, 0.8, 0.02);
+    refs.spinners.push({ mesh: cell, axis: 'y', speed: 4 });
+    part(m, 'cylinder', mats.dark, 0, 0.75, 0.6, 0.15, 1.6, 0.15, 0.03).rotation.x = Math.PI / 2;
+    for (const [x, y] of [[0.24, 0], [-0.24, 0], [0, 0.24]]) {
+      const rail = part(m, 'roundBox', shell, x, 0.75 + y, 0.55, x ? 0.08 : 0.32, x ? 0.32 : 0.08, 1.45, 0.02);
+      rail.userData.rail = true;
+    }
+    const rings = [];
+    for (const z of [0.15, 0.45, 0.75, 1.05]) {
+      const r = part(m, 'ring', core, 0, 0.75, z, 0.2, 0.2, 0.8, 0.02);
+      rings.push(r);
+    }
+    refs.laserRings = rings;
+    part(m, 'cylinder', mats.metal, 0, 0.75, 1.42, 0.26, 0.14, 0.26, 0.03).rotation.x = Math.PI / 2;
+    for (let k = 0; k < 3; k++) {
+      const prong = new THREE.Group();
+      prong.position.set(0, 0.75, 1.48);
+      prong.rotation.z = (k / 3) * Math.PI * 2 + Math.PI / 2;
+      m.add(prong);
+      part(prong, 'roundBox', mats.dark, 0.24, 0, 0.22, 0.07, 0.07, 0.5, 0.02).rotation.y = -0.35;
+    }
+    part(m, 'cylinder', hot, 0, 0.75, 1.5, 0.12, 0.03, 0.12, 0).rotation.x = Math.PI / 2;
+    return { laserMount: new THREE.Vector3(0, 0.75, 1.62) };
   },
 
   flamethrower(m, mats, refs) {
@@ -1061,7 +1081,12 @@ export function flameDirection(refs, out) {
 
 export function stepLaser(laser, refs, dt, time) {
   const overheatedNow = stepHeat(laser, refs, 'laser', dt, time);
-  return { beaming: laser.firing && laser.delay <= 0, overheatedNow };
+  const beaming = laser.firing && laser.delay <= 0;
+  refs.laserRings?.forEach((ring, i) => {
+    const wave = beaming ? Math.sin(time * 26 - i * 1.4) : Math.sin(time * 3 - i * 0.6);
+    ring.scale.setScalar(1 + (beaming ? 0.35 : 0.08) * Math.max(0, wave));
+  });
+  return { beaming, overheatedNow };
 }
 
 export function aimLaserGun(refs, wobble, dt) {
