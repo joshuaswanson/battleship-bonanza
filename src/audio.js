@@ -3,6 +3,16 @@ export class Sfx {
     this.ctx = null;
     this.muted = localStorage.getItem('bb-muted') === '1';
     this.listener = null;
+    this.music = new Audio(`${import.meta.env.BASE_URL}menu-music.mp3`);
+    this.music.loop = true;
+    this.music.volume = 0.45;
+    this.musicWanted = false;
+  }
+
+  playMusic(on) {
+    this.musicWanted = on;
+    if (on && !this.muted && this.ctx) this.music.play().catch(() => {});
+    else this.music.pause();
   }
 
   unlock() {
@@ -25,12 +35,14 @@ export class Sfx {
       this.engine.start();
     }
     if (this.ctx.state === 'suspended') this.ctx.resume();
+    if (this.musicWanted && !this.muted && this.music.paused) this.music.play().catch(() => {});
   }
 
   toggleMute() {
     this.muted = !this.muted;
     localStorage.setItem('bb-muted', this.muted ? '1' : '0');
     if (this.master) this.master.gain.value = this.muted ? 0 : 0.5;
+    this.playMusic(this.musicWanted);
     return this.muted;
   }
 

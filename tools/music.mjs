@@ -1,0 +1,17 @@
+import puppeteer from 'puppeteer-core';
+const browser = await puppeteer.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: 'new', args: ['--autoplay-policy=no-user-gesture-required'] });
+const page = await browser.newPage();
+page.on('pageerror', (e) => console.log('[pageerror]', e.message));
+const wait = (t) => new Promise((r) => setTimeout(r, t));
+await page.goto('http://localhost:5288/', { waitUntil: 'networkidle0' });
+await page.mouse.click(10, 10);
+await wait(1500);
+const state = () => page.evaluate(() => { const m = window.__bb.sfx?.music; return m ? `paused=${m.paused} t=${m.currentTime.toFixed(1)} dur=${m.duration.toFixed(0)} err=${m.error?.code ?? 'none'}` : 'no handle'; });
+console.log('title', await state());
+await page.evaluate(() => document.getElementById('btn-play').click());
+await wait(800);
+console.log('shipyard', await state());
+await page.evaluate(() => document.getElementById('btn-start').click());
+await wait(800);
+console.log('race', await state());
+await browser.close();

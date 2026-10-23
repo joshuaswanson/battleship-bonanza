@@ -143,6 +143,7 @@ function showScreen(id) {
 }
 
 function goTitle() {
+  sfx.playMusic(true);
   mode = 'title';
   newRace(true);
   hud.show(false);
@@ -152,6 +153,7 @@ function goTitle() {
 
 function goLoadout() {
   sfx.unlock();
+  sfx.playMusic(true);
   if (!race?.attract) newRace(true);
   mode = 'loadout';
   hud.show(false);
@@ -162,6 +164,7 @@ function goLoadout() {
 function startRace() {
   if (!setup.items.every(Boolean)) return;
   sfx.unlock();
+  sfx.playMusic(false);
   saveSetup();
   newRace(false);
   mode = 'race';
@@ -253,6 +256,7 @@ $('btn-pause').addEventListener('click', () => pause(true));
 $('btn-again').addEventListener('click', startRace);
 $('btn-change').addEventListener('click', goLoadout);
 addEventListener('pointerdown', () => sfx.unlock(), { once: true });
+addEventListener('keydown', () => sfx.unlock(), { once: true });
 
 const cam = {
   pos: new THREE.Vector3(0, 30, -40),
@@ -399,6 +403,7 @@ if (import.meta.env.DEV) {
       return race;
     },
     setup,
+    sfx,
     camera,
     cam,
     get world() {
