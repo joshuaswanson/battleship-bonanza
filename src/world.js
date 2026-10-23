@@ -665,6 +665,161 @@ function addIsland(batch, x, z, r, rand, { clearCenter = 0 } = {}) {
   return sand;
 }
 
+const PILLAR_DARK = new THREE.Color(0x6f6457);
+const PILLAR_STREAK = new THREE.Color(0x857868);
+const PILLAR_LIGHT = new THREE.Color(0xa49582);
+const PILLAR_WET = new THREE.Color(0x4f4a43);
+
+function paintPillar(g, top) {
+  g.computeVertexNormals();
+  const pos = g.attributes.position;
+  const nor = g.attributes.normal;
+  const colors = [];
+  const greens = [];
+  const moss = [];
+  const color = new THREE.Color();
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const y = pos.getY(i);
+    const z = pos.getZ(i);
+    const streak = Math.sin(Math.atan2(z, x) * 9 + y * 0.05) * 0.5 + Math.sin(x * 0.4 - z * 0.3 + y * 0.02) * 0.5;
+    color.copy(PILLAR_STREAK).lerp(streak > 0 ? PILLAR_LIGHT : PILLAR_DARK, Math.abs(streak) * 0.8);
+    color.multiplyScalar(0.92 + 0.12 * Math.sin(y * 0.35 + streak));
+    if (y < 1.6) color.lerp(PILLAR_WET, 1 - THREE.MathUtils.smoothstep(y, -1, 1.6));
+    colors.push(color.r, color.g, color.b);
+    const ny = nor.getY(i);
+    const hang = THREE.MathUtils.smoothstep(y, top - 4, top - 0.5) * (0.5 + 0.5 * Math.sin(Math.atan2(z, x) * 5 + x)) * 0.62;
+    greens.push(Math.max(THREE.MathUtils.smoothstep(ny, 0.55, 0.75) * THREE.MathUtils.smoothstep(y, top - 3, top - 1), hang));
+    const tone = streak > 0.2 ? GRASS_EDGE : GRASS_TONE;
+    moss.push(tone.r, tone.g, tone.b);
+  }
+  g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  g.setAttribute('aGreen', new THREE.Float32BufferAttribute(greens, 1));
+  g.setAttribute('aMoss', new THREE.Float32BufferAttribute(moss, 3));
+  return g;
+}
+
+function pillarGeometry(radius, height, rand) {
+  const waist = 0.45 + rand() * 0.45;
+  const waistAt = 0.3 + rand() * 0.3;
+  const flare = 1 + rand() * 0.6;
+  const lean = new THREE.Vector2((rand() - 0.5) * radius * 0.5, (rand() - 0.5) * radius * 0.5);
+  const stretch = 0.75 + rand() * 0.5;
+  const turn = rand() * Math.PI;
+  const lumps = Array.from({ length: 5 }, () => ({ k: 1 + Math.floor(rand() * 5), p: rand() * 6, a: 0.04 + rand() * 0.1, v: rand() * 0.2 }));
+  const g = mergeVertices(new THREE.CylinderGeometry(1, 1, 1, 16, 22).translate(0, 0.5, 0).deleteAttribute('normal').deleteAttribute('uv'));
+  const pos = g.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const t = pos.getY(i);
+    const z = pos.getZ(i);
+    const r0 = Math.hypot(x, z);
+    const a = Math.atan2(z, x);
+    let profile = 1 - (1 - waist) * Math.exp(-(((t - waistAt) / 0.28) ** 2));
+    profile *= 1 + (flare - 1) * THREE.MathUtils.smoothstep(t, 0.72, 0.97);
+    profile *= 1 + 0.25 * (1 - THREE.MathUtils.smoothstep(t, 0, 0.12));
+    let bump = 1;
+    for (const l of lumps) bump += Math.sin(a * l.k + l.p + t * height * l.v) * l.a;
+    bump += Math.sin(a * 11 + t * 3) * 0.03;
+    const rr = r0 * radius * profile * bump;
+    const lx = Math.cos(a) * rr * stretch;
+    const lz = Math.sin(a) * rr / stretch;
+    const shift = t * t;
+    let y = t * height - 2;
+    if (t > 0.999 && r0 < 0.999) y += Math.sin(x * 3 + z * 2) * 0.6;
+    pos.setXYZ(i, lx * Math.cos(turn) - lz * Math.sin(turn) + lean.x * shift, y, lx * Math.sin(turn) + lz * Math.cos(turn) + lean.y * shift);
+  }
+  return { geometry: paintPillar(g, height - 2), top: new THREE.Vector3(lean.x, height - 2, lean.y), topRadius: radius * flare * 0.8, footprint: radius * 1.1 * Math.max(stretch, 1 / stretch) };
+}
+
+function plantTop(batch, x, y, z, radius, rand, density = 1) {
+  const palms = Math.max(1, Math.round((1 + rand() * 3) * density * Math.min(1.6, radius / 8)));
+  for (let i = 0; i < palms; i++) {
+    const a = rand() * Math.PI * 2;
+    const d = radius * Math.sqrt(rand()) * 0.75;
+    addPalm(batch, x + Math.cos(a) * d, y - 0.3, z + Math.sin(a) * d, rand, { height: 5 + rand() * 5, lean: 0.1 + rand() * 0.4, dir: a });
+  }
+  const bushes = Math.round((3 + rand() * 5) * density * Math.min(1.8, radius / 8));
+  for (let i = 0; i < bushes; i++) {
+    const a = rand() * Math.PI * 2;
+    const d = radius * Math.sqrt(rand()) * 0.9;
+    const sz = 1.2 + rand() * 1.6;
+    batch.add(rand() < 0.5 ? 'moss' : 'mossDark', LOW_SPHERE, mat(x + Math.cos(a) * d, y + sz * 0.3, z + Math.sin(a) * d, sz * 1.2, sz * 0.75, sz));
+  }
+}
+
+function addPillar(batch, x, z, rand, { radius, height, plants = 1 }) {
+  const pillar = pillarGeometry(radius, height, rand);
+  batch.add('rockland', pillar.geometry, mat(x, 0, z));
+  batch.add('foam', RING, mat(x, 0.2, z, pillar.footprint * 1.05, 6, pillar.footprint * 1.05));
+  const top = pillar.top.clone().add(new THREE.Vector3(x, 0, z));
+  if (plants) plantTop(batch, top.x, top.y, top.z, pillar.topRadius, rand, plants);
+  return { blob: { x, z, rx: pillar.footprint, rz: pillar.footprint, rot: 0 }, top };
+}
+
+function archGeometry(span, height, thick, rand) {
+  const pts = [
+    new THREE.Vector3(-span, -3, 0),
+    new THREE.Vector3(-span * 1.02, height * 0.45, 0),
+    new THREE.Vector3(-span * 0.85, height * 0.85, 0),
+    new THREE.Vector3(-span * 0.4, height, 0),
+    new THREE.Vector3(span * 0.4, height * (0.97 + rand() * 0.06), 0),
+    new THREE.Vector3(span * 0.85, height * 0.85, 0),
+    new THREE.Vector3(span * 1.02, height * 0.45, 0),
+    new THREE.Vector3(span, -3, 0),
+  ];
+  const curve = new THREE.CatmullRomCurve3(pts);
+  const segments = 60;
+  const radial = 12;
+  const tube = new THREE.TubeGeometry(curve, segments, 1, radial, false);
+  const pos = tube.attributes.position;
+  const lumps = Array.from({ length: 3 }, () => ({ f: 3 + rand() * 6, k: 2 + Math.floor(rand() * 3), p: rand() * 6, a: 0.08 + rand() * 0.1 }));
+  for (let i = 0; i <= segments; i++) {
+    const t = i / segments;
+    const c = curve.getPointAt(t);
+    const along = Math.abs(t - 0.5) * 2;
+    const r = thick * (1.2 - 0.4 * along + 0.7 * along ** 8);
+    for (let j = 0; j <= radial; j++) {
+      const k = i * (radial + 1) + j;
+      const a = (j / radial) * Math.PI * 2;
+      let bump = 1;
+      for (const l of lumps) bump += Math.sin(t * l.f + a * l.k + l.p) * l.a;
+      const dx = pos.getX(k) - c.x;
+      const dy = pos.getY(k) - c.y;
+      const dz = pos.getZ(k) - c.z;
+      const flat = dy > 0 && along < 0.6 ? 0.7 : 1;
+      pos.setXYZ(k, c.x + dx * r * bump, c.y + dy * r * bump * flat, c.z + dz * r * bump * 1.35);
+    }
+  }
+  const g = mergeVertices(tube.deleteAttribute('normal').deleteAttribute('uv'));
+  return paintPillar(g, height + thick);
+}
+
+function addArch(batch, track, fraction, rand) {
+  const idx = track.wrap(Math.round(fraction * track.N));
+  const half = track.halfWidth;
+  const span = half + 9;
+  const height = 26 + rand() * 6;
+  const thick = 5 + rand() * 1.5;
+  const p = track.point(idx, 0);
+  const heading = track.heading(idx);
+  batch.add('rockland', archGeometry(span, height, thick, rand), mat(p.x, 0, p.z, 1, 1, 1, 0, heading, 0));
+  const nx = track.nx[idx];
+  const nz = track.nz[idx];
+  for (let k = -3; k <= 3; k++) {
+    const lat = (k / 3) * span * 0.75;
+    plantTop(batch, p.x + nx * lat, height + thick * 0.55, p.z + nz * lat, 2.2, rand, 0.4);
+  }
+  const blobs = [];
+  for (const side of [-1, 1]) {
+    const lx = p.x + nx * side * span;
+    const lz = p.z + nz * side * span;
+    batch.add('foam', RING, mat(lx, 0.2, lz, thick * 1.6, 6, thick * 1.6));
+    blobs.push({ x: lx, z: lz, rx: thick * 1.4, rz: thick * 1.4, rot: 0 });
+  }
+  return blobs;
+}
+
 function addLighthouse(batch, x, z, baseY) {
   const stripes = 6;
   for (let i = 0; i < stripes; i++) {
@@ -776,42 +931,42 @@ export function createWorld(scene, track) {
 
   const rand = mulberry32(20261023);
   const batch = new Batcher();
-  const islands = [];
   const half = track.halfWidth;
-  for (let gx = -540; gx <= 540; gx += 60) {
-    for (let gz = -480; gz <= 560; gz += 60) {
-      const x = gx + (rand() - 0.5) * 44;
-      const z = gz + (rand() - 0.5) * 44;
-      if (rand() < 0.72) continue;
-      const clearance = track.project(x, z).distance - half;
-      if (clearance < 20) continue;
-      const roll = rand();
-      const wanted = roll < 0.4 ? 5 + rand() * 8 : roll < 0.78 ? 13 + rand() * 15 : 28 + rand() * 45;
-      const r = Math.min(wanted, clearance - 12);
-      if (r < 5) continue;
-      if (islands.some((o) => Math.hypot(o.x - x, o.z - z) < o.r + r + 8)) continue;
-      islands.push({ x, z, r });
+  const shores = [];
+  const pillars = [];
+  const fits = (x, z, r) => !pillars.some((o) => Math.hypot(o.x - x, o.z - z) < o.r + r + 6);
+  for (const f of [0.2, 0.47, 0.72]) shores.push(...addArch(batch, track, f, rand));
+  for (const f of [0.2, 0.47, 0.72]) {
+    const idx = track.wrap(Math.round(f * track.N));
+    for (const side of [-1, 1]) {
+      const p = track.point(idx, side * (half + 9));
+      pillars.push({ x: p.x, z: p.z, r: 8 });
     }
   }
-  const shores = [];
-  for (const island of islands) shores.push(...addIsland(batch, island.x, island.z, island.r, rand));
-
-  const start = track.point(0, -(half + 40));
-  shores.push(...addIsland(batch, start.x, start.z, 13, rand, { clearCenter: 5 }));
-
-  const stacks = [];
-  for (let tries = 0; stacks.length < 12 && tries < 900; tries++) {
-    const x = (rand() - 0.5) * 1000;
-    const z = (rand() - 0.5) * 960 + 60;
-    const clearance = track.project(x, z).distance - half;
-    if (clearance < 45 || clearance > 260) continue;
-    if (islands.some((o) => Math.hypot(o.x - x, o.z - z) < o.r + 40)) continue;
-    if (stacks.some((s) => Math.hypot(s.x - x, s.z - z) < 120)) continue;
-    const footprint = addSeaStack(batch, x, z, rand);
-    stacks.push({ x, z, crag: footprint.crag });
-    shores.push(...footprint);
+  const start = track.point(0, -(half + 26));
+  const home = addPillar(batch, start.x, start.z, rand, { radius: 9, height: 34, plants: 0.5 });
+  shores.push(home.blob);
+  pillars.push({ x: start.x, z: start.z, r: 10 });
+  addLighthouse(batch, home.top.x, home.top.z, home.top.y);
+  for (let gx = -560; gx <= 560; gx += 42) {
+    for (let gz = -500; gz <= 580; gz += 42) {
+      const x = gx + (rand() - 0.5) * 34;
+      const z = gz + (rand() - 0.5) * 34;
+      if (rand() < 0.6) continue;
+      const clearance = track.project(x, z).distance - half;
+      const mesa = rand() < 0.18;
+      const radius = mesa ? 13 + rand() * 12 : 4 + rand() * 9;
+      if (clearance < radius + 6) continue;
+      if (!fits(x, z, radius)) continue;
+      const height = mesa ? 26 + rand() * 30 : 30 + rand() * 65 + (clearance > 120 ? rand() * 35 : 0);
+      const pillar = addPillar(batch, x, z, rand, { radius, height });
+      pillars.push({ x, z, r: radius });
+      shores.push(pillar.blob);
+    }
   }
-  addLighthouse(batch, start.x, start.z, 3);
+  const islands = pillars.map((p) => ({ x: p.x, z: p.z, r: p.r }));
+  const stacks = [];
+
 
   const scenery = new THREE.Group();
   const chunks = batch.build(scenery);
