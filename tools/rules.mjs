@@ -48,7 +48,7 @@ const sweep = async (items) => {
 console.log('laser vs saw:', await sweep(['saw']));
 console.log('laser vs plain:', await sweep(['spikes']));
 console.log('laser vs armor:', await sweep(['armor']));
-await ev(() => { const r = window.__bb.race; const t = __setup(['missiles', 'grapple'], 30); t.heading += Math.PI; r.player.items = ['laser', 'emp']; window.__t = t; r.actions.missiles.call(r, t); return r.missiles[0]?.target?.name; }).then((x) => console.log('AI missile targets:', x));
+await ev(() => { const r = window.__bb.race; const t = __setup(['missiles', 'grapple'], 30); t.heading += Math.PI; r.player.items = ['laser', 'emp']; window.__t = t; r.actions.missiles.call(r, t); return new Promise((res) => setTimeout(() => res(r.missiles[0]?.target?.name), 400)); }).then((x) => console.log('AI missile targets:', x));
 await wait(250);
 console.log('EMP vs missile:', await ev(() => { const r = window.__bb.race; r.useItem(r.player, 1); return 'used'; }));
 await wait(600);
@@ -68,5 +68,5 @@ console.log('grapple vs plain:', await ev(() => { const r = window.__bb.race; __
 console.log('grapple vs jetpack:', await ev(() => { const r = window.__bb.race; const t = __setup(['jetpack'], 40); r.player.cooldowns = [0, 0]; r.useItem(r.player, 1); return `hook target ${r.hooks.at(-1).target?.name ?? 'none'} (expected ${t.name})`; }));
 await wait(700);
 console.log('  hook phase:', await ev(() => window.__bb.race.hooks.map((h) => h.phase).join(',')));
-console.log('missile vs camo player:', await ev(() => { const r = window.__bb.race; const t = __setup(['missiles'], 30); t.heading += Math.PI; r.player.items = ['camo', 'grapple']; r.actions.missiles.call(r, t); return `target ${r.missiles.at(-1).target?.name ?? 'none'}`; }));
+console.log('missile vs camo player:', await ev(() => { const r = window.__bb.race; const t = __setup(['missiles'], 30); t.heading += Math.PI; r.player.items = ['camo', 'grapple']; r.missiles.length = 0; r.actions.missiles.call(r, t); return new Promise((res) => setTimeout(() => res(`target ${r.missiles.at(-1)?.target?.name ?? 'none'} (launched ${r.missiles.length})`), 400)); }));
 await browser.close();
