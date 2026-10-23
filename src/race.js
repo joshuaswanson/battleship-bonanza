@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { ITEMS } from './items.js';
-import { buildBoat, buildMine, buildMissile, buildHook, laserWobble, aimLaserGun, aimTurret, SALVO, spendMissile, reloadMissiles, updateMissileTips, missileDirection, stepGun, stepLaser, stepFlame, flameDirection, newHeat, gunDirection, laserDirection, launchMine, reloadMine, updateMineHolder, HULL_L } from './boatModel.js';
+import { buildBoat, buildMine, buildMissile, buildHook, laserWobble, aimLaserGun, aimTurret, SALVO, spendMissile, reloadMissiles, updateMissileTips, missileDirection, stepGun, stepLaser, stepFlame, stepSaw, flameDirection, newHeat, gunDirection, laserDirection, launchMine, reloadMine, updateMineHolder, HULL_L } from './boatModel.js';
 import { waveHeight } from './water.js';
 import { createAI, driveAI } from './ai.js';
 import { toon, glow } from './toon.js';
@@ -23,8 +23,6 @@ const REGEN_MAX = 22;
 const OFF_COURSE_SPEED = 0.35;
 const OUTER_LIMIT = 45;
 const SHORE_MARGIN = 2.2;
-const SAW_WORK = 3;
-const SAW_REST = 1.5;
 const SAW_LEAK = 0.4;
 const EASY_HOOK = (o) => o.has('spikes') || o.has('jetpack');
 const REVERSE_SPEED = fast(14);
@@ -91,6 +89,7 @@ class Boat {
         return { id: s.id, group: s.group, rest, backGun: this.model.backGuns.has(s.id), limit: s.front ? FRONT_LIMIT : Math.PI };
       });
     this.missileQueue = [];
+    this.attackRolls = new Map();
     this.lastFired = -Infinity;
     this.regenerating = false;
     this.disabled = 0;
@@ -119,6 +118,7 @@ class Boat {
     this.stun = 0;
     this.boost = 0;
     this.sawState = { spin: 0, yaw: 0, tick: 0, shield: 0, shieldYaw: 0, sound: 0 };
+    this.sawHeat = newHeat();
     this.gun = newHeat();
     this.laser = newHeat();
     this.flame = newHeat();
@@ -280,6 +280,7 @@ export class Race {
         b.gun.trigger = (input.hold0 && b.items[0] === 'machinegun') || (input.hold1 && b.items[1] === 'machinegun');
         b.laser.trigger = (input.hold0 && b.items[0] === 'laser') || (input.hold1 && b.items[1] === 'laser');
         b.flame.trigger = (input.hold0 && b.items[0] === 'flamethrower') || (input.hold1 && b.items[1] === 'flamethrower');
+        b.sawHeat.trigger = (input.hold0 && b.items[0] === 'saw') || (input.hold1 && b.items[1] === 'saw');
       } else if (b.alive) {
         driveAI(this, b, dt);
       }
@@ -487,6 +488,7 @@ export class Race {
     b.gun.trigger = false;
     b.laser.trigger = false;
     b.flame.trigger = false;
+    b.sawHeat.trigger = false;
     b.exploded = false;
     const s = idx * t.spacing;
     let ds = s - b.trackS;
@@ -604,6 +606,7 @@ export class Race {
     b.gun.trigger = false;
     b.laser.trigger = false;
     b.flame.trigger = false;
+    b.sawHeat.trigger = false;
     b.burn = null;
     for (const h of this.hooks) if (h.target === b || h.owner === b) h.phase = 'retract';
     const c = b.center();
@@ -662,7 +665,7 @@ export class Race {
   actions = {
     missiles(b) {
       const targets = this.boats
-        .filter((o) => o !== b && o.alive && o.invuln <= 0 && !o.has('camo') && !(o.finished && !this.attract))
+        .filter((o) => o !== b && o.alive && o.invuln <= 0 && !o.has('camo') && !(o.finished && !this.attract) && this.willAttack(b, o))
         .map((o) => ({ o, d: Math.hypot(o.pos.x - b.pos.x, o.pos.z - b.pos.z) }))
         .filter((t) => t.d <= 180)
         .sort((x, y) => x.d - y.d)
@@ -1192,18 +1195,18 @@ export class Race {
     b.burn.time -= dt;
     b.burn.tick -= dt;
     const c = b.center();
-    for (let i = 0; i < 2; i++) {
-      const a = Math.random() * Math.PI * 2;
-      const r = Math.random() * 2.2;
-      const along = (Math.random() - 0.5) * HULL_L * 1.4;
-      this.fx.flame(
-        c.x + Math.sin(b.heading) * along + Math.cos(a) * r * 0.5,
-        c.y + 0.2,
-        c.z + Math.cos(b.heading) * along + Math.sin(a) * r * 0.5,
-        0, 4 + Math.random() * 3, 0,
+    for (let i = 0; i < 6; i++) {
+      const along = (Math.random() - 0.5) * HULL_L * 1.6;
+      const side = (Math.random() - 0.5) * 2.4;
+      this.fx.blaze(
+        c.x + Math.sin(b.heading) * along + Math.cos(b.heading) * side,
+        c.y + 0.4 + Math.random(),
+        c.z + Math.cos(b.heading) * along - Math.sin(b.heading) * side,
+        b.vel,
       );
     }
-    if (Math.random() < 0.3) this.fx.smoke(c.x, c.y + 1.5, c.z);
+    if (Math.random() < 0.7) this.fx.blackSmoke(c.x, c.y + 3 + Math.random() * 1.5, c.z, b.vel);
+    if (Math.random() < 0.25) this.fx.sparkBurst(c.x, c.y + 1.5, c.z, 0xffa62b, 2);
     if (b.burn.tick <= 0) {
       b.burn.tick = 0.25;
       this.damage(b, BURN_DPS * 0.25, b.burn.source, 'fire');
@@ -1219,7 +1222,10 @@ export class Race {
     for (let i = 0; i < 4; i++) this.fx.sparkBurst(c.x, c.y + 1, c.z, i % 2 ? 0xffd23f : 0xff5a3a, 20);
     this.sfx.play('boom', b.pos);
     this.sfx.play('boom', b.pos);
-    if (this.player && Math.hypot(this.player.pos.x - c.x, this.player.pos.z - c.z) < BLAST_RADIUS * 2) this.emit('lockShake', { amount: 1.6 });
+    if (this.player) {
+      const near = 1 - Math.hypot(this.player.pos.x - c.x, this.player.pos.z - c.z) / 200;
+      if (near > 0) this.emit('quake', { amount: 1 + 4 * near * near });
+    }
     for (const o of this.boats) {
       if (o === b || !o.alive) continue;
       const dx = o.pos.x - b.pos.x;
@@ -1286,6 +1292,24 @@ export class Race {
         this.fx.sparkBurst(p.x, p.y + 1, p.z, 0x5ff4ff, 3);
       }
     });
+  }
+
+  willAttack(b, o) {
+    const player = this.player;
+    if (b.isPlayer || this.attract || !player || player.finished) return true;
+    const cached = b.attackRolls.get(o);
+    if (cached && cached.until > this.time) return cached.value;
+    let chance;
+    if (o.isPlayer) {
+      const pack = this.boats.filter((x) => !x.isPlayer).map((x) => x.dist).sort((m, n) => m - n);
+      const lead = player.dist - pack[pack.length >> 1];
+      chance = clamp(0.55 + lead / 500, 0.08, 1);
+    } else {
+      chance = clamp(0.5 + (o.dist - player.dist) / 300, 0.05, 1);
+    }
+    const value = Math.random() < chance;
+    b.attackRolls.set(o, { until: this.time + 1.2, value });
+    return value;
   }
 
   relativeAngle(b, o) {
@@ -1360,11 +1384,18 @@ export class Race {
     const fz = Math.cos(b.heading);
     const lx = Math.cos(b.heading);
     const lz = -Math.sin(b.heading);
+    if (this.state !== 'racing' || !b.alive || b.disabled > 0) b.sawHeat.trigger = false;
+    const { cutting: armed, overheatedNow } = stepSaw(b.sawHeat, refs, dt, this.time);
+    if (overheatedNow) {
+      this.sfx.play('overheat', b.pos);
+      if (b.isPlayer) this.emit('warning', { text: tr('overheatedWarn') });
+    }
+    if (armed) b.lastFired = this.time;
     let target = null;
     let best = SAW_RANGE;
     if (b.alive && this.state === 'racing' && b.disabled <= 0) {
       for (const o of this.boats) {
-        if (o === b || !o.alive || (o.finished && !this.attract)) continue;
+        if (o === b || !o.alive || (o.finished && !this.attract) || !this.willAttack(b, o)) continue;
         if (Math.abs(o.yOffset - b.yOffset) > 3) continue;
         const d = o.distanceToAxis2D(pivot.x, pivot.z);
         if (d < best) {
@@ -1385,15 +1416,9 @@ export class Race {
 
     s.sound -= dt;
     const blade = refs.saw.getWorldPosition(new THREE.Vector3());
-    s.rest = Math.max(0, (s.rest ?? 0) - dt);
+    if (b.sawHeat.overheated && Math.random() < 0.4) this.fx.smoke(blade.x, blade.y + 0.4, blade.z);
     const inReach = target && s.shield <= 0 && target.distanceToAxis2D(blade.x, blade.z) < HIT_RADIUS + 0.7;
-    const cutting = inReach && s.rest <= 0;
-    s.work = cutting ? (s.work ?? 0) + dt : Math.max(0, (s.work ?? 0) - dt * 0.5);
-    if (s.work >= SAW_WORK) {
-      s.work = 0;
-      s.rest = SAW_REST;
-      for (let i = 0; i < 3; i++) this.fx.smoke(blade.x, blade.y + 0.4, blade.z);
-    }
+    const cutting = armed && inReach;
     s.chop = cutting ? (s.chop ?? 0) + dt : 0;
     const arm = refs.modules.saw;
     const pitch = cutting ? Math.sin(s.chop * 16) * 0.2 + 0.08 : 0;
@@ -1407,7 +1432,6 @@ export class Race {
       if (s.tick <= 0) {
         s.tick = 0.22;
         this.damage(target, 4, b, 'saw', { stun: 0.15 });
-        b.lastFired = this.time;
         this.fx.sparkBurst(contact.x, contact.y, contact.z, 0xffa62b, 12);
         if (s.sound <= 0) {
           s.sound = 0.45;
@@ -1415,7 +1439,7 @@ export class Race {
         }
       }
     }
-    const spinning = (!!target && s.rest <= 0) || s.shield > 0;
+    const spinning = armed || s.shield > 0;
     s.spin += ((spinning ? 42 : 0) - s.spin) * (1 - Math.exp(-(spinning ? 6 : 2) * dt));
     refs.saw.rotation.x += s.spin * dt;
 

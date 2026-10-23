@@ -1586,6 +1586,15 @@ kbd {
   box-shadow: inset 0 0 120px 30px rgba(61, 220, 111, 0.6);
 }
 
+.hud-flash.blast {
+  background: rgba(255, 214, 120, 0.55);
+  box-shadow: inset 0 0 160px 60px rgba(255, 110, 40, 0.8);
+}
+
+.hud-flash.on.blast {
+  animation: flash 700ms ease-out;
+}
+
 .hud-flash.on {
   animation: flash 450ms ease-out;
 }

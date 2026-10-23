@@ -94,9 +94,13 @@ let race = null;
 let resultsTimer = 0;
 let time = 0;
 let shake = 0;
+let quake = 0;
+const shakers = [document.getElementById('game'), document.getElementById('hud')];
 
 function newRace(attract) {
   race?.dispose();
+  quake = 0;
+  for (const el of shakers) el.style.transform = '';
   race = new Race({ scene, track, fx, sfx: attract ? SILENT : sfx, shores: world.shores, defs: makeDefs(attract ? null : setup), attract });
   cam.snap = true;
 }
@@ -281,7 +285,21 @@ function updateCamera(dt) {
     camera.position.y += (Math.random() - 0.5) * shake;
     shake = Math.max(0, shake - dt * 4);
   }
+  if (quake > 0) {
+    camera.position.x += (Math.random() - 0.5) * quake * 1.4;
+    camera.position.y += (Math.random() - 0.5) * quake * 1.4;
+    camera.position.z += (Math.random() - 0.5) * quake * 1.4;
+  }
   camera.lookAt(cam.look);
+  if (quake > 0) {
+    camera.rotateZ((Math.random() - 0.5) * quake * 0.07);
+    const px = (Math.random() - 0.5) * quake * 9;
+    const py = (Math.random() - 0.5) * quake * 9;
+    quake = Math.max(0, quake - dt * 3.2);
+    const [canvas, hudEl] = shakers;
+    canvas.style.transform = quake > 0 ? `translate(${px}px, ${py}px) scale(1.06)` : '';
+    hudEl.style.transform = quake > 0 ? `translate(${px * 0.6}px, ${py * 0.6}px)` : '';
+  }
   if (Math.abs(camera.fov - fov) > 0.05) {
     camera.fov += (fov - camera.fov) * (1 - Math.exp(-3 * dt));
     camera.updateProjectionMatrix();
@@ -295,6 +313,7 @@ function handleEvents() {
     if (e.type === 'hurt') shake = Math.max(shake, e.kind === 'bullet' ? 0.25 : 1.2);
     if (e.type === 'ko') shake = 1.6;
     if (e.type === 'lockShake') shake = Math.max(shake, e.amount);
+    if (e.type === 'quake') quake = Math.max(quake, e.amount);
     if (e.type === 'finish') resultsTimer = 3.5;
   }
   race.events.length = 0;

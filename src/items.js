@@ -67,7 +67,7 @@ export const ITEMS = {
   saw: {
     stats: { punch: 2, tough: 1 },
     group: 'weapons',
-    passive: true,
+    hold: true,
   },
   missiles: {
     stats: { punch: 3 },

@@ -192,6 +192,17 @@ export class Effects {
     this.sparks.emit(x, y, z, vx + (r() - 0.5) * 2, vy + (r() - 0.5) * 2, vz + (r() - 0.5) * 2, 0.35 + r() * 0.3, 0.25, r() < 0.5 ? 0xffd23f : 0xff8a1f, 0, 2, 1);
   }
 
+  blaze(x, y, z, carry) {
+    const r = Math.random;
+    const color = r() < 0.12 ? 0xffffff : r() < 0.5 ? 0xffd23f : r() < 0.85 ? 0xff8a1f : 0xff4a2a;
+    this.sparks.emit(x, y, z, carry.x * 0.8 + (r() - 0.5) * 2, 3 + r() * 4, carry.z * 0.8 + (r() - 0.5) * 2, 0.8 + r() * 0.8, 0.4 + r() * 0.3, color, -9, 2, 2);
+  }
+
+  blackSmoke(x, y, z, carry) {
+    const r = Math.random;
+    this.puffs.emit(x, y, z, carry.x * 0.5 + (r() - 0.5) * 1.5, 3 + r() * 2, carry.z * 0.5 + (r() - 0.5) * 1.5, 0.9 + r() * 0.7, 1.4 + r() * 0.6, r() < 0.5 ? 0x3d3f46 : 0x5c5f68, -2, 1, 0);
+  }
+
   bubbles(x, y, z) {
     const r = Math.random;
     this.puffs.emit(x + (r() - 0.5) * 3, y, z + (r() - 0.5) * 3, (r() - 0.5), 2 + r() * 2, (r() - 0.5), 0.25 + r() * 0.35, 0.8 + r() * 0.6, r() < 0.5 ? 0xbff6ff : 0xffffff, -2, 1, 0);

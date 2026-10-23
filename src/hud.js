@@ -160,6 +160,11 @@ export class Hud {
         void this.flash.offsetWidth;
         this.flash.className = 'hud-flash on heal';
         break;
+      case 'quake':
+        this.flash.className = 'hud-flash';
+        void this.flash.offsetWidth;
+        this.flash.className = 'hud-flash on blast';
+        break;
       case 'dodge':
         this.pop(t('dodged'), 'go');
         break;
@@ -205,7 +210,7 @@ export class Hud {
         return;
       }
       if (item.hold) {
-        const { heat, overheated } = id === 'laser' ? p.laser : id === 'flamethrower' ? p.flame : p.gun;
+        const { heat, overheated } = { laser: p.laser, flamethrower: p.flame, saw: p.sawHeat }[id] ?? p.gun;
         this.slotFills[i].style.width = `${(1 - heat) * 100}%`;
         slot.classList.toggle('overheated', overheated);
         slot.classList.toggle('hot', !overheated && heat > 0.6);

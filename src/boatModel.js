@@ -646,7 +646,9 @@ const MODULES = {
     part(m, 'sphere', mats.dark, 0, 1.55, 0, 0.32, 0.32, 0.32, 0.03);
     part(m, 'cylinder', mats.paint, 0, 1.55, 1.0, 0.15, 2.0, 0.15, 0.03).rotation.x = Math.PI / 2;
     part(m, 'roundBox', mats.dark, 0, 1.55, 2.0, 0.34, 0.5, 0.34, 0.02);
-    const saw = part(m, 'saw', mats.metal, 0, 1.55, 2.25, 1.25, 1.25, 1.25, 0.03);
+    const bladeMat = toon(METAL);
+    refs.heatMats.saw = [bladeMat];
+    const saw = part(m, 'saw', bladeMat, 0, 1.55, 2.25, 1.25, 1.25, 1.25, 0.03);
     part(saw, 'sphere', toon(RED), 0, 0, 0, 0.26, 0.26, 0.26, 0.03);
     refs.saw = saw;
     const shield = new THREE.Mesh(
@@ -947,6 +949,11 @@ export function stepGun(gun, refs, dt, time) {
     refs.gunSwivel.rotation.y += (sway - refs.gunSwivel.rotation.y) * (1 - Math.exp(-20 * dt));
   }
   return { shots, overheatedNow };
+}
+
+export function stepSaw(saw, refs, dt, time) {
+  const overheatedNow = stepHeat(saw, refs, 'saw', dt, time);
+  return { cutting: saw.firing, overheatedNow };
 }
 
 export function stepFlame(flame, refs, dt, time) {

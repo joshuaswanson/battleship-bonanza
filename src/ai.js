@@ -39,10 +39,11 @@ export function driveAI(race, b, dt) {
   if (b.gun.heat > 0.85) b.gun.trigger = false;
   if (b.laser.heat > 0.85) b.laser.trigger = false;
   if (b.flame.heat > 0.85) b.flame.trigger = false;
+  if (b.sawHeat.heat > 0.85) b.sawHeat.trigger = false;
 
   if (race.player && !race.attract && !b.isPlayer) {
     const gap = race.player.dist - b.dist;
-    b.skill = ai.base * clamp(1 + gap / 1800, 0.93, 1.12);
+    b.skill = ai.base * clamp(1 + gap / 1000, 0.8, 1.18);
   } else {
     b.skill = ai.base;
   }
@@ -77,17 +78,22 @@ function avoidMines(race, b, ai) {
 function useItems(race, b, ai) {
   for (let slot = 0; slot < 2; slot++) {
     if (b.items[slot] === 'machinegun') {
-      const t = race.findTarget(b, race.gunArc(b, 'machinegun', 75));
+      const t = race.findTarget(b, { ...race.gunArc(b, 'machinegun', 75), filter: (o) => race.willAttack(b, o) });
       b.gun.trigger = !!t && !t.has('armor') && b.gun.heat < 0.7 && Math.random() < ai.aggression + 0.3;
       continue;
     }
     if (b.items[slot] === 'flamethrower') {
-      const t = race.findTarget(b, race.gunArc(b, 'flamethrower', 15));
+      const t = race.findTarget(b, { ...race.gunArc(b, 'flamethrower', 15), filter: (o) => race.willAttack(b, o) });
       b.flame.trigger = !!t && b.flame.heat < 0.75 && Math.random() < ai.aggression + 0.4;
       continue;
     }
+    if (b.items[slot] === 'saw') {
+      const t = race.findTarget(b, { range: 11, minDot: -0.2, filter: (o) => race.willAttack(b, o) });
+      b.sawHeat.trigger = !!t && !t.has('armor') && b.sawHeat.heat < 0.75 && Math.random() < ai.aggression + 0.4;
+      continue;
+    }
     if (b.items[slot] === 'laser') {
-      const t = race.findTarget(b, race.gunArc(b, 'laser', 70));
+      const t = race.findTarget(b, { ...race.gunArc(b, 'laser', 70), filter: (o) => race.willAttack(b, o) });
       b.laser.trigger = !!t && b.laser.heat < 0.7 && Math.random() < ai.aggression + 0.3;
       continue;
     }
@@ -100,7 +106,7 @@ function shouldUse(race, b, id, ai) {
   const r = Math.random();
   switch (id) {
     case 'missiles': {
-      const t = race.findTarget(b, { range: 170, minDot: -1, filter: (o) => !o.has('camo') });
+      const t = race.findTarget(b, { range: 170, minDot: -1, filter: (o) => !o.has('camo') && race.willAttack(b, o) });
       return !!t && r < ai.aggression * 0.8;
     }
     case 'grapple': {
@@ -123,7 +129,7 @@ function shouldUse(race, b, id, ai) {
     }
     case 'mines': {
       const behind = race.boats.some((o) => {
-        if (o === b || !o.alive) return false;
+        if (o === b || !o.alive || !race.willAttack(b, o)) return false;
         const dx = o.pos.x - b.pos.x;
         const dz = o.pos.z - b.pos.z;
         const d = Math.hypot(dx, dz);
