@@ -192,13 +192,17 @@ applyStatic();
 renderLanguagePicker();
 
 $('btn-play').addEventListener('click', goLoadout);
-$('btn-howto').addEventListener('click', () => {
+let howtoOpener = null;
+function openHowto(opener) {
+  howtoOpener = opener;
   showScreen('screen-howto');
   $('btn-howto-close').focus();
-});
+}
+$('btn-howto').addEventListener('click', () => openHowto($('btn-howto')));
+$('btn-pause-howto').addEventListener('click', () => openHowto($('btn-pause-howto')));
 $('btn-howto-close').addEventListener('click', () => {
-  showScreen('screen-title');
-  $('btn-howto').focus();
+  showScreen(mode === 'paused' ? 'screen-pause' : 'screen-title');
+  howtoOpener?.focus();
 });
 $('btn-back').addEventListener('click', goTitle);
 $('btn-start').addEventListener('click', startRace);
@@ -300,7 +304,7 @@ function frame(now) {
   const pressed = input.pressed;
 
   if (pressed.has('mute')) sfx.toggleMute();
-  if (pressed.has('pause')) {
+  if (pressed.has('pause') && $('screen-howto').classList.contains('hidden')) {
     if (mode === 'race') pause(true);
     else if (mode === 'paused') pause(false);
   }
@@ -340,7 +344,10 @@ function frame(now) {
 
 addEventListener('keydown', (e) => {
   if (e.code === 'Enter' && mode === 'title' && $('screen-howto').classList.contains('hidden')) goLoadout();
-  if (e.code === 'Escape' && !$('screen-howto').classList.contains('hidden')) $('btn-howto-close').click();
+  if (e.code === 'Escape' && !$('screen-howto').classList.contains('hidden')) {
+    input.queued.delete('Escape');
+    $('btn-howto-close').click();
+  }
 });
 
 if (import.meta.env.DEV) {

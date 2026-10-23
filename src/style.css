@@ -387,6 +387,10 @@ kbd {
   gap: 0.6rem;
 }
 
+.howto-keys .wide {
+  grid-column: 1 / -1;
+}
+
 .howto-keys dt {
   display: flex;
   gap: 4px;
@@ -1549,6 +1553,7 @@ kbd {
 /* Pause and results */
 
 .screen-dim {
+  z-index: 10;
   display: grid;
   place-items: center;
   background: rgba(10, 60, 92, 0.5);
