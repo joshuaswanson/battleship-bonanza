@@ -41,7 +41,7 @@ export const logoSvg = ({ boat = true, main = true, art = true } = {}) => `
       <stop offset="1" stop-color="#FF8A1F"/>
     </radialGradient>
   </defs>
-  <path id="lg-arc-top" d="M 175 205 Q 500 -15 825 205" fill="none" />
+  <path id="lg-arc-top" d="M 205 186 Q 500 -12 795 186" fill="none" />
   <path id="lg-arc-bottom" d="M 105 425 Q 500 675 895 425" fill="none" />
   <path id="lg-arc-bottom-shadow" d="M 117 437 Q 512 687 907 437" fill="none" />
   ${art ? `  <g transform="translate(500 300)">
@@ -60,8 +60,8 @@ export const logoSvg = ({ boat = true, main = true, art = true } = {}) => `
   </g>
 ` : ''}
   ${main ? `  <g class="lg-main">
-    <text class="logo-main logo-shadow"><textPath href="#lg-arc-bottom-shadow" startOffset="50%" text-anchor="middle" textLength="760" lengthAdjust="spacingAndGlyphs">BONANZA</textPath></text>
-    <text class="logo-main"><textPath href="#lg-arc-bottom" startOffset="50%" text-anchor="middle" textLength="760" lengthAdjust="spacingAndGlyphs">BONANZA</textPath></text>
+    <text class="logo-main logo-shadow"><textPath href="#lg-arc-bottom-shadow" startOffset="52.4%" text-anchor="middle" textLength="760" lengthAdjust="spacingAndGlyphs">BONANZA</textPath></text>
+    <text class="logo-main"><textPath href="#lg-arc-bottom" startOffset="52.4%" text-anchor="middle" textLength="760" lengthAdjust="spacingAndGlyphs">BONANZA</textPath></text>
   </g>
 ` : ''}
 </svg>`;
