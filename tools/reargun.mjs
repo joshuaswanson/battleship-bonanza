@@ -20,7 +20,7 @@ async function trial(items, key, behind, label, shot) {
     const v = others[0];
     v.items = ['spikes', 'jetpack']; v.hp = 100; v.invuln = 0;
     const d = behind ? -24 : 24;
-    v.pos.set(p.pos.x + Math.sin(p.heading) * d + Math.cos(p.heading) * 6, 0, p.pos.z + Math.cos(p.heading) * d - Math.sin(p.heading) * 6);
+    v.pos.set(p.pos.x + Math.sin(p.heading) * d, 0, p.pos.z + Math.cos(p.heading) * d);
     v.heading = p.heading;
     window.__v = v;
     window.__bb.freeCam = true;

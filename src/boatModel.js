@@ -16,7 +16,6 @@ const SOLO_MOUNT = -0.35;
 const MOUNT_RANK = { saw: -1, missiles: 0.4, mines: 0.5, jetpack: 1 };
 const mountRank = (id) => MOUNT_RANK[id] ?? 0;
 const AIMED = new Set(['machinegun', 'laser', 'missiles', 'grapple']);
-const REAR_GUNS = new Set(['machinegun', 'laser']);
 const MODULE_SCALE = 1.3;
 
 export function halfWidth(z) {
@@ -369,7 +368,7 @@ export function buildBoat(color, items) {
   body.add(flag);
   part(flag, 'cone', mats.paint, 0, 0, -0.45, 0.04, 0.9, 0.3, 0.02).rotation.x = -Math.PI / 2;
 
-  const refs = { root, body, flag, saw: null, flames: [], spinners: [], materials: [], parts: {}, hookMarkers: [], aimers: [], heatMats: {}, swivels: [], busy: {}, rearGuns: new Set(), missileTips: [] };
+  const refs = { root, body, flag, saw: null, flames: [], spinners: [], materials: [], parts: {}, hookMarkers: [], aimers: [], heatMats: {}, swivels: [], busy: {}, missileTips: [] };
 
   if (camoMat) {
     mats.paint = camoMat;
@@ -402,7 +401,6 @@ export function buildBoat(color, items) {
     yaw.position.y = baseH;
     turret.add(yaw);
     refs.swivels.push({ id, group: yaw, front: z > 0 });
-    if (raised && REAR_GUNS.has(id)) refs.rearGuns.add(id);
     const module = new THREE.Group();
     module.scale.setScalar(MODULE_SCALE);
     yaw.add(module);
@@ -798,10 +796,6 @@ export function updateMineHolder(refs, dt) {
 }
 
 export function aimTurret(refs, id) {
-  if (refs.rearGuns.has(id)) {
-    refs.busy[id] = 1.9;
-    return 0;
-  }
   const aimer = refs.aimers.find((a) => a.id === id);
   const swivel = refs.swivels.find((s) => s.id === id);
   const yaw = (swivel?.group.rotation.y ?? 0) + (aimer?.module.rotation.y ?? 0);

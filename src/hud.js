@@ -281,7 +281,7 @@ export class Hud {
     if (p.alive && race.state === 'racing' && !p.finished) {
       for (let i = 0; i < 2; i++) {
         const id = p.items[i];
-        const spec = id === 'laser' ? race.gunArc(p, 'laser', 70) : TARGETING[id];
+        const spec = id === 'laser' ? race.gunArc('laser', 70) : TARGETING[id];
         if (!spec || p.cooldowns[i] > 0) continue;
         target = race.findTarget(p, spec);
         if (target) {

@@ -27,8 +27,6 @@ const DODGE_WINDOW = 0.45;
 const SAW_RANGE = 9;
 const WATCH_RANGE = 70;
 const FRONT_LIMIT = 1.9;
-const REAR_ARC = 1.75;
-const REAR_MAX_DOT = Math.cos(Math.PI - REAR_ARC);
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const approach = (v, target, step) => (v < target ? Math.min(target, v + step) : Math.max(target, v - step));
@@ -81,15 +79,7 @@ class Boat {
         if (aimer) aimer.module.rotation.y = 0;
         const rest = aimer ? Math.PI : 0;
         s.group.rotation.y = rest;
-        const rearGun = this.model.rearGuns.has(s.id);
-        return {
-          id: s.id,
-          group: s.group,
-          rest,
-          rearGun,
-          center: rearGun ? Math.PI : 0,
-          limit: rearGun ? REAR_ARC : s.front ? FRONT_LIMIT : Math.PI,
-        };
+        return { id: s.id, group: s.group, rest, limit: s.front ? FRONT_LIMIT : Math.PI };
       });
     this.missileQueue = [];
     this.shadow = new THREE.Mesh(SHADOW_GEOMETRY, shadowMaterial());
@@ -550,7 +540,7 @@ export class Race {
     return this.hooks.some((h) => h.phase === 'attached' && h.target === b);
   }
 
-  findTarget(b, { range, minDot, maxDot = 1, filter = null, minRange = 0 }) {
+  findTarget(b, { range, minDot, filter = null, minRange = 0 }) {
     let best = null;
     let bestD = range;
     const fx = Math.sin(b.heading);
@@ -561,8 +551,7 @@ export class Race {
       const dz = o.pos.z - b.pos.z;
       const d = Math.hypot(dx, dz);
       if (d > bestD || d < minRange || d === 0) continue;
-      const dot = (dx * fx + dz * fz) / d;
-      if (dot < minDot || dot > maxDot) continue;
+      if ((dx * fx + dz * fz) / d < minDot) continue;
       if (filter && !filter(o)) continue;
       best = o;
       bestD = d;
@@ -684,7 +673,7 @@ export class Race {
     const dir = gunDirection(b.model, new THREE.Vector3());
     dir.y = 0;
     dir.normalize();
-    const target = this.findTarget(b, this.gunArc(b, 'machinegun', 80));
+    const target = this.findTarget(b, this.gunArc('machinegun', 80));
     if (target) {
       const c = target.center();
       const lead = c.distanceTo(origin) / 150;
@@ -1063,8 +1052,8 @@ export class Race {
     this.damage(victim, amount, b, 'laser', { knockX: dir.x * 4, knockZ: dir.z * 4, stun: 0.4, spin: amount > 10 ? 0.5 : 0 });
   }
 
-  gunArc(b, id, range) {
-    return b.model.rearGuns.has(id) ? { range, minDot: -1, maxDot: REAR_MAX_DOT } : { range, minDot: id === 'laser' ? 0.97 : 0.88 };
+  gunArc(id, range) {
+    return { range, minDot: id === 'laser' ? 0.97 : 0.88 };
   }
 
   relativeAngle(b, o) {
@@ -1097,8 +1086,7 @@ export class Race {
         target = b.missileAim;
         rate = 16;
       } else if (firing || busy[t.id] > 0) {
-        const inArc = watchAngle !== null && Math.abs(wrapAngle(watchAngle - t.center)) <= t.limit;
-        target = t.rearGun ? (inArc ? watchAngle : Math.PI) : 0;
+        target = 0;
         rate = 16;
       } else if (watchAngle !== null) {
         target = watchAngle;
@@ -1109,9 +1097,9 @@ export class Race {
         const current = t.group.rotation.y;
         t.group.rotation.y = current + wrapAngle(target - current) * (1 - Math.exp(-rate * dt));
       } else {
-        const want = clamp(wrapAngle(target - t.center), -t.limit, t.limit);
-        const now = wrapAngle(t.group.rotation.y - t.center);
-        t.group.rotation.y = t.center + now + (want - now) * (1 - Math.exp(-rate * dt));
+        const want = clamp(wrapAngle(target), -t.limit, t.limit);
+        const now = wrapAngle(t.group.rotation.y);
+        t.group.rotation.y = now + (want - now) * (1 - Math.exp(-rate * dt));
       }
     }
     for (const q of [...b.missileQueue]) {
