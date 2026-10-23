@@ -220,7 +220,7 @@ export class Loadout {
     const count = items.filter(Boolean).length;
     const start = $('btn-start');
     start.disabled = count < 2;
-    start.textContent = count === 2 ? t('startRace') : t(count === 1 ? 'pickOne' : 'pickTwo');
+    start.textContent = count === 2 ? t('next') : t(count === 1 ? 'pickOne' : 'pickTwo');
   }
 
   refresh() {

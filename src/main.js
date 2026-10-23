@@ -79,6 +79,7 @@ function useVenue(id) {
 function pickMap(attract) {
   if (import.meta.env.DEV && window.__bb?.map) return window.__bb.map;
   if (attract) return 'bay';
+  if (MAPS[setup.map]) return setup.map;
   const ids = Object.keys(MAPS);
   return ids[Math.floor(Math.random() * ids.length)];
 }
@@ -136,7 +137,7 @@ function newRace(attract) {
   cam.snap = true;
 }
 
-const screens = ['screen-title', 'screen-howto', 'screen-loadout', 'screen-pause', 'screen-results'];
+const screens = ['screen-title', 'screen-howto', 'screen-settings', 'screen-loadout', 'screen-maps', 'screen-pause', 'screen-results'];
 function showScreen(id) {
   for (const s of screens) $(s).classList.toggle('hidden', s !== id);
   loadout.active = false;
@@ -159,6 +160,64 @@ function goLoadout() {
   hud.show(false);
   showScreen('screen-loadout');
   loadout.active = true;
+}
+
+let wiping = false;
+function wipe(fn) {
+  if (wiping) return;
+  wiping = true;
+  sfx.unlock();
+  sfx.play('whoosh');
+  const el = $('wipe');
+  el.className = 'wipe cover';
+  el.addEventListener(
+    'animationend',
+    () => {
+      fn();
+      sfx.play('splash');
+      el.className = 'wipe reveal';
+      el.addEventListener(
+        'animationend',
+        () => {
+          el.className = 'wipe';
+          wiping = false;
+        },
+        { once: true },
+      );
+    },
+    { once: true },
+  );
+}
+
+const MAP_CHOICES = ['bay', 'jungle', 'random'];
+function renderMaps() {
+  $('map-cards').innerHTML = MAP_CHOICES.map((id, i) => {
+    const art = id === 'random' ? 'map-art random' : 'map-art';
+    const style = id === 'random' ? '' : ` style="background-image:url('${import.meta.env.BASE_URL}maps/${id}.jpg')"`;
+    return `<button class="map-card" role="radio" data-map="${id}" aria-checked="${setup.map === id}" style="--i:${i}">
+      <div class="${art}"${style}></div>
+      <div class="map-text"><h3>${t(`map_${id}`)}</h3><p>${t(`mapBlurb_${id}`)}</p></div>
+    </button>`;
+  }).join('');
+  for (const card of document.querySelectorAll('.map-card')) {
+    card.addEventListener('click', () => {
+      setup.map = card.dataset.map;
+      saveSetup();
+      sfx.play('pick');
+      for (const c of document.querySelectorAll('.map-card')) c.setAttribute('aria-checked', String(c === card));
+    });
+    card.addEventListener('dblclick', () => wipe(startRace));
+  }
+}
+
+function goMaps() {
+  if (!setup.items.every(Boolean)) return;
+  setup.map ??= 'random';
+  saveSetup();
+  mode = 'maps';
+  showScreen('screen-maps');
+  renderMaps();
+  document.querySelector('.map-card[aria-checked="true"]')?.focus();
 }
 
 function startRace() {
@@ -224,6 +283,7 @@ function renderLanguagePicker() {
       applyStatic();
       loadout.relabel();
       renderLanguagePicker();
+      if (mode === 'maps') renderMaps();
       document.querySelector(`.lang[data-lang="${getLang()}"]`).focus();
     });
   }
@@ -233,7 +293,7 @@ renderLanguagePicker();
 const touchOnly = matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches;
 document.body.classList.toggle('touch-only', touchOnly);
 
-$('btn-play').addEventListener('click', goLoadout);
+$('btn-play').addEventListener('click', () => wipe(goLoadout));
 let howtoOpener = null;
 function openHowto(opener) {
   howtoOpener = opener;
@@ -246,15 +306,25 @@ $('btn-howto-close').addEventListener('click', () => {
   showScreen(mode === 'paused' ? 'screen-pause' : 'screen-title');
   howtoOpener?.focus();
 });
-$('btn-back').addEventListener('click', goTitle);
-$('btn-start').addEventListener('click', startRace);
+$('btn-back').addEventListener('click', () => wipe(goTitle));
+$('btn-start').addEventListener('click', () => wipe(goMaps));
+$('btn-maps-back').addEventListener('click', () => wipe(goLoadout));
+$('btn-go').addEventListener('click', () => wipe(startRace));
+$('btn-settings').addEventListener('click', () => {
+  showScreen('screen-settings');
+  document.querySelector('.lang[aria-pressed="true"]')?.focus();
+});
+$('btn-settings-close').addEventListener('click', () => {
+  showScreen('screen-title');
+  $('btn-settings').focus();
+});
 $('btn-resume').addEventListener('click', () => pause(false));
 $('btn-restart').addEventListener('click', startRace);
 $('btn-quit').addEventListener('click', goLoadout);
 $('btn-menu').addEventListener('click', goTitle);
 $('btn-pause').addEventListener('click', () => pause(true));
 $('btn-again').addEventListener('click', startRace);
-$('btn-change').addEventListener('click', goLoadout);
+$('btn-change').addEventListener('click', () => wipe(goLoadout));
 addEventListener('pointerdown', () => sfx.unlock(), { once: true });
 addEventListener('keydown', () => sfx.unlock(), { once: true });
 
@@ -389,10 +459,15 @@ function frame(now) {
 }
 
 addEventListener('keydown', (e) => {
-  if (e.code === 'Enter' && mode === 'title' && $('screen-howto').classList.contains('hidden')) goLoadout();
+  const overlay = !$('screen-howto').classList.contains('hidden') || !$('screen-settings').classList.contains('hidden');
+  if (e.code === 'Enter' && mode === 'title' && !overlay && !(document.activeElement instanceof HTMLButtonElement)) wipe(goLoadout);
   if (e.code === 'Escape' && !$('screen-howto').classList.contains('hidden')) {
     input.queued.delete('Escape');
     $('btn-howto-close').click();
+  }
+  if (e.code === 'Escape' && !$('screen-settings').classList.contains('hidden')) {
+    input.queued.delete('Escape');
+    $('btn-settings-close').click();
   }
 });
 

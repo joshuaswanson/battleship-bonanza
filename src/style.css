@@ -354,7 +354,244 @@ kbd {
 
 .lang-picker {
   display: flex;
+  justify-content: center;
   gap: 0.5rem;
+}
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.settings h2 {
+  margin: 0 0 0.6rem;
+}
+
+.settings-label {
+  margin: 0 0 0.6rem;
+  font-weight: 600;
+}
+
+.settings .btn-big {
+  margin-top: 1.3rem;
+}
+
+.wipe {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 190vw;
+  height: 100vh;
+  z-index: 50;
+  pointer-events: none;
+  transform: translateX(-100%);
+  visibility: hidden;
+}
+
+.wipe svg {
+  width: 100%;
+  height: 100%;
+}
+
+.wipe-back {
+  fill: #1b8fc2;
+}
+
+.wipe-front {
+  fill: #35d6e0;
+}
+
+.wipe-edge {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 10;
+  vector-effect: non-scaling-stroke;
+}
+
+.wipe-foam {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 18;
+  stroke-linecap: round;
+  stroke-dasharray: 34 26;
+  vector-effect: non-scaling-stroke;
+}
+
+.wipe.cover {
+  visibility: visible;
+  animation: wipe-cover 420ms cubic-bezier(0.55, 0, 0.75, 0.4) forwards;
+}
+
+.wipe.reveal {
+  visibility: visible;
+  animation: wipe-reveal 520ms cubic-bezier(0.2, 0.6, 0.35, 1) forwards;
+}
+
+@keyframes wipe-cover {
+  from {
+    transform: translateX(-100%) skewX(-8deg);
+  }
+  to {
+    transform: translateX(-45vw) skewX(-8deg);
+  }
+}
+
+@keyframes wipe-reveal {
+  from {
+    transform: translateX(-45vw) skewX(-8deg);
+  }
+  to {
+    transform: translateX(105vw) skewX(-8deg);
+  }
+}
+
+.maps {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.6rem;
+  padding: 1.5rem;
+  background: rgba(14, 42, 71, 0.35);
+}
+
+.maps-head {
+  position: relative;
+  width: min(1100px, 100%);
+  display: flex;
+  justify-content: center;
+}
+
+.maps-head .btn {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.maps-title {
+  margin: 0;
+  font-family: var(--race);
+  font-weight: 900;
+  font-size: 3.2rem;
+  line-height: 1;
+  color: var(--sun);
+  -webkit-text-stroke: 3px var(--ink);
+  paint-order: stroke fill;
+  text-shadow: 0 5px 0 var(--ink);
+  transform: skewX(-10deg);
+}
+
+.map-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.4rem;
+  width: min(1100px, 100%);
+}
+
+.map-card {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  font: inherit;
+  color: var(--ink);
+  text-align: left;
+  background: var(--foam);
+  border: 4px solid var(--ink);
+  border-radius: 22px;
+  box-shadow: 0 7px 0 var(--ink);
+  cursor: pointer;
+  transition: transform 140ms ease, box-shadow 140ms ease;
+  animation: card-in 420ms cubic-bezier(0.2, 1.5, 0.4, 1) both;
+  animation-delay: calc(var(--i) * 90ms + 150ms);
+}
+
+@keyframes card-in {
+  from {
+    transform: translateY(50px) scale(0.9);
+    opacity: 0;
+  }
+}
+
+.map-card:hover {
+  transform: translateY(-4px) rotate(-0.6deg);
+  box-shadow: 0 11px 0 var(--ink);
+}
+
+.map-card[aria-checked='true'] {
+  background: var(--sun);
+  transform: translateY(-6px);
+  box-shadow: 0 13px 0 var(--ink);
+}
+
+.map-art {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  border-bottom: 4px solid var(--ink);
+  background-size: cover;
+  background-position: center;
+}
+
+.map-art.random {
+  background: linear-gradient(115deg, transparent 49.5%, var(--ink) 49.5%, var(--ink) 50.5%, transparent 50.5%), url('/maps/jungle.jpg') right / cover, #35d6e0;
+}
+
+.map-art.random::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: url('/maps/bay.jpg') left / cover;
+  clip-path: polygon(0 0, 55% 0, 45% 100%, 0 100%);
+}
+
+.map-art.random::after {
+  content: '?';
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--race);
+  font-weight: 900;
+  font-size: 6rem;
+  color: #ffffff;
+  -webkit-text-stroke: 4px var(--ink);
+  paint-order: stroke fill;
+  text-shadow: 0 6px 0 var(--ink);
+}
+
+.map-text {
+  padding: 0.9rem 1.1rem 1.1rem;
+}
+
+.map-text h3 {
+  margin: 0 0 0.3rem;
+  font-family: var(--race);
+  font-weight: 900;
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.map-text p {
+  margin: 0;
+  line-height: 1.35;
+}
+
+#btn-go {
+  width: auto;
+  min-width: 320px;
+  padding-left: 2.2em;
+  padding-right: 2.2em;
+}
+
+@media (max-width: 800px) {
+  .map-cards {
+    grid-template-columns: 1fr;
+  }
 }
 
 .title-row {
