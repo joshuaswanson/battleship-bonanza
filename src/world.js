@@ -643,26 +643,6 @@ function createMarkerBuoy(kind) {
   return group;
 }
 
-function createDuck() {
-  const duck = new THREE.Group();
-  const yellow = toon(0xffd23f);
-  const add = (geometry, material, x, y, z, sx, sy, sz) => {
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(x, y, z);
-    mesh.scale.set(sx, sy, sz);
-    duck.add(mesh);
-    const shell = new THREE.Mesh(geometry, outlineMaterial(0.06));
-    mesh.add(shell);
-  };
-  add(SPHERE, yellow, 0, 2, 0, 5, 3.6, 6.5);
-  add(SPHERE, yellow, 0, 3.4, -5.6, 2.2, 3.6, 1.4);
-  add(SPHERE, yellow, 0, 8, 3.6, 3.4, 3.2, 3.2);
-  add(SPHERE, toon(0xff8a1f), 0, 7.4, 7, 1.9, 0.8, 1.6);
-  add(SPHERE, toon(0x0e2a47), 1.9, 8.8, 5.6, 0.55, 0.75, 0.5);
-  add(SPHERE, toon(0x0e2a47), -1.9, 8.8, 5.6, 0.55, 0.75, 0.5);
-  return duck;
-}
-
 export function createWorld(scene, track) {
   scene.fog = new THREE.Fog(SKY_HORIZON, 260, 950);
 
@@ -774,18 +754,6 @@ export function createWorld(scene, track) {
     scene.add(marker);
   }
 
-  const ducks = [];
-  const duckSpots = islands.filter((o) => o.r > 18).slice(0, 4);
-  for (const spot of duckSpots) {
-    const duck = createDuck();
-    const p = { x: spot.x + spot.r + 9, z: spot.z };
-    if (track.project(p.x, p.z).distance - half < 12) continue;
-    duck.position.set(p.x, 0, p.z);
-    duck.rotation.y = rand() * Math.PI * 2;
-    duck.userData.phase = rand() * 10;
-    ducks.push(duck);
-    scene.add(duck);
-  }
 
   const dummy = new THREE.Object3D();
   return {
@@ -817,12 +785,6 @@ export function createWorld(scene, track) {
         m.rotation.x = Math.sin(t * 1.4 + ph) * 0.12;
         m.rotation.z = Math.cos(t * 1.1 + ph) * 0.12;
         if (m.userData.light) m.userData.light.visible = (t + ph) % 2 < 0.35;
-      }
-      for (const duck of ducks) {
-        const ph = duck.userData.phase;
-        duck.position.y = waveHeight(duck.position.x, duck.position.z, t) - 0.6;
-        duck.rotation.z = Math.sin(t * 0.9 + ph) * 0.06;
-        duck.rotation.x = Math.cos(t * 0.7 + ph) * 0.05;
       }
     },
   };
