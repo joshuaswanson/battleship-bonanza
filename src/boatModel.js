@@ -175,6 +175,16 @@ const geo = {
   roundBox: () => cachedGeometry('roundBox', () => new RoundedBoxGeometry(1, 1, 1, 3, 0.2)),
   ring: () => cachedGeometry('ring', () => new THREE.TorusGeometry(1, 0.1, 8, 32)),
   handle: () => cachedGeometry('handle', () => new THREE.TorusGeometry(0.34, 0.07, 8, 16, Math.PI)),
+  shield: () =>
+    cachedGeometry('shield', () => {
+      const g = new THREE.RingGeometry(0.2, 1.75, 40, 3);
+      const pos = g.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const r = Math.hypot(pos.getX(i), pos.getY(i));
+        pos.setZ(i, 0.35 * (1 - (r / 1.75) ** 2));
+      }
+      return g;
+    }),
   octa: () => cachedGeometry('octa', () => new THREE.OctahedronGeometry(1, 0)),
   prong: () =>
     cachedGeometry('prong', () => {
@@ -416,6 +426,8 @@ export function buildBoat(color, items) {
     }
   });
 
+  refs.sawYaw = refs.swivels.find((s) => s.id === 'saw')?.group ?? null;
+
   body.traverse((o) => {
     if (o.isMesh && o.material.isMeshToonMaterial && !refs.materials.includes(o.material)) refs.materials.push(o.material);
   });
@@ -561,11 +573,20 @@ const MODULES = {
   },
 
   saw(m, mats, refs) {
-    part(m, 'cylinder', mats.dark, 0, 0.55, 0, 0.18, 1.1, 0.18, 0.03);
-    part(m, 'cylinder', mats.paint, 0, 1.15, 0.55, 0.15, 1.3, 0.15, 0.03).rotation.x = Math.PI / 2;
-    const saw = part(m, 'saw', mats.metal, 0, 1.15, 1.3, 1.25, 1.25, 1.25, 0.03);
+    part(m, 'cylinder', mats.dark, 0, 0.5, 0, 0.22, 1.0, 0.22, 0.03);
+    part(m, 'sphere', mats.dark, 0, 1.05, 0, 0.32, 0.32, 0.32, 0.03);
+    part(m, 'cylinder', mats.paint, 0, 1.05, 1.0, 0.15, 2.0, 0.15, 0.03).rotation.x = Math.PI / 2;
+    part(m, 'roundBox', mats.dark, 0, 1.05, 2.0, 0.34, 0.5, 0.34, 0.02);
+    const saw = part(m, 'saw', mats.metal, 0, 1.05, 2.25, 1.25, 1.25, 1.25, 0.03);
     part(saw, 'sphere', toon(RED), 0, 0, 0, 0.26, 0.26, 0.26, 0.03);
     refs.saw = saw;
+    const shield = new THREE.Mesh(
+      geo.shield(),
+      new THREE.MeshBasicMaterial({ color: 0xff9ef0, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }),
+    );
+    shield.position.set(0, 1.05, 2.55);
+    m.add(shield);
+    refs.sawShield = shield;
   },
 
   missiles(m, mats) {

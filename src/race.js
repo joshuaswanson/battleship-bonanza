@@ -23,6 +23,7 @@ const AXIS_HALF = 3.4;
 const KO_TIME = 2.2;
 const LASER_REACH = 75;
 const DODGE_WINDOW = 0.45;
+const SAW_RANGE = 9;
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const approach = (v, target, step) => (v < target ? Math.min(target, v + step) : Math.max(target, v - step));
@@ -91,8 +92,7 @@ class Boat {
     this.spinDur = 1;
     this.stun = 0;
     this.boost = 0;
-    this.sawDash = 0;
-    this.sawHits = new Set();
+    this.sawState = { spin: 0, yaw: 0, tick: 0, shield: 0, shieldYaw: 0, sound: 0 };
     this.gun = newHeat();
     this.laser = newHeat();
     this.laserTicks = new Map();
@@ -318,10 +318,6 @@ export class Race {
 
     if (b.has('machinegun')) this.updateGun(b, dt);
 
-    if (b.sawDash > 0) {
-      b.sawDash -= dt;
-      this.sawSweep(b);
-    }
 
     b.pos.x += b.vel.x * dt;
     b.pos.z += b.vel.z * dt;
@@ -402,7 +398,6 @@ export class Race {
     b.stun = 0;
     b.gun.trigger = false;
     b.laser.trigger = false;
-    b.sawDash = 0;
     const s = idx * t.spacing;
     let ds = s - b.trackS;
     if (ds < -t.length / 2) ds += t.length;
@@ -492,7 +487,7 @@ export class Race {
     target.bump(kind === 'bullet' ? 1.5 : 5);
     target.vel.x += knockX;
     target.vel.z += knockZ;
-    target.speed *= kind === 'bullet' ? 0.97 : 0.7;
+    target.speed *= kind === 'bullet' ? 0.97 : kind === 'saw' ? 0.94 : 0.7;
     if (spin && target.spinTime <= 0) {
       target.spinTime = spin;
       target.spinDur = spin;
@@ -557,15 +552,6 @@ export class Race {
   }
 
   actions = {
-    saw(b) {
-      b.sawDash = 0.5;
-      b.sawHits.clear();
-      b.vel.x += Math.sin(b.heading) * 20;
-      b.vel.z += Math.cos(b.heading) * 20;
-      b.speed += 12;
-      this.sfx.play('saw', b.pos);
-    },
-
     missiles(b) {
       aimTurret(b.model, 'missiles');
       const target = this.findTarget(b, { range: 180, minDot: 0.25, filter: (o) => !o.has('camo') });
@@ -1010,8 +996,13 @@ export class Race {
       dir.normalize();
       const reach = LASER_REACH * Math.hypot(1, drop);
       const hit = this.raycastBoats(origin, dir, reach, b);
-      const end = origin.clone().addScaledVector(dir, hit ? hit.t : reach);
+      const shielded = hit && hit.boat.model.sawYaw;
+      const end = shielded ? this.shieldAgainst(hit.boat, b) : origin.clone().addScaledVector(dir, hit ? hit.t : reach);
       this.fx.beam(origin, end, 0xff4fd8, 0.5, 0.05, 1);
+      if (shielded) {
+        const back = b.has('saw') ? end.clone().add(new THREE.Vector3(0, 40, 0).addScaledVector(dir, -20)) : b.center();
+        this.fx.beam(end, back, 0xff4fd8, 0.45, 0.05, 2);
+      }
       if (!hit) {
         this.fx.scorch(end.x, waveHeight(end.x, end.z, this.time) + 0.15, end.z);
         continue;
@@ -1029,7 +1020,6 @@ export class Race {
       this.fx.sparkBurst(end.x, end.y, end.z, 0xffffff, 16);
       if (victim.isPlayer) this.emit('blocked', { kind: 'laser' });
       if (b.has('saw')) return;
-      this.fx.beam(end, b.center(), 0xff4fd8, 0.5, 0.3);
       this.damage(b, amount, victim, 'reflect', { knockX: dir.x * -4, knockZ: dir.z * -4, stun: 0.3 });
       return;
     }
@@ -1037,38 +1027,79 @@ export class Race {
     this.damage(victim, amount, b, 'laser', { knockX: dir.x * 4, knockZ: dir.z * 4, stun: 0.4, spin: amount > 10 ? 0.5 : 0 });
   }
 
-  sawSweep(b) {
+  updateSaw(b, dt) {
+    const refs = b.model;
+    const s = b.sawState;
+    const pivot = refs.sawYaw.getWorldPosition(new THREE.Vector3());
     const fx = Math.sin(b.heading);
     const fz = Math.cos(b.heading);
-    for (const o of this.boats) {
-      if (o === b || !o.alive || b.sawHits.has(o)) continue;
-      if (Math.abs(o.yOffset - b.yOffset) > 2.5) continue;
-      const bowX = b.pos.x + fx * (HULL_L + 1.5);
-      const bowZ = b.pos.z + fz * (HULL_L + 1.5);
-      if (o.distanceToAxis2D(bowX, bowZ) > 3.2) continue;
-      const side = (o.pos.x - b.pos.x) * -fz + (o.pos.z - b.pos.z) * fx;
-      b.sawHits.add(o);
-      const s = Math.sign(side) || 1;
-      const hit = this.damage(o, 28, b, 'saw', {
-        knockX: fx * 16 - fz * s * 6,
-        knockZ: fz * 16 + fx * s * 6,
-        spin: 0.8,
-      });
-      if (!hit && o.has('armor')) {
-        b.vel.x -= fx * 22;
-        b.vel.z -= fz * 22;
-        b.speed *= 0.4;
-        b.sawDash = 0;
-        b.bump(4);
+    const lx = Math.cos(b.heading);
+    const lz = -Math.sin(b.heading);
+    let target = null;
+    let best = SAW_RANGE;
+    if (b.alive && this.state === 'racing') {
+      for (const o of this.boats) {
+        if (o === b || !o.alive || (o.finished && !this.attract)) continue;
+        if (Math.abs(o.yOffset - b.yOffset) > 3) continue;
+        const d = o.distanceToAxis2D(pivot.x, pivot.z);
+        if (d < best) {
+          best = d;
+          target = o;
+        }
       }
     }
+    let desired = 0;
+    if (s.shield > 0) desired = s.shieldYaw;
+    else if (target) {
+      const dx = target.pos.x - pivot.x;
+      const dz = target.pos.z - pivot.z;
+      desired = Math.atan2(dx * lx + dz * lz, dx * fx + dz * fz);
+    }
+    s.yaw = wrapAngle(s.yaw + wrapAngle(desired - s.yaw) * (1 - Math.exp(-(s.shield > 0 ? 20 : 9) * dt)));
+    refs.sawYaw.rotation.y = s.yaw;
+
+    s.sound -= dt;
+    const blade = refs.saw.getWorldPosition(new THREE.Vector3());
+    if (target && s.shield <= 0 && target.distanceToAxis2D(blade.x, blade.z) < HIT_RADIUS + 0.7) {
+      s.tick -= dt;
+      if (s.tick <= 0) {
+        s.tick = 0.22;
+        this.damage(target, 5, b, 'saw', { stun: 0.15 });
+        this.fx.sparkBurst(blade.x, blade.y, blade.z, 0xffe066, 10);
+        if (s.sound <= 0) {
+          s.sound = 0.45;
+          this.sfx.play('saw', b.pos);
+        }
+      }
+    }
+    const spinning = !!target || s.shield > 0;
+    s.spin += ((spinning ? 42 : 0) - s.spin) * (1 - Math.exp(-(spinning ? 6 : 2) * dt));
+    refs.saw.rotation.x += s.spin * dt;
+
+    s.shield = Math.max(0, s.shield - dt);
+    const shield = refs.sawShield;
+    const glowAmount = s.shield > 0 ? 0.6 + 0.25 * Math.sin(this.time * 45) : 0;
+    shield.material.opacity += (glowAmount - shield.material.opacity) * (1 - Math.exp(-18 * dt));
+    shield.scale.setScalar(1 + 0.08 * Math.sin(this.time * 30));
+  }
+
+  shieldAgainst(victim, shooter) {
+    const s = victim.sawState;
+    const pivot = victim.model.sawYaw.getWorldPosition(new THREE.Vector3());
+    const dx = shooter.pos.x - pivot.x;
+    const dz = shooter.pos.z - pivot.z;
+    const fx = Math.sin(victim.heading);
+    const fz = Math.cos(victim.heading);
+    s.shieldYaw = Math.atan2(dx * Math.cos(victim.heading) - dz * Math.sin(victim.heading), dx * fx + dz * fz);
+    s.shield = 0.2;
+    return victim.model.sawShield.getWorldPosition(new THREE.Vector3());
   }
 
   updateVisual(b, dt) {
     const t = this.time;
     const w = waveHeight(b.pos.x, b.pos.z, t);
     b.waterY = w;
-    const { root, body, flag, saw, flames, spinners, materials } = b.model;
+    const { root, body, flag, flames, spinners, materials } = b.model;
     const fx = Math.sin(b.heading);
     const fz = Math.cos(b.heading);
 
@@ -1115,7 +1146,7 @@ export class Race {
     }
     root.visible = b.invuln > 0 && b.alive ? Math.floor(b.invuln * 12) % 2 === 0 : true;
 
-    if (saw) saw.rotation.x += dt * (b.sawDash > 0 ? 45 : 7);
+    if (b.model.sawYaw) this.updateSaw(b, dt);
     updateAimers(b.model, dt);
     updateMineHolder(b.model, dt);
 

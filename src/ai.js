@@ -93,10 +93,6 @@ function useItems(race, b, ai) {
 function shouldUse(race, b, id, ai) {
   const r = Math.random();
   switch (id) {
-    case 'saw': {
-      const t = race.findTarget(b, { range: 10, minDot: 0.75 });
-      return !!t && !t.has('armor');
-    }
     case 'missiles': {
       const t = race.findTarget(b, { range: 170, minDot: 0.25, filter: (o) => !o.has('camo') });
       return !!t && r < ai.aggression * 0.8;
