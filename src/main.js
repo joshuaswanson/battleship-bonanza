@@ -159,7 +159,7 @@ function renderResults() {
   $('standings').innerHTML = race.order
     .map((b) => {
       const time = b.finished ? formatTime(b.finishTime) : `Lap ${b.lap}`;
-      const items = b.items.map((id) => ITEMS[id].name).join(' and ');
+      const items = b.items.map((id) => (id === 'emp' ? 'EMP' : ITEMS[id].name.toLowerCase())).join(' and ');
       return `<li class="${b.isPlayer ? 'me' : ''}">
         <span class="st-place">${ordinal(b.place)}</span>
         <span class="st-dot" style="--paint:#${b.color.toString(16).padStart(6, '0')}"></span>
