@@ -13,9 +13,8 @@ const MOUNTED = new Set(['machinegun', 'laser', 'saw', 'missiles', 'mines', 'jet
 const FRONT_MOUNT = 1.5;
 const REAR_MOUNT = -2.2;
 const SOLO_MOUNT = -0.35;
-const FRONT_ONLY = new Set(['saw']);
-const REAR_ONLY = new Set(['jetpack']);
-const mountRank = (id) => (FRONT_ONLY.has(id) ? -1 : REAR_ONLY.has(id) ? 1 : 0);
+const MOUNT_RANK = { saw: -1, mines: 0.5, jetpack: 1 };
+const mountRank = (id) => MOUNT_RANK[id] ?? 0;
 const MODULE_SCALE = 1.3;
 
 export function halfWidth(z) {
@@ -236,6 +235,54 @@ const planks = () =>
     for (let i = 0; i < 8; i++) ctx.fillRect(i * 32, ((i * 97) % 256), 32, 4);
   });
 
+const iron = () =>
+  canvasTexture('iron', (ctx) => {
+    ctx.fillStyle = '#9aa6b4';
+    ctx.fillRect(0, 0, 256, 256);
+    for (let col = 0; col < 8; col++) {
+      for (let row = 0; row < 4; row++) {
+        const shade = 150 + ((col * 7 + row * 13) % 5) * 6;
+        ctx.fillStyle = `rgb(${shade - 4}, ${shade + 6}, ${shade + 18})`;
+        ctx.fillRect(col * 32 + 2, row * 64 + 2, 28, 60);
+      }
+    }
+    ctx.fillStyle = '#56657a';
+    for (let col = 0; col <= 8; col++) ctx.fillRect(col * 32 - 1, 0, 3, 256);
+    for (let row = 0; row <= 4; row++) ctx.fillRect(0, row * 64 - 1, 256, 3);
+    ctx.fillStyle = '#4a586c';
+    for (let col = 0; col < 8; col++) {
+      for (let row = 0; row < 4; row++) {
+        for (const [dx, dy] of [[6, 6], [26, 6], [6, 58], [26, 58], [6, 32], [26, 32]]) {
+          ctx.beginPath();
+          ctx.arc(col * 32 + dx, row * 64 + dy, 2.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+  });
+
+const treadPlate = () =>
+  canvasTexture('tread', (ctx) => {
+    ctx.fillStyle = '#b4bfcc';
+    ctx.fillRect(0, 0, 256, 256);
+    ctx.strokeStyle = '#8693a4';
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
+    for (let y = 0; y < 8; y++) {
+      for (let x = 0; x < 8; x++) {
+        const cx = x * 32 + (y % 2) * 16 + 8;
+        const cy = y * 32 + 16;
+        const flip = (x + y) % 2 ? 1 : -1;
+        ctx.beginPath();
+        ctx.moveTo(cx - 6, cy - 6 * flip);
+        ctx.lineTo(cx + 6, cy + 6 * flip);
+        ctx.stroke();
+      }
+    }
+    ctx.fillStyle = '#6f7d90';
+    for (let i = 0; i <= 4; i++) ctx.fillRect(i * 64 - 1, 0, 3, 256);
+  });
+
 export function buildBoat(color, items) {
   const root = new THREE.Group();
   const body = new THREE.Group();
@@ -250,11 +297,12 @@ export function buildBoat(color, items) {
     ink: toon(INK),
     white: toon(0xffffff),
   };
-  const hullMat = hasCamo ? toon(0xffffff, { map: camo() }) : mats.paint;
-  const bumperMat = hasArmor ? mats.metal : hasCamo ? toon(0x4f6b2c) : mats.white;
+  const hullMat = hasCamo ? toon(0xffffff, { map: camo() }) : hasArmor ? toon(0xffffff, { map: iron() }) : mats.paint;
+  const bumperMat = hasArmor ? mats.paint : hasCamo ? toon(0x4f6b2c) : mats.white;
+  const deckMat = hasArmor ? toon(0xffffff, { map: treadPlate() }) : toon(0xffffff, { map: planks() });
 
   part(body, 'hull', hullMat, 0, 0, 0, 1, 1, 1, 0.07);
-  part(body, 'deck', toon(0xffffff, { map: planks() }), 0, 0, 0, 1, 1, 1, 0);
+  part(body, 'deck', deckMat, 0, 0, 0, 1, 1, 1, 0);
   part(body, 'bumper', bumperMat, 0, 0, 0, 1, 1, 1, 0.04);
 
   const sternTop = sheer(-HULL_L);
@@ -280,7 +328,8 @@ export function buildBoat(color, items) {
   }
 
   const mounted = items.filter((id) => MOUNTED.has(id)).sort((a, b) => mountRank(a) - mountRank(b));
-  const soloSpot = { [-1]: FRONT_MOUNT, 0: SOLO_MOUNT, 1: REAR_MOUNT }[mountRank(mounted[0])];
+  const rank = mountRank(mounted[0]);
+  const soloSpot = rank < 0 ? FRONT_MOUNT : rank > 0 ? REAR_MOUNT : SOLO_MOUNT;
   const spots = mounted.length === 2 ? [FRONT_MOUNT, REAR_MOUNT] : [soloSpot];
   mounted.forEach((id, i) => {
     const z = spots[i];
@@ -314,35 +363,59 @@ export function buildBoat(color, items) {
 
 const UP = new THREE.Vector3(0, 1, 0);
 
+function sphereDirections(count) {
+  const dirs = [];
+  const golden = Math.PI * (3 - Math.sqrt(5));
+  for (let i = 0; i < count; i++) {
+    const y = 1 - ((i + 0.5) / count) * 2;
+    const r = Math.sqrt(1 - y * y);
+    dirs.push(new THREE.Vector3(Math.cos(golden * i) * r, y, Math.sin(golden * i) * r));
+  }
+  return dirs;
+}
+
+function spikyBall(parent, mats, x, y, z, radius, count, spikeLength) {
+  part(parent, 'sphere', mats.ink, x, y, z, radius, radius, radius, 0.04);
+  for (const dir of sphereDirections(count)) {
+    const base = radius * 0.85;
+    part(parent, 'sphere', mats.dark, x + dir.x * base, y + dir.y * base, z + dir.z * base, radius * 0.16, radius * 0.16, radius * 0.16, 0.02);
+    const mid = base + spikeLength * 0.5;
+    const spike = part(parent, 'cone', mats.metal, x + dir.x * mid, y + dir.y * mid, z + dir.z * mid, radius * 0.13, spikeLength, radius * 0.13, 0.02);
+    spike.quaternion.setFromUnitVectors(UP, dir);
+  }
+}
+
 const HULL_MODS = {
   spikes(body, mats) {
+    const spike = (base, dir, radius, length) => {
+      part(body, 'sphere', mats.dark, base.x, base.y, base.z, radius * 1.25, radius * 1.25, radius * 1.25, 0.03);
+      const mesh = part(body, 'cone', mats.metal, base.x + dir.x * length * 0.5, base.y + dir.y * length * 0.5, base.z + dir.z * length * 0.5, radius, length, radius, 0.035);
+      mesh.quaternion.setFromUnitVectors(UP, dir);
+    };
     for (const side of [-1, 1]) {
-      for (const z of [-3.5, -2.3, -1.1, 0.1, 1.3, 2.4]) {
+      for (const z of [-3.5, -2.4, -1.3, -0.2, 0.9, 2.0, 3.0]) {
         const w = halfWidth(z);
         const slope = (halfWidth(z + 0.1) - halfWidth(z - 0.1)) / 0.2;
-        const dir = new THREE.Vector3(side, 0.15, -side * slope).normalize();
-        const spike = part(body, 'cone', mats.metal, side * (w + 0.45), sheer(z) - 0.3, z + dir.z * 0.45, 0.26, 0.95, 0.26, 0.04);
-        spike.quaternion.setFromUnitVectors(UP, dir);
+        const dir = new THREE.Vector3(side * 0.85, 0.65, -side * slope * 0.85).normalize();
+        spike(new THREE.Vector3(side * (w + 0.12), sheer(z) + 0.12, z), dir, 0.2, 1.75);
       }
+      spike(new THREE.Vector3(side * (halfWidth(-HULL_L) - 0.1), sheer(-HULL_L) + 0.15, -HULL_L + 0.1), new THREE.Vector3(side * 0.5, 0.55, -0.7).normalize(), 0.2, 1.6);
     }
-    const ram = part(body, 'cone', mats.metal, 0, sheer(HULL_L) - 0.35, HULL_L + 0.45, 0.38, 1.4, 0.38, 0.04);
-    ram.quaternion.setFromUnitVectors(UP, new THREE.Vector3(0, 0.1, 1).normalize());
+    spike(new THREE.Vector3(0, sheer(HULL_L) - 0.1, HULL_L - 0.05), new THREE.Vector3(0, 0.18, 1).normalize(), 0.36, 2.4);
   },
 
   armor(body, mats) {
+    const rivet = toon(0x5d6b7e);
     for (const side of [-1, 1]) {
-      for (const z of [-3.0, -1.5, 0, 1.5]) {
-        const w = halfWidth(z);
-        const plate = part(body, 'roundBox', mats.metal, side * (w + 0.06), sheer(z) - 0.5, z, 0.16, 0.85, 1.3, 0.04);
-        plate.rotation.z = side * 0.12;
-        plate.rotation.y = side * Math.atan((halfWidth(z + 0.1) - halfWidth(z - 0.1)) / 0.2) * -1;
-        for (const dz of [-0.45, 0.45]) {
-          part(body, 'smallSphere', mats.dark, side * (w + 0.15), sheer(z) - 0.25, z + dz, 0.07, 0.07, 0.07, 0);
-        }
+      for (let i = 0; i < 14; i++) {
+        const z = -HULL_L + 0.35 + i * 0.58;
+        part(body, 'smallSphere', rivet, side * (halfWidth(z) + 0.01), sheer(z) - 0.28, z, 0.075, 0.075, 0.075, 0);
       }
     }
-    const nose = part(body, 'cone', mats.metal, 0, sheer(HULL_L) - 0.5, HULL_L - 0.1, 0.55, 1.0, 0.55, 0.04);
-    nose.quaternion.setFromUnitVectors(UP, new THREE.Vector3(0, -0.2, 1).normalize());
+    const nose = part(body, 'cone', mats.metal, 0, sheer(HULL_L) - 0.5, HULL_L + 0.05, 0.6, 1.3, 0.6, 0.04);
+    nose.quaternion.setFromUnitVectors(UP, new THREE.Vector3(0, -0.15, 1).normalize());
+    const transom = part(body, 'roundBox', mats.metal, 0, (sheer(-HULL_L) - 0.85) / 2 + 0.1, -HULL_L - 0.02, halfWidth(-HULL_L) * 1.7, 1.3, 0.14, 0.03);
+    transom.position.z -= 0.05;
   },
 
   camo(body) {
@@ -429,13 +502,9 @@ const MODULES = {
   mines(m, mats) {
     part(m, 'roundBox', mats.metal, 0, 0.12, 0, 1.2, 0.25, 2.0, 0.03);
     for (const x of [-0.5, 0.5]) part(m, 'cylinder', mats.dark, x, 0.45, 0, 0.07, 0.6, 0.07, 0.02);
-    for (const z of [-0.6, 0, 0.6]) {
-      part(m, 'sphere', mats.ink, 0, 0.62, z, 0.36, 0.36, 0.36, 0.04);
-      for (const d of [[1, 0, 0], [-1, 0, 0], [0, 1, 0]]) {
-        const dir = new THREE.Vector3(...d);
-        part(m, 'cone', mats.metal, dir.x * 0.42, 0.62 + dir.y * 0.42, z, 0.09, 0.22, 0.09, 0.02).quaternion.setFromUnitVectors(UP, dir);
-      }
-      part(m, 'smallSphere', glow(RED), 0, 1.02, z, 0.08, 0.08, 0.08, 0);
+    for (const z of [-0.62, 0, 0.62]) {
+      spikyBall(m, mats, 0, 0.62, z, 0.3, 14, 0.28);
+      part(m, 'smallSphere', glow(RED), 0, 0.95, z, 0.07, 0.07, 0.07, 0);
     }
   },
 
@@ -487,23 +556,13 @@ const MODULES = {
 
 export function buildMine() {
   const group = new THREE.Group();
-  const body = part(group, 'sphere', toon(INK), 0, 0.3, 0, 0.85, 0.85, 0.85, 0.05);
-  const spikeMat = toon(METAL);
-  const dirs = [
-    [1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, 0, 1], [0, 0, -1],
-    [0.7, 0.7, 0], [-0.7, 0.7, 0], [0, 0.7, 0.7], [0, 0.7, -0.7],
-  ];
-  for (const d of dirs) {
-    const dir = new THREE.Vector3(...d).normalize();
-    const spike = part(group, 'cone', spikeMat, dir.x * 0.95, 0.3 + dir.y * 0.95, dir.z * 0.95, 0.16, 0.45, 0.16, 0.03);
-    spike.quaternion.setFromUnitVectors(UP, dir);
-  }
+  const mats = { ink: toon(INK), dark: toon(DARK), metal: toon(METAL) };
+  spikyBall(group, mats, 0, 0.3, 0, 0.8, 22, 0.75);
   const light = new THREE.Mesh(geo.smallSphere(), glow(RED));
-  light.scale.setScalar(0.24);
-  light.position.set(0, 1.25, 0);
+  light.scale.setScalar(0.22);
+  light.position.set(0, 1.12, 0);
   group.add(light);
   group.userData.light = light;
-  group.userData.body = body;
   return group;
 }
 
