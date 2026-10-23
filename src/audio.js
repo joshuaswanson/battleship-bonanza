@@ -54,7 +54,7 @@ export class Sfx {
       this.samples = {};
       this.loadSamples('gun', ['sfx/gun1.wav', 'sfx/gun2.wav', 'sfx/gun3.wav']);
       this.loadSamples('jetpack', ['sfx/jetpack.wav']);
-      for (const name of ['emp', 'zap', 'hook', 'hookcatch', 'reel']) this.loadSamples(name, [`sfx/${name}.wav`]);
+      for (const name of ['emp', 'zap', 'hook', 'hookcatch', 'reel', 'winch', 'fireloop']) this.loadSamples(name, [`sfx/${name}.wav`]);
       this.noiseBuffer = this.ctx.createBuffer(1, this.ctx.sampleRate, this.ctx.sampleRate);
       const data = this.noiseBuffer.getChannelData(0);
       for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
@@ -188,6 +188,28 @@ export class Sfx {
     const hissGain = ctx.createGain();
     hissGain.gain.value = 0.35;
     source(1).connect(hiss).connect(hissGain).connect(flutter);
+    const shaper = ctx.createWaveShaper();
+    const curve = new Float32Array(256);
+    for (let i = 0; i < 256; i++) {
+      const x = (i / 255) * 2 - 1;
+      curve[i] = Math.tanh(x * 3);
+    }
+    shaper.curve = curve;
+    roarGain.disconnect();
+    roarGain.connect(shaper).connect(flutter);
+    const fire = ctx.createGain();
+    fire.gain.value = 0;
+    fire.connect(this.master);
+    const startFire = () => {
+      const buffer = this.samples.fireloop?.[0];
+      if (!buffer) return setTimeout(startFire, 300);
+      const loop = ctx.createBufferSource();
+      loop.buffer = buffer;
+      loop.loop = true;
+      loop.connect(fire);
+      loop.start();
+    };
+    startFire();
     const crackle = ctx.createBiquadFilter();
     crackle.type = 'highpass';
     crackle.frequency.value = 3000;
@@ -195,19 +217,21 @@ export class Sfx {
     crackleGain.gain.value = 0;
     source(1.3).connect(crackle).connect(crackleGain).connect(out);
     lfo.start();
-    this.flame = { out, crackleGain, roar, on: false };
+    this.flame = { out, crackleGain, roar, fire, on: false };
   }
 
   setFlame(level) {
     if (!this.flame) return;
     const t = this.ctx.currentTime;
     const f = this.flame;
-    f.out.gain.setTargetAtTime(0.3 * level, t, level > f.level ? 0.03 : 0.12);
+    f.out.gain.setTargetAtTime(0.42 * level, t, level > f.level ? 0.03 : 0.12);
+    f.fire.gain.setTargetAtTime(0.9 * level, t, level > f.level ? 0.04 : 0.2);
     f.roar.frequency.setTargetAtTime(420 + 260 * level + Math.random() * 120, t, 0.05);
     f.crackleGain.gain.setTargetAtTime(level > 0.05 && Math.random() < 0.35 ? 0.25 + Math.random() * 0.35 : 0, t, 0.01);
     if (level > 0.3 && !f.on) {
-      this.noise(0.35, { vol: 0.45 * level, freq: 300, to: 1400 });
-      this.tone(90, 0.3, { type: 'sine', vol: 0.35 * level, to: 45 });
+      this.noise(0.45, { vol: 0.7 * level, freq: 250, to: 1800 });
+      this.tone(80, 0.4, { type: 'sine', vol: 0.5 * level, to: 40 });
+      this.sample('jetpack', 0.35 * level, 1.3);
     }
     f.on = level > 0.3;
     f.level = level;
@@ -387,7 +411,10 @@ export class Sfx {
         this.tone(320, 0.18, { type: 'square', vol: 0.12 * v, to: 140 });
         break;
       case 'reel':
-        this.sample('reel', 0.35 * v);
+        this.sample('reel', 0.5 * v);
+        break;
+      case 'winch':
+        this.sample('winch', 0.6 * v);
         break;
       case 'clank':
         this.tone(320, 0.18, { type: 'square', vol: 0.12 * v, to: 140 });

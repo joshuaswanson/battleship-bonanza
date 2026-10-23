@@ -34,17 +34,20 @@ export const methods = {
     h.loose = { points, prev, length: from.distanceTo(h.pos), wait: 0.35, mesh };
   },
 
+  reelSound(h, dt) {
+    h.reelClock = (h.reelClock ?? 0) - dt;
+    if (h.reelClock > 0) return;
+    h.reelClock = 1.35;
+    this.sfx.play('reel', h.owner.pos);
+  },
+
   reelSlack(h, from, dt) {
     const rope = h.loose;
     const { points, prev } = rope;
     rope.wait -= dt;
     if (rope.wait <= 0) {
       rope.length = Math.max(0, rope.length - fast(55) * dt);
-      rope.click = (rope.click ?? 0) - dt;
-      if (rope.click <= 0) {
-        rope.click = 0.7;
-        this.sfx.play('reel', h.owner.pos);
-      }
+      this.reelSound(h, dt);
     }
     if (rope.length < 2.5) return true;
     const step = new THREE.Vector3();
@@ -118,6 +121,7 @@ export const methods = {
             h.phase = 'attached';
             h.time = 3;
             this.sfx.play('hookCatch', h.target.pos);
+            this.sfx.play('winch', o.pos);
             if (o.isPlayer) this.emit('feed', { text: tr('youHooked', { name: h.target.name }), player: true });
           }
         } else {
@@ -151,6 +155,7 @@ export const methods = {
         }
         return true;
       } else {
+        this.reelSound(h, dt);
         h.dir.copy(from).sub(h.pos);
         const d = h.dir.length();
         if (d < 2.5) {
