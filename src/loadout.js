@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GROUPS, ITEMS, ITEM_IDS, STATS, statsFor } from './items.js';
 import { t, itemName, itemBlurb, comboName } from './i18n.js';
-import { buildBoat, buildItemModel, slotLock, slotCenter, laserWobble, aimLaserGun, SALVO, buildMine, buildMissile, buildHook, aimTurret, spendMissile, reloadMissiles, updateMissileTips, missileDirection, stepGun, stepLaser, stepFlame, stepSaw, flameDirection, newHeat, gunDirection, laserDirection, launchMine, reloadMine, updateMineHolder } from './boatModel.js';
+import { buildBoat, buildItemModel, slotLock, slotCenter, laserWobble, aimLaserGun, buildMine, buildMissile, buildHook, aimTurret, spendMissile, reloadMissile, updateMissileTips, missileDirection, stepGun, stepLaser, stepFlame, stepSaw, flameDirection, newHeat, gunDirection, laserDirection, launchMine, reloadMine, updateMineHolder } from './boatModel.js';
 import { createWater, seaWaves as waveHeight } from './water.js';
 import { Effects } from './effects.js';
 import { SUN_DIR } from './world.js';
@@ -355,6 +355,7 @@ export class Loadout {
   }
 
   rebuildBoat() {
+    this.recharge = null;
     if (this.boat) this.scene.remove(this.boat.root);
     this.heat = { machinegun: newHeat(), laser: newHeat(), flamethrower: newHeat(), saw: newHeat() };
     this.boat = buildBoat(this.setup.color, this.setup.items);
@@ -410,34 +411,33 @@ export class Loadout {
         }
         break;
       case 'missiles': {
-        if (!b.missileTips.some((tip) => tip.visible)) return;
-        this.busy.missiles = 1.8;
-        this.after(ITEMS.missiles.cooldown, () => this.boat === b && reloadMissiles(b));
-        for (let i = 0; i < SALVO; i++) {
-          this.after(i * 0.13, () => {
-            if (this.boat !== b) return;
-            const mesh = buildMissile();
-            mesh.scale.setScalar(0.75);
-            if (!spendMissile(b, mesh.position)) return;
-            this.scene.add(mesh);
-            const vel = missileDirection(b, new THREE.Vector3());
-            vel.x += (Math.random() - 0.5) * 0.3;
-            vel.z += (Math.random() - 0.5) * 0.3;
-            this.movers.push({
-              mesh,
-              vel: vel.normalize().multiplyScalar(26),
-              gravity: 9,
-              life: 1.1 + i * 0.08,
-              trail: true,
-              end: (m) => {
-                this.fx.explosion(m.position.x, m.position.y, m.position.z, 0.8);
-                for (const c of [0xff2a2a, 0x5ff4ff, 0xffe066]) this.fx.sparkBurst(m.position.x, m.position.y, m.position.z, c, 10);
-                this.sfx.play('boom');
-              },
-            });
-            this.sfx.play('missile');
-          });
-        }
+        const mesh = buildMissile();
+        mesh.scale.setScalar(0.75);
+        if (!spendMissile(b, mesh.position)) return;
+        this.busy.missiles = 1.2;
+        this.recharge = (this.recharge ?? Promise.resolve()).then(
+          () => new Promise((done) => this.after(ITEMS.missiles.recharge, () => {
+            if (this.boat === b) reloadMissile(b);
+            done();
+          })),
+        );
+        this.scene.add(mesh);
+        const vel = missileDirection(b, new THREE.Vector3());
+        vel.x += (Math.random() - 0.5) * 0.3;
+        vel.z += (Math.random() - 0.5) * 0.3;
+        this.movers.push({
+          mesh,
+          vel: vel.normalize().multiplyScalar(26),
+          gravity: 9,
+          life: 1.1,
+          trail: true,
+          end: (m) => {
+            this.fx.explosion(m.position.x, m.position.y, m.position.z, 0.8);
+            for (const c of [0xff2a2a, 0x5ff4ff, 0xffe066]) this.fx.sparkBurst(m.position.x, m.position.y, m.position.z, c, 10);
+            this.sfx.play('boom');
+          },
+        });
+        this.sfx.play('missile');
         break;
       }
       case 'mines': {

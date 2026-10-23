@@ -92,7 +92,7 @@ export class Hud {
           <kbd>${i === 0 ? 'O' : 'P'}</kbd>
           <div class="ability-body">
             <div class="ability-top"><span>${itemName(id)}</span><em class="slot-state"></em></div>
-            <div class="ability-track"><div class="ability-fill"></div></div>
+            ${item.charges ? `<div class="ability-segs">${'<div class="ability-track"><div class="ability-fill"></div></div>'.repeat(item.charges)}</div>` : '<div class="ability-track"><div class="ability-fill"></div></div>'}
           </div>
         </div>`;
       })
@@ -110,6 +110,7 @@ export class Hud {
     });
     this.slotLabels = this.slots.map((slot) => slot.querySelector('.slot-state'));
     this.slotFills = this.slots.map((slot) => slot.querySelector('.ability-fill'));
+    this.segFills = this.slots.map((slot) => [...slot.querySelectorAll('.ability-segs .ability-fill')]);
     this.lastPlace = 0;
   }
 
@@ -221,6 +222,18 @@ export class Hud {
         slot.classList.toggle('overheated', overheated);
         slot.classList.toggle('hot', !overheated && heat > 0.6);
         const text = overheated ? t('overheated') : heat > 0.6 ? t('hot') : t('hold');
+        if (this.slotLabels[i].textContent !== text) this.slotLabels[i].textContent = text;
+        return;
+      }
+      if (item.charges) {
+        const { left, refill } = p.charges[i];
+        this.segFills[i].forEach((fill, k) => {
+          const amount = k < left ? 1 : k === left ? refill : 0;
+          fill.style.width = `${amount * 100}%`;
+          fill.parentElement.classList.toggle('full', amount >= 1);
+        });
+        slot.classList.toggle('ready', left > 0);
+        const text = `${left}/${item.charges}`;
         if (this.slotLabels[i].textContent !== text) this.slotLabels[i].textContent = text;
         return;
       }

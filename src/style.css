@@ -1762,6 +1762,23 @@ kbd {
   background: var(--sun);
 }
 
+.ability-segs {
+  display: flex;
+  gap: 5px;
+}
+
+.ability-segs .ability-track {
+  flex: 1;
+}
+
+.ability-segs .ability-fill {
+  background: #9fb3c8;
+}
+
+.ability-segs .full .ability-fill {
+  background: var(--sun);
+}
+
 .ability.heat .ability-fill {
   background: #3ddc6f;
 }

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { ITEMS } from './items.js';
-import { buildBoat, buildMine, buildMissile, buildHook, laserWobble, aimLaserGun, aimTurret, SALVO, spendMissile, reloadMissiles, updateMissileTips, missileDirection, stepGun, stepLaser, stepFlame, stepSaw, slotCenter, ALWAYS_AIMS, flameDirection, newHeat, gunDirection, laserDirection, launchMine, reloadMine, updateMineHolder, HULL_L } from './boatModel.js';
+import { buildBoat, buildMine, buildMissile, buildHook, laserWobble, aimLaserGun, aimTurret, spendMissile, reloadMissile, updateMissileTips, missileDirection, stepGun, stepLaser, stepFlame, stepSaw, slotCenter, ALWAYS_AIMS, flameDirection, newHeat, gunDirection, laserDirection, launchMine, reloadMine, updateMineHolder, HULL_L } from './boatModel.js';
 import { waveHeight, isWater } from './water.js';
 import { createAI, driveAI } from './ai.js';
 import { toon, glow } from './toon.js';
@@ -87,6 +87,7 @@ class Boat {
       .map((s) => ({ id: s.id, group: s.group, center: s.center }));
     this.aim = {};
     this.missileQueue = [];
+    this.charges = this.items.map((id) => (ITEMS[id]?.charges ? { left: ITEMS[id].charges, refill: 0 } : null));
     this.attackRolls = new Map();
     this.lastFired = -Infinity;
     this.regenerating = false;
@@ -307,7 +308,15 @@ export class Race {
       const was = b.cooldowns[i];
       b.cooldowns[i] = Math.max(0, was - dt);
       if (was > 0 && b.cooldowns[i] === 0 && b.items[i] === 'mines') reloadMine(b.model);
-      if (was > 0 && b.cooldowns[i] === 0 && b.items[i] === 'missiles') reloadMissiles(b.model);
+      const charge = b.charges[i];
+      if (charge && charge.left < ITEMS[b.items[i]].charges) {
+        charge.refill += dt / ITEMS[b.items[i]].recharge;
+        if (charge.refill >= 1) {
+          charge.refill = 0;
+          charge.left++;
+          if (b.items[i] === 'missiles') reloadMissile(b.model);
+        }
+      }
     }
     b.invuln = Math.max(0, b.invuln - dt);
     b.flash = Math.max(0, b.flash - dt * 5);
@@ -687,28 +696,32 @@ export class Race {
       if (b.isPlayer) this.sfx.play('nope');
       return false;
     }
-    if (b.cooldowns[slot] > 0) {
-      if (b.isPlayer) this.sfx.play('nope');
+    const charge = b.charges[slot];
+    if (b.cooldowns[slot] > 0 || (charge && charge.left <= 0)) {
+      if (b.isPlayer && !(charge && b.cooldowns[slot] > 0)) this.sfx.play('nope');
       return false;
     }
     if (this.actions[id].call(this, b) === false) return false;
     b.cooldowns[slot] = item.cooldown;
+    if (charge) charge.left--;
     b.lastFired = this.time;
     return true;
   }
 
   actions = {
     missiles(b) {
+      const chased = new Set(this.missiles.filter((m) => m.owner === b && m.target).map((m) => m.target));
+      for (const q of b.missileQueue) if (q.target) chased.add(q.target);
       const targets = this.boats
         .filter((o) => o !== b && o.alive && o.invuln <= 0 && !o.has('camo') && !(o.finished && !this.attract) && this.willAttack(b, o))
-        .map((o) => ({ o, d: Math.hypot(o.pos.x - b.pos.x, o.pos.z - b.pos.z) }))
-        .filter((t) => t.d <= 180)
+        .map((o) => ({ o, d: Math.hypot(o.pos.x - b.pos.x, o.pos.z - b.pos.z) + (chased.has(o) ? 60 : 0) }))
+        .filter((t) => t.d <= 240)
         .sort((x, y) => x.d - y.d)
-        .slice(0, SALVO)
         .map((t) => t.o);
-      b.model.busy.missiles = 1.4;
-      b.missileAim = targets.length ? this.relativeAngle(b, targets[0]) : 0;
-      for (let i = 0; i < SALVO; i++) b.missileQueue.push({ target: targets.length ? targets[i % targets.length] : null, wait: 0.28 + i * 0.13 });
+      const target = targets[0] ?? null;
+      b.model.busy.missiles = 1;
+      b.missileAim = target ? this.relativeAngle(b, target) : 0;
+      b.missileQueue.push({ target, wait: 0.12 });
     },
 
     mines(b) {

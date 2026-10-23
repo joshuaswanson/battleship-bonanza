@@ -72,7 +72,9 @@ export const ITEMS = {
   missiles: {
     stats: { punch: 3 },
     group: 'weapons',
-    cooldown: 6,
+    cooldown: 0.3,
+    charges: 3,
+    recharge: 2.2,
   },
   mines: {
     stats: { punch: 2, tricks: 1 },

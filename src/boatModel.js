@@ -699,8 +699,8 @@ const MODULES = {
     for (const x of [-0.66, 0.66]) part(m, 'roundBox', mats.dark, x, 0.68, 0, 0.12, 0.5, 0.42, 0.02);
     part(launcher, 'cylinder', mats.metal, 0, 0, 0, 0.1, 1.42, 0.1, 0.02).rotation.z = Math.PI / 2;
     const red = toon(RED);
-    for (const x of [-0.25, 0.25]) {
-      for (const y of [-0.25, 0.25]) {
+    for (const [x, y] of [[-0.27, -0.17], [0.27, -0.17], [0, 0.29]]) {
+      {
         part(launcher, 'cylinder', mats.white, x, y, 0, 0.23, 1.7, 0.23, 0.03).rotation.x = Math.PI / 2;
         part(launcher, 'cylinder', mats.ink, x, y, 0.84, 0.17, 0.04, 0.17, 0).rotation.x = Math.PI / 2;
         part(launcher, 'cylinder', mats.metal, x, y, -0.86, 0.15, 0.06, 0.15, 0.02).rotation.x = Math.PI / 2;
@@ -873,15 +873,12 @@ export function spendMissile(refs, out) {
   return out;
 }
 
-export const SALVO = 3;
-
-export function reloadMissiles(refs) {
-  for (const tip of refs.missileTips) {
-    if (tip.visible) continue;
-    tip.visible = true;
-    tip.userData.rise = 0;
-    tip.position.z = tip.userData.restZ - 0.7;
-  }
+export function reloadMissile(refs) {
+  const tip = refs.missileTips.find((t) => !t.visible);
+  if (!tip) return;
+  tip.visible = true;
+  tip.userData.rise = 0;
+  tip.position.z = tip.userData.restZ - 0.7;
 }
 
 export function updateMissileTips(refs, dt) {
