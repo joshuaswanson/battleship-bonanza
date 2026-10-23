@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { buildBoat } from './boatModel.js';
 import { SUN_DIR } from './world.js';
-import { toon, outlined, mulberry32 } from './toon.js';
+import { toon, outlined, INK } from './toon.js';
+import { createWater } from './water.js';
 
 export class TitleBoat {
   constructor(container) {
@@ -37,28 +38,62 @@ export class TitleBoat {
   }
 }
 
+const RX = 2.35;
+const RZ = 4.0;
+
 function splash() {
   const group = new THREE.Group();
-  group.position.set(0, -0.85, -0.6);
-  const rand = mulberry32(7);
-  const cone = new THREE.ConeGeometry(1, 1, 10).translate(0, 0.5, 0);
-  const white = toon(0xffffff);
-  const aqua = toon(0x7fe6ee);
-  const up = new THREE.Vector3(0, 1, 0);
-  const petals = 22;
-  for (let i = 0; i < petals; i++) {
-    const a = (i / petals) * Math.PI * 2 + rand() * 0.15;
-    const x = Math.cos(a) * 2.25;
-    const z = Math.sin(a) * 3.9;
-    const height = 0.8 + rand() * 1.1 + (i % 2 ? 0 : 0.5);
-    const width = 0.32 + rand() * 0.14;
-    const petal = outlined(cone.clone().scale(width, height, width), i % 3 ? white : aqua, 0.05);
-    petal.position.set(x, 0, z);
-    const out = new THREE.Vector3(Math.cos(a) * 0.55, 1, Math.sin(a) * 0.4).normalize();
-    petal.quaternion.setFromUnitVectors(up, out);
-    group.add(petal);
+  group.position.set(0, -0.75, -0.5);
+
+  const sea = createWater({ geometry: new THREE.CircleGeometry(1, 72).scale(RX * 1.55, RZ * 1.32, 1) });
+  sea.mesh.position.y = -0.15;
+  group.add(sea.mesh);
+  const rim = new THREE.Mesh(
+    new THREE.TorusGeometry(1, 0.06, 6, 96).rotateX(Math.PI / 2).scale(RX * 1.55, 1, RZ * 1.32),
+    new THREE.MeshBasicMaterial({ color: INK }),
+  );
+  rim.position.y = -0.1;
+  group.add(rim);
+  group.add(outlined(new THREE.TorusGeometry(1, 0.22, 10, 96).rotateX(Math.PI / 2).scale(RX * 1.5, 1, RZ * 1.29), toon(0xffffff), 0.04));
+
+  const around = 120;
+  const rows = 10;
+  const pos = [];
+  const col = [];
+  const index = [];
+  const low = new THREE.Color(0x35d6e0);
+  const high = new THREE.Color(0xffffff);
+  const c = new THREE.Color();
+  const crest = [];
+  for (let i = 0; i <= around; i++) {
+    const a = (i / around) * Math.PI * 2;
+    const height = 0.75 + 0.55 * Math.pow(Math.sin(a * 5 + 0.7), 2) + 0.2 * Math.sin(a * 11);
+    for (let j = 0; j <= rows; j++) {
+      const t = j / rows;
+      const flare = 1 + 0.45 * t * t;
+      const x = Math.cos(a) * RX * flare;
+      const z = Math.sin(a) * RZ * (1 + 0.25 * t * t);
+      const y = height * Math.sin((t * Math.PI) / 2);
+      pos.push(x, y, z);
+      c.copy(low).lerp(high, Math.pow(t, 0.7));
+      col.push(c.r, c.g, c.b);
+      if (j === rows) crest.push(new THREE.Vector3(x, y, z));
+    }
   }
-  const foam = outlined(new THREE.TorusGeometry(1, 0.32, 10, 48).rotateX(Math.PI / 2).scale(2.3, 1, 3.95), white, 0.05);
-  group.add(foam);
+  for (let i = 0; i < around; i++) {
+    for (let j = 0; j < rows; j++) {
+      const p = i * (rows + 1) + j;
+      const q = p + rows + 1;
+      index.push(p, q, p + 1, q, q + 1, p + 1);
+    }
+  }
+  const sheet = new THREE.BufferGeometry();
+  sheet.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  sheet.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  sheet.setIndex(index);
+  sheet.computeVertexNormals();
+  group.add(new THREE.Mesh(sheet, toon(0xffffff, { vertexColors: true, side: THREE.DoubleSide })));
+  const edge = new THREE.CatmullRomCurve3(crest, true);
+  group.add(new THREE.Mesh(new THREE.TubeGeometry(edge, 240, 0.06, 6, true), new THREE.MeshBasicMaterial({ color: INK })));
   return group;
 }

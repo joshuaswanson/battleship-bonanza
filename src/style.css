@@ -187,6 +187,13 @@ kbd {
   width: min(980px, 92vw, 118vh);
 }
 
+.logo-front {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  filter: none;
+}
+
 .title-boat {
   position: absolute;
   left: 5%;
@@ -637,16 +644,16 @@ kbd {
 .item-groups {
   display: flex;
   flex-direction: column;
-  gap: 0.7rem;
+  gap: 1.4rem;
 }
 
 .group-label {
   display: inline-block;
-  margin: 0 0 0.45rem;
-  padding: 0.1rem 0.7rem 0.15rem;
+  margin: 0 0 0.6rem;
+  padding: 0.1rem 0.9rem 0.15rem;
   font-family: var(--race);
   font-weight: 800;
-  font-size: 1.15rem;
+  font-size: 1.6rem;
   line-height: 1.1;
   color: #ffffff;
   background: var(--ink);

@@ -18,8 +18,12 @@ import { TitleBoat } from './titleBoat.js';
 import { ITEMS, ITEM_IDS } from './items.js';
 
 const $ = (id) => document.getElementById(id);
-for (const el of document.querySelectorAll('[data-logo]')) el.innerHTML = logoSvg({ boat: el.dataset.logo !== '3d' });
-new TitleBoat(document.querySelector('.title-logo'));
+for (const el of document.querySelectorAll('[data-logo]')) {
+  el.innerHTML = el.dataset.logo === '3d' ? logoSvg({ boat: false, main: false }) : logoSvg();
+}
+const titleLogo = document.querySelector('.title-logo');
+new TitleBoat(titleLogo);
+titleLogo.insertAdjacentHTML('beforeend', logoSvg({ art: false }).replace('class="logo"', 'class="logo logo-front" aria-hidden="true"'));
 
 const canvas = $('game');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
