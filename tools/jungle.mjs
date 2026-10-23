@@ -12,9 +12,9 @@ await new Promise((r) => setTimeout(r, 1400)); // PLAYWAIT
 await wait(200);
 const t0 = Date.now();
 await page.evaluate(() => document.getElementById('btn-start').click());
-await new Promise((r) => setTimeout(r, 1000));
+await new Promise((r) => setTimeout(r, 1400));
 await page.evaluate(() => document.getElementById('btn-go').click());
-await new Promise((r) => setTimeout(r, 1000));
+await new Promise((r) => setTimeout(r, 1400));
 console.log('start click took', Date.now() - t0, 'ms');
 await wait(1500);
 await page.screenshot({ path: 'tools/shots/jungle-start.png' });

@@ -8,7 +8,7 @@ await page.evaluate(() => { window.__bb.map = 'bay'; window.__bb.setup.items.spl
 await page.evaluate(() => document.getElementById('btn-play').click());
 await wait(1400);
 await page.evaluate(() => document.getElementById('btn-start').click());
-await wait(1000);
+await wait(1400);
 await page.evaluate(() => document.getElementById('btn-go').click());
 await wait(5000);
 await page.evaluate(() => {

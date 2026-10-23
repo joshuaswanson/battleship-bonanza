@@ -18,9 +18,9 @@ for (const lang of ['fr', 'de', 'en']) {
   await page.screenshot({ path: `tools/shots/lang-${lang}-yard.png` });
   await page.mouse.move(10, 10);
   await page.evaluate(() => document.getElementById('btn-start').click());
-await new Promise((r) => setTimeout(r, 1000));
+await new Promise((r) => setTimeout(r, 1400));
 await page.evaluate(() => document.getElementById('btn-go').click());
-await new Promise((r) => setTimeout(r, 1000));
+await new Promise((r) => setTimeout(r, 1400));
   await wait(5200);
   await page.screenshot({ path: `tools/shots/lang-${lang}-race.png` });
   await page.keyboard.press('Escape');

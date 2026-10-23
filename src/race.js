@@ -1007,6 +1007,11 @@ export class Race {
     }
   }
 
+  sawCuts(victim, hooker) {
+    if (!victim.model.sawYaw || victim.disabled > 0 || !victim.alive) return false;
+    return this.inArc(victim, victim.items.indexOf('saw'), hooker.pos.x, hooker.pos.z);
+  }
+
   slacken(h, from, dt) {
     h.phase = 'retract';
     const points = [];
@@ -1088,6 +1093,16 @@ export class Race {
           h.dir.copy(c).sub(h.pos);
           const gap = h.dir.length();
           h.pos.addScaledVector(h.dir.divideScalar(gap || 1), Math.min(gap, HOOK_SPEED * dt));
+          if (gap < 4 && this.sawCuts(h.target, o)) {
+            const cut = h.pos.clone();
+            this.shieldAgainst(h.target, o);
+            this.fx.sparkBurst(cut.x, cut.y, cut.z, 0xffe066, 18);
+            this.sfx.play('tink', cut);
+            this.sfx.play('saw', cut);
+            if (o.isPlayer) this.emit('warning', { text: tr('hookCut') });
+            this.slacken(h, from, dt);
+            return true;
+          }
           if (gap < 1.2) {
             h.phase = 'attached';
             h.time = 3;

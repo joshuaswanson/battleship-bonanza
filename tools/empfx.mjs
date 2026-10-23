@@ -13,9 +13,9 @@ await page.evaluate(() => window.__bb.loadout.refresh());
 await wait(1000);
 await page.screenshot({ path: 'tools/shots/emp-yard.png', clip: { x: 150, y: 80, width: 520, height: 360 } });
 await page.evaluate(() => document.getElementById('btn-start').click());
-await new Promise((r) => setTimeout(r, 1000));
+await new Promise((r) => setTimeout(r, 1400));
 await page.evaluate(() => document.getElementById('btn-go').click());
-await new Promise((r) => setTimeout(r, 1000));
+await new Promise((r) => setTimeout(r, 1400));
 await wait(4800);
 await page.evaluate(() => {
   const r = window.__bb.race; const p = r.player;

@@ -116,7 +116,7 @@ function shouldUse(race, b, id, ai) {
     }
     case 'grapple': {
       const t = race.findTarget(b, { ...race.hookSpec(b), minRange: 18 });
-      return !!t && r < ai.aggression;
+      return !!t && !(race.sawCuts(t, b) && r < 0.8) && r < ai.aggression;
     }
     case 'emp': {
       const incoming = race.missiles.some((m) => m.target === b && m.fizzle <= 0 && m.pos.distanceTo(b.pos) < 40);

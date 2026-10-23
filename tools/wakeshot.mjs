@@ -9,9 +9,9 @@ await page.evaluate(() => document.getElementById('btn-play').click());
 await new Promise((r) => setTimeout(r, 1400)); // PLAYWAIT
 await wait(200);
 await page.evaluate(() => document.getElementById('btn-start').click());
-await new Promise((r) => setTimeout(r, 1000));
+await new Promise((r) => setTimeout(r, 1400));
 await page.evaluate(() => document.getElementById('btn-go').click());
-await new Promise((r) => setTimeout(r, 1000));
+await new Promise((r) => setTimeout(r, 1400));
 await page.evaluate(() => { window.__bb.autopilot = true; });
 await wait(9000);
 await page.screenshot({ path: `tools/shots/wake-chase-${process.argv[2] ?? 'bay'}.png` });

@@ -21,9 +21,9 @@ for (const [map, fn] of Object.entries(shots)) {
 await new Promise((r) => setTimeout(r, 1400)); // PLAYWAIT
   await wait(200);
   await page.evaluate(() => document.getElementById('btn-start').click());
-await new Promise((r) => setTimeout(r, 1000));
+await new Promise((r) => setTimeout(r, 1400));
 await page.evaluate(() => document.getElementById('btn-go').click());
-await new Promise((r) => setTimeout(r, 1000));
+await new Promise((r) => setTimeout(r, 1400));
   await wait(4500);
   await page.evaluate(() => { document.getElementById('ui').style.display = 'none'; document.getElementById('hud').style.display = 'none'; window.__bb.freeCam = true; });
   await page.evaluate(`(${fn.toString()})()`);

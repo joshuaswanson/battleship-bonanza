@@ -27,9 +27,9 @@ await page.evaluate(() => { window.__bb.setup.items.splice(0, 2, 'missiles', 'la
 await wait(600);
 await shot('3-loadout-picked');
 await page.evaluate(() => document.getElementById('btn-start').click());
-await new Promise((r) => setTimeout(r, 1000));
+await new Promise((r) => setTimeout(r, 1400));
 await page.evaluate(() => document.getElementById('btn-go').click());
-await new Promise((r) => setTimeout(r, 1000));
+await new Promise((r) => setTimeout(r, 1400));
 await wait(1500);
 await shot('4-countdown');
 await wait(3000);

@@ -11,9 +11,9 @@ async function trial(items, key, behind, label, shot) {
 await new Promise((r) => setTimeout(r, 1400)); // PLAYWAIT
   await wait(200);
   await page.evaluate(() => document.getElementById('btn-start').click());
-await new Promise((r) => setTimeout(r, 1000));
+await new Promise((r) => setTimeout(r, 1400));
 await page.evaluate(() => document.getElementById('btn-go').click());
-await new Promise((r) => setTimeout(r, 1000));
+await new Promise((r) => setTimeout(r, 1400));
   await wait(4600);
   await page.evaluate((behind) => {
     const r = window.__bb.race; const p = r.player;

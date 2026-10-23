@@ -10,9 +10,9 @@ for (const playerBase of [1.0, 0.8]) {
 await new Promise((r) => setTimeout(r, 1400)); // PLAYWAIT
   await wait(200);
   await page.evaluate(() => document.getElementById('btn-start').click());
-await new Promise((r) => setTimeout(r, 1000));
+await new Promise((r) => setTimeout(r, 1400));
 await page.evaluate(() => document.getElementById('btn-go').click());
-await new Promise((r) => setTimeout(r, 1000));
+await new Promise((r) => setTimeout(r, 1400));
   await page.evaluate((base) => {
     const bb = window.__bb; bb.autopilot = true; bb.steps = 6;
     const r = bb.race; r.player.ai.base = base;

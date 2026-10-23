@@ -11,9 +11,9 @@ await page.evaluate(() => document.getElementById('btn-play').click());
 await new Promise((r) => setTimeout(r, 1400)); // PLAYWAIT
 await wait(200);
 await page.evaluate(() => document.getElementById('btn-start').click());
-await new Promise((r) => setTimeout(r, 1000));
+await new Promise((r) => setTimeout(r, 1400));
 await page.evaluate(() => document.getElementById('btn-go').click());
-await new Promise((r) => setTimeout(r, 1000));
+await new Promise((r) => setTimeout(r, 1400));
 await wait(4800);
 console.log('AI flamethrowers when player has one:', await page.evaluate(() => window.__bb.race.boats.filter((b) => !b.isPlayer && b.has('flamethrower')).length));
 await page.evaluate(() => {

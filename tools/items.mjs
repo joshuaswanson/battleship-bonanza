@@ -29,9 +29,9 @@ for (const items of pairs) {
 await new Promise((r) => setTimeout(r, 1400)); // PLAYWAIT
   await wait(300);
   await page.evaluate(() => document.getElementById('btn-start').click());
-await new Promise((r) => setTimeout(r, 1000));
+await new Promise((r) => setTimeout(r, 1400));
 await page.evaluate(() => document.getElementById('btn-go').click());
-await new Promise((r) => setTimeout(r, 1000));
+await new Promise((r) => setTimeout(r, 1400));
   await wait(4500);
   await page.keyboard.down('KeyW');
   await wait(1500);
