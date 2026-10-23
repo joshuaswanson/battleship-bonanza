@@ -53,6 +53,7 @@ export class Sfx {
       this.master.connect(limiter).connect(this.ctx.destination);
       this.samples = {};
       this.loadSamples('gun', ['sfx/gun1.wav', 'sfx/gun2.wav', 'sfx/gun3.wav']);
+      this.loadSamples('jetpack', ['sfx/jetpack.wav']);
       this.noiseBuffer = this.ctx.createBuffer(1, this.ctx.sampleRate, this.ctx.sampleRate);
       const data = this.noiseBuffer.getChannelData(0);
       for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
@@ -286,6 +287,10 @@ export class Sfx {
         this.tone(1500, 0.4, { type: 'sawtooth', vol: 0.14 * v, to: 1100 });
         this.tone(2900, 0.4, { type: 'square', vol: 0.06 * v, to: 2300 });
         this.tone(95, 0.4, { type: 'square', vol: 0.2 * v, to: 70 });
+        break;
+      case 'jetpack':
+        if (this.sample('jetpack', 0.55 * v)) break;
+        this.noise(0.6, { vol: 0.3 * v, freq: 400, type: 'bandpass', to: 2400 });
         break;
       case 'whoosh':
         this.noise(0.6, { vol: 0.3 * v, freq: 400, type: 'bandpass', to: 2400 });

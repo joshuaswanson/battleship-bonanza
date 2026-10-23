@@ -3,6 +3,8 @@ import { stepGun, gunDirection } from '../../boatModel.js';
 import { waveHeight } from '../../water.js';
 import { BULLET_SPEED, HIT_RADIUS } from '../shared.js';
 
+const BULLET_DROP = 40;
+
 export const methods = {
   updateGun(b, dt) {
     const { shots } = this.stepHold(b, 'machinegun', stepGun, b.model.gunMount, dt);
@@ -53,6 +55,7 @@ export const methods = {
     this.bullets = this.bullets.filter((bullet) => {
       bullet.life -= dt;
       bullet.prev.copy(bullet.pos);
+      bullet.vel.y -= BULLET_DROP * dt;
       bullet.pos.addScaledVector(bullet.vel, dt);
       seg.subVectors(bullet.pos, bullet.prev);
       const len = seg.length();
@@ -72,8 +75,9 @@ export const methods = {
       }
       if (bullet.life <= 0) return false;
       if (bullet.pos.y < waveHeight(bullet.pos.x, bullet.pos.z, this.time)) {
-        this.fx.splash(bullet.pos.x, bullet.pos.y, bullet.pos.z, 0.3);
-        this.fx.droplet(bullet.pos.x, bullet.pos.y, bullet.pos.z, 0, 9 + Math.random() * 4, 0, 0.3);
+        const y = waveHeight(bullet.pos.x, bullet.pos.z, this.time);
+        this.fx.splash(bullet.pos.x, y, bullet.pos.z, 0.35);
+        for (let i = 0; i < 2; i++) this.fx.droplet(bullet.pos.x, y, bullet.pos.z, (Math.random() - 0.5) * 2, 7 + Math.random() * 5, (Math.random() - 0.5) * 2, 0.32);
         return false;
       }
       if (n < 400) {

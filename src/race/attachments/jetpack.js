@@ -54,6 +54,6 @@ export const actions = {
     b.speed += fast(12);
     b.boost = Math.max(b.boost, 1.5);
     this.fx.splash(b.pos.x, b.waterY, b.pos.z, 1.2);
-    this.sfx.play('whoosh', b.pos);
+    this.sfx.play('jetpack', b.pos);
   },
 };

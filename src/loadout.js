@@ -469,7 +469,7 @@ export class Loadout {
         if (this.jump) return;
         this.jump = { t: 0, dur: 1.3 };
         this.splashBoat(1.2);
-        this.sfx.play('whoosh');
+        this.sfx.play('jetpack');
         break;
       case 'grapple': {
         aimTurret(b, 'grapple');
