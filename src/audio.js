@@ -147,6 +147,10 @@ export class Sfx {
       case 'lockHigh':
         this.tone(1650, 0.05, { type: 'square', vol: 0.11 });
         break;
+      case 'boost':
+        this.tone(300, 0.35, { type: 'sawtooth', vol: 0.08 * v, to: 1200 });
+        this.noise(0.4, { vol: 0.2 * v, freq: 800, type: 'bandpass', to: 4000 });
+        break;
       case 'heal':
         [660, 880, 1100, 1320].forEach((f, i) => this.tone(f, 0.16, { type: 'sine', vol: 0.12 * v, delay: i * 0.06 }));
         break;

@@ -3,8 +3,9 @@ import { ITEMS } from './items.js';
 import { buildBoat, buildMine, buildMissile, buildHook, updateAimers, aimTurret, stepGun, stepLaser, newHeat, gunDirection, laserDirection, launchMine, reloadMine, updateMineHolder, HULL_L } from './boatModel.js';
 import { waveHeight } from './water.js';
 import { createAI, driveAI } from './ai.js';
-import { toon, glow } from './toon.js';
+import { toon, glow, outlineMaterial } from './toon.js';
 import { Medkits } from './medkits.js';
+import { TrackFeatures } from './features.js';
 
 export const LAPS = 3;
 export const MAX_HP = 100;
@@ -183,12 +184,18 @@ export class Race {
     this.lastCount = 5;
     this.order = [...this.boats];
 
-    this.bulletMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 8, 6), glow(0xffe066), 400);
-    this.bulletMesh.frustumCulled = false;
-    this.bulletMesh.count = 0;
-    scene.add(this.bulletMesh);
+    const slug = new THREE.CapsuleGeometry(0.5, 1, 4, 10).rotateX(Math.PI / 2);
+    this.bulletMesh = new THREE.InstancedMesh(slug, toon(0xff7a1a, { emissive: 0xff5a00, emissiveIntensity: 0.6 }), 400);
+    this.bulletOutline = new THREE.InstancedMesh(slug, outlineMaterial(0.12), 400);
+    this.bulletOutline.instanceMatrix = this.bulletMesh.instanceMatrix;
+    for (const mesh of [this.bulletMesh, this.bulletOutline]) {
+      mesh.frustumCulled = false;
+      mesh.count = 0;
+      scene.add(mesh);
+    }
 
     this.medkits = new Medkits(scene, track, fx, sfx);
+    this.features = new TrackFeatures(scene, track, fx, sfx);
     this.placeGrid();
   }
 
@@ -255,6 +262,7 @@ export class Race {
     this.updatePulses(dt);
     this.updateLasers(dt);
     this.medkits.update(this, dt, this.time);
+    this.features.update(this, dt, this.time);
     for (const b of this.boats) this.updateVisual(b, dt);
     this.updateStandings();
   }
@@ -669,7 +677,7 @@ export class Race {
     dir.normalize();
     const vel = dir.clone().multiplyScalar(150).add(b.vel);
     this.bullets.push({ pos: origin, prev: origin.clone(), vel, owner: b, life: 0.6 });
-    this.fx.sparkBurst(origin.x, origin.y, origin.z, 0xffe066, 2);
+    this.fx.sparkBurst(origin.x, origin.y, origin.z, 0xffffff, 2);
     this.sfx.play('shoot', b.pos);
   }
 
@@ -678,7 +686,7 @@ export class Race {
     const seg = new THREE.Vector3();
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
-    const s = new THREE.Vector3(0.18, 0.18, 1.1);
+    const s = new THREE.Vector3(0.3, 0.3, 1.1);
     const z = new THREE.Vector3(0, 0, 1);
     const dir = new THREE.Vector3();
     let n = 0;
@@ -697,7 +705,7 @@ export class Race {
           hit = o.distanceToAxis(c) < HIT_RADIUS;
         }
         if (hit) {
-          this.fx.sparkBurst(bullet.pos.x, bullet.pos.y, bullet.pos.z, 0xffe066, 4);
+          this.fx.sparkBurst(bullet.pos.x, bullet.pos.y, bullet.pos.z, 0xfff6c8, 5);
           this.damage(o, 2, bullet.owner, 'bullet', { knockX: seg.x * 1.2, knockZ: seg.z * 1.2 });
           return false;
         }
@@ -716,6 +724,7 @@ export class Race {
       return true;
     });
     this.bulletMesh.count = Math.min(n, 400);
+    this.bulletOutline.count = this.bulletMesh.count;
     this.bulletMesh.instanceMatrix.needsUpdate = true;
   }
 
@@ -1224,7 +1233,8 @@ export class Race {
     for (const m of this.missiles) this.scene.remove(m.mesh);
     for (const m of this.mines) this.scene.remove(m.mesh);
     for (const h of this.hooks) this.scene.remove(h.mesh, h.rope);
-    this.scene.remove(this.bulletMesh);
+    this.scene.remove(this.bulletMesh, this.bulletOutline);
     this.medkits.dispose();
+    this.features.dispose();
   }
 }

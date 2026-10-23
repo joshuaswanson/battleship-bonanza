@@ -332,6 +332,16 @@ export class Hud {
     ctx.fill();
     ctx.stroke();
 
+    for (const f of race.features.all) {
+      const [fx, fy] = this.toMap(f.x, f.z);
+      ctx.fillStyle = f.kind === 'pad' ? '#FFD23F' : '#FF8A1F';
+      ctx.strokeStyle = '#0E2A47';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(fx, fy, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
     for (const kit of race.medkits.active) {
       const [kx, ky] = this.toMap(kit.x, kit.z);
       ctx.fillStyle = '#FFFFFF';
