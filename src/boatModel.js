@@ -20,6 +20,7 @@ export function arrange([a, b]) {
 }
 
 export const slotCenter = (slot) => (slot === 0 ? 0 : Math.PI);
+export const ALWAYS_AIMS = new Set(['flamethrower', 'saw']);
 const MODULE_SCALE = 1.3;
 
 export function halfWidth(z) {
@@ -656,19 +657,23 @@ const MODULES = {
     launcher.position.set(0, 0.75, 0);
     launcher.rotation.x = -0.3;
     m.add(launcher);
-    part(m, 'cylinder', mats.dark, 0, 0.35, 0, 0.2, 0.7, 0.2, 0.03);
-    part(launcher, 'roundBox', mats.dark, 0, 0, 0, 1.5, 1.05, 1.6, 0.04);
-    part(launcher, 'roundBox', mats.paint, 0, 0.56, 0, 1.2, 0.12, 1.3, 0.03);
+    part(m, 'cylinder', mats.dark, 0, 0.3, 0, 0.2, 0.6, 0.2, 0.03);
+    part(m, 'roundBox', mats.dark, 0, 0.5, 0, 1.45, 0.14, 0.5, 0.03);
+    for (const x of [-0.66, 0.66]) part(m, 'roundBox', mats.dark, x, 0.68, 0, 0.12, 0.5, 0.42, 0.02);
+    part(launcher, 'cylinder', mats.metal, 0, 0, 0, 0.1, 1.42, 0.1, 0.02).rotation.z = Math.PI / 2;
     const red = toon(RED);
-    for (const x of [-0.35, 0.35]) {
-      for (const y of [-0.22, 0.22]) {
-        part(launcher, 'cylinder', mats.ink, x, y, 0.8, 0.22, 0.06, 0.22, 0).rotation.x = Math.PI / 2;
-        const tip = part(launcher, 'cone', red, x, y, 0.98, 0.17, 0.4, 0.17, 0.03);
+    for (const x of [-0.25, 0.25]) {
+      for (const y of [-0.25, 0.25]) {
+        part(launcher, 'cylinder', mats.white, x, y, 0, 0.23, 1.7, 0.23, 0.03).rotation.x = Math.PI / 2;
+        part(launcher, 'cylinder', mats.ink, x, y, 0.84, 0.17, 0.04, 0.17, 0).rotation.x = Math.PI / 2;
+        part(launcher, 'cylinder', mats.metal, x, y, -0.86, 0.15, 0.06, 0.15, 0.02).rotation.x = Math.PI / 2;
+        const tip = part(launcher, 'cone', red, x, y, 0.98, 0.15, 0.36, 0.15, 0.03);
         tip.rotation.x = Math.PI / 2;
         tip.userData.restZ = 0.98;
         refs.missileTips.push(tip);
       }
     }
+    for (const z of [-0.45, 0.4]) part(launcher, 'roundBox', mats.paint, 0, 0, z, 1.08, 1.08, 0.2, 0.03);
     const mount = new THREE.Object3D();
     mount.position.set(0, 0, 1.3);
     launcher.add(mount);
@@ -681,9 +686,11 @@ const MODULES = {
     cup.rotation.x = Math.PI / 2;
     for (let i = 0; i < 3; i++) {
       const a = (i / 3) * Math.PI * 2;
-      const claw = part(m, 'roundBox', mats.metal, Math.cos(a) * 0.84, 0.8, Math.sin(a) * 0.84, 0.14, 0.7, 0.14, 0.02);
+      const claw = part(m, 'roundBox', mats.metal, Math.cos(a) * 0.84, 0.85, Math.sin(a) * 0.84, 0.14, 0.7, 0.14, 0.02);
       claw.rotation.set(0, -a, 0);
       claw.rotateZ(0.1);
+      const bracket = part(m, 'roundBox', mats.metal, Math.cos(a) * 0.68, 0.55, Math.sin(a) * 0.68, 0.4, 0.14, 0.16, 0.02);
+      bracket.rotation.y = -a;
     }
     const loaded = new THREE.Group();
     loaded.position.set(0, MINE_REST_Y, 0);
@@ -750,7 +757,12 @@ const MODULES = {
     part(m, 'cylinder', mats.metal, 0, 0.25, 0, 0.5, 0.5, 0.5, 0.03);
     part(m, 'cylinder', mats.paint, 0, 0.25, 0, 0.53, 0.14, 0.53, 0.02);
     part(m, 'cylinder', mats.dark, 0, 1.0, 0, 0.1, 1.4, 0.1, 0.02);
-    part(m, 'sphere', glow(0x5ff4ff), 0, 1.9, 0, 0.45, 0.45, 0.45, 0.04);
+    refs.empCore = part(m, 'sphere', glow(0x8ff6ff), 0, 1.9, 0, 0.45, 0.45, 0.45, 0.04);
+    const halo = new THREE.Mesh(geo.sphere(), new THREE.MeshBasicMaterial({ color: 0x5ff4ff, transparent: true, opacity: 0.25, depthWrite: false, blending: THREE.AdditiveBlending }));
+    halo.position.set(0, 1.9, 0);
+    halo.scale.setScalar(0.6);
+    m.add(halo);
+    refs.empHalo = halo;
     const a = part(m, 'ring', mats.metal, 0, 1.9, 0, 0.75, 0.75, 0.75, 0.03);
     const b = part(m, 'ring', mats.metal, 0, 1.9, 0, 0.68, 0.68, 0.68, 0.03);
     b.rotation.x = Math.PI / 2;
@@ -881,7 +893,7 @@ const AIM_DELAY = 0.3;
 export function aimTurret(refs, id) {
   refs.busy[id] = 1.9;
   const swivel = refs.swivels.find((s) => s.id === id);
-  if (!swivel || swivel.slot === 1) return 0;
+  if (!swivel || swivel.slot === 1 || ALWAYS_AIMS.has(id)) return 0;
   const yaw = swivel.group.rotation.y;
   return Math.abs(Math.atan2(Math.sin(yaw), Math.cos(yaw))) > 0.25 ? AIM_DELAY : 0;
 }

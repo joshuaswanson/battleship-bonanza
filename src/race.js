@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { ITEMS } from './items.js';
-import { buildBoat, buildMine, buildMissile, buildHook, laserWobble, aimLaserGun, aimTurret, SALVO, spendMissile, reloadMissiles, updateMissileTips, missileDirection, stepGun, stepLaser, stepFlame, stepSaw, slotCenter, flameDirection, newHeat, gunDirection, laserDirection, launchMine, reloadMine, updateMineHolder, HULL_L } from './boatModel.js';
+import { buildBoat, buildMine, buildMissile, buildHook, laserWobble, aimLaserGun, aimTurret, SALVO, spendMissile, reloadMissiles, updateMissileTips, missileDirection, stepGun, stepLaser, stepFlame, stepSaw, slotCenter, ALWAYS_AIMS, flameDirection, newHeat, gunDirection, laserDirection, launchMine, reloadMine, updateMineHolder, HULL_L } from './boatModel.js';
 import { waveHeight } from './water.js';
 import { createAI, driveAI } from './ai.js';
 import { toon, glow } from './toon.js';
@@ -1279,8 +1279,9 @@ export class Race {
   }
 
   gunArc(b, id, range) {
-    if (b.items.indexOf(id) === 1) return { range: Math.min(id === 'flamethrower' ? FLAME_REACH : range, WATCH_RANGE), maxDot: 0 };
-    if (id === 'flamethrower') return { range: FLAME_REACH, minDot: 0.75 };
+    if (id === 'flamethrower') range = FLAME_REACH;
+    if (b.items.indexOf(id) === 1) return { range: Math.min(range, WATCH_RANGE), maxDot: 0 };
+    if (ALWAYS_AIMS.has(id)) return { range, minDot: 0 };
     return { range, minDot: { laser: 0.97, saw: 0 }[id] ?? 0.88 };
   }
 
@@ -1376,7 +1377,8 @@ export class Race {
       const firing = (t.id === 'machinegun' && b.gun.trigger) || (t.id === 'laser' && b.laser.trigger) || (t.id === 'flamethrower' && b.flame.trigger);
       const watched = b.alive ? this.turretTarget(b, t) : null;
       const active = firing || busy[t.id] > 0;
-      let target = watched && !(active && t.center === 0) ? this.relativeAngle(b, watched) : t.center;
+      const straight = active && t.center === 0 && !ALWAYS_AIMS.has(t.id);
+      let target = watched && !straight ? this.relativeAngle(b, watched) : t.center;
       if (t.id === 'missiles' && busy.missiles > 0) target = b.missileAim;
       const rate = active ? 16 : 5;
       const want = clamp(wrapAngle(target - t.center), -HALF_ARC, HALF_ARC);
@@ -1479,12 +1481,9 @@ export class Race {
     shield.scale.setScalar(1 + 0.08 * Math.sin(this.time * 30));
   }
 
-  crackle(orbMarker, intensity, dt, pos) {
-    if (Math.random() > dt * 9 * intensity) return;
-    const orb = orbMarker.getWorldPosition(new THREE.Vector3());
-    const dir = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.3, Math.random() - 0.5).normalize();
-    this.fx.bolt(orb, orb.clone().addScaledVector(dir, 1 + Math.random() * 1.4), 0x2f7dff, 0.11, 0.08, false);
-    if (Math.random() < 0.12 * intensity) this.sfx.play('crackle', pos);
+  crackle(b, dt) {
+    const intensity = b.cooldowns[b.items.indexOf('emp')] > 0 ? 0.35 : 1;
+    if (this.fx.empIdle(b.model, dt, intensity, this.time) && Math.random() < 0.04 * intensity) this.sfx.play('crackle', b.pos);
   }
 
   shieldAgainst(victim, shooter) {
@@ -1551,7 +1550,7 @@ export class Race {
     root.visible = b.exploded ? false : b.invuln > 0 && b.alive ? Math.floor(b.invuln * 12) % 2 === 0 : true;
 
     if (b.model.sawYaw) this.updateSaw(b, dt);
-    if (b.model.empOrb && b.alive) this.crackle(b.model.empOrb, b.cooldowns[b.items.indexOf('emp')] > 0 ? 0.3 : 1, dt, b.pos);
+    if (b.model.empOrb && b.alive) this.crackle(b, dt);
     this.updateTurrets(b, dt);
     this.updateSulk(b, dt);
     this.updateRegen(b, dt);

@@ -168,6 +168,7 @@ export class Effects {
     this.rings = new Transient(scene, new THREE.TorusGeometry(1, 0.12, 8, 48).rotateX(Math.PI / 2), 16, false);
     const beam = new THREE.CylinderGeometry(1, 1, 1, 10, 1, true).rotateX(Math.PI / 2).translate(0, 0, 0.5);
     this.beams = new Transient(scene, beam, 420, false);
+    this.arcs = new Transient(scene, beam, 360, true);
     this.shells = new Transient(scene, new THREE.SphereGeometry(1, 32, 20), 6, true);
     this.casings = new CasingPool(scene, 240);
   }
@@ -184,6 +185,7 @@ export class Effects {
     this.sparks.update(dt);
     this.rings.update(dt);
     this.beams.update(dt);
+    this.arcs.update(dt);
     this.shells.update(dt);
     this.casings.update(dt, (p) => this.puffs.emit(p.x, 0.2, p.z, 0, 1.5, 0, 0.14, 0.35, 0xffffff, 6, 1, 1));
   }
@@ -336,6 +338,47 @@ export class Effects {
     const r = Math.random;
     this.sparks.emit(x, y, z, 0, 0, 0, 0.55 + r() * 0.2, 1.1, r() < 0.5 ? 0xff2a2a : 0xffffff, 0, 0, 1, 0.25);
     if (r() < 0.35) this.puffs.emit(x, y + 0.3, z, (r() - 0.5), 2 + r() * 2, (r() - 0.5), 0.5 + r() * 0.4, 0.9, 0xffffff, -1, 1, 0);
+  }
+
+  empIdle(refs, dt, intensity, time) {
+    const flicker = 0.85 + Math.random() * 0.3 * intensity;
+    refs.empCore.scale.setScalar(0.96 + 0.08 * flicker * intensity);
+    refs.empHalo.scale.setScalar(0.6 * (0.95 + 0.15 * Math.sin(time * 23) * intensity + 0.05 * flicker));
+    refs.empHalo.material.opacity = 0.12 + 0.18 * intensity * flicker;
+    if (Math.random() > dt * 32 * intensity) return false;
+    const orb = refs.empOrb.getWorldPosition(new THREE.Vector3());
+    this.orbArc(orb, 0.6, Math.random() < 0.25 ? 0.55 : 0.15 + Math.random() * 0.3);
+    return true;
+  }
+
+  orbArc(center, radius, reach) {
+    const r = Math.random;
+    const unit = () => new THREE.Vector3(r() - 0.5, r() - 0.5, r() - 0.5).normalize();
+    const from = unit();
+    const axis = unit().cross(from).normalize();
+    const sweep = 0.8 + r() * 1.8;
+    const steps = 8;
+    let prev = null;
+    for (let k = 0; k <= steps; k++) {
+      const d = from.clone().applyAxisAngle(axis, (sweep * k) / steps);
+      const lift = 1.02 + Math.sin((Math.PI * k) / steps) * reach;
+      const p = center.clone().addScaledVector(d, radius * lift);
+      if (k > 0 && k < steps) p.add(unit().multiplyScalar(0.06));
+      if (prev) this.arcSegment(prev, p);
+      prev = p;
+    }
+  }
+
+  arcSegment(a, b) {
+    const len = a.distanceTo(b);
+    for (const [w, c] of [[0.1, 0x3fb8ff], [0.04, 0xffffff]]) {
+      this.arcs.take(c, 0.05, (mesh) => {
+        mesh.position.copy(a);
+        mesh.lookAt(b);
+        mesh.scale.set(w, w, len);
+        mesh.material.opacity = 0.9;
+      });
+    }
   }
 
   bolt(from, to, color = 0x2f7dff, width = 0.18, life = 0.12, fork = true) {

@@ -708,11 +708,7 @@ export class Loadout {
     if (b.laserMount) this.stepLaser(dt);
     if (b.flameMount) this.stepFlame(dt);
     for (const sp of spinners) sp.mesh.rotation[sp.axis] += sp.speed * dt;
-    if (b.empOrb && Math.random() < dt * 9) {
-      const orb = b.empOrb.getWorldPosition(new THREE.Vector3());
-      const dir = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.3, Math.random() - 0.5).normalize();
-      this.fx.bolt(orb, orb.clone().addScaledVector(dir, 1 + Math.random() * 1.4), 0x2f7dff, 0.11, 0.08, false);
-    }
+    if (b.empOrb) this.fx.empIdle(b, dt, 1, this.time);
     flag.rotation.y = Math.sin(this.time * 9) * 0.25;
 
     const due = this.timers.filter((t) => t.at <= this.time);

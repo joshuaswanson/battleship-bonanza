@@ -602,14 +602,14 @@ kbd {
   box-shadow: 0 3px 0 var(--ink);
   cursor: pointer;
   z-index: 1;
-  transition: transform 120ms ease;
 }
 
-.slot-swap:hover {
-  transform: translate(-50%, -50%) rotate(180deg);
+.slot-swap:hover svg {
+  transform: rotate(180deg);
 }
 
 .slot-swap svg {
+  transition: transform 160ms ease;
   width: 18px;
   height: 18px;
   fill: none;
