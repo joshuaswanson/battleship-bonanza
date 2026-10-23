@@ -20,7 +20,7 @@ for (const c of combos) {
     for (const id of items) document.querySelector(`.tile[data-id="${id}"]`).click();
   }, items);
   await wait(900);
-  const el = await page.$('.stage-col');
+  const el = await page.$('#screen-loadout');
   await el.screenshot({ path: `tools/shots/boat-${items.join('-')}.png` });
 }
 await browser.close();

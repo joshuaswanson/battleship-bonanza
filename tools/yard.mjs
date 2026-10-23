@@ -31,7 +31,6 @@ await shot('5-laser');
 await page.keyboard.press('KeyP');
 await wait(900);
 await shot('6-missile');
-await page.click('#btn-surprise');
 await wait(1200);
 await shot('7-spinning');
 await wait(2500);

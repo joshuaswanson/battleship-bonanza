@@ -24,7 +24,4 @@ await page.click('.tile[data-id="saw"]');
 await wait(200);
 console.log('unselect saw:', await state());
 await page.screenshot({ path: 'tools/shots/sel-2.png' });
-await page.click('#btn-surprise');
-await wait(4000);
-console.log('surprise:', await state());
 await browser.close();

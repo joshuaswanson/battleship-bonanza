@@ -14,5 +14,5 @@ await page.evaluate((items) => {
 await wait(1500);
 if (key) await page.keyboard.press(key);
 await wait(Number(delay));
-await (await page.$('.stage-col')).screenshot({ path: `tools/shots/${name}.png` });
+await (await page.$('#screen-loadout')).screenshot({ path: `tools/shots/${name}.png` });
 await browser.close();

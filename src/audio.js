@@ -145,9 +145,6 @@ export class Sfx {
         this.noise(0.9, { vol: 0.3 * v, freq: 4000, type: 'highpass', to: 1500 });
         this.tone(900, 0.5, { type: 'square', vol: 0.06 * v, to: 120 });
         break;
-      case 'tick':
-        this.tone(1300, 0.03, { type: 'square', vol: 0.05 });
-        break;
       case 'hover':
         this.tone(880, 0.04, { type: 'sine', vol: 0.05, to: 1100 });
         break;

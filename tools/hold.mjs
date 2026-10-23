@@ -11,6 +11,6 @@ await page.evaluate((items) => { window.__bb.setup.items.splice(0, 2, ...items.s
 await wait(1500);
 await page.keyboard.down(key);
 await wait(Number(ms));
-await (await page.$('.stage-col')).screenshot({ path: `tools/shots/${name}.png` });
+await (await page.$('#screen-loadout')).screenshot({ path: `tools/shots/${name}.png` });
 await page.keyboard.up(key);
 await browser.close();
