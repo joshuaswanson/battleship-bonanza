@@ -1,6 +1,6 @@
 import { ITEMS } from './items.js';
 
-const HOLD_RANGE = { machinegun: 75, laser: 70, flamethrower: 15, saw: 11 };
+const HOLD_RANGE = { machinegun: 75, laser: 70, flamethrower: 15, saw: 13 };
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 

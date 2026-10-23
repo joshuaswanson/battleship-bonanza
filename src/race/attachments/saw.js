@@ -47,7 +47,7 @@ export const methods = {
 
     s.sound -= dt;
     const blade = refs.saw.getWorldPosition(new THREE.Vector3());
-    const inReach = target && s.shield <= 0 && target.distanceToAxis2D(blade.x, blade.z) < HIT_RADIUS + 0.7;
+    const inReach = target && s.shield <= 0 && target.distanceToAxis2D(blade.x, blade.z) < HIT_RADIUS + 1.4;
     const cutting = armed && inReach;
     s.chop = cutting ? (s.chop ?? 0) + dt : 0;
     const arm = refs.modules.saw;
