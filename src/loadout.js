@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GROUPS, ITEMS, ITEM_IDS, STATS, statsFor } from './items.js';
 import { t, itemName, itemBlurb, comboName } from './i18n.js';
-import { buildBoat, buildItemModel, frontFirst, buildMine, buildMissile, buildHook, aimTurret, spendMissile, reloadMissiles, updateMissileTips, missileDirection, updateAimers, stepGun, stepLaser, newHeat, gunDirection, laserDirection, launchMine, reloadMine, updateMineHolder } from './boatModel.js';
+import { buildBoat, buildItemModel, frontFirst, laserWobble, buildMine, buildMissile, buildHook, aimTurret, spendMissile, reloadMissiles, updateMissileTips, missileDirection, updateAimers, stepGun, stepLaser, newHeat, gunDirection, laserDirection, launchMine, reloadMine, updateMineHolder } from './boatModel.js';
 import { createWater, waveHeight } from './water.js';
 import { Effects } from './effects.js';
 import { SUN_DIR } from './world.js';
@@ -512,9 +512,9 @@ export class Loadout {
     for (let i = 0; i < shots; i++) {
       const o = b.gunMount.getWorldPosition(new THREE.Vector3());
       const dir = gunDirection(b, new THREE.Vector3());
-      dir.x += (Math.random() - 0.5) * 0.16;
-      dir.y += (Math.random() - 0.4) * 0.08;
-      dir.z += (Math.random() - 0.5) * 0.16;
+      dir.x += (Math.random() - 0.5) * 0.34;
+      dir.y += (Math.random() - 0.4) * 0.1;
+      dir.z += (Math.random() - 0.5) * 0.34;
       this.fx.beam(o, o.clone().addScaledVector(dir.normalize(), 28), 0xffe066, 0.12, 0.1, 2);
       this.sfx.play('shoot');
     }
@@ -535,10 +535,12 @@ export class Loadout {
     const dir = laserDirection(b, new THREE.Vector3());
     dir.y = 0;
     const reach = 15;
-    dir.normalize().setY(-(origin.y - 0.2) / reach).normalize();
+    const wobble = laserWobble(this.time, 0);
+    dir.normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), wobble.yaw);
+    dir.setY(wobble.lift * 2.5 - (origin.y - 0.2) / reach).normalize();
     const end = origin.clone().addScaledVector(dir, reach * Math.hypot(1, (origin.y - 0.2) / reach));
     this.fx.beam(origin, end, 0xff4fd8, 0.5, 0.05, 1);
-    this.fx.scorch(end.x, waveHeight(end.x, end.z, this.time) + 0.15, end.z);
+    if (end.y < 1.5) this.fx.scorch(end.x, waveHeight(end.x, end.z, this.time) + 0.15, end.z);
   }
 
   afterHeat(id, overheatedNow, mount) {

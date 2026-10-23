@@ -836,7 +836,7 @@ export function aimTurret(refs, id) {
   return offAxis ? AIM_DELAY : 0;
 }
 
-export const GUN_RATE = 0.075;
+export const GUN_RATE = 0.062;
 const HEAT_TIME = 2.5;
 
 export function newHeat() {
@@ -881,7 +881,7 @@ export function stepGun(gun, refs, dt, time) {
   }
   if (refs.minigun) refs.minigun.rotation.z += dt * (gun.firing ? 32 : 1.5);
   if (refs.gunSwivel) {
-    const sway = gun.firing ? Math.sin(time * 11) * 0.14 + Math.sin(time * 23) * 0.05 : 0;
+    const sway = gun.firing ? Math.sin(time * 11) * 0.22 + Math.sin(time * 23) * 0.09 : 0;
     refs.gunSwivel.rotation.y += (sway - refs.gunSwivel.rotation.y) * (1 - Math.exp(-20 * dt));
   }
   return { shots, overheatedNow };
@@ -890,6 +890,13 @@ export function stepGun(gun, refs, dt, time) {
 export function stepLaser(laser, refs, dt, time) {
   const overheatedNow = stepHeat(laser, refs, 'laser', dt, time);
   return { beaming: laser.firing && laser.delay <= 0, overheatedNow };
+}
+
+export function laserWobble(time, seed) {
+  const t = time + seed;
+  const yaw = Math.sin(t * 6.3) * 0.13 + Math.sin(t * 15.7) * 0.05;
+  const lift = Math.max(0, Math.sin(t * 2.9)) ** 3 * 0.16 + Math.max(0, Math.sin(t * 9.1)) * 0.03;
+  return { yaw, lift };
 }
 
 export function laserDirection(refs, out) {
