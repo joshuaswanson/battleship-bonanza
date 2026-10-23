@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { toon, outlined, INK } from './toon.js';
 import { waveHeight } from './water.js';
+import { fast } from './tuning.js';
 
 const PADS = [
   [0.03, 6], [0.15, -10], [0.27, 10], [0.4, -4], [0.52, -12], [0.64, 8], [0.77, -8], [0.89, 12],
@@ -162,7 +163,7 @@ export class TrackFeatures {
           if (Math.abs(along) > PAD_L / 2 + 1 || Math.abs(side) > PAD_W / 2 + 0.8) continue;
           f.used.set(b, race.time + 1.5);
           b.boost = Math.max(b.boost, 1.6);
-          b.speed = Math.max(b.speed, 0) + 14;
+          b.speed = Math.max(b.speed, 0) + fast(14);
           b.bump(2);
           const c = b.center();
           this.fx.ring(c.x, b.waterY + 0.3, c.z, 0xffd23f, 2, 8, 0.4);
@@ -170,12 +171,12 @@ export class TrackFeatures {
           this.sfx.play('boost', b.pos);
           if (b.isPlayer) race.emit('boost');
         } else {
-          if (along < 0 || along > RAMP_L / 2 + 1 || Math.abs(side) > RAMP_W / 2 + 0.6 || speed < 8) continue;
+          if (along < 0 || along > RAMP_L / 2 + 1 || Math.abs(side) > RAMP_W / 2 + 0.6 || speed < fast(8)) continue;
           f.used.set(b, race.time + 2);
-          const power = Math.min(1.4, speed / 40);
+          const power = Math.min(1.4, speed / fast(40));
           b.air = { t: 0, dur: 0.9 + power * 0.5, peak: 4 + power * 4, jet: false };
           b.boost = Math.max(b.boost, 1.2);
-          b.speed += 6;
+          b.speed += fast(6);
           this.fx.splash(b.pos.x, b.waterY, b.pos.z, 0.8);
           this.sfx.play('whoosh', b.pos);
           if (b.isPlayer) race.emit('ramp');

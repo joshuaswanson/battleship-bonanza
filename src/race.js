@@ -5,11 +5,12 @@ import { waveHeight } from './water.js';
 import { createAI, driveAI } from './ai.js';
 import { toon, glow } from './toon.js';
 import { Medkits } from './medkits.js';
+import { fast } from './tuning.js';
 import { TrackFeatures } from './features.js';
 
 export const LAPS = 3;
 export const MAX_HP = 100;
-export const BASE_SPEED = 44;
+export const BASE_SPEED = fast(44);
 const ARMOR_SPEED = 0.95;
 const OFF_COURSE_SPEED = 0.35;
 const OUTER_LIMIT = 45;
@@ -17,11 +18,13 @@ const SHORE_MARGIN = 2.2;
 const SAW_WORK = 3;
 const SAW_REST = 1.5;
 const EASY_HOOK = (o) => o.has('spikes') || o.has('jetpack');
-const REVERSE_SPEED = 14;
-const ACCEL = 22;
-const BRAKE = 40;
-const COAST = 9;
-const TURN_RATE = 1.9;
+const REVERSE_SPEED = fast(14);
+const ACCEL = fast(22);
+const BRAKE = fast(40);
+const COAST = fast(9);
+const TURN_RATE = 2.1;
+const BULLET_SPEED = fast(150);
+const HOOK_SPEED = fast(150);
 const GRIP = 3.6;
 const RADIUS = 2.05;
 const CIRCLE_OFFSET = 1.9;
@@ -690,7 +693,7 @@ export class Race {
       if (b.air) return false;
       this.tryDodge(b);
       b.air = { t: 0, dur: 1.5, peak: 7, jet: true };
-      b.speed += 12;
+      b.speed += fast(12);
       b.boost = Math.max(b.boost, 1.5);
       this.fx.splash(b.pos.x, b.waterY, b.pos.z, 1.2);
       this.sfx.play('whoosh', b.pos);
@@ -731,7 +734,7 @@ export class Race {
     const target = this.findTarget(b, { ...this.gunArc('machinegun', 80), filter: (o) => !o.has('camo') });
     if (target) {
       const c = target.center();
-      const lead = c.distanceTo(origin) / 150;
+      const lead = c.distanceTo(origin) / BULLET_SPEED;
       c.addScaledVector(target.vel, lead).sub(origin).normalize();
       dir.lerp(c, 0.45).normalize();
     }
@@ -739,8 +742,8 @@ export class Race {
     dir.y += (Math.random() - 0.3) * 0.06;
     dir.z += (Math.random() - 0.5) * 0.16;
     dir.normalize();
-    const vel = dir.clone().multiplyScalar(150).add(b.vel);
-    this.bullets.push({ pos: origin, prev: origin.clone(), start: origin.clone(), vel, owner: b, life: 0.6 });
+    const vel = dir.clone().multiplyScalar(BULLET_SPEED).add(b.vel);
+    this.bullets.push({ pos: origin, prev: origin.clone(), start: origin.clone(), vel, owner: b, life: 0.48 });
     this.fx.sparkBurst(origin.x, origin.y, origin.z, 0xffffff, 2);
     this.sfx.play('shoot', b.pos);
   }
@@ -802,7 +805,7 @@ export class Race {
     const c = new THREE.Vector3();
     this.missiles = this.missiles.filter((m) => {
       m.life -= dt;
-      m.speed = Math.min(85, m.speed + 60 * dt);
+      m.speed = Math.min(fast(85), m.speed + fast(60) * dt);
       if (m.fizzle > 0) {
         m.fizzle -= dt;
         if (m.fizzle <= 0) return this.explodeMissile(m, null, 0.5);
@@ -905,7 +908,7 @@ export class Race {
           this.hookPoint(h, c);
           h.dir.copy(c).sub(h.pos);
           const gap = h.dir.length();
-          h.pos.addScaledVector(h.dir.divideScalar(gap || 1), Math.min(gap, 150 * dt));
+          h.pos.addScaledVector(h.dir.divideScalar(gap || 1), Math.min(gap, HOOK_SPEED * dt));
           if (gap < 1.2) {
             h.phase = 'attached';
             h.time = 3;
@@ -913,8 +916,8 @@ export class Race {
             if (o.isPlayer) this.emit('feed', { text: `You hooked ${h.target.name}`, player: true });
           }
         } else {
-          h.pos.addScaledVector(h.dir, 140 * dt);
-          h.travelled += 140 * dt;
+          h.pos.addScaledVector(h.dir, HOOK_SPEED * dt);
+          h.travelled += HOOK_SPEED * dt;
           if (h.travelled > 70) h.phase = 'retract';
         }
       } else if (h.phase === 'attached') {
@@ -925,14 +928,14 @@ export class Race {
         const dz = t.pos.z - o.pos.z;
         const d = Math.hypot(dx, dz);
         if (d > 10) {
-          o.vel.x += (dx / d) * 75 * dt;
-          o.vel.z += (dz / d) * 75 * dt;
+          o.vel.x += (dx / d) * fast(75) * dt;
+          o.vel.z += (dz / d) * fast(75) * dt;
         }
         t.vel.multiplyScalar(Math.exp(-0.6 * dt));
         if (h.time <= 0 || d < 10 || !t.alive) {
           h.phase = 'retract';
           o.boost = Math.max(o.boost, 1.2);
-          o.speed += 10;
+          o.speed += fast(10);
         }
       } else {
         h.dir.copy(from).sub(h.pos);
@@ -942,7 +945,7 @@ export class Race {
           o.model.hookHead.visible = !this.hooks.some((other) => other !== h && other.owner === o);
           return false;
         }
-        h.pos.addScaledVector(h.dir.divideScalar(d), Math.min(d, 170 * dt));
+        h.pos.addScaledVector(h.dir.divideScalar(d), Math.min(d, fast(170) * dt));
       }
 
       h.mesh.position.copy(h.pos);
@@ -1184,7 +1187,7 @@ export class Race {
       const mesh = buildMissile();
       this.scene.add(mesh);
       spendMissile(b.model);
-      this.missiles.push({ pos, dir, speed: Math.max(30, b.speed + 8), owner: b, target: q.target, life: 5, fizzle: 0, mesh });
+      this.missiles.push({ pos, dir, speed: Math.max(fast(30), b.speed + fast(8)), owner: b, target: q.target, life: 5, fizzle: 0, mesh });
       this.sfx.play('missile', b.pos);
     }
   }
