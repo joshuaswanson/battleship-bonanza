@@ -31,12 +31,22 @@
       <section id="screen-howto" class="screen screen-dim hidden">
         <div class="panel howto">
           <h2 data-i18n="howto">How to play</h2>
-          <dl class="howto-keys">
-            <div><dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd data-i18n="drive">Drive</dd></div>
-            <div><dt><kbd>Esc</kbd></dt><dd data-i18n="pauseKey">Pause</dd></div>
-            <div><dt><kbd>O</kbd></dt><dd data-i18n="firstAttachment">First attachment</dd></div>
-            <div><dt><kbd>P</kbd></dt><dd data-i18n="secondAttachment">Second attachment</dd></div>
-          </dl>
+          <div class="howto-keys">
+            <div class="key-group">
+              <div class="key-t"><kbd class="k-w">W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></div>
+              <span data-i18n="drive">Drive</span>
+            </div>
+            <div class="key-group">
+              <div class="key-pair">
+                <div><kbd>O</kbd><span data-i18n="firstAttachment">Front attachment</span></div>
+                <div><kbd>P</kbd><span data-i18n="secondAttachment">Back attachment</span></div>
+              </div>
+            </div>
+            <div class="key-group">
+              <kbd class="k-esc">Esc</kbd>
+              <span data-i18n="pauseKey">Pause</span>
+            </div>
+          </div>
           <ul class="howto-tips">
             <li data-i18n="tip1"></li>
             <li data-i18n="tip2"></li>

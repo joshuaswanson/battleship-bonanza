@@ -661,30 +661,64 @@ kbd {
 }
 
 .howto-keys {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.6rem 1.5rem;
-  margin: 0 0 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 1rem;
+  margin: 0.2rem 0 1.2rem;
 }
 
-.howto-keys div {
+.key-group {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.45rem;
+  font-weight: 600;
+  text-align: center;
 }
 
-.howto-keys .wide {
-  grid-column: 1 / -1;
-}
-
-.howto-keys dt {
-  display: flex;
+.key-t {
+  display: grid;
+  grid-template-columns: repeat(3, auto);
   gap: 4px;
 }
 
-.howto-keys dd {
-  margin: 0;
-  font-weight: 500;
+.key-t .k-w {
+  grid-column: 2;
+}
+
+.key-t kbd:not(.k-w) {
+  grid-row: 2;
+}
+
+.howto-keys kbd {
+  min-width: 2.1rem;
+  height: 2.1rem;
+  display: inline-grid;
+  place-items: center;
+  font-size: 1rem;
+}
+
+.howto-keys .k-esc {
+  min-width: 3rem;
+}
+
+.key-pair {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.key-pair > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  width: 6.2rem;
+  line-height: 1.15;
+}
+
+.key-pair span {
+  font-size: 0.9rem;
 }
 
 .howto-tips {
