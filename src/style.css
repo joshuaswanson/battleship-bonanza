@@ -194,6 +194,10 @@ kbd {
   filter: none;
 }
 
+.logo-3d {
+  position: relative;
+}
+
 .title-boat {
   position: absolute;
   left: 5%;
@@ -644,7 +648,7 @@ kbd {
 .item-groups {
   display: flex;
   flex-direction: column;
-  gap: 1.4rem;
+  gap: 2.2rem;
 }
 
 .group-label {

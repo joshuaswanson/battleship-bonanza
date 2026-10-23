@@ -175,16 +175,7 @@ const geo = {
   roundBox: () => cachedGeometry('roundBox', () => new RoundedBoxGeometry(1, 1, 1, 3, 0.2)),
   ring: () => cachedGeometry('ring', () => new THREE.TorusGeometry(1, 0.1, 8, 32)),
   handle: () => cachedGeometry('handle', () => new THREE.TorusGeometry(0.34, 0.07, 8, 16, Math.PI)),
-  shield: () =>
-    cachedGeometry('shield', () => {
-      const g = new THREE.RingGeometry(0.2, 1.75, 40, 3);
-      const pos = g.attributes.position;
-      for (let i = 0; i < pos.count; i++) {
-        const r = Math.hypot(pos.getX(i), pos.getY(i));
-        pos.setZ(i, 0.35 * (1 - (r / 1.75) ** 2));
-      }
-      return g;
-    }),
+  shield: () => cachedGeometry('shield', () => new THREE.RingGeometry(0.2, 1.75, 40, 2).rotateY(Math.PI / 2)),
   octa: () => cachedGeometry('octa', () => new THREE.OctahedronGeometry(1, 0)),
   prong: () =>
     cachedGeometry('prong', () => {
@@ -584,7 +575,7 @@ const MODULES = {
       geo.shield(),
       new THREE.MeshBasicMaterial({ color: 0xff9ef0, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }),
     );
-    shield.position.set(0, 1.05, 2.55);
+    shield.position.set(0, 1.05, 2.25);
     m.add(shield);
     refs.sawShield = shield;
   },

@@ -19,11 +19,11 @@ import { ITEMS, ITEM_IDS } from './items.js';
 
 const $ = (id) => document.getElementById(id);
 for (const el of document.querySelectorAll('[data-logo]')) {
-  el.innerHTML = el.dataset.logo === '3d' ? logoSvg({ boat: false, main: false }) : logoSvg();
+  el.classList.add('logo-3d');
+  el.innerHTML = logoSvg({ boat: false, main: false });
+  new TitleBoat(el);
+  el.insertAdjacentHTML('beforeend', logoSvg({ art: false }).replace('class="logo"', 'class="logo logo-front" aria-hidden="true"'));
 }
-const titleLogo = document.querySelector('.title-logo');
-new TitleBoat(titleLogo);
-titleLogo.insertAdjacentHTML('beforeend', logoSvg({ art: false }).replace('class="logo"', 'class="logo logo-front" aria-hidden="true"'));
 
 const canvas = $('game');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });

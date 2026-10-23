@@ -499,7 +499,8 @@ export class Loadout {
       dir.x += (Math.random() - 0.5) * 0.16;
       dir.y += (Math.random() - 0.4) * 0.08;
       dir.z += (Math.random() - 0.5) * 0.16;
-      this.fx.beam(o, o.clone().addScaledVector(dir.normalize(), 28), 0xffe066, 0.12, 0.1, 2);
+      this.fx.beam(o, o.clone().addScaledVector(dir.normalize(), 28), 0xff7a1a, 0.2, 0.1, 0);
+      this.fx.sparkBurst(o.x, o.y, o.z, 0xffffff, 2);
       this.sfx.play('shoot');
     }
     this.afterHeat('machinegun', overheatedNow, b.gunMount);
