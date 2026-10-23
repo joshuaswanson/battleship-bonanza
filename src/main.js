@@ -488,6 +488,8 @@ if (import.meta.env.DEV) {
     },
     setup,
     sfx,
+    scene,
+    THREE,
     camera,
     cam,
     get world() {

@@ -234,7 +234,7 @@ function ribbon(track, from, to, levelAt, positions) {
   }
 }
 
-const lowLevel = (track) => (s) => track.level(s, track.inTunnel(s) && track.pastSeam(s) ? 1 : 0);
+const lowLevel = (track) => (s) => track.level(s, track.pastSeam(s) ? 1 : 0);
 const copyLevel = (track) => (s) => highLevel(track, s);
 
 function buildRiver(track) {
@@ -452,8 +452,8 @@ function buildMouth(track, k, levelAt, top) {
   return mesh;
 }
 
-function buildCap(track, k, levelAt, color) {
-  const i = track.wrap(k);
+function buildCap(track, k, levelAt, color, along = 0) {
+  const i = track.wrap(k + along);
   const w = track.halfWidth + 8;
   const geometry = new THREE.PlaneGeometry(w * 2, ARCH_TOP - ARCH_FLOOR + 2);
   const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide, fog: false }));
@@ -509,7 +509,7 @@ function buildTunnel(track) {
   group.add(buildShell(track, kIn, kOut));
   group.add(buildMouth(track, kIn, low, highLevel(track, river.tunnelIn) + LID));
   group.add(buildMouth(track, kOut, high, highLevel(track, river.tunnelOut) + LID));
-  group.add(buildCap(track, kOut, low, SKY_GREEN));
+  group.add(buildCap(track, kOut, low, 0xdff7ec, 3));
   group.add(buildCap(track, kSeam - GHOST, high, 0x15110d));
   return group;
 }
@@ -528,6 +528,7 @@ const FALL_VERT = /* glsl */ `
 
 const FALL_FRAG = /* glsl */ `
   uniform float uTime;
+  uniform float uAlpha;
   varying vec2 vUv;
   #include <common>
   #include <fog_pars_fragment>
@@ -538,11 +539,59 @@ const FALL_FRAG = /* glsl */ `
     float streak = smoothstep(0.5, 0.56, flow) * (1.0 - smoothstep(0.8, 0.9, flow));
     vec3 base = mix(vec3(0.42, 0.86, 0.84), vec3(0.75, 0.96, 0.95), vUv.y);
     vec3 color = mix(base, vec3(1.0), streak * 0.75 + smoothstep(0.82, 1.0, vUv.y) * 0.7 + smoothstep(0.08, 0.0, vUv.y) * 0.5);
-    gl_FragColor = vec4(color, 1.0);
+    gl_FragColor = vec4(color, mix(uAlpha, 1.0, streak));
     #include <colorspace_fragment>
     #include <fog_fragment>
   }
 `;
+
+function fallMaterial(alpha = 1) {
+  return new THREE.ShaderMaterial({
+    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uTime: { value: 0 }, uAlpha: { value: alpha } }]),
+    vertexShader: FALL_VERT,
+    fragmentShader: FALL_FRAG,
+    side: THREE.DoubleSide,
+    transparent: alpha < 1,
+    depthWrite: alpha >= 1,
+    fog: true,
+  });
+}
+
+function buildCurtain(track, k, levelAt) {
+  const i = track.wrap(k);
+  const base = levelAt(k * track.spacing);
+  const hw = CAVE_HALF + 6;
+  const top = LID + 2;
+  const cols = 28;
+  const rows = 16;
+  const positions = [];
+  const uvs = [];
+  const indices = [];
+  for (let r = 0; r <= rows; r++) {
+    const u = r / rows;
+    const along = -1 + 3.5 * Math.sqrt(u);
+    const y = base - 0.4 + top * (1 - u);
+    for (let c = 0; c <= cols; c++) {
+      const lat = -hw + (2 * hw * c) / cols;
+      positions.push(track.px[i] + track.tx[i] * along + track.nx[i] * lat, y, track.pz[i] + track.tz[i] * along + track.nz[i] * lat);
+      uvs.push(c / cols, u);
+    }
+  }
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const a = r * (cols + 1) + c;
+      indices.push(a, a + cols + 1, a + 1, a + 1, a + cols + 1, a + cols + 2);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(indices);
+  const material = fallMaterial(0.88);
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.renderOrder = 4;
+  return { mesh, material, base: { x: track.px[i] + track.tx[i] * 2.5, y: base, z: track.pz[i] + track.tz[i] * 2.5, nx: track.nx[i], nz: track.nz[i], hw: CAVE_HALF } };
+}
 
 function buildFalls(track, drop) {
   const s = drop.s;
@@ -576,13 +625,7 @@ function buildFalls(track, drop) {
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
   geometry.setIndex(indices);
-  const material = new THREE.ShaderMaterial({
-    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uTime: { value: 0 } }]),
-    vertexShader: FALL_VERT,
-    fragmentShader: FALL_FRAG,
-    side: THREE.DoubleSide,
-    fog: true,
-  });
+  const material = fallMaterial();
   const mesh = new THREE.Mesh(geometry, material);
   return { mesh, material, base: { x: px + tx * 10, y: bottom, z: pz + tz * 10, nx, nz, hw: track.halfWidth }, big: height > 8, lip: { i, top: bottom + height } };
 }
@@ -760,6 +803,12 @@ export function createJungle(group, track, fx) {
   const falls = track.river.drops.map((drop) => buildFalls(track, drop));
   for (const f of falls) group.add(f.mesh);
   group.add(buildTunnel(track));
+  const kExit = Math.round(track.river.tunnelOut / track.spacing);
+  const curtains = [buildCurtain(track, kExit, lowLevel(track)), buildCurtain(track, kExit, copyLevel(track))];
+  for (const c of curtains) {
+    group.add(c.mesh);
+    falls.push({ material: c.material, base: c.base, curtain: true });
+  }
 
   const batch = new Batcher();
 
@@ -836,7 +885,6 @@ export function createJungle(group, track, fx) {
     group.add(cloud);
   }
 
-  const base = big.base;
   return {
     fog,
     water,
@@ -851,10 +899,13 @@ export function createJungle(group, track, fx) {
         cloud.position.x += cloud.userData.speed * dt;
         if (cloud.position.x > 800) cloud.position.x = -800;
       }
-      for (let i = 0; i < 3; i++) {
-        if (Math.random() > dt * 30) continue;
-        const lat = (Math.random() - 0.5) * 2 * (base.hw + 4);
-        fx.mist(base.x + base.nx * lat, base.y + 0.5, base.z + base.nz * lat);
+      for (const f of [big, ...falls.filter((x) => x.curtain)]) {
+        const spot = f.base;
+        for (let i = 0; i < 3; i++) {
+          if (Math.random() > dt * (f.curtain ? 18 : 30)) continue;
+          const lat = (Math.random() - 0.5) * 2 * (spot.hw + 4);
+          fx.mist(spot.x + spot.nx * lat, spot.y + 0.5, spot.z + spot.nz * lat);
+        }
       }
     },
   };

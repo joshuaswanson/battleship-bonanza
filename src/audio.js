@@ -11,6 +11,7 @@ export class Sfx {
   }
 
   playMusic(on) {
+    if (on && !this.musicWanted) this.music.currentTime = 0;
     this.musicWanted = on;
     if (on && this.musicOn && this.ctx) this.music.play().catch(() => {});
     else this.music.pause();

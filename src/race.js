@@ -456,6 +456,20 @@ export class Race {
       if (b.isPlayer && before - level > 8) this.emit('falls');
     }
     b.surfaceLevel = level;
+    const sinceExit = b.riverS == null ? Infinity : t.ahead(t.river.tunnelOut, s);
+    const step = b.riverS == null ? Infinity : t.ahead(b.riverS, s);
+    if (sinceExit < step && step < 30) this.drench(b);
+    b.riverS = s;
+  }
+
+  drench(b) {
+    const c = b.center();
+    this.fx.splash(c.x, b.waterY + 0.3, c.z, 1.1);
+    for (let i = 0; i < 14; i++) {
+      this.fx.droplet(c.x + (Math.random() - 0.5) * 5, c.y + 4 + Math.random() * 4, c.z + (Math.random() - 0.5) * 5, b.vel.x * 0.6, -6 - Math.random() * 6, b.vel.z * 0.6, 0.45);
+    }
+    this.sfx.play('splash', b.pos);
+    if (b.burn) b.burn = null;
   }
 
   collideShores(b) {
@@ -523,6 +537,7 @@ export class Race {
     b.invuln = 2;
     b.air = null;
     b.surfaceLevel = null;
+    b.riverS = null;
     b.yOffset = 0;
     b.spinTime = 0;
     b.stun = 0;
