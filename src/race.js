@@ -13,7 +13,9 @@ export const MAX_HP = 100;
 export const BASE_SPEED = fast(44);
 const ARMOR_SPEED = 0.95;
 const REGEN_DELAY = 3;
-const REGEN_RATE = 6;
+const REGEN_START = 2;
+const REGEN_RAMP = 4;
+const REGEN_MAX = 22;
 const OFF_COURSE_SPEED = 0.35;
 const OUTER_LIMIT = 45;
 const SHORE_MARGIN = 2.2;
@@ -1136,8 +1138,10 @@ export class Race {
   }
 
   updateRegen(b, dt) {
-    b.regenerating = b.alive && this.state === 'racing' && b.hp < MAX_HP && this.time - b.lastFired > REGEN_DELAY;
-    if (b.regenerating) b.hp = Math.min(MAX_HP, b.hp + REGEN_RATE * dt);
+    const waited = this.time - b.lastFired - REGEN_DELAY;
+    b.regenerating = b.alive && this.state === 'racing' && b.hp < MAX_HP && waited > 0;
+    b.regenRate = b.regenerating ? Math.min(REGEN_MAX, REGEN_START + REGEN_RAMP * waited) : 0;
+    if (b.regenerating) b.hp = Math.min(MAX_HP, b.hp + b.regenRate * dt);
   }
 
   updateSulk(b, dt) {

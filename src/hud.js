@@ -246,7 +246,8 @@ export class Hud {
     this.hullFill.style.width = `${hull * 100}%`;
     this.hullFill.dataset.level = hull > 0.6 ? 'high' : hull > 0.3 ? 'mid' : 'low';
     this.hullFill.parentElement.parentElement.parentElement.classList.toggle('regen', p.regenerating);
-    const hullText = `${p.regenerating ? '+ ' : ''}${Math.ceil(hull * 100)}%`;
+    const pluses = p.regenerating ? '+'.repeat(p.regenRate < 8 ? 1 : p.regenRate < 16 ? 2 : 3) + ' ' : '';
+    const hullText = `${pluses}${Math.ceil(hull * 100)}%`;
     if (this.hullText.textContent !== hullText) this.hullText.textContent = hullText;
     this.updateLock(race, camera, dt);
     this.drawMap(race);
