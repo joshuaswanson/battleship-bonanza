@@ -360,6 +360,20 @@ export function buildBoat(color, items) {
   part(body, 'roundBox', camoMat ?? mats.paint, 0, sternTop + 0.35, -HULL_L - 0.55, 0.85, 0.95, 0.85, 0.04);
   part(body, 'roundBox', mats.white, 0, sternTop + 0.88, -HULL_L - 0.55, 0.7, 0.18, 0.7, 0.03);
 
+  const towRing = (x, y, z, turn) => {
+    part(body, 'cylinder', mats.dark, x, y + 0.2, z, 0.09, 0.4, 0.09, 0.02);
+    const ring = part(body, 'ring', mats.metal, x, y + 0.62, z, 0.3, 0.3, 0.3, 0.02);
+    ring.rotation.y = turn;
+    const anchor = new THREE.Object3D();
+    anchor.position.set(x, y + 0.62, z);
+    body.add(anchor);
+    return anchor;
+  };
+  const towRings = [
+    towRing(0, sternTop + 0.97, -HULL_L - 0.55, 0),
+    towRing(0, sheer(HULL_L - 0.9) + 0.02, HULL_L - 0.9, Math.PI / 2),
+  ];
+
   const flagZ = -HULL_L + 0.6;
   const flagX = halfWidth(flagZ) - 0.35;
   part(body, 'cylinder', mats.dark, flagX, sternTop + 0.8, flagZ, 0.05, 1.6, 0.05, 0.02);
@@ -368,7 +382,7 @@ export function buildBoat(color, items) {
   body.add(flag);
   part(flag, 'cone', mats.paint, 0, 0, -0.45, 0.04, 0.9, 0.3, 0.02).rotation.x = -Math.PI / 2;
 
-  const refs = { root, body, flag, saw: null, flames: [], spinners: [], materials: [], parts: {}, hookMarkers: [], aimers: [], heatMats: {}, swivels: [], busy: {}, missileTips: [] };
+  const refs = { root, body, flag, towRings, saw: null, flames: [], spinners: [], materials: [], parts: {}, hookMarkers: [], aimers: [], heatMats: {}, swivels: [], busy: {}, missileTips: [] };
 
   if (camoMat) {
     mats.paint = camoMat;

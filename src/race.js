@@ -10,7 +10,10 @@ import { TrackFeatures } from './features.js';
 export const LAPS = 3;
 export const MAX_HP = 100;
 export const BASE_SPEED = 44;
-const ARMOR_SPEED = 0.76;
+const ARMOR_SPEED = 0.88;
+const SAW_WORK = 3;
+const SAW_REST = 1.5;
+const EASY_HOOK = (o) => o.has('spikes') || o.has('jetpack');
 const REVERSE_SPEED = 14;
 const ACCEL = 22;
 const BRAKE = 40;
@@ -594,11 +597,7 @@ export class Race {
 
     grapple(b) {
       aimTurret(b.model, 'grapple');
-      const target = this.findTarget(b, {
-        range: 120,
-        minDot: 0.55,
-        filter: (o) => o.has('spikes') || o.has('jetpack'),
-      });
+      const target = this.findTarget(b, this.hookSpec(b));
       const anchor = target ? this.nearestHookMarker(target, b.pos) : null;
       const mesh = buildHook();
       b.model.hookHead.visible = false;
@@ -622,7 +621,7 @@ export class Race {
     },
 
     emp(b) {
-      this.pulses.push({ owner: b, age: 0, life: 0.5, radius: 26 });
+      this.pulses.push({ owner: b, age: 0, life: 0.5, radius: 26, jolted: new Set() });
       this.fx.followRing(b.pos, 0x5ff4ff, 26, 0.7);
       this.fx.followRing(b.pos, 0xffffff, 18, 0.55);
       this.fx.shell(b.pos, 0x5ff4ff, 26, 0.7);
@@ -673,7 +672,7 @@ export class Race {
     const dir = gunDirection(b.model, new THREE.Vector3());
     dir.y = 0;
     dir.normalize();
-    const target = this.findTarget(b, this.gunArc('machinegun', 80));
+    const target = this.findTarget(b, { ...this.gunArc('machinegun', 80), filter: (o) => !o.has('camo') });
     if (target) {
       const c = target.center();
       const lead = c.distanceTo(origin) / 150;
@@ -944,7 +943,7 @@ export class Race {
     let best = null;
     let bestD = Infinity;
     const p = new THREE.Vector3();
-    for (const marker of target.model.hookMarkers) {
+    for (const marker of [...target.model.hookMarkers, ...target.model.towRings]) {
       const d = marker.getWorldPosition(p).distanceToSquared(from);
       if (d < bestD) {
         bestD = d;
@@ -985,6 +984,15 @@ export class Race {
           o.vel.z += (dz / d) * 16;
         }
         this.fx.sparkBurst(h.pos.x, h.pos.y, h.pos.z, 0x5ff4ff, 10);
+      }
+      for (const o of this.boats) {
+        if (o === p.owner || !o.alive || p.jolted.has(o)) continue;
+        if (o.center(new THREE.Vector3()).distanceTo(center) > r + 1.5) continue;
+        p.jolted.add(o);
+        o.stun = Math.max(o.stun, 1.1);
+        o.flash = 0.6;
+        const oc = o.center();
+        this.fx.sparkBurst(oc.x, oc.y, oc.z, 0x5ff4ff, 12);
       }
       return p.age < p.life;
     });
@@ -1054,6 +1062,14 @@ export class Race {
 
   gunArc(id, range) {
     return { range, minDot: id === 'laser' ? 0.97 : 0.88 };
+  }
+
+  hookSpec(b) {
+    return {
+      range: 120,
+      minDot: 0.55,
+      filter: (o) => EASY_HOOK(o) || Math.hypot(o.pos.x - b.pos.x, o.pos.z - b.pos.z) < 70,
+    };
   }
 
   relativeAngle(b, o) {
@@ -1150,7 +1166,15 @@ export class Race {
 
     s.sound -= dt;
     const blade = refs.saw.getWorldPosition(new THREE.Vector3());
-    const cutting = target && s.shield <= 0 && target.distanceToAxis2D(blade.x, blade.z) < HIT_RADIUS + 0.7;
+    s.rest = Math.max(0, (s.rest ?? 0) - dt);
+    const inReach = target && s.shield <= 0 && target.distanceToAxis2D(blade.x, blade.z) < HIT_RADIUS + 0.7;
+    const cutting = inReach && s.rest <= 0;
+    s.work = cutting ? (s.work ?? 0) + dt : Math.max(0, (s.work ?? 0) - dt * 0.5);
+    if (s.work >= SAW_WORK) {
+      s.work = 0;
+      s.rest = SAW_REST;
+      for (let i = 0; i < 3; i++) this.fx.smoke(blade.x, blade.y + 0.4, blade.z);
+    }
     s.chop = cutting ? (s.chop ?? 0) + dt : 0;
     const arm = refs.sawYaw.children[0];
     const pitch = cutting ? Math.sin(s.chop * 16) * 0.2 + 0.08 : 0;
@@ -1171,7 +1195,7 @@ export class Race {
         }
       }
     }
-    const spinning = !!target || s.shield > 0;
+    const spinning = (!!target && s.rest <= 0) || s.shield > 0;
     s.spin += ((spinning ? 42 : 0) - s.spin) * (1 - Math.exp(-(spinning ? 6 : 2) * dt));
     refs.saw.rotation.x += s.spin * dt;
 

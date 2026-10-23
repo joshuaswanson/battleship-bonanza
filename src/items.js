@@ -105,7 +105,7 @@ export const ITEMS = {
     name: 'Spikes',
     group: 'defense',
     passive: true,
-    blurb: 'Keep other boats at a distance AND look intimidating. Watch out for grappling hooks though.',
+    blurb: 'Keep other boats at a distance AND look intimidating. Grappling hooks love them though.',
   },
   armor: {
     stats: { tough: 3, speed: -2 },
@@ -119,13 +119,13 @@ export const ITEMS = {
     name: 'Camo',
     group: 'defense',
     passive: true,
-    blurb: "Heat seeking missiles can't find you. As far as they know, you're just a floating shrub.",
+    blurb: "Missiles and the minimap can't find you, and machine guns won't lock on. As far as anyone knows, you're just a floating shrub.",
   },
   jetpack: {
     stats: { speed: 1, tricks: 2 },
     name: 'Jet pack',
     group: 'gadgets',
-    cooldown: 6,
+    cooldown: 8,
     blurb: "Who said boats can't fly? Leap over sea mines and dodge missiles and grappling hooks.",
   },
   grapple: {
@@ -133,14 +133,14 @@ export const ITEMS = {
     name: 'Grappling hook',
     group: 'gadgets',
     cooldown: 5,
-    blurb: 'Snag a boat with spikes or a jet pack and get slingshotted right past it. Free ride!',
+    blurb: 'Snag any boat and get slingshotted right past it. Boats with spikes or a jet pack are extra easy to catch.',
   },
   emp: {
     stats: { tough: 1, tricks: 2 },
     name: 'EMP',
     group: 'gadgets',
     cooldown: 7,
-    blurb: 'A big zappy bubble that swats away missiles and grappling hooks. Rude, but effective.',
+    blurb: 'A big zappy bubble that swats away missiles and grappling hooks, and jolts anyone nearby. Rude, but effective.',
   },
   machinegun: {
     stats: { punch: 2 },

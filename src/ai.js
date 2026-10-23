@@ -100,12 +100,7 @@ function shouldUse(race, b, id, ai) {
       return !!t && r < ai.aggression * 0.8;
     }
     case 'grapple': {
-      const t = race.findTarget(b, {
-        range: 110,
-        minDot: 0.6,
-        minRange: 18,
-        filter: (o) => o.has('spikes') || o.has('jetpack'),
-      });
+      const t = race.findTarget(b, { ...race.hookSpec(b), minRange: 18 });
       return !!t && r < ai.aggression;
     }
     case 'emp': {
