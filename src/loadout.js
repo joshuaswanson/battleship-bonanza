@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GROUPS, ITEMS, ITEM_IDS, STATS, statsFor, comboName } from './items.js';
-import { buildBoat, buildItemModel, buildMine, buildMissile, buildHook, aimTurret, updateAimers, stepGun, stepLaser, newHeat, gunDirection, laserDirection, launchMine, reloadMine, updateMineHolder } from './boatModel.js';
+import { buildBoat, buildItemModel, buildMine, buildMissile, buildHook, aimTurret, spendMissile, reloadMissiles, updateMissileTips, missileDirection, updateAimers, stepGun, stepLaser, newHeat, gunDirection, laserDirection, launchMine, reloadMine, updateMineHolder } from './boatModel.js';
 import { createWater, waveHeight } from './water.js';
 import { Effects } from './effects.js';
 import { SUN_DIR } from './world.js';
@@ -369,12 +369,15 @@ export class Loadout {
         break;
       case 'missiles': {
         const mesh = buildMissile();
-        aimTurret(b, 'missiles');
+        if (!b.missileTips.some((t) => t.visible)) return;
+        this.busy.missiles = 1.6;
+        spendMissile(b);
+        this.after(ITEMS.missiles.cooldown, () => this.boat === b && reloadMissiles(b));
         b.missileMount.getWorldPosition(mesh.position);
         this.scene.add(mesh);
         this.movers.push({
           mesh,
-          vel: fwd.clone().multiplyScalar(8).addScaledVector(up, 22),
+          vel: missileDirection(b, new THREE.Vector3()).multiplyScalar(26),
           gravity: 9,
           life: 1.2,
           trail: true,
@@ -480,6 +483,7 @@ export class Loadout {
 
   swivelIdle(dt) {
     this.boat.swivels.forEach((s, i) => {
+      if (s.id === 'jetpack') return;
       this.busy[s.id] = Math.max(0, (this.busy[s.id] ?? 0) - dt);
       const busy = this.busy[s.id] > 0 || this.heat[s.id]?.trigger;
       s.group.rotation.y = Math.atan2(Math.sin(s.group.rotation.y), Math.cos(s.group.rotation.y));
@@ -499,8 +503,7 @@ export class Loadout {
       dir.x += (Math.random() - 0.5) * 0.16;
       dir.y += (Math.random() - 0.4) * 0.08;
       dir.z += (Math.random() - 0.5) * 0.16;
-      this.fx.beam(o, o.clone().addScaledVector(dir.normalize(), 28), 0xff7a1a, 0.2, 0.1, 0);
-      this.fx.sparkBurst(o.x, o.y, o.z, 0xffffff, 2);
+      this.fx.beam(o, o.clone().addScaledVector(dir.normalize(), 28), 0xffe066, 0.12, 0.1, 2);
       this.sfx.play('shoot');
     }
     this.afterHeat('machinegun', overheatedNow, b.gunMount);
@@ -604,6 +607,7 @@ export class Loadout {
     updateAimers(b, dt);
     this.swivelIdle(dt);
     updateMineHolder(b, dt);
+    updateMissileTips(b, dt);
     for (const id of ['machinegun', 'laser']) {
       this.autoFire[id] = Math.max(0, this.autoFire[id] - dt);
       const slot = this.setup.items.indexOf(id);

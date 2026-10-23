@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { ITEMS } from './items.js';
-import { buildBoat, buildMine, buildMissile, buildHook, updateAimers, aimTurret, stepGun, stepLaser, newHeat, gunDirection, laserDirection, launchMine, reloadMine, updateMineHolder, HULL_L } from './boatModel.js';
+import { buildBoat, buildMine, buildMissile, buildHook, aimTurret, spendMissile, reloadMissiles, updateMissileTips, missileDirection, stepGun, stepLaser, newHeat, gunDirection, laserDirection, launchMine, reloadMine, updateMineHolder, HULL_L } from './boatModel.js';
 import { waveHeight } from './water.js';
 import { createAI, driveAI } from './ai.js';
-import { toon, glow, outlineMaterial } from './toon.js';
+import { toon, glow } from './toon.js';
 import { Medkits } from './medkits.js';
 import { TrackFeatures } from './features.js';
 
@@ -25,6 +25,10 @@ const KO_TIME = 2.2;
 const LASER_REACH = 75;
 const DODGE_WINDOW = 0.45;
 const SAW_RANGE = 9;
+const WATCH_RANGE = 70;
+const FRONT_LIMIT = 1.9;
+const REAR_ARC = 1.75;
+const REAR_MAX_DOT = Math.cos(Math.PI - REAR_ARC);
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const approach = (v, target, step) => (v < target ? Math.min(target, v + step) : Math.max(target, v - step));
@@ -70,6 +74,24 @@ class Boat {
     this.isPlayer = !!def.isPlayer;
     this.model = buildBoat(def.color, def.items);
     scene.add(this.model.root);
+    this.turrets = this.model.swivels
+      .filter((s) => s.id !== 'saw' && s.id !== 'jetpack')
+      .map((s) => {
+        const aimer = this.model.aimers.find((a) => a.id === s.id);
+        if (aimer) aimer.module.rotation.y = 0;
+        const rest = aimer ? Math.PI : 0;
+        s.group.rotation.y = rest;
+        const rearGun = this.model.rearGuns.has(s.id);
+        return {
+          id: s.id,
+          group: s.group,
+          rest,
+          rearGun,
+          center: rearGun ? Math.PI : 0,
+          limit: rearGun ? REAR_ARC : s.front ? FRONT_LIMIT : Math.PI,
+        };
+      });
+    this.missileQueue = [];
     this.shadow = new THREE.Mesh(SHADOW_GEOMETRY, shadowMaterial());
     this.shadow.renderOrder = 1;
     scene.add(this.shadow);
@@ -184,10 +206,10 @@ export class Race {
     this.lastCount = 5;
     this.order = [...this.boats];
 
-    const slug = new THREE.CapsuleGeometry(0.5, 1, 4, 10).rotateX(Math.PI / 2);
-    this.bulletMesh = new THREE.InstancedMesh(slug, toon(0xff7a1a, { emissive: 0xff5a00, emissiveIntensity: 0.6 }), 400);
-    this.bulletOutline = new THREE.InstancedMesh(slug, outlineMaterial(0.12), 400);
-    this.bulletOutline.instanceMatrix = this.bulletMesh.instanceMatrix;
+    const streak = new THREE.CylinderGeometry(1, 1, 1, 8, 1, true).rotateX(Math.PI / 2).translate(0, 0, -0.5);
+    const tracer = (color) => new THREE.MeshBasicMaterial({ color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+    this.bulletMesh = new THREE.InstancedMesh(streak, tracer(0xffe066), 400);
+    this.bulletOutline = new THREE.InstancedMesh(streak, tracer(0xffffff), 400);
     for (const mesh of [this.bulletMesh, this.bulletOutline]) {
       mesh.frustumCulled = false;
       mesh.count = 0;
@@ -273,6 +295,7 @@ export class Race {
       const was = b.cooldowns[i];
       b.cooldowns[i] = Math.max(0, was - dt);
       if (was > 0 && b.cooldowns[i] === 0 && b.items[i] === 'mines') reloadMine(b.model);
+      if (was > 0 && b.cooldowns[i] === 0 && b.items[i] === 'missiles') reloadMissiles(b.model);
     }
     b.invuln = Math.max(0, b.invuln - dt);
     b.flash = Math.max(0, b.flash - dt * 5);
@@ -527,7 +550,7 @@ export class Race {
     return this.hooks.some((h) => h.phase === 'attached' && h.target === b);
   }
 
-  findTarget(b, { range, minDot, filter = null, minRange = 0 }) {
+  findTarget(b, { range, minDot, maxDot = 1, filter = null, minRange = 0 }) {
     let best = null;
     let bestD = range;
     const fx = Math.sin(b.heading);
@@ -538,7 +561,8 @@ export class Race {
       const dz = o.pos.z - b.pos.z;
       const d = Math.hypot(dx, dz);
       if (d > bestD || d < minRange || d === 0) continue;
-      if ((dx * fx + dz * fz) / d < minDot) continue;
+      const dot = (dx * fx + dz * fz) / d;
+      if (dot < minDot || dot > maxDot) continue;
       if (filter && !filter(o)) continue;
       best = o;
       bestD = d;
@@ -561,14 +585,10 @@ export class Race {
 
   actions = {
     missiles(b) {
-      aimTurret(b.model, 'missiles');
-      const target = this.findTarget(b, { range: 180, minDot: 0.25, filter: (o) => !o.has('camo') });
-      const pos = b.model.missileMount.getWorldPosition(new THREE.Vector3());
-      const mesh = buildMissile();
-      this.scene.add(mesh);
-      const dir = new THREE.Vector3(Math.sin(b.heading), 0.6, Math.cos(b.heading)).normalize();
-      this.missiles.push({ pos, dir, speed: Math.max(30, b.speed + 8), owner: b, target, life: 5, fizzle: 0, mesh });
-      this.sfx.play('missile', b.pos);
+      const target = this.findTarget(b, { range: 180, minDot: -1, filter: (o) => !o.has('camo') });
+      b.model.busy.missiles = 1.4;
+      b.missileAim = target ? this.relativeAngle(b, target) : 0;
+      b.missileQueue.push({ target, wait: 0.28 });
     },
 
     mines(b) {
@@ -664,7 +684,7 @@ export class Race {
     const dir = gunDirection(b.model, new THREE.Vector3());
     dir.y = 0;
     dir.normalize();
-    const target = this.findTarget(b, { range: 80, minDot: 0.88 });
+    const target = this.findTarget(b, this.gunArc(b, 'machinegun', 80));
     if (target) {
       const c = target.center();
       const lead = c.distanceTo(origin) / 150;
@@ -676,7 +696,7 @@ export class Race {
     dir.z += (Math.random() - 0.5) * 0.16;
     dir.normalize();
     const vel = dir.clone().multiplyScalar(150).add(b.vel);
-    this.bullets.push({ pos: origin, prev: origin.clone(), vel, owner: b, life: 0.6 });
+    this.bullets.push({ pos: origin, prev: origin.clone(), start: origin.clone(), vel, owner: b, life: 0.6 });
     this.fx.sparkBurst(origin.x, origin.y, origin.z, 0xffffff, 2);
     this.sfx.play('shoot', b.pos);
   }
@@ -686,7 +706,8 @@ export class Race {
     const seg = new THREE.Vector3();
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
-    const s = new THREE.Vector3(0.3, 0.3, 1.1);
+    const s = new THREE.Vector3(0.12, 0.12, 9);
+    const core = new THREE.Vector3(0.05, 0.05, 9);
     const z = new THREE.Vector3(0, 0, 1);
     const dir = new THREE.Vector3();
     let n = 0;
@@ -718,13 +739,17 @@ export class Race {
       if (n < 400) {
         dir.copy(bullet.vel).normalize();
         q.setFromUnitVectors(z, dir);
+        s.z = core.z = Math.min(9, bullet.pos.distanceTo(bullet.start));
         m.compose(bullet.pos, q, s);
-        this.bulletMesh.setMatrixAt(n++, m);
+        this.bulletMesh.setMatrixAt(n, m);
+        m.compose(bullet.pos, q, core);
+        this.bulletOutline.setMatrixAt(n++, m);
       }
       return true;
     });
     this.bulletMesh.count = Math.min(n, 400);
     this.bulletOutline.count = this.bulletMesh.count;
+    this.bulletOutline.instanceMatrix.needsUpdate = true;
     this.bulletMesh.instanceMatrix.needsUpdate = true;
   }
 
@@ -1038,6 +1063,72 @@ export class Race {
     this.damage(victim, amount, b, 'laser', { knockX: dir.x * 4, knockZ: dir.z * 4, stun: 0.4, spin: amount > 10 ? 0.5 : 0 });
   }
 
+  gunArc(b, id, range) {
+    return b.model.rearGuns.has(id) ? { range, minDot: -1, maxDot: REAR_MAX_DOT } : { range, minDot: id === 'laser' ? 0.97 : 0.88 };
+  }
+
+  relativeAngle(b, o) {
+    const dx = o.pos.x - b.pos.x;
+    const dz = o.pos.z - b.pos.z;
+    return Math.atan2(dx * Math.cos(b.heading) - dz * Math.sin(b.heading), dx * Math.sin(b.heading) + dz * Math.cos(b.heading));
+  }
+
+  updateTurrets(b, dt) {
+    const busy = b.model.busy;
+    let watched = null;
+    let best = WATCH_RANGE;
+    if (b.alive) {
+      for (const o of this.boats) {
+        if (o === b || !o.alive) continue;
+        const d = Math.hypot(o.pos.x - b.pos.x, o.pos.z - b.pos.z);
+        if (d < best) {
+          best = d;
+          watched = o;
+        }
+      }
+    }
+    const watchAngle = watched ? this.relativeAngle(b, watched) : null;
+    for (const t of b.turrets) {
+      busy[t.id] = Math.max(0, (busy[t.id] ?? 0) - dt);
+      const firing = (t.id === 'machinegun' && b.gun.trigger) || (t.id === 'laser' && b.laser.trigger);
+      let target;
+      let rate = 5;
+      if (t.id === 'missiles' && busy.missiles > 0) {
+        target = b.missileAim;
+        rate = 16;
+      } else if (firing || busy[t.id] > 0) {
+        const inArc = watchAngle !== null && Math.abs(wrapAngle(watchAngle - t.center)) <= t.limit;
+        target = t.rearGun ? (inArc ? watchAngle : Math.PI) : 0;
+        rate = 16;
+      } else if (watchAngle !== null) {
+        target = watchAngle;
+      } else {
+        target = t.rest;
+      }
+      if (t.limit >= Math.PI) {
+        const current = t.group.rotation.y;
+        t.group.rotation.y = current + wrapAngle(target - current) * (1 - Math.exp(-rate * dt));
+      } else {
+        const want = clamp(wrapAngle(target - t.center), -t.limit, t.limit);
+        const now = wrapAngle(t.group.rotation.y - t.center);
+        t.group.rotation.y = t.center + now + (want - now) * (1 - Math.exp(-rate * dt));
+      }
+    }
+    for (const q of [...b.missileQueue]) {
+      q.wait -= dt;
+      if (q.wait > 0) continue;
+      b.missileQueue.splice(b.missileQueue.indexOf(q), 1);
+      if (!b.alive) continue;
+      const pos = b.model.missileMount.getWorldPosition(new THREE.Vector3());
+      const dir = missileDirection(b.model, new THREE.Vector3());
+      const mesh = buildMissile();
+      this.scene.add(mesh);
+      spendMissile(b.model);
+      this.missiles.push({ pos, dir, speed: Math.max(30, b.speed + 8), owner: b, target: q.target, life: 5, fizzle: 0, mesh });
+      this.sfx.play('missile', b.pos);
+    }
+  }
+
   updateSaw(b, dt) {
     const refs = b.model;
     const s = b.sawState;
@@ -1167,8 +1258,9 @@ export class Race {
     root.visible = b.invuln > 0 && b.alive ? Math.floor(b.invuln * 12) % 2 === 0 : true;
 
     if (b.model.sawYaw) this.updateSaw(b, dt);
-    updateAimers(b.model, dt);
+    this.updateTurrets(b, dt);
     updateMineHolder(b.model, dt);
+    updateMissileTips(b.model, dt);
 
     const jetOn = !!b.air?.jet;
     for (const flame of flames) {

@@ -16,6 +16,7 @@ const SOLO_MOUNT = -0.35;
 const MOUNT_RANK = { saw: -1, missiles: 0.4, mines: 0.5, jetpack: 1 };
 const mountRank = (id) => MOUNT_RANK[id] ?? 0;
 const AIMED = new Set(['machinegun', 'laser', 'missiles', 'grapple']);
+const REAR_GUNS = new Set(['machinegun', 'laser']);
 const MODULE_SCALE = 1.3;
 
 export function halfWidth(z) {
@@ -368,7 +369,7 @@ export function buildBoat(color, items) {
   body.add(flag);
   part(flag, 'cone', mats.paint, 0, 0, -0.45, 0.04, 0.9, 0.3, 0.02).rotation.x = -Math.PI / 2;
 
-  const refs = { root, body, flag, saw: null, flames: [], spinners: [], materials: [], parts: {}, hookMarkers: [], aimers: [], heatMats: {}, swivels: [] };
+  const refs = { root, body, flag, saw: null, flames: [], spinners: [], materials: [], parts: {}, hookMarkers: [], aimers: [], heatMats: {}, swivels: [], busy: {}, rearGuns: new Set(), missileTips: [] };
 
   if (camoMat) {
     mats.paint = camoMat;
@@ -400,7 +401,8 @@ export function buildBoat(color, items) {
     const yaw = new THREE.Group();
     yaw.position.y = baseH;
     turret.add(yaw);
-    refs.swivels.push({ id, group: yaw });
+    refs.swivels.push({ id, group: yaw, front: z > 0 });
+    if (raised && REAR_GUNS.has(id)) refs.rearGuns.add(id);
     const module = new THREE.Group();
     module.scale.setScalar(MODULE_SCALE);
     yaw.add(module);
@@ -580,7 +582,7 @@ const MODULES = {
     refs.sawShield = shield;
   },
 
-  missiles(m, mats) {
+  missiles(m, mats, refs) {
     const launcher = new THREE.Group();
     launcher.position.set(0, 0.75, 0);
     launcher.rotation.x = -0.3;
@@ -592,10 +594,16 @@ const MODULES = {
     for (const x of [-0.35, 0.35]) {
       for (const y of [-0.22, 0.22]) {
         part(launcher, 'cylinder', mats.ink, x, y, 0.8, 0.22, 0.06, 0.22, 0).rotation.x = Math.PI / 2;
-        part(launcher, 'cone', red, x, y, 0.98, 0.17, 0.4, 0.17, 0.03).rotation.x = Math.PI / 2;
+        const tip = part(launcher, 'cone', red, x, y, 0.98, 0.17, 0.4, 0.17, 0.03);
+        tip.rotation.x = Math.PI / 2;
+        tip.userData.restZ = 0.98;
+        refs.missileTips.push(tip);
       }
     }
-    return { missileMount: new THREE.Vector3(0, 1.2, 1.0) };
+    const mount = new THREE.Object3D();
+    mount.position.set(0, 0, 1.3);
+    launcher.add(mount);
+    refs.missileMount = mount;
   },
 
   mines(m, mats, refs) {
@@ -735,6 +743,35 @@ export function buildItemModel(id, color) {
 }
 
 export const AIM_DELAY = 0.3;
+
+export function spendMissile(refs) {
+  const tip = refs.missileTips.find((t) => t.visible);
+  if (tip) tip.visible = false;
+}
+
+export function reloadMissiles(refs) {
+  for (const tip of refs.missileTips) {
+    if (tip.visible) continue;
+    tip.visible = true;
+    tip.userData.rise = 0;
+    tip.position.z = tip.userData.restZ - 0.7;
+  }
+}
+
+export function updateMissileTips(refs, dt) {
+  for (const tip of refs.missileTips) {
+    if (tip.userData.rise == null) continue;
+    tip.userData.rise = Math.min(1, tip.userData.rise + dt / 0.55);
+    const k = tip.userData.rise;
+    const ease = 1 + 2.4 * Math.pow(k - 1, 3) + 1.4 * Math.pow(k - 1, 2);
+    tip.position.z = tip.userData.restZ - 0.7 * (1 - ease);
+    if (k >= 1) tip.userData.rise = null;
+  }
+}
+
+export function missileDirection(refs, out) {
+  return out.set(0, 0, 1).applyQuaternion(refs.missileMount.parent.getWorldQuaternion(new THREE.Quaternion()));
+}
 const MINE_REST_Y = 1.05;
 
 export function launchMine(refs) {
@@ -761,11 +798,17 @@ export function updateMineHolder(refs, dt) {
 }
 
 export function aimTurret(refs, id) {
+  if (refs.rearGuns.has(id)) {
+    refs.busy[id] = 1.9;
+    return 0;
+  }
   const aimer = refs.aimers.find((a) => a.id === id);
-  if (!aimer) return 0;
-  const idle = aimer.hold <= 0;
-  aimer.hold = 1.9;
-  return idle ? AIM_DELAY : 0;
+  const swivel = refs.swivels.find((s) => s.id === id);
+  const yaw = (swivel?.group.rotation.y ?? 0) + (aimer?.module.rotation.y ?? 0);
+  const offAxis = Math.abs(Math.atan2(Math.sin(yaw), Math.cos(yaw))) > 0.25;
+  if (aimer) aimer.hold = 1.9;
+  refs.busy[id] = 1.9;
+  return offAxis ? AIM_DELAY : 0;
 }
 
 export const GUN_RATE = 0.075;

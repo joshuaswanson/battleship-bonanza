@@ -77,12 +77,12 @@ function avoidMines(race, b, ai) {
 function useItems(race, b, ai) {
   for (let slot = 0; slot < 2; slot++) {
     if (b.items[slot] === 'machinegun') {
-      const t = race.findTarget(b, { range: 75, minDot: 0.85 });
+      const t = race.findTarget(b, race.gunArc(b, 'machinegun', 75));
       b.gun.trigger = !!t && !t.has('armor') && b.gun.heat < 0.7 && Math.random() < ai.aggression + 0.3;
       continue;
     }
     if (b.items[slot] === 'laser') {
-      const t = race.findTarget(b, { range: 70, minDot: 0.97 });
+      const t = race.findTarget(b, race.gunArc(b, 'laser', 70));
       const bounces = t?.has('saw') && !b.has('saw');
       b.laser.trigger = !!t && !bounces && b.laser.heat < 0.7 && Math.random() < ai.aggression + 0.3;
       continue;
@@ -96,7 +96,7 @@ function shouldUse(race, b, id, ai) {
   const r = Math.random();
   switch (id) {
     case 'missiles': {
-      const t = race.findTarget(b, { range: 170, minDot: 0.25, filter: (o) => !o.has('camo') });
+      const t = race.findTarget(b, { range: 170, minDot: -1, filter: (o) => !o.has('camo') });
       return !!t && r < ai.aggression * 0.8;
     }
     case 'grapple': {

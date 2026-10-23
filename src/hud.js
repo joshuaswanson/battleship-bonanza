@@ -13,7 +13,7 @@ export function formatTime(seconds) {
 const $ = (id) => document.getElementById(id);
 
 const TARGETING = {
-  missiles: { range: 180, minDot: 0.25, filter: (o) => !o.has('camo') },
+  missiles: { range: 180, minDot: -1, filter: (o) => !o.has('camo') },
   grapple: { range: 120, minDot: 0.55, filter: (o) => o.has('spikes') || o.has('jetpack') },
   laser: { range: 70, minDot: 0.97 },
 };
@@ -74,14 +74,16 @@ export class Hud {
     this.slotsEl.innerHTML = player.items
       .map((id, i) => {
         const item = ITEMS[id];
-        return `<div class="slot ${item.passive ? 'slot-passive' : ''}" data-slot="${i}">
+        if (item.passive) return '';
+        return `<div class="slot" data-slot="${i}">
           <div class="slot-face">${iconSvg(id)}</div>
           <div class="slot-text"><kbd>${i === 0 ? 'O' : 'P'}</kbd><span>${item.name}</span></div>
           <div class="slot-state">${item.passive ? 'Always on' : item.hold ? 'Hold to fire' : 'Ready'}</div>
         </div>`;
       })
       .join('');
-    this.slots = [...this.slotsEl.querySelectorAll('.slot')];
+    this.slots = [];
+    for (const el of this.slotsEl.querySelectorAll('.slot')) this.slots[Number(el.dataset.slot)] = el;
     this.barsEl.innerHTML = race.boats
       .map((b) => `<div class="boat-bar${b.isPlayer ? ' me' : ''}" style="--paint:#${b.color.toString(16).padStart(6, '0')}"><i></i><div class="boat-bar-track"><div class="boat-bar-fill"></div></div></div>`)
       .join('');
@@ -278,7 +280,8 @@ export class Hud {
     let label = '';
     if (p.alive && race.state === 'racing' && !p.finished) {
       for (let i = 0; i < 2; i++) {
-        const spec = TARGETING[p.items[i]];
+        const id = p.items[i];
+        const spec = id === 'laser' ? race.gunArc(p, 'laser', 70) : TARGETING[id];
         if (!spec || p.cooldowns[i] > 0) continue;
         target = race.findTarget(p, spec);
         if (target) {

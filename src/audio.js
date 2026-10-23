@@ -83,7 +83,7 @@ export class Sfx {
   play(name, pos) {
     if (!this.ctx || this.muted) return;
     const v = this.volumeAt(pos);
-    if (v < 0.04) return;
+    if (!(v >= 0.04)) return;
     switch (name) {
       case 'shoot':
         this.tone(900, 0.05, { type: 'square', vol: 0.06 * v, to: 300 });

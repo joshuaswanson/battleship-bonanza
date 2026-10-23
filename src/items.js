@@ -168,7 +168,7 @@ export const ITEMS = {
     name: 'Heat seeking missiles',
     group: 'weapons',
     cooldown: 6,
-    blurb: "Fire and forget. They chase down the nearest boat ahead, unless it's hiding in camo.",
+    blurb: "Fire and forget. They chase down the nearest boat in any direction, unless it's hiding in camo.",
   },
   mines: {
     stats: { punch: 2, tricks: 1 },
