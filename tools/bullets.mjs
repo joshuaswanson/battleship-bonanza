@@ -1,0 +1,28 @@
+import puppeteer from 'puppeteer-core';
+const browser = await puppeteer.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: 'new', args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'], defaultViewport: { width: 1280, height: 760 } });
+const page = await browser.newPage();
+page.on('pageerror', (e) => console.log('[pageerror]', e.message));
+const wait = (t) => new Promise((r) => setTimeout(r, t));
+await page.goto('http://localhost:5288/', { waitUntil: 'networkidle0' });
+await wait(500);
+await page.evaluate(() => window.__bb.setup.items.splice(0, 2, 'jetpack', 'machinegun'));
+await page.evaluate(() => document.getElementById('btn-play').click());
+await wait(200);
+await page.evaluate(() => document.getElementById('btn-start').click());
+await wait(4600);
+await page.evaluate(() => {
+  const r = window.__bb.race; const p = r.player;
+  for (const b of r.boats) b.ai.think = 1e9;
+  const v = r.boats.find((b) => !b.isPlayer);
+  v.pos.set(p.pos.x + Math.sin(p.heading) * 22, 0, p.pos.z + Math.cos(p.heading) * 22);
+  v.heading = p.heading;
+  window.__bb.freeCam = true;
+  const c = window.__bb.camera; const lx = Math.cos(p.heading), lz = -Math.sin(p.heading);
+  c.position.set(p.pos.x + lx * 14 + Math.sin(p.heading) * 6, 6, p.pos.z + lz * 14 + Math.cos(p.heading) * 6);
+  c.lookAt(p.pos.x + Math.sin(p.heading) * 12, 1.5, p.pos.z + Math.cos(p.heading) * 12);
+});
+await page.keyboard.down('KeyP');
+await wait(700);
+await page.screenshot({ path: 'tools/shots/bullets.png' });
+await page.keyboard.up('KeyP');
+await browser.close();
