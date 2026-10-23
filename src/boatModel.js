@@ -392,6 +392,18 @@ export function buildBoat(color, items) {
   const sternTop = sheer(-HULL_L);
   part(body, 'roundBox', mats.dark, 0, sternTop - 0.05, -HULL_L - 0.15, 0.6, 0.5, 0.35, 0.03);
   part(body, 'cylinder', mats.dark, 0, sternTop - 0.75, -HULL_L - 0.55, 0.13, 1.3, 0.13, 0.03);
+  part(body, 'capsule', mats.dark, 0, sternTop - 1.35, -HULL_L - 0.6, 0.32, 0.32, 0.32, 0.03).rotation.x = Math.PI / 2;
+  part(body, 'roundBox', mats.dark, 0, sternTop - 1.6, -HULL_L - 0.45, 0.06, 0.3, 0.5, 0.02);
+  const propeller = new THREE.Group();
+  propeller.position.set(0, sternTop - 1.35, -HULL_L - 0.95);
+  body.add(propeller);
+  part(propeller, 'cone', mats.metal, 0, 0, -0.08, 0.1, 0.2, 0.1, 0.02).rotation.x = -Math.PI / 2;
+  for (let i = 0; i < 3; i++) {
+    const blade = new THREE.Group();
+    blade.rotation.z = (i / 3) * Math.PI * 2;
+    propeller.add(blade);
+    part(blade, 'roundBox', mats.metal, 0, 0.22, 0, 0.2, 0.34, 0.05, 0.02).rotation.y = 0.55;
+  }
   part(body, 'roundBox', camoMat ?? mats.paint, 0, sternTop + 0.35, -HULL_L - 0.55, 0.85, 0.95, 0.85, 0.04);
   part(body, 'roundBox', mats.white, 0, sternTop + 0.88, -HULL_L - 0.55, 0.7, 0.18, 0.7, 0.03);
 
@@ -418,6 +430,7 @@ export function buildBoat(color, items) {
   part(flag, 'cone', mats.paint, 0, 0, -0.45, 0.04, 0.9, 0.3, 0.02).rotation.x = -Math.PI / 2;
 
   const refs = { root, body, flag, towRings, saw: null, flames: [], spinners: [], materials: [], parts: {}, hookMarkers: [], heatMats: {}, swivels: [], busy: {}, missileTips: [], sags: [], modules: {} };
+  refs.spinners.push({ mesh: propeller, axis: 'z', speed: 30 });
 
   if (camoMat) {
     mats.paint = camoMat;
@@ -606,9 +619,10 @@ const MODULES = {
       part(m, 'roundBox', mats.dark, x, 0.6, 0.95, 0.18, 0.55, 1.5, 0.03);
       part(m, 'roundBox', pink, x * 0.86, 0.6, 1.25, 0.05, 0.3, 0.8, 0);
     }
-    part(m, 'ring', pink, 0, 0.6, 0.5, 0.26, 0.26, 0.6, 0.02);
-    const crystal = part(m, 'octa', softPink, 0, 0.6, 1.3, 0.2, 0.34, 0.2, 0);
-    refs.spinners.push({ mesh: crystal, axis: 'y', speed: 3 });
+    part(m, 'cylinder', mats.dark, 0, 0.6, 0.95, 0.17, 0.9, 0.17, 0.03).rotation.x = Math.PI / 2;
+    for (const z of [0.68, 0.92, 1.16]) part(m, 'ring', pink, 0, 0.6, z, 0.2, 0.2, 0.9, 0.02);
+    part(m, 'cylinder', mats.metal, 0, 0.6, 1.42, 0.21, 0.12, 0.21, 0.03).rotation.x = Math.PI / 2;
+    part(m, 'cylinder', softPink, 0, 0.6, 1.49, 0.14, 0.03, 0.14, 0).rotation.x = Math.PI / 2;
     const ventMat = toon(DARK);
     refs.heatMats.laser = [ventMat];
     for (const z of [-0.5, -0.15, 0.2]) part(m, 'roundBox', ventMat, 0, 1.1, z, 0.85, 0.16, 0.14, 0.02);
