@@ -72,7 +72,13 @@ export class Hud {
     this.center.textContent = '';
     this.warn.textContent = '';
     this.of.textContent = `of ${race.boats.length}`;
-    this.slotsEl.innerHTML = player.items
+    this.slotsEl.innerHTML = `<div class="ability hull-row">
+          <i class="hull-dot" style="--paint:#${player.color.toString(16).padStart(6, '0')}"></i>
+          <div class="ability-body">
+            <div class="ability-top"><span>Hull</span><em class="hull-text"></em></div>
+            <div class="ability-track"><div class="ability-fill hull-fill"></div></div>
+          </div>
+        </div>` + player.items
       .map((id, i) => {
         const item = ITEMS[id];
         if (item.passive) return '';
@@ -85,8 +91,10 @@ export class Hud {
         </div>`;
       })
       .join('');
+    this.hullFill = this.slotsEl.querySelector('.hull-fill');
+    this.hullText = this.slotsEl.querySelector('.hull-text');
     this.slots = [];
-    for (const el of this.slotsEl.querySelectorAll('.ability')) this.slots[Number(el.dataset.slot)] = el;
+    for (const el of this.slotsEl.querySelectorAll('.ability[data-slot]')) this.slots[Number(el.dataset.slot)] = el;
     this.barsEl.innerHTML = race.boats
       .map((b) => `<div class="boat-bar${b.isPlayer ? ' me' : ''}" style="--paint:#${b.color.toString(16).padStart(6, '0')}"><i></i><div class="boat-bar-track"><div class="boat-bar-fill"></div></div></div>`)
       .join('');
@@ -224,6 +232,11 @@ export class Hud {
 
     this.updateBars(race, camera);
     this.placeAbilities(p, camera);
+    const hull = Math.max(0, p.hp) / MAX_HP;
+    this.hullFill.style.width = `${hull * 100}%`;
+    this.hullFill.dataset.level = hull > 0.6 ? 'high' : hull > 0.3 ? 'mid' : 'low';
+    const hullText = `${Math.ceil(hull * 100)}%`;
+    if (this.hullText.textContent !== hullText) this.hullText.textContent = hullText;
     this.updateLock(race, camera, dt);
     this.drawMap(race);
   }
@@ -239,10 +252,10 @@ export class Hud {
   updateBars(race, camera) {
     race.boats.forEach((b, i) => {
       const bar = this.bars[i];
-      const v = this.projected.set(b.pos.x, b.pos.y + 4.8, b.pos.z);
+      const v = this.projected.set(b.pos.x, b.pos.y + 3.6, b.pos.z);
       const dist = v.distanceTo(camera.position);
       v.project(camera);
-      const visible = b.alive && !b.finished && v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1 && dist < 170;
+      const visible = !b.isPlayer && b.alive && !b.finished && v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1 && dist < 170;
       if (visible !== bar.shown) {
         bar.el.style.display = visible ? 'flex' : 'none';
         bar.shown = visible;
