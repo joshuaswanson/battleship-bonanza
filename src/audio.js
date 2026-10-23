@@ -155,7 +155,7 @@ export class Sfx {
     src.stop(t + dur + 0.02);
   }
 
-  play(name, pos) {
+  play(name, pos, pitch = 1000) {
     if (!this.ctx || !this.soundOn) return;
     const v = this.volumeAt(pos);
     if (!(v >= 0.04)) return;
@@ -184,6 +184,14 @@ export class Sfx {
         this.noise(0.25, { vol: 0.55 * v, freq: 2600, to: 300 });
         this.noise(1.4, { vol: 0.32 * v, freq: 1800, type: 'bandpass', to: 400 });
         this.tone(1250, 0.25, { type: 'triangle', vol: 0.06 * v, to: 900 });
+        break;
+      case 'seek':
+        this.tone(pitch, 0.05, { type: 'square', vol: 0.05 });
+        break;
+      case 'seekLock':
+        this.tone(1760, 0.09, { type: 'square', vol: 0.08 });
+        this.tone(1760, 0.22, { type: 'square', vol: 0.08, delay: 0.11 });
+        this.tone(2640, 0.22, { type: 'sine', vol: 0.05, delay: 0.11 });
         break;
       case 'boing':
         this.tone(220, 0.22, { vol: 0.22 * v, to: 660 });

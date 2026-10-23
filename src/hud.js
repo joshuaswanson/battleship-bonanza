@@ -13,6 +13,7 @@ export function formatTime(seconds) {
 
 const $ = (id) => document.getElementById(id);
 
+const SEEK_TIME = 0.8;
 const TARGETING = {
   missiles: { range: 180, minDot: -1, filter: (o) => !o.has('camo') },
 };
@@ -35,6 +36,9 @@ export class Hud {
     this.center = $('hud-center');
     this.warn = $('hud-warn');
     this.reticle = $('hud-reticle');
+    this.seeker = $('hud-seeker');
+    this.seekLabel = this.seeker.querySelector('.sk-label');
+    this.seek = { target: null, t: 0, tick: 0, x: 0, y: 0 };
     this.barsEl = $('hud-bars');
     this.dmgEl = $('hud-dmg');
     this.popups = [];
@@ -274,6 +278,7 @@ export class Hud {
       button.classList.toggle('off', p.disabled > 0 && item.group === 'weapons');
     });
     this.updateReticle(race, camera);
+    this.updateSeeker(race, camera, dt);
     this.burnVignette.classList.toggle('on', !!p.burn && p.alive);
 
     this.warnTime -= dt;
@@ -411,6 +416,54 @@ export class Hud {
     this.lockArrow.style.transform = `translate(${px}px, ${py}px) rotate(${angle}rad) scale(${bob})`;
   }
 
+  updateSeeker(race, camera, dt) {
+    const p = race.player;
+    const slot = p.items.indexOf('missiles');
+    const ready = slot >= 0 && p.alive && race.state === 'racing' && !p.finished && p.charges[slot].left > 0 && p.disabled <= 0;
+    const target = ready ? race.findTarget(p, TARGETING.missiles) : null;
+    const s = this.seek;
+    const v = target?.center(this.projected).project(camera);
+    if (!target || v.z > 1) {
+      s.target = null;
+      this.seeker.classList.remove('on', 'locked');
+      return;
+    }
+    if (target !== s.target) {
+      s.target = target;
+      s.t = 0;
+      s.tick = 0;
+      s.drift = (Math.random() - 0.5) * 120;
+      this.seeker.classList.remove('locked');
+    }
+    const before = s.t;
+    s.t += dt;
+    const k = Math.min(1, s.t / SEEK_TIME);
+    const x = (v.x * 0.5 + 0.5) * innerWidth;
+    const y = (-v.y * 0.5 + 0.5) * innerHeight;
+    const wander = (1 - k) * (1 - k);
+    const jx = wander * (s.drift + Math.sin(s.t * 23) * 18);
+    const jy = wander * (Math.cos(s.t * 19) * 14 - s.drift * 0.4);
+    this.seeker.style.transform = `translate(${x + jx}px, ${y + jy}px)`;
+    this.seeker.style.setProperty('--spread', `${26 + 70 * wander}px`);
+    this.seeker.style.setProperty('--spin', `${45 * wander}deg`);
+    this.seeker.classList.add('on');
+    if (k < 1) {
+      s.tick -= dt;
+      if (s.tick <= 0) {
+        s.tick = 0.17 - k * 0.1;
+        this.sfx.play('seek', null, 700 + k * 900);
+      }
+      const text = t('tracking');
+      if (this.seekLabel.textContent !== text) this.seekLabel.textContent = text;
+      this.seeker.classList.toggle('blink', Math.floor(s.t * 8) % 2 === 0);
+    } else if (before < SEEK_TIME) {
+      this.seeker.classList.add('locked');
+      this.seeker.classList.remove('blink');
+      this.seekLabel.textContent = t('locked');
+      this.sfx.play('seekLock');
+    }
+  }
+
   updateReticle(race, camera) {
     const p = race.player;
     let target = null;
@@ -418,7 +471,7 @@ export class Hud {
     if (p.alive && race.state === 'racing' && !p.finished) {
       for (let i = 0; i < 2; i++) {
         const id = p.items[i];
-        const spec = id === 'grapple' ? race.hookSpec(p) : TARGETING[id];
+        const spec = id === 'grapple' ? race.hookSpec(p) : null;
         if (!spec || p.cooldowns[i] > 0) continue;
         target = race.findTarget(p, spec);
         if (target) {
