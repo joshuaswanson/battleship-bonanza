@@ -233,7 +233,7 @@ const ITEM_TEXT = {
   en: {
     spikes: ['Spikes', 'Keep other boats at a distance AND look intimidating. Grappling hooks love them though.'],
     armor: ['Armor', "Turn your boat into a heavy armored bathtub. Deflects bullets, spikes and saw blades, but you won't move as fast."],
-    camo: ['Camo', "Unfortunately you're still very visible out on the open ocean. Luckily, heat seeking missiles can't seem to find you."],
+    camo: ['Camo', "Probably the worst camouflage you could wear on the open ocean. But it does hide you from heat seeking missiles, so that's nice."],
     jetpack: ['Jet pack', "Who said boats can't fly? Leap over sea mines and dodge missiles and grappling hooks."],
     grapple: ['Grappling hook', 'Snag any boat and get slingshotted right past it. Boats with spikes or a jet pack are extra easy to catch.'],
     emp: ['EMP', 'Have you tried turning everyone off and on again? Fries nearby weapons and sends missiles packing.'],
@@ -246,7 +246,7 @@ const ITEM_TEXT = {
   fr: {
     spikes: ['Pointes', "Tenez les autres bateaux à distance ET ayez l'air redoutable. Les grappins les adorent, par contre."],
     armor: ['Blindage', 'Transformez votre bateau en baignoire blindée. Repousse balles, pointes et scies, mais vous irez moins vite.'],
-    camo: ['Camouflage', "Malheureusement, on vous voit toujours très bien en pleine mer. Heureusement, les missiles à tête chercheuse n'arrivent pas à vous trouver."],
+    camo: ['Camouflage', "Sans doute le pire camouflage possible en pleine mer. Mais il vous cache des missiles à tête chercheuse, c'est déjà ça."],
     jetpack: ['Jetpack', 'Qui a dit que les bateaux ne volaient pas ? Sautez par-dessus les mines et esquivez missiles et grappins.'],
     grapple: ['Grappin', "Accrochez n'importe quel bateau et faites-vous catapulter devant lui. Les bateaux à pointes ou à jetpack sont encore plus faciles à attraper."],
     emp: ['IEM', "Vous avez essayé d'éteindre et de rallumer tout le monde ? Grille les armes voisines et renvoie les missiles."],
@@ -259,7 +259,7 @@ const ITEM_TEXT = {
   de: {
     spikes: ['Stacheln', 'Halte andere Boote auf Abstand UND sieh dabei furchteinflößend aus. Enterhaken lieben sie allerdings.'],
     armor: ['Panzerung', 'Verwandle dein Boot in eine schwer gepanzerte Badewanne. Hält Kugeln, Stacheln und Sägen ab, aber du bist etwas langsamer.'],
-    camo: ['Tarnung', 'Leider bist du auf dem offenen Meer trotzdem gut zu sehen. Zum Glück finden dich Lenkraketen einfach nicht.'],
+    camo: ['Tarnung', 'Wahrscheinlich die schlechteste Tarnung, die man auf offener See tragen kann. Aber sie versteckt dich vor Lenkraketen, immerhin.'],
     jetpack: ['Jetpack', 'Wer sagt, dass Boote nicht fliegen können? Spring über Seeminen und weich Raketen und Enterhaken aus.'],
     grapple: ['Enterhaken', 'Schnapp dir ein beliebiges Boot und lass dich daran vorbeischleudern. Boote mit Stacheln oder Jetpack sind besonders leicht zu erwischen.'],
     emp: ['EMP', 'Schon mal versucht, alle aus- und wieder einzuschalten? Legt Waffen in der Nähe lahm und schickt Raketen weg.'],
