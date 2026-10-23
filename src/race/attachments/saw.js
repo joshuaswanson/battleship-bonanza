@@ -12,11 +12,6 @@ export const methods = {
     const lx = Math.cos(b.heading);
     const lz = -Math.sin(b.heading);
     const { cutting: armed } = this.stepHold(b, 'saw', stepSaw, refs.saw, dt);
-    s.spinSound = (s.spinSound ?? 0) - dt;
-    if (armed && s.spinSound <= 0) {
-      s.spinSound = 0.32;
-      this.sfx.play('sawSpin', b.pos);
-    }
     if (armed) b.lastFired = this.time;
     const slot = b.items.indexOf('saw');
     const center = slotCenter(slot);
@@ -45,7 +40,6 @@ export const methods = {
     s.yaw = center + now + (want - now) * (1 - Math.exp(-(s.shield > 0 ? 20 : 9) * dt));
     refs.sawYaw.rotation.y = s.yaw;
 
-    s.sound -= dt;
     const blade = refs.saw.getWorldPosition(new THREE.Vector3());
     const inReach = target && s.shield <= 0 && target.distanceToAxis2D(blade.x, blade.z) < HIT_RADIUS + 1.4;
     const cutting = armed && inReach;
@@ -63,10 +57,6 @@ export const methods = {
         s.tick = 0.22;
         this.damage(target, 4, b, 'saw', { stun: 0.15 });
         this.fx.sparkBurst(contact.x, contact.y, contact.z, 0xffa62b, 12);
-        if (s.sound <= 0) {
-          s.sound = 0.45;
-          this.sfx.play('saw', b.pos);
-        }
       }
     }
     const spinning = armed || s.shield > 0;

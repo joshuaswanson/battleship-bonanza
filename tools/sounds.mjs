@@ -33,8 +33,7 @@ const saw = await count(['saw', 'camo'], 'KeyO', 1500, () => {
   v.heading = p.heading;
   v.invuln = 0;
 });
-check('saw whines while held', (saw.sawSpin ?? 0) >= 3, `${saw.sawSpin} spins`);
-check('saw grinds while cutting', (saw.saw ?? 0) >= 1, `${saw.saw} grinds`);
+
 const missiles = await count(['missiles', 'armor'], 'KeyO', 300, () => {
   const r = window.__bb.race;
   const p = r.player;

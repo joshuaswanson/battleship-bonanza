@@ -402,7 +402,6 @@ export class Loadout {
         break;
       case 'saw':
         this.sawBoost = 1.6;
-        this.sfx.play('saw');
         for (let i = 0; i < 8; i++) {
           this.after(0.15 + i * 0.16, () => {
             const p = b.saw.getWorldPosition(new THREE.Vector3());
@@ -710,11 +709,6 @@ export class Loadout {
       const { overheatedNow } = stepSaw(sawHeat, b, dt, this.time);
       this.afterHeat('saw', overheatedNow, b.saw);
       const active = this.sawBoost > 0 || sawHeat.firing;
-      this.sawSound = (this.sawSound ?? 0) - dt;
-      if (active && this.sawSound <= 0) {
-        this.sawSound = 0.32;
-        this.sfx.play('sawSpin');
-      }
       this.sawSpin += ((active ? 42 : 0) - this.sawSpin) * (1 - Math.exp(-(active ? 6 : 2) * dt));
       saw.rotation.x += this.sawSpin * dt;
       const glowAmount = active ? 0.55 + 0.25 * Math.sin(this.time * 45) : 0;

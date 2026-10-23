@@ -2743,3 +2743,40 @@ kbd {
     }
   }
 }
+
+.sound-nudge {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.85rem 0.45rem 0.6rem;
+  font: 600 0.95rem var(--ui);
+  color: var(--ink);
+  background: #ffffff;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  box-shadow: 0 4px 0 var(--ink);
+  cursor: pointer;
+  animation: nudge 1.4s ease-in-out infinite;
+}
+
+.sound-nudge svg {
+  width: 22px;
+  height: 22px;
+  fill: var(--ink);
+  stroke: var(--ink);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.sound-nudge .wave {
+  fill: none;
+}
+
+@keyframes nudge {
+  50% {
+    transform: scale(1.06) rotate(-2deg);
+  }
+}

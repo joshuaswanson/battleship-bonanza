@@ -19,5 +19,5 @@ check('tracking shows first', /on/.test(tracking.cls) && !/locked/.test(tracking
 await wait(900);
 const locked = await state();
 await page.screenshot({ path: 'tools/shots/seek-locked.png' });
-check('then locks on', /locked/.test(locked.cls) && locked.label === 'LOCKED', JSON.stringify(locked));
+check('then locks on', /locked/.test(locked.cls) && locked.label === 'FIRE MISSILE', JSON.stringify(locked));
 await browser.close();

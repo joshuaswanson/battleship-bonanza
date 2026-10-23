@@ -477,8 +477,12 @@ $('btn-again').addEventListener('click', startRace);
 $('btn-replay').addEventListener('click', () => wipe(startReplay));
 $('btn-replay-exit').addEventListener('click', () => wipe(endReplay));
 $('btn-change').addEventListener('click', () => wipe(goLoadout));
-addEventListener('pointerdown', () => sfx.unlock(), { once: true });
-addEventListener('keydown', () => sfx.unlock(), { once: true });
+function unlockAudio() {
+  sfx.unlock();
+  $('sound-nudge').classList.add('hidden');
+}
+addEventListener('pointerdown', unlockAudio, { once: true });
+addEventListener('keydown', unlockAudio, { once: true });
 
 const cam = {
   pos: new THREE.Vector3(0, 30, -40),
@@ -540,6 +544,22 @@ function riverShot(dt, k) {
   }
   cam.pos.lerp(desired, k(cam.shot === 'chase' || cam.shot === 'lead' ? 6 : 20));
   cam.look.lerp(new THREE.Vector3(f.pos.x, f.pos.y + 1, f.pos.z), k(8));
+}
+
+function updateSawSound() {
+  let level = 0;
+  let grinding = 0;
+  if (mode === 'loadout') level = loadout.sawSpin / 42;
+  else if ((mode === 'race' || mode === 'results') && !race.attract) {
+    for (const b of race.boats) {
+      if (!b.model.sawYaw || !b.alive) continue;
+      const near = sfx.volumeAt(b.pos);
+      const spin = (b.sawState.spin / 42) * near;
+      if (spin > level) level = spin;
+      if (b.sawState.chop > 0) grinding = Math.max(grinding, near);
+    }
+  }
+  sfx.setSaw(level, grinding);
 }
 
 function updateCamera(dt) {
@@ -681,6 +701,7 @@ function frame(now) {
     sfx.listener = cam.pos;
     sfx.setEngine(0, false);
   }
+  updateSawSound();
 
   renderer.render(scene, camera);
   adaptResolution(dt);

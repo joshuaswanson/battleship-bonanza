@@ -65,6 +65,7 @@ export class Sfx {
       this.engineGain.gain.value = 0;
       this.engine.connect(this.engineFilter).connect(this.engineGain).connect(this.master);
       this.engine.start();
+      this.buildSaw();
     }
     if (this.ctx.state === 'suspended') this.ctx.resume();
     if (this.musicWanted && this.musicOn && this.music.paused) this.music.play().catch(() => {});
@@ -80,6 +81,82 @@ export class Sfx {
     this.musicOn = on;
     localStorage.setItem('bb-music', on ? '1' : '0');
     this.playMusic(this.musicWanted);
+  }
+
+  buildSaw() {
+    const ctx = this.ctx;
+    const out = ctx.createGain();
+    out.gain.value = 0;
+    out.connect(this.master);
+    const chatter = ctx.createGain();
+    chatter.gain.value = 0.75;
+    chatter.connect(out);
+    const lfo = ctx.createOscillator();
+    lfo.type = 'triangle';
+    lfo.frequency.value = 38;
+    const depth = ctx.createGain();
+    depth.gain.value = 0.25;
+    lfo.connect(depth).connect(chatter.gain);
+    const whine = [ctx.createOscillator(), ctx.createOscillator()];
+    whine[0].type = 'sawtooth';
+    whine[1].type = 'sawtooth';
+    whine[1].detune.value = 18;
+    const whineTone = ctx.createBiquadFilter();
+    whineTone.type = 'bandpass';
+    whineTone.frequency.value = 2200;
+    whineTone.Q.value = 1.2;
+    const whineGain = ctx.createGain();
+    whineGain.gain.value = 0.5;
+    for (const o of whine) o.connect(whineTone);
+    whineTone.connect(whineGain).connect(chatter);
+    const motor = ctx.createOscillator();
+    motor.type = 'sawtooth';
+    const motorTone = ctx.createBiquadFilter();
+    motorTone.type = 'lowpass';
+    motorTone.frequency.value = 500;
+    const motorGain = ctx.createGain();
+    motorGain.gain.value = 0.8;
+    motor.connect(motorTone).connect(motorGain).connect(chatter);
+    const hiss = ctx.createBufferSource();
+    hiss.buffer = this.noiseBuffer;
+    hiss.loop = true;
+    const hissTone = ctx.createBiquadFilter();
+    hissTone.type = 'bandpass';
+    hissTone.frequency.value = 3600;
+    hissTone.Q.value = 0.8;
+    const hissGain = ctx.createGain();
+    hissGain.gain.value = 0.35;
+    hiss.connect(hissTone).connect(hissGain).connect(chatter);
+    const grind = ctx.createGain();
+    grind.gain.value = 0;
+    grind.connect(this.master);
+    const grindNoise = ctx.createBufferSource();
+    grindNoise.buffer = this.noiseBuffer;
+    grindNoise.loop = true;
+    grindNoise.playbackRate.value = 0.7;
+    const grindTone = ctx.createBiquadFilter();
+    grindTone.type = 'bandpass';
+    grindTone.frequency.value = 1700;
+    grindTone.Q.value = 1.5;
+    grindNoise.connect(grindTone).connect(grind);
+    const screech = ctx.createOscillator();
+    screech.type = 'square';
+    screech.frequency.value = 1180;
+    const screechGain = ctx.createGain();
+    screechGain.gain.value = 0.12;
+    screech.connect(screechGain).connect(grind);
+    for (const node of [lfo, ...whine, motor, hiss, grindNoise, screech]) node.start();
+    this.saw = { out, grind, whine, motor };
+  }
+
+  setSaw(level, grinding = 0) {
+    if (!this.saw) return;
+    const t = this.ctx.currentTime;
+    const spin = Math.min(1, level);
+    for (const o of this.saw.whine) o.frequency.setTargetAtTime(500 + 1500 * spin, t, 0.08);
+    this.saw.motor.frequency.setTargetAtTime(60 + 70 * spin, t, 0.08);
+    this.saw.out.gain.setTargetAtTime(0.16 * spin, t, 0.06);
+    this.saw.grind.gain.setTargetAtTime(0.22 * grinding, t, 0.04);
   }
 
   setEngine(speedFraction, active) {
@@ -209,12 +286,6 @@ export class Sfx {
         this.tone(1500, 0.4, { type: 'sawtooth', vol: 0.14 * v, to: 1100 });
         this.tone(2900, 0.4, { type: 'square', vol: 0.06 * v, to: 2300 });
         this.tone(95, 0.4, { type: 'square', vol: 0.2 * v, to: 70 });
-        break;
-      case 'sawSpin':
-        this.tone(1850, 0.36, { type: 'sawtooth', vol: 0.11 * v, to: 1900 });
-        this.tone(3700, 0.36, { type: 'square', vol: 0.035 * v, to: 3800 });
-        this.tone(120, 0.36, { type: 'sawtooth', vol: 0.18 * v, to: 124 });
-        this.noise(0.36, { vol: 0.16 * v, freq: 3000, type: 'bandpass', to: 3200 });
         break;
       case 'whoosh':
         this.noise(0.6, { vol: 0.3 * v, freq: 400, type: 'bandpass', to: 2400 });
