@@ -141,7 +141,7 @@ export class Hud {
         this.setWarning(e.text);
         break;
       case 'blocked':
-        this.setWarning(e.kind === 'laser' ? 'Laser bounced off your saw' : 'Armor blocked it', 1.1);
+        this.setWarning('Laser bounced off your saw', 1.1);
         break;
     }
   }

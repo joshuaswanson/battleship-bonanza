@@ -472,8 +472,14 @@ export class Race {
     if (target.has('armor') && (kind === 'bullet' || kind === 'spikes' || kind === 'saw')) {
       this.fx.sparkBurst(c.x, c.y, c.z, 0xffffff, kind === 'bullet' ? 4 : 14);
       this.sfx.play(kind === 'bullet' ? 'tink' : 'clank', target.pos);
-      if (target.isPlayer && kind !== 'bullet') this.emit('blocked', { kind });
       return false;
+    }
+    if (kind === 'missile' && target.has('armor')) {
+      amount *= 0.5;
+      launch *= 0.5;
+      spin = 0;
+      this.fx.sparkBurst(c.x, c.y, c.z, 0xffffff, 10);
+      this.sfx.play('clank', target.pos);
     }
     target.hp -= amount;
     target.flash = 1;

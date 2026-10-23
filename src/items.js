@@ -45,7 +45,7 @@ export const ITEMS = {
     name: 'Armor',
     group: 'defense',
     passive: true,
-    blurb: 'Bullets, spikes and saw blades just bounce right off. Turns your boat into a very heavy bathtub.',
+    blurb: 'Bullets, spikes and saw blades bounce right off, and missiles barely dent it. Turns your boat into a very heavy bathtub.',
   },
   camo: {
     adj: 'Sneaky',
