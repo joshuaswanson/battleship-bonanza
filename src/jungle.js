@@ -771,32 +771,79 @@ function addBanana(batch, x, y, z, rand, big = false) {
   }
 }
 
-function addBush(batch, x, y, z, rand) {
-  const lumps = 2 + Math.floor(rand() * 2);
-  for (let i = 0; i < lumps; i++) {
-    const a = rand() * Math.PI * 2;
-    const s = 1.8 + rand() * 1.8;
-    const key = ['leaf', 'leafLight', 'leafDark', 'fern'][Math.floor(rand() * 4)];
-    batch.add(key, CANOPY, mat(x + Math.cos(a) * s * 0.5, y + s * 0.35, z + Math.sin(a) * s * 0.5, s, s * 0.7, s));
+
+
+
+function leafGeometry(width, droop, fold) {
+  const steps = 8;
+  const pos = [];
+  const index = [];
+  const rows = [];
+  const v = (x, y, z) => {
+    pos.push(x, y, z);
+    return pos.length / 3 - 1;
+  };
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const w = width * Math.sin(Math.PI * Math.pow(t, 0.75)) * (1 - 0.25 * t);
+    const y = -droop * t * t;
+    const thick = 0.03 + 0.05 * Math.sin(Math.PI * t);
+    rows.push({ top: v(0, y, t), bottom: v(0, y - thick, t), left: v(w, y - fold * w, t), right: v(-w, y - fold * w, t) });
+  }
+  for (let i = 0; i < steps; i++) {
+    const a = rows[i];
+    const b = rows[i + 1];
+    index.push(a.top, a.right, b.top, a.right, b.right, b.top);
+    index.push(a.top, b.top, a.left, a.left, b.top, b.left);
+    index.push(a.bottom, b.bottom, a.right, a.right, b.bottom, b.right);
+    index.push(a.bottom, a.left, b.bottom, a.left, b.left, b.bottom);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(index);
+  g.computeVertexNormals();
+  return g;
+}
+
+const BROAD_LEAF = leafGeometry(0.32, 0.35, 0.35);
+const FROND = leafGeometry(0.13, 0.5, 0.2);
+const BLADE = leafGeometry(0.06, 0.22, 0.1);
+const SHRUB_KEYS = ['leaf', 'leafDark', 'leafTeal', 'monstera', 'leafLight', 'leafDark'];
+
+function leafAt(batch, key, shape, x, y, z, length, up, yaw) {
+  batch.add(key, shape, tilted(x, y, z, length, length, length, -up, yaw));
+}
+
+function addBush(batch, x, y, z, rand, out = null) {
+  const leaves = 9 + Math.floor(rand() * 7);
+  const size = 1.4 + rand() * 1.3;
+  const key = SHRUB_KEYS[Math.floor(rand() * SHRUB_KEYS.length)];
+  const lean = out ? Math.atan2(out.x, out.z) : 0;
+  for (let i = 0; i < leaves; i++) {
+    const outward = out && i % 2 === 0;
+    const yaw = outward ? lean + (rand() - 0.5) * 1.6 : rand() * Math.PI * 2;
+    const up = outward ? 0.05 + rand() * 0.4 : 0.25 + rand() * 0.95;
+    const length = size * (outward ? 1.2 + rand() * 0.6 : 0.7 + rand() * 0.6);
+    const lift = rand() * size * 0.5;
+    leafAt(batch, rand() < 0.8 ? key : SHRUB_KEYS[Math.floor(rand() * SHRUB_KEYS.length)], BROAD_LEAF, x + (rand() - 0.5) * 0.6, y + lift, z + (rand() - 0.5) * 0.6, length * 2.2, up, yaw);
   }
 }
 
 function addReeds(batch, x, y, z, rand, out) {
-  const blades = 4 + Math.floor(rand() * 4);
+  const blades = 7 + Math.floor(rand() * 6);
+  const lean = Math.atan2(out.x, out.z);
   for (let i = 0; i < blades; i++) {
-    const h = 1.6 + rand() * 2.4;
-    const ox = (rand() - 0.5) * 1.2;
-    const oz = (rand() - 0.5) * 1.2;
-    batch.add(rand() < 0.5 ? 'fern' : 'leafLight', CONE, mat(x + ox, y + h / 2, z + oz, 0.18, h, 0.18, out.z * 0.35 + (rand() - 0.5) * 0.3, 0, -out.x * 0.35 + (rand() - 0.5) * 0.3));
+    const yaw = rand() < 0.6 ? lean + (rand() - 0.5) * 1.4 : rand() * Math.PI * 2;
+    leafAt(batch, rand() < 0.5 ? 'fern' : 'leafLight', BLADE, x + (rand() - 0.5) * 1, y, z + (rand() - 0.5) * 1, 2.6 + rand() * 2.6, 0.9 + rand() * 0.55, yaw);
   }
 }
 
 function addFern(batch, x, y, z, rand) {
-  const leaves = 5 + Math.floor(rand() * 3);
-  const size = 1.2 + rand() * 1.4;
-  for (let i = 0; i < leaves; i++) {
-    const a = (i / leaves) * Math.PI * 2 + rand() * 0.4;
-    batch.add('fern', CONE, mat(x + Math.cos(a) * size * 0.6, y + size * 0.35, z + Math.sin(a) * size * 0.6, 0.35 * size, size * 1.4, 0.18 * size, Math.sin(a) * 0.9, 0, -Math.cos(a) * 0.9));
+  const fronds = 8 + Math.floor(rand() * 5);
+  const size = 2 + rand() * 1.6;
+  for (let i = 0; i < fronds; i++) {
+    const yaw = (i / fronds) * Math.PI * 2 + rand() * 0.5;
+    leafAt(batch, rand() < 0.6 ? 'fern' : 'leafLight', FROND, x, y + 0.2, z, size * (0.8 + rand() * 0.4), 0.45 + rand() * 0.5, yaw);
   }
 }
 
@@ -881,7 +928,7 @@ export async function createJungle(group, track, fx) {
         if (tunnelMask(track, s) > 0 || track.river.drops.some((d) => Math.abs(track.ahead(d.s, s) - 2) < 10 || track.ahead(s, d.s) < 6)) continue;
         const ground = Math.max(terrainHeight(surface, track, x, z), track.level(s) - 0.3);
         const roll = rand();
-        if (roll < 0.45) addBush(batch, x, ground - 0.4, z, rand);
+        if (roll < 0.45) addBush(batch, x, ground - 0.2, z, rand, out);
         else if (roll < 0.75) addReeds(batch, x, ground - 0.3, z, rand, out);
         else addBanana(batch, x, ground - 0.2, z, rand, rand() < 0.4);
       }
