@@ -28,6 +28,27 @@ const COLORS = {
 
 const IDENTITY = new THREE.Matrix4();
 
+function mossyRock() {
+  const material = toon(0xffffff, { vertexColors: true });
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader =
+      'attribute float aGreen;\nattribute vec3 aMoss;\nvarying float vGreen;\nvarying vec3 vMoss;\n' +
+      shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvGreen = aGreen;\nvMoss = aMoss;');
+    shader.fragmentShader =
+      'varying float vGreen;\nvarying vec3 vMoss;\n' +
+      shader.fragmentShader.replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+        float edge = max(fwidth(vGreen), 1e-4);
+        float covered = smoothstep(0.5 - edge, 0.5 + edge, vGreen);
+        diffuseColor.rgb = mix(diffuseColor.rgb, vMoss, covered);
+        float ink = 1.0 - smoothstep(edge * 1.6, edge * 2.6, abs(vGreen - 0.5));
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.0044, 0.0232, 0.063), ink);`,
+      );
+  };
+  return material;
+}
+
 class Batcher {
   constructor() {
     this.groups = new Map();
@@ -42,9 +63,11 @@ class Batcher {
     for (const [key, list] of this.groups) {
       const geometry = mergeGeometries(list);
       const painted = geometry.hasAttribute('color');
-      const material = painted
-        ? toon(0xffffff, { vertexColors: true })
-        : toon(COLORS[key]);
+      const material = geometry.hasAttribute('aGreen')
+        ? mossyRock()
+        : painted
+          ? toon(0xffffff, { vertexColors: true })
+          : toon(COLORS[key]);
       parent.add(new THREE.Mesh(geometry, material));
       if (outline && key !== 'foam') parent.add(new THREE.Mesh(geometry, outlineMaterial(outline)));
     }
@@ -236,6 +259,8 @@ function paintRock(g) {
   const pos = g.attributes.position;
   const nor = g.attributes.normal;
   const colors = [];
+  const greens = [];
+  const moss = [];
   const color = new THREE.Color();
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i);
@@ -243,18 +268,21 @@ function paintRock(g) {
     const z = pos.getZ(i);
     const ny = Math.abs(nor.getY(i));
     const speckle = Math.sin(x * 0.7 + z * 0.5) + Math.sin(z * 0.9 - y * 0.3);
-    const band = 0.5 + 0.5 * Math.sin(y / 5 + speckle * 0.8);
-    color.copy(ROCK_TONES[0]).lerp(TOWER_ROCK, band);
+    color.copy(ROCK_TONES[0]).lerp(TOWER_ROCK, 0.5 + 0.5 * Math.sin(y / 5 + speckle * 0.8));
     if (y < 0.8) color.copy(ROCK_TONES[1]);
-    const green = THREE.MathUtils.smoothstep(ny, 0.42 + speckle * 0.05, 0.62 + speckle * 0.05);
-    if (green > 0) color.lerp(speckle > 0.3 ? GRASS_EDGE : GRASS_TONE, green);
     colors.push(color.r, color.g, color.b);
+    greens.push(y < 0.8 ? 0 : THREE.MathUtils.smoothstep(ny, 0.4 + speckle * 0.05, 0.64 + speckle * 0.05));
+    const tone = speckle > 0.3 ? GRASS_EDGE : GRASS_TONE;
+    moss.push(tone.r, tone.g, tone.b);
   }
   g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  g.setAttribute('aGreen', new THREE.Float32BufferAttribute(greens, 1));
+  g.setAttribute('aMoss', new THREE.Float32BufferAttribute(moss, 3));
   return g;
 }
 
 const TOWER_ROCK = new THREE.Color(0x9f9182);
+
 const ROCK_TONES = [new THREE.Color(0xa89a8c), new THREE.Color(0x938577), new THREE.Color(0xb7aa9b)];
 const GRASS_TONE = new THREE.Color(0x6cc84f);
 const GRASS_EDGE = new THREE.Color(0x4fae4a);
@@ -290,6 +318,8 @@ function rockland(r, height, stretch, rot, rand) {
   g.computeVertexNormals();
   const nor = g.attributes.normal;
   const colors = [];
+  const greens = [];
+  const moss = [];
   const tops = [];
   const color = new THREE.Color();
   for (let i = 0; i < pos.count; i++) {
@@ -299,14 +329,18 @@ function rockland(r, height, stretch, rot, rand) {
     const ny = nor.getY(i);
     const speckle = Math.sin(x * 0.6 + z * 0.45) + Math.sin(z * 0.8 - y * 0.35);
     color.copy(ROCK_TONES[0]).lerp(ROCK_TONES[1], 0.5 + 0.5 * Math.sin(y / 3.5 + speckle * 0.6));
-    const grass = THREE.MathUtils.smoothstep(ny, 0.55, 0.78) * THREE.MathUtils.smoothstep(y, height * 0.25, height * 0.4);
-    if (grass > 0) color.lerp(y > plateau - 2.5 ? GRASS_TONE : GRASS_EDGE, grass);
     const sand = 1 - THREE.MathUtils.smoothstep(y, 0.4, 2.2);
     if (sand > 0) color.lerp(SAND_TONE, sand);
     colors.push(color.r, color.g, color.b);
+    const grass = THREE.MathUtils.smoothstep(ny, 0.5, 0.8) * THREE.MathUtils.smoothstep(y, height * 0.22, height * 0.42);
+    greens.push(grass);
+    const tone = y > plateau - 2.5 ? GRASS_TONE : GRASS_EDGE;
+    moss.push(tone.r, tone.g, tone.b);
     if (grass > 0.95 && y > plateau - 3 && rand() < 0.01 && tops.length < 9) tops.push({ x, y, z });
   }
   g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  g.setAttribute('aGreen', new THREE.Float32BufferAttribute(greens, 1));
+  g.setAttribute('aMoss', new THREE.Float32BufferAttribute(moss, 3));
   return { geometry: g, tops };
 }
 
