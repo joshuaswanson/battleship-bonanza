@@ -208,11 +208,15 @@ kbd {
 }
 
 .title-logo .lg-top {
-  animation: lg-slide-left 520ms 120ms cubic-bezier(0.2, 1.5, 0.4, 1) both;
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: lg-burst-out 520ms 120ms cubic-bezier(0.2, 1.5, 0.4, 1) both;
 }
 
 .title-logo .lg-main {
-  animation: lg-slide-right 520ms 260ms cubic-bezier(0.2, 1.5, 0.4, 1) both;
+  transform-box: fill-box;
+  transform-origin: 50% 0%;
+  animation: lg-burst-out 520ms 260ms cubic-bezier(0.2, 1.5, 0.4, 1) both;
 }
 
 .title-logo .lg-burst-pop {
@@ -239,15 +243,10 @@ kbd {
   animation: lg-bob 3.2s 1.2s ease-in-out infinite;
 }
 
-@keyframes lg-slide-left {
+@keyframes lg-burst-out {
   from {
-    transform: translateX(-700px);
-  }
-}
-
-@keyframes lg-slide-right {
-  from {
-    transform: translateX(700px);
+    transform: scale(0);
+    opacity: 0;
   }
 }
 
@@ -1125,20 +1124,32 @@ kbd {
 }
 
 .return-arrow {
-  width: 84px;
-  height: 84px;
-  background: var(--ink);
-  clip-path: polygon(50% 0, 100% 55%, 68% 55%, 68% 100%, 32% 100%, 32% 55%, 0 55%);
-  filter: drop-shadow(0 0 0 var(--ink));
   position: relative;
+  width: 76px;
+  height: 76px;
+}
+
+.return-arrow::before,
+.return-arrow::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  clip-path: polygon(100% 50%, 0 0, 22% 50%, 0 100%);
+  transform: translate(-50%, -50%) rotate(-90deg);
+}
+
+.return-arrow::after {
+  width: 68px;
+  height: 76px;
+  background: var(--ink);
 }
 
 .return-arrow::before {
-  content: '';
-  position: absolute;
-  inset: 8px;
-  background: var(--sun);
-  clip-path: polygon(50% 0, 100% 55%, 68% 55%, 68% 100%, 32% 100%, 32% 55%, 0 55%);
+  z-index: 1;
+  width: 52px;
+  height: 60px;
+  background: #ff4141;
 }
 
 .hud-reticle {
@@ -1244,7 +1255,7 @@ kbd {
   left: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
   will-change: transform;
   transition: opacity 200ms;
 }
@@ -1256,7 +1267,11 @@ kbd {
 .ability {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+}
+
+.ability kbd {
+  font-size: 1.05rem;
 }
 
 .ability kbd {
@@ -1276,7 +1291,7 @@ kbd {
   justify-content: space-between;
   gap: 6px;
   font-weight: 600;
-  font-size: 0.82rem;
+  font-size: 1.1rem;
   line-height: 1.1;
   text-shadow: 0 2px 0 var(--ink), 0 0 4px rgba(14, 42, 71, 0.8);
 }
@@ -1288,9 +1303,9 @@ kbd {
 }
 
 .ability-track {
-  height: 12px;
-  margin-top: 3px;
-  border: 2.5px solid var(--ink);
+  height: 20px;
+  margin-top: 4px;
+  border: 3px solid var(--ink);
   border-radius: 999px;
   background: rgba(14, 42, 71, 0.55);
   overflow: hidden;
@@ -1306,7 +1321,7 @@ kbd {
 
 .hull-dot {
   flex: none;
-  width: 26px;
+  width: 32px;
 }
 
 .ability .hull-fill {

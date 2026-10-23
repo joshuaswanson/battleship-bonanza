@@ -75,7 +75,7 @@ export class Hud {
     this.slotsEl.innerHTML = `<div class="ability hull-row">
           <i class="hull-dot"></i>
           <div class="ability-body">
-            <div class="ability-top"><span>Hull</span><em class="hull-text"></em></div>
+            <div class="ability-top"><span>Health</span><em class="hull-text"></em></div>
             <div class="ability-track"><div class="ability-fill hull-fill"></div></div>
           </div>
         </div>` + player.items
@@ -242,7 +242,7 @@ export class Hud {
     const v = this.projected.set(p.pos.x, p.pos.y + 1, p.pos.z).project(camera);
     const x = (v.x * 0.5 + 0.5) * innerWidth;
     const y = (-v.y * 0.5 + 0.5) * innerHeight;
-    this.slotsEl.style.transform = `translate(${Math.round(x + 95)}px, ${Math.round(y - 20)}px)`;
+    this.slotsEl.style.transform = `translate(${Math.round(x + 100)}px, ${Math.round(y - 60)}px)`;
     this.slotsEl.classList.toggle('dim', !p.alive);
   }
 
@@ -315,7 +315,7 @@ export class Hud {
     if (p.alive && race.state === 'racing' && !p.finished) {
       for (let i = 0; i < 2; i++) {
         const id = p.items[i];
-        const spec = id === 'laser' ? race.gunArc('laser', 70) : id === 'grapple' ? race.hookSpec(p) : TARGETING[id];
+        const spec = id === 'laser' ? race.gunArc(p, 'laser', 70) : id === 'grapple' ? race.hookSpec(p) : TARGETING[id];
         if (!spec || p.cooldowns[i] > 0) continue;
         target = race.findTarget(p, spec);
         if (target) {
