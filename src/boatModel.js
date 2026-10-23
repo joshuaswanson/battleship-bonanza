@@ -663,7 +663,7 @@ const MODULES = {
     }
   },
 
-  grapple(m, mats) {
+  grapple(m, mats, refs) {
     part(m, 'sphere', mats.dark, 0, 0.35, 0, 0.6, 0.45, 0.6, 0.04);
     const barrel = part(m, 'cylinder', mats.metal, 0, 0.75, 0.75, 0.24, 1.7, 0.24, 0.04);
     barrel.rotation.x = Math.PI / 2 - 0.25;
@@ -673,6 +673,7 @@ const MODULES = {
     hook.scale.setScalar(1.3);
     m.add(hook);
     hookHead(hook, mats.metal, mats.dark);
+    refs.hookHead = hook;
     part(m, 'ring', toon(0xc0874f), 0.75, 0.25, -0.2, 0.4, 0.4, 1.4, 0.03).rotation.x = Math.PI / 2;
     return { hookMount: new THREE.Vector3(0, 0.97, 1.7) };
   },

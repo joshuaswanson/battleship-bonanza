@@ -584,6 +584,7 @@ export class Race {
       });
       const anchor = target ? this.nearestHookMarker(target, b.pos) : null;
       const mesh = buildHook();
+      b.model.hookHead.visible = false;
       const rope = new THREE.Mesh(ROPE_GEOMETRY, ROPE_MATERIAL);
       rope.frustumCulled = false;
       this.scene.add(mesh, rope);
@@ -860,6 +861,7 @@ export class Race {
         const d = h.dir.length();
         if (d < 2.5) {
           this.scene.remove(h.mesh, h.rope);
+          o.model.hookHead.visible = !this.hooks.some((other) => other !== h && other.owner === o);
           return false;
         }
         h.pos.addScaledVector(h.dir.divideScalar(d), Math.min(d, 170 * dt));
