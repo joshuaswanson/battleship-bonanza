@@ -377,7 +377,7 @@ export function buildBoat(color, items) {
   };
   const towRings = [
     towRing(0, sternTop + 0.97, -HULL_L - 0.55, 0),
-    towRing(0, sheer(HULL_L - 0.9) + 0.02, HULL_L - 0.9, Math.PI / 2),
+    towRing(-(halfWidth(2.5) - 0.4), sheer(2.5) + 0.02, 2.5, Math.PI / 2),
   ];
 
   const flagZ = -HULL_L + 0.6;

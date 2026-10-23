@@ -20,6 +20,7 @@ const COLORS = {
   cliffDark: 0x8f8178,
   moss: 0x4fae4a,
   mossDark: 0x3a8f3e,
+  rockland: 0xffffff,
   stripeRed: 0xff4141,
   stripeWhite: 0xf6f8ff,
   roof: 0x0e2a47,
@@ -241,6 +242,64 @@ function forestBand(radius, height, steep, k0, k1, grow) {
   return lump(new THREE.LatheGeometry(points, 28));
 }
 
+const ROCK_TONES = [new THREE.Color(0xa89a8c), new THREE.Color(0x938577), new THREE.Color(0xb7aa9b)];
+const GRASS_TONE = new THREE.Color(0x6cc84f);
+const GRASS_EDGE = new THREE.Color(0x4fae4a);
+const SAND_TONE = new THREE.Color(0xf2d48f);
+
+function rockland(r, height, stretch, rot, rand) {
+  const waves = Array.from({ length: 6 }, () => ({
+    dir: new THREE.Vector3(rand() - 0.5, (rand() - 0.5) * 0.6, rand() - 0.5).normalize(),
+    freq: 1.5 + rand() * 4,
+    phase: rand() * 10,
+    amp: 0.05 + rand() * 0.07,
+  }));
+  const noise = (v) => waves.reduce((sum, w) => sum + Math.sin(v.dot(w.dir) * w.freq + w.phase) * w.amp, 0);
+  const plateau = height * (0.78 + rand() * 0.12);
+  const g = new THREE.IcosahedronGeometry(1, 4);
+  const pos = g.attributes.position;
+  const v = new THREE.Vector3();
+  const c = Math.cos(rot);
+  const sn = Math.sin(rot);
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i);
+    const unit = v.clone();
+    const n = 1 + noise(unit);
+    let px = unit.x * r * stretch * n;
+    let pz = unit.z * (r / stretch) * n;
+    let py = unit.y * height * 1.25 * (1 + noise(unit.clone().multiplyScalar(2)) * 0.6) - 2;
+    const cliff = Math.max(0, unit.y) ** 0.35;
+    px *= 1 - 0.18 * cliff;
+    pz *= 1 - 0.18 * cliff;
+    py = Math.min(py, plateau + noise(unit.clone().multiplyScalar(3)) * 3);
+    pos.setXYZ(i, px * c + pz * sn, py, -px * sn + pz * c);
+  }
+  g.computeVertexNormals();
+  const colors = [];
+  const tops = [];
+  const a = new THREE.Vector3();
+  const b = new THREE.Vector3();
+  const d = new THREE.Vector3();
+  const normal = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i += 3) {
+    a.fromBufferAttribute(pos, i);
+    b.fromBufferAttribute(pos, i + 1);
+    d.fromBufferAttribute(pos, i + 2);
+    const cy = (a.y + b.y + d.y) / 3;
+    normal.subVectors(b, a).cross(d.clone().sub(a)).normalize();
+    let color;
+    if (cy < 1.4) color = SAND_TONE;
+    else if (normal.y > 0.72 && cy > height * 0.3) color = cy > plateau - 2.5 ? GRASS_TONE : GRASS_EDGE;
+    else color = ROCK_TONES[Math.floor(cy / 3.2) % ROCK_TONES.length];
+    for (let k = 0; k < 3; k++) colors.push(color.r, color.g, color.b);
+    if (color === GRASS_TONE && rand() < 0.035 && tops.length < 9) {
+      tops.push({ x: (a.x + b.x + d.x) / 3, y: cy, z: (a.z + b.z + d.z) / 3 });
+    }
+  }
+  g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  return { geometry: g, tops };
+}
+
 function addSeaStack(batch, x, z, rand) {
   const roll = rand();
   const shape = roll < 0.3 ? 'dome' : roll < 0.55 ? 'spire' : roll < 0.7 ? 'twin' : 'crag';
@@ -285,31 +344,24 @@ function addSeaStack(batch, x, z, rand) {
     peak(x, z, r1, 55 + rand() * 30, 2.6, 0.06, 'dome');
     peak(x + Math.cos(a) * (r1 + r2 * 0.6), z + Math.sin(a) * (r1 + r2 * 0.6), r2, 32 + rand() * 20, 2.4, 0.1, 'spire');
   } else {
-    const count = 4 + Math.floor(rand() * 4);
-    const spread = 18 + rand() * 14;
-    let highest = null;
-    for (let i = 0; i < count; i++) {
-      const a = rand() * Math.PI * 2;
-      const d = i === 0 ? 0 : spread * (0.3 + rand() * 0.6);
-      const size = (i === 0 ? 14 : 7) + rand() * 9;
-      const height = size * (0.9 + rand() * 0.8);
-      const bx = x + Math.cos(a) * d;
-      const bz = z + Math.sin(a) * d;
-      batch.add(rand() < 0.5 ? 'cliff' : 'cliffDark', ROCK, mat(bx, height * 0.35, bz, size, height, size, rand() * 0.4, rand() * 3, rand() * 0.4));
-      batch.add(i % 2 ? 'grass' : 'moss', SPHERE, mat(bx, height * 0.35 + height * 0.82, bz, size * 0.62, size * 0.2, size * 0.62));
-      batch.add('foam', RING, mat(bx, 0.2, bz, size * 1.15, 5, size * 1.15));
-      footprint.push({ x: bx, z: bz, rx: size, rz: size, rot: 0 });
-      if (!highest || height > highest.height) highest = { bx, bz, height, size };
+    const r = 22 + rand() * 18;
+    const height = r * (0.45 + rand() * 0.55);
+    const rot = rand() * Math.PI;
+    const stretch = 0.7 + rand() * 0.6;
+    const land = rockland(r, height, stretch, rot, rand);
+    batch.add('rockland', land.geometry, mat(x, 0, z));
+    batch.add('foam', RING, mat(x, 0.2, z, r * stretch * 1.12, 6, (r / stretch) * 1.12, 0, rot, 0));
+    for (const spot of land.tops) {
+      const px = x + spot.x;
+      const pz = z + spot.z;
+      if (rand() < 0.45) {
+        addPalm(batch, px, spot.y - 0.3, pz, rand, { height: 7 + rand() * 6, lean: 0.1 + rand() * 0.35, dir: rand() * Math.PI * 2 });
+      } else {
+        const sz = 1.6 + rand() * 1.8;
+        batch.add(rand() < 0.5 ? 'moss' : 'mossDark', LOW_SPHERE, mat(px, spot.y + sz * 0.3, pz, sz * 1.2, sz * 0.8, sz));
+      }
     }
-    const palms = 1 + Math.floor(rand() * 3);
-    for (let i = 0; i < palms; i++) {
-      const a = rand() * Math.PI * 2;
-      addPalm(batch, highest.bx + Math.cos(a) * highest.size * 0.25, highest.height * 1.15, highest.bz + Math.sin(a) * highest.size * 0.25, rand, {
-        height: 7 + rand() * 5,
-        lean: 0.2 + rand() * 0.4,
-        dir: a,
-      });
-    }
+    footprint.push({ x, z, rx: r * stretch * 0.95, rz: (r / stretch) * 0.95, rot });
   }
   const base = footprint[0];
   for (let i = 0; i < 2 + Math.floor(rand() * 3); i++) {
@@ -317,6 +369,7 @@ function addSeaStack(batch, x, z, rand) {
     const s = 2 + rand() * 4;
     batch.add('rock', ROCK, mat(base.x + Math.cos(a) * (base.rx + s * 0.6), 0.2, base.z + Math.sin(a) * (base.rx + s * 0.6), s, s * 0.8, s, rand(), rand() * 3, rand()));
   }
+  footprint.crag = shape === 'crag';
   return footprint;
 }
 
@@ -631,8 +684,9 @@ export function createWorld(scene, track) {
     if (clearance < 45 || clearance > 260) continue;
     if (islands.some((o) => Math.hypot(o.x - x, o.z - z) < o.r + 40)) continue;
     if (stacks.some((s) => Math.hypot(s.x - x, s.z - z) < 120)) continue;
-    stacks.push({ x, z });
-    shores.push(...addSeaStack(batch, x, z, rand));
+    const footprint = addSeaStack(batch, x, z, rand);
+    stacks.push({ x, z, crag: footprint.crag });
+    shores.push(...footprint);
   }
   addLighthouse(batch, start.x, start.z, 3);
 
@@ -713,6 +767,7 @@ export function createWorld(scene, track) {
     sun,
     islands,
     shores,
+    stacks,
     update(t, dt, camera) {
       water.update(t);
       sky.position.copy(camera.position);
