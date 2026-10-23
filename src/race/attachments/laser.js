@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { laserWobble, aimLaserGun, stepLaser, laserDirection } from '../../boatModel.js';
+import { laserWobble, aimLaserGun, stepLaser, laserDirection, pointLaserGun } from '../../boatModel.js';
 import { waveHeight } from '../../water.js';
 import { LASER_REACH, SAW_LEAK } from '../shared.js';
 
@@ -21,13 +21,14 @@ export const methods = {
         b.laserHum = 1.25;
         this.sfx.play('laser', b.pos);
       }
-      const origin = b.model.laserMount.getWorldPosition(new THREE.Vector3());
       const dir = laserDirection(b.model, new THREE.Vector3());
       dir.y = 0;
       dir.normalize();
-      const drop = (origin.y - b.waterY) / LASER_REACH;
+      const drop = (b.model.laserMount.getWorldPosition(new THREE.Vector3()).y - b.waterY) / LASER_REACH;
       dir.y = wobble.lift - drop;
       dir.normalize();
+      const origin = pointLaserGun(b.model, dir, new THREE.Vector3());
+      if (b.isPlayer) this.lastLaserDir = dir;
       const reach = LASER_REACH * Math.hypot(1, drop);
       const hit = this.raycastBoats(origin, dir, reach, b);
       const shielded = hit && hit.boat.model.sawYaw && this.inArc(hit.boat, hit.boat.items.indexOf('saw'), origin.x, origin.z);

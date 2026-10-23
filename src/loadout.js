@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GROUPS, ITEMS, ITEM_IDS, STATS, statsFor } from './items.js';
 import { t, itemName, itemBlurb, comboName } from './i18n.js';
-import { buildBoat, buildItemModel, slotLock, laserWobble, aimLaserGun, buildMine, buildMissile, buildHook, aimTurret, spendMissile, reloadMissile, updateMissileTips, missileDirection, stepGun, stepLaser, stepFlame, stepSaw, flameDirection, newHeat, gunDirection, laserDirection, launchMine, reloadMine, updateMineHolder } from './boatModel.js';
+import { buildBoat, buildItemModel, slotLock, laserWobble, aimLaserGun, buildMine, buildMissile, buildHook, aimTurret, spendMissile, reloadMissile, updateMissileTips, missileDirection, stepGun, stepLaser, stepFlame, stepSaw, flameDirection, newHeat, gunDirection, laserDirection, pointLaserGun, launchMine, reloadMine, updateMineHolder } from './boatModel.js';
 import { createWater, seaWaves as waveHeight } from './water.js';
 import { Effects } from './effects.js';
 import { SUN_DIR } from './world.js';
@@ -586,12 +586,13 @@ export class Loadout {
       this.laserHum = 1.25;
       this.sfx.play('laser');
     }
-    const origin = b.laserMount.getWorldPosition(new THREE.Vector3());
+    const muzzle = b.laserMount.getWorldPosition(new THREE.Vector3());
     const dir = laserDirection(b, new THREE.Vector3());
     dir.y = 0;
     const reach = 15;
     dir.normalize();
-    dir.setY(wobble.lift * 2.5 - (origin.y - 0.2) / reach).normalize();
+    dir.setY(wobble.lift * 2.5 - (muzzle.y - 0.2) / reach).normalize();
+    const origin = pointLaserGun(b, dir, new THREE.Vector3());
     const end = origin.clone().addScaledVector(dir, reach * Math.hypot(1, (origin.y - 0.2) / reach));
     this.fx.beam(origin, end, 0xff2a2a, 0.5, 0.05, 1);
     if (end.y < 1.5) this.fx.scorch(end.x, waveHeight(end.x, end.z, this.time) + 0.15, end.z);

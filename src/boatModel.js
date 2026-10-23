@@ -1073,6 +1073,17 @@ export function aimLaserGun(refs, wobble, dt) {
   gun.updateMatrixWorld(true);
 }
 
+const parentQuat = new THREE.Quaternion();
+export function pointLaserGun(refs, dir, out) {
+  const gun = refs.modules.laser;
+  gun.parent.getWorldQuaternion(parentQuat);
+  const local = dir.clone().applyQuaternion(parentQuat.invert()).normalize();
+  gun.rotation.order = 'YXZ';
+  gun.rotation.set(-Math.asin(local.y), Math.atan2(local.x, local.z), 0);
+  gun.updateMatrixWorld(true);
+  return refs.laserMount.getWorldPosition(out);
+}
+
 export function laserWobble(time, seed) {
   const t = time + seed;
   const yaw = Math.sin(t * 6.3) * 0.13 + Math.sin(t * 15.7) * 0.05;

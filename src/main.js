@@ -670,7 +670,7 @@ function frame(now) {
   if (race.player && !race.attract && mode !== 'replay') {
     hud.update(race, camera, dt);
     sfx.listener = race.player.pos;
-    sfx.setEngine(Math.abs(race.player.speed) / BASE_SPEED, mode === 'race');
+    sfx.setEngine(Math.abs(race.player.speed) / BASE_SPEED, mode === 'race' && state.throttle > 0 && race.player.alive);
   } else {
     sfx.listener = cam.pos;
     sfx.setEngine(0, false);
