@@ -45,7 +45,7 @@ export const ITEMS = {
     name: 'Armor',
     group: 'defense',
     passive: true,
-    blurb: 'Bullets, spikes and saw blades bounce right off, and missiles barely dent it. Turns your boat into a very heavy bathtub.',
+    blurb: "Turn your boat into a heavy armored bathtub. Deflects bullets, spikes and saw blades, but you won't move as fast.",
   },
   camo: {
     adj: 'Sneaky',
@@ -90,7 +90,7 @@ export const ITEMS = {
     name: 'Machine gun',
     group: 'weapons',
     hold: true,
-    blurb: 'Hold the trigger for a hailstorm of bullets. Let go before it overheats! Armor just shrugs it off.',
+    blurb: "Hold the trigger for a hailstorm of bullets. Just don't let it overheat!",
   },
   laser: {
     adj: 'Dazzling',
@@ -107,8 +107,8 @@ export const ITEMS = {
     stats: { punch: 2, tough: 1 },
     name: 'Saw blade',
     group: 'weapons',
-    cooldown: 4,
-    blurb: "Lunge ahead and slice up whoever's in front. Spins so fast it bounces lasers back.",
+    passive: true,
+    blurb: 'Swivels around on its own to slice up anyone who gets too close. Lasers bounce right off its spinning shield.',
   },
   missiles: {
     adj: 'Homing',
