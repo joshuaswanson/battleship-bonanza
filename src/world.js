@@ -58,6 +58,7 @@ function mat(x, y, z, sx = 1, sy = 1, sz = 1, rx = 0, ry = 0, rz = 0) {
 const SPHERE = new THREE.SphereGeometry(1, 20, 14);
 const LOW_SPHERE = new THREE.SphereGeometry(1, 12, 8);
 const CYLINDER = new THREE.CylinderGeometry(1, 1, 1, 12);
+const CONE = new THREE.ConeGeometry(1, 1, 14);
 const ROCK = new THREE.DodecahedronGeometry(1, 0);
 ROCK.computeVertexNormals();
 const RING = new THREE.TorusGeometry(1, 0.06, 6, 40).rotateX(Math.PI / 2);
@@ -393,6 +394,42 @@ function createCloud(rand) {
   return new THREE.Mesh(mergeGeometries(parts), toon(0xffffff, { emissive: 0x9bd9ff, emissiveIntensity: 0.25 }));
 }
 
+function createMarkerBuoy(kind) {
+  const group = new THREE.Group();
+  const add = (geometry, color, x, y, z, sx, sy, sz, outline = 0.06) => {
+    const mesh = new THREE.Mesh(geometry, typeof color === 'number' ? toon(color) : color);
+    mesh.position.set(x, y, z);
+    mesh.scale.set(sx, sy, sz);
+    if (outline) mesh.add(new THREE.Mesh(geometry, outlineMaterial(outline / Math.min(sx, sy, sz))));
+    group.add(mesh);
+    return mesh;
+  };
+  const dark = 0x34465e;
+  if (kind === 0) {
+    add(SPHERE, 0xffffff, 0, 0.4, 0, 1.6, 0.7, 1.6);
+    add(CYLINDER, 0xff4141, 0, 2.2, 0, 1.0, 2.8, 1.0);
+    add(CYLINDER, 0xffffff, 0, 2.2, 0, 1.03, 0.5, 1.03, 0.04);
+    add(CYLINDER, dark, 0, 3.75, 0, 1.05, 0.3, 1.05);
+  } else if (kind === 1) {
+    add(SPHERE, 0xffffff, 0, 0.4, 0, 1.6, 0.7, 1.6);
+    add(CYLINDER, 0x3ddc6f, 0, 1.4, 0, 1.1, 1.4, 1.1);
+    add(CONE, 0x3ddc6f, 0, 3.0, 0, 1.1, 1.8, 1.1);
+    add(CYLINDER, 0xffffff, 0, 1.6, 0, 1.13, 0.4, 1.13, 0.04);
+  } else {
+    add(SPHERE, 0xffd23f, 0, 0.9, 0, 1.5, 1.4, 1.5);
+    add(CYLINDER, dark, 0, 0.9, 0, 1.52, 0.45, 1.52, 0.04);
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2;
+      const leg = add(CYLINDER, dark, Math.cos(a) * 0.45, 3.0, Math.sin(a) * 0.45, 0.1, 2.4, 0.1, 0.03);
+      leg.rotation.set(Math.sin(a) * 0.15, 0, -Math.cos(a) * 0.15);
+    }
+    add(CYLINDER, 0xffd23f, 0, 4.25, 0, 0.75, 0.2, 0.75, 0.04);
+    add(CONE, dark, 0, 4.9, 0, 0.55, 0.8, 0.55, 0.04);
+    group.userData.light = add(SPHERE, new THREE.MeshBasicMaterial({ color: 0xfff27a }), 0, 4.55, 0, 0.32, 0.32, 0.32, 0);
+  }
+  return group;
+}
+
 function createDuck() {
   const duck = new THREE.Group();
   const yellow = toon(0xffd23f);
@@ -492,6 +529,22 @@ export function createWorld(scene, track) {
     scene.add(cloud);
   }
 
+  const markers = [];
+  for (let tries = 0; markers.length < 22 && tries < 600; tries++) {
+    const x = (rand() - 0.5) * 900;
+    const z = (rand() - 0.5) * 900 + 60;
+    const clearance = track.project(x, z).distance - half;
+    if (clearance < 8 || clearance > 120) continue;
+    if (islands.some((o) => Math.hypot(o.x - x, o.z - z) < o.r + 8)) continue;
+    if (markers.some((m) => Math.hypot(m.position.x - x, m.position.z - z) < 30)) continue;
+    const marker = createMarkerBuoy(markers.length % 3);
+    marker.position.set(x, 0, z);
+    marker.rotation.y = rand() * Math.PI * 2;
+    marker.userData.phase = rand() * 10;
+    markers.push(marker);
+    scene.add(marker);
+  }
+
   const ducks = [];
   const duckSpots = islands.filter((o) => o.r > 18).slice(0, 4);
   for (const spot of duckSpots) {
@@ -526,6 +579,13 @@ export function createWorld(scene, track) {
       for (const cloud of clouds) {
         cloud.position.x += cloud.userData.speed * dt;
         if (cloud.position.x > 800) cloud.position.x = -800;
+      }
+      for (const m of markers) {
+        const ph = m.userData.phase;
+        m.position.y = waveHeight(m.position.x, m.position.z, t) - 0.4;
+        m.rotation.x = Math.sin(t * 1.4 + ph) * 0.12;
+        m.rotation.z = Math.cos(t * 1.1 + ph) * 0.12;
+        if (m.userData.light) m.userData.light.visible = (t + ph) % 2 < 0.35;
       }
       for (const duck of ducks) {
         const ph = duck.userData.phase;
