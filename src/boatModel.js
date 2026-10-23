@@ -9,19 +9,19 @@ const METAL = 0xc3cdd8;
 const DARK = 0x34465e;
 const RED = 0xff4141;
 
-const MOUNTED = new Set(['machinegun', 'laser', 'saw', 'missiles', 'mines', 'jetpack', 'grapple', 'emp']);
+const MOUNTED = new Set(['machinegun', 'laser', 'saw', 'missiles', 'mines', 'jetpack', 'grapple', 'emp', 'flamethrower']);
 const FRONT_MOUNT = 1.5;
 const REAR_MOUNT = -2.2;
 const SOLO_MOUNT = -0.35;
-const MOUNT_RANK = { saw: -1, missiles: 0.4, mines: 0.5, jetpack: 1 };
+const MOUNT_RANK = { saw: -1, flamethrower: -0.5, missiles: 0.4, mines: 0.5, jetpack: 1 };
 const mountRank = (id) => MOUNT_RANK[id] ?? 0;
 
 export function frontFirst(items) {
   const rank = (id) => (MOUNTED.has(id) ? mountRank(id) : 2);
   return [...items].sort((a, b) => rank(a) - rank(b));
 }
-const AIMED = new Set(['machinegun', 'laser', 'missiles', 'grapple']);
-const BACK_GUNS = new Set(['machinegun', 'laser']);
+const AIMED = new Set(['machinegun', 'laser', 'missiles', 'grapple', 'flamethrower']);
+const BACK_GUNS = new Set(['machinegun', 'laser', 'flamethrower']);
 const MODULE_SCALE = 1.3;
 
 export function halfWidth(z) {
@@ -619,6 +619,28 @@ const MODULES = {
     return { laserMount: new THREE.Vector3(0, 0.6, 1.55) };
   },
 
+  flamethrower(m, mats, refs) {
+    const tankMat = toon(RED);
+    refs.heatMats.flamethrower = [tankMat];
+    part(m, 'cylinder', mats.dark, 0, 0.3, -0.1, 0.55, 0.6, 0.55, 0.03);
+    const tank = part(m, 'capsule', tankMat, 0, 0.95, -0.55, 0.75, 0.75, 0.75, 0.04);
+    tank.rotation.x = Math.PI / 2;
+    part(m, 'cylinder', mats.white, 0, 0.95, -0.55, 0.39, 0.14, 0.39, 0.02).rotation.x = Math.PI / 2;
+    part(m, 'cylinder', mats.metal, 0, 0.95, -1.35, 0.14, 0.25, 0.14, 0.02).rotation.x = Math.PI / 2;
+    part(m, 'sphere', mats.dark, 0, 0.8, 0.25, 0.32, 0.32, 0.32, 0.03);
+    const pipe = part(m, 'cylinder', mats.metal, 0, 0.8, 0.95, 0.13, 1.4, 0.13, 0.03);
+    pipe.rotation.x = Math.PI / 2;
+    for (const z of [0.6, 1.1]) part(m, 'cylinder', mats.dark, 0, 0.8, z, 0.17, 0.1, 0.17, 0.02).rotation.x = Math.PI / 2;
+    const nozzle = part(m, 'cone', mats.dark, 0, 0.8, 1.75, 0.24, 0.35, 0.24, 0.03);
+    nozzle.rotation.x = -Math.PI / 2;
+    const pilot = new THREE.Mesh(geo.smallSphere(), glow(0x6ac8ff));
+    pilot.scale.setScalar(0.09);
+    pilot.position.set(0, 0.65, 1.88);
+    m.add(pilot);
+    refs.pilotLight = pilot;
+    return { flameMount: new THREE.Vector3(0, 0.8, 1.95) };
+  },
+
   saw(m, mats, refs) {
     part(m, 'cylinder', mats.dark, 0, 0.75, 0, 0.22, 1.5, 0.22, 0.03);
     part(m, 'sphere', mats.dark, 0, 1.55, 0, 0.32, 0.32, 0.32, 0.03);
@@ -925,6 +947,22 @@ export function stepGun(gun, refs, dt, time) {
     refs.gunSwivel.rotation.y += (sway - refs.gunSwivel.rotation.y) * (1 - Math.exp(-20 * dt));
   }
   return { shots, overheatedNow };
+}
+
+export function stepFlame(flame, refs, dt, time) {
+  const overheatedNow = stepHeat(flame, refs, 'flamethrower', dt, time);
+  const spraying = flame.firing && flame.delay <= 0;
+  const gun = refs.modules.flamethrower;
+  if (gun) {
+    const sway = spraying ? Math.sin(time * 7) * 0.12 + Math.sin(time * 17) * 0.04 : 0;
+    gun.rotation.y += (sway - gun.rotation.y) * (1 - Math.exp(-14 * dt));
+  }
+  if (refs.pilotLight) refs.pilotLight.scale.setScalar(0.09 * (spraying ? 1.6 : 0.8 + Math.sin(time * 20) * 0.15));
+  return { spraying, overheatedNow };
+}
+
+export function flameDirection(refs, out) {
+  return out.set(0, 0, 1).applyQuaternion(refs.flameMount.parent.getWorldQuaternion(new THREE.Quaternion()));
 }
 
 export function stepLaser(laser, refs, dt, time) {

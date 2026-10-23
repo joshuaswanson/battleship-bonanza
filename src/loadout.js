@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GROUPS, ITEMS, ITEM_IDS, STATS, statsFor } from './items.js';
 import { t, itemName, itemBlurb, comboName } from './i18n.js';
-import { buildBoat, buildItemModel, frontFirst, laserWobble, aimLaserGun, SALVO, buildMine, buildMissile, buildHook, aimTurret, spendMissile, reloadMissiles, updateMissileTips, missileDirection, updateAimers, stepGun, stepLaser, newHeat, gunDirection, laserDirection, launchMine, reloadMine, updateMineHolder } from './boatModel.js';
+import { buildBoat, buildItemModel, frontFirst, laserWobble, aimLaserGun, SALVO, buildMine, buildMissile, buildHook, aimTurret, spendMissile, reloadMissiles, updateMissileTips, missileDirection, updateAimers, stepGun, stepLaser, stepFlame, flameDirection, newHeat, gunDirection, laserDirection, launchMine, reloadMine, updateMineHolder } from './boatModel.js';
 import { createWater, waveHeight } from './water.js';
 import { Effects } from './effects.js';
 import { SUN_DIR } from './world.js';
@@ -52,10 +52,10 @@ export class Loadout {
     this.buildTray();
     this.buildIdentity();
     this.initPreview();
-    this.heat = { machinegun: newHeat(), laser: newHeat() };
+    this.heat = { machinegun: newHeat(), laser: newHeat(), flamethrower: newHeat() };
     this.busy = {};
     this.heldSlots = new Set();
-    this.autoFire = { machinegun: 0, laser: 0 };
+    this.autoFire = { machinegun: 0, laser: 0, flamethrower: 0 };
     const slotFor = { KeyO: 0, KeyP: 1 };
     addEventListener('keydown', (e) => {
       if (!this.active || e.target instanceof HTMLInputElement || e.repeat) return;
@@ -320,7 +320,7 @@ export class Loadout {
 
   rebuildBoat() {
     if (this.boat) this.scene.remove(this.boat.root);
-    this.heat = { machinegun: newHeat(), laser: newHeat() };
+    this.heat = { machinegun: newHeat(), laser: newHeat(), flamethrower: newHeat() };
     this.boat = buildBoat(this.setup.color, this.setup.items);
     this.scene.add(this.boat.root);
   }
@@ -359,6 +359,7 @@ export class Loadout {
     const up = new THREE.Vector3(0, 1, 0);
     switch (id) {
       case 'machinegun':
+      case 'flamethrower':
       case 'laser':
         this.autoFire[id] = 1.6;
         break;
@@ -548,6 +549,21 @@ export class Loadout {
     if (end.y < 1.5) this.fx.scorch(end.x, waveHeight(end.x, end.z, this.time) + 0.15, end.z);
   }
 
+  stepFlame(dt) {
+    const b = this.boat;
+    const { spraying, overheatedNow } = stepFlame(this.heat.flamethrower, b, dt, this.time);
+    this.afterHeat('flamethrower', overheatedNow, b.flameMount);
+    this.flameHum = spraying ? (this.flameHum ?? 0) - dt : 0;
+    if (!spraying) return;
+    if (this.flameHum <= 0) {
+      this.flameHum = 0.32;
+      this.sfx.play('flame');
+    }
+    const origin = b.flameMount.getWorldPosition(new THREE.Vector3());
+    const dir = flameDirection(b, new THREE.Vector3()).setY(0).normalize();
+    this.fx.flameSpray(origin, dir, new THREE.Vector3());
+  }
+
   afterHeat(id, overheatedNow, mount) {
     if (overheatedNow) {
       this.autoFire[id] = 0;
@@ -627,13 +643,14 @@ export class Loadout {
     this.swivelIdle(dt);
     updateMineHolder(b, dt);
     updateMissileTips(b, dt);
-    for (const id of ['machinegun', 'laser']) {
+    for (const id of ['machinegun', 'laser', 'flamethrower']) {
       this.autoFire[id] = Math.max(0, this.autoFire[id] - dt);
       const slot = this.setup.items.indexOf(id);
       this.heat[id].trigger = slot >= 0 && (this.heldSlots.has(slot) || this.autoFire[id] > 0);
     }
     if (b.minigun) this.stepGun(dt);
     if (b.laserMount) this.stepLaser(dt);
+    if (b.flameMount) this.stepFlame(dt);
     for (const sp of spinners) sp.mesh.rotation[sp.axis] += sp.speed * dt;
     flag.rotation.y = Math.sin(this.time * 9) * 0.25;
 

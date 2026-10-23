@@ -38,6 +38,7 @@ export function driveAI(race, b, dt) {
   avoidMines(race, b, ai);
   if (b.gun.heat > 0.85) b.gun.trigger = false;
   if (b.laser.heat > 0.85) b.laser.trigger = false;
+  if (b.flame.heat > 0.85) b.flame.trigger = false;
 
   if (race.player && !race.attract && !b.isPlayer) {
     const gap = race.player.dist - b.dist;
@@ -78,6 +79,11 @@ function useItems(race, b, ai) {
     if (b.items[slot] === 'machinegun') {
       const t = race.findTarget(b, race.gunArc(b, 'machinegun', 75));
       b.gun.trigger = !!t && !t.has('armor') && b.gun.heat < 0.7 && Math.random() < ai.aggression + 0.3;
+      continue;
+    }
+    if (b.items[slot] === 'flamethrower') {
+      const t = race.findTarget(b, race.gunArc(b, 'flamethrower', 15));
+      b.flame.trigger = !!t && b.flame.heat < 0.75 && Math.random() < ai.aggression + 0.4;
       continue;
     }
     if (b.items[slot] === 'laser') {

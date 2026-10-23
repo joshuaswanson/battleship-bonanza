@@ -205,7 +205,7 @@ export class Hud {
         return;
       }
       if (item.hold) {
-        const { heat, overheated } = id === 'laser' ? p.laser : p.gun;
+        const { heat, overheated } = id === 'laser' ? p.laser : id === 'flamethrower' ? p.flame : p.gun;
         this.slotFills[i].style.width = `${(1 - heat) * 100}%`;
         slot.classList.toggle('overheated', overheated);
         slot.classList.toggle('hot', !overheated && heat > 0.6);

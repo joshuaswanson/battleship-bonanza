@@ -224,6 +224,23 @@ export class Effects {
     });
   }
 
+  flameSpray(origin, dir, carry) {
+    const r = Math.random;
+    for (let i = 0; i < 7; i++) {
+      const speed = 22 + r() * 14;
+      const spread = 0.22;
+      const vx = dir.x * speed + (r() - 0.5) * speed * spread + carry.x * 0.8;
+      const vz = dir.z * speed + (r() - 0.5) * speed * spread + carry.z * 0.8;
+      const vy = (r() - 0.3) * 4;
+      const color = r() < 0.15 ? 0xffffff : r() < 0.55 ? 0xffd23f : r() < 0.85 ? 0xff8a1f : 0xff4a2a;
+      this.sparks.emit(origin.x, origin.y, origin.z, vx, vy, vz, 0.5 + r() * 0.6, 0.35 + r() * 0.15, color, -6, 1.5, 2);
+    }
+    if (r() < 0.5) {
+      const t = 0.3 + r() * 0.2;
+      this.puffs.emit(origin.x + dir.x * 10, origin.y + 0.5, origin.z + dir.z * 10, dir.x * 6, 2 + r() * 2, dir.z * 6, 0.9 + r() * 0.6, 0.7 + t, r() < 0.5 ? 0x6b6f78 : 0x8c9099, -2, 1, 0);
+    }
+  }
+
   scorch(x, y, z) {
     const r = Math.random;
     this.sparks.emit(x, y, z, 0, 0, 0, 0.55 + r() * 0.2, 1.1, r() < 0.5 ? 0xff2a2a : 0xffffff, 0, 0, 1, 0.25);

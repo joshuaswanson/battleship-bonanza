@@ -79,6 +79,11 @@ export const ITEMS = {
     group: 'weapons',
     cooldown: 3,
   },
+  flamethrower: {
+    stats: { punch: 3, tough: -1 },
+    group: 'weapons',
+    hold: true,
+  },
 };
 
 export const ITEM_IDS = Object.keys(ITEMS);
@@ -94,6 +99,7 @@ export const ICONS = {
   laser: '<path d="M2 12 H15" /><circle cx="19" cy="12" r="3" /><path d="M19 4 V6 M19 18 V20 M24 12 H22 M23 7 L21.5 8.5 M23 17 L21.5 15.5" />',
   saw: '<circle cx="12" cy="12" r="3" /><path d="M12 1 L14 5 L18 3 L18 7.5 L22.5 7.5 L20 11 L23 14 L19 15.5 L20 20 L15.5 19 L14 23 L11 20 L7.5 22.5 L7 18 L2.5 17.5 L4.5 13.5 L1 10.5 L5 9 L4 4.5 L8.5 5.5 Z" />',
   missiles: '<path d="M4 20 L8 16 M8 16 L16 8 C18 6 21 3 21 3 C21 3 18 6 16 8" /><path d="M16 8 L18 10 L8.5 19.5 L4.5 15.5 L14 6 Z" /><path d="M5.5 14.5 L2 14 L5 11 M9.5 18.5 L10 22 L13 19" />',
+  flamethrower: '<path d="M12 2 C14 6 18 8 18 13 A6 6 0 0 1 6 13 C6 10 8 9 9 6 C10 9 12 9 12 2 Z" />',
   mines: '<circle cx="12" cy="13" r="6" /><path d="M12 3 V7 M12 19 V23 M2 13 H6 M18 13 H22 M5 6 L7.5 8.5 M19 6 L16.5 8.5 M5 20 L7.5 17.5 M19 20 L16.5 17.5" />',
 };
 

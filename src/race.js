@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { ITEMS } from './items.js';
-import { buildBoat, buildMine, buildMissile, buildHook, laserWobble, aimLaserGun, aimTurret, SALVO, spendMissile, reloadMissiles, updateMissileTips, missileDirection, stepGun, stepLaser, newHeat, gunDirection, laserDirection, launchMine, reloadMine, updateMineHolder, HULL_L } from './boatModel.js';
+import { buildBoat, buildMine, buildMissile, buildHook, laserWobble, aimLaserGun, aimTurret, SALVO, spendMissile, reloadMissiles, updateMissileTips, missileDirection, stepGun, stepLaser, stepFlame, flameDirection, newHeat, gunDirection, laserDirection, launchMine, reloadMine, updateMineHolder, HULL_L } from './boatModel.js';
 import { waveHeight } from './water.js';
 import { createAI, driveAI } from './ai.js';
 import { toon, glow } from './toon.js';
@@ -12,6 +12,10 @@ export const LAPS = 3;
 export const MAX_HP = 100;
 export const BASE_SPEED = fast(44);
 const ARMOR_SPEED = 0.95;
+const FLAME_REACH = 15;
+const BURN_TIME = 3;
+const BURN_DPS = 5;
+const BLAST_RADIUS = 24;
 const REGEN_DELAY = 3;
 const REGEN_START = 2;
 const REGEN_RAMP = 4;
@@ -117,6 +121,11 @@ class Boat {
     this.sawState = { spin: 0, yaw: 0, tick: 0, shield: 0, shieldYaw: 0, sound: 0 };
     this.gun = newHeat();
     this.laser = newHeat();
+    this.flame = newHeat();
+    this.flameTicks = new Map();
+    this.flameHum = 0;
+    this.burn = null;
+    this.exploded = false;
     this.laserTicks = new Map();
     this.laserHum = 0;
     this.ko = 0;
@@ -270,6 +279,7 @@ export class Race {
         if (input.use1) this.useItem(b, 1);
         b.gun.trigger = (input.hold0 && b.items[0] === 'machinegun') || (input.hold1 && b.items[1] === 'machinegun');
         b.laser.trigger = (input.hold0 && b.items[0] === 'laser') || (input.hold1 && b.items[1] === 'laser');
+        b.flame.trigger = (input.hold0 && b.items[0] === 'flamethrower') || (input.hold1 && b.items[1] === 'flamethrower');
       } else if (b.alive) {
         driveAI(this, b, dt);
       }
@@ -283,6 +293,7 @@ export class Race {
     this.updateHooks(dt);
     this.updatePulses(dt);
     this.updateLasers(dt);
+    this.updateFlames(dt);
     this.features.update(this, dt, this.time);
     for (const b of this.boats) this.updateVisual(b, dt);
     this.updateStandings();
@@ -475,6 +486,8 @@ export class Race {
     b.stun = 0;
     b.gun.trigger = false;
     b.laser.trigger = false;
+    b.flame.trigger = false;
+    b.exploded = false;
     const s = idx * t.spacing;
     let ds = s - b.trackS;
     if (ds < -t.length / 2) ds += t.length;
@@ -563,10 +576,11 @@ export class Race {
     if (source !== target) source.stats.dealt += amount;
     if (source.isPlayer && source !== target) this.emit('dmg', { target, amount });
     target.flash = 1;
-    target.bump(kind === 'bullet' ? 1.5 : 5);
+    const light = kind === 'bullet' || kind === 'flame' || kind === 'fire';
+    target.bump(light ? 1.5 : 5);
     target.vel.x += knockX;
     target.vel.z += knockZ;
-    const SLOWDOWN = { bullet: 0.97, saw: 0.94, laser: 0.97, reflect: 0.97 };
+    const SLOWDOWN = { bullet: 0.97, saw: 0.94, laser: 0.97, reflect: 0.97, flame: 0.97, fire: 1 };
     target.speed *= SLOWDOWN[kind] ?? 0.7;
     if (spin && target.spinTime <= 0) {
       target.spinTime = spin;
@@ -574,7 +588,7 @@ export class Race {
     }
     if (stun) target.stun = Math.max(target.stun, stun);
     if (launch && !target.air) target.air = { t: 0, dur: launch, peak: launch * 6, jet: false };
-    this.sfx.play('hit', target.pos);
+    if (kind !== 'flame' && kind !== 'fire') this.sfx.play('hit', target.pos);
     if (target.isPlayer) this.emit('hurt', { amount, kind, source: source.name });
     if (target.hp <= 0) this.knockOut(target, source, kind);
     return true;
@@ -589,10 +603,17 @@ export class Race {
     b.yOffset = 0;
     b.gun.trigger = false;
     b.laser.trigger = false;
+    b.flame.trigger = false;
+    b.burn = null;
     for (const h of this.hooks) if (h.target === b || h.owner === b) h.phase = 'retract';
     const c = b.center();
-    this.fx.explosion(c.x, c.y, c.z, 0.8);
-    this.sfx.play('pop', b.pos);
+    if (b.has('flamethrower')) {
+      b.exploded = true;
+      this.propaneBlast(b);
+    } else {
+      this.fx.explosion(c.x, c.y, c.z, 0.8);
+      this.sfx.play('pop', b.pos);
+    }
     this.emit('feed', { text: tr(`feed_${kind}`, { a: source.name, b: b.name }), player: b.isPlayer || source.isPlayer });
     if (b.isPlayer) this.emit('ko', { source: source.name });
   }
@@ -640,10 +661,16 @@ export class Race {
 
   actions = {
     missiles(b) {
-      const target = this.findTarget(b, { range: 180, minDot: -1, filter: (o) => !o.has('camo') });
+      const targets = this.boats
+        .filter((o) => o !== b && o.alive && o.invuln <= 0 && !o.has('camo') && !(o.finished && !this.attract))
+        .map((o) => ({ o, d: Math.hypot(o.pos.x - b.pos.x, o.pos.z - b.pos.z) }))
+        .filter((t) => t.d <= 180)
+        .sort((x, y) => x.d - y.d)
+        .slice(0, SALVO)
+        .map((t) => t.o);
       b.model.busy.missiles = 1.4;
-      b.missileAim = target ? this.relativeAngle(b, target) : 0;
-      for (let i = 0; i < SALVO; i++) b.missileQueue.push({ target, wait: 0.28 + i * 0.13 });
+      b.missileAim = targets.length ? this.relativeAngle(b, targets[0]) : 0;
+      for (let i = 0; i < SALVO; i++) b.missileQueue.push({ target: targets.length ? targets[i % targets.length] : null, wait: 0.28 + i * 0.13 });
     },
 
     mines(b) {
@@ -1109,6 +1136,105 @@ export class Race {
     }
   }
 
+  updateFlames(dt) {
+    for (const b of this.boats) {
+      if (!b.has('flamethrower')) continue;
+      if (this.state !== 'racing' || !b.alive || b.disabled > 0) b.flame.trigger = false;
+      const { spraying, overheatedNow } = stepFlame(b.flame, b.model, dt, this.time);
+      if (overheatedNow) {
+        this.sfx.play('overheat', b.pos);
+        if (b.isPlayer) this.emit('warning', { text: tr('overheatedWarn') });
+      }
+      if (b.flame.overheated && Math.random() < 0.4) {
+        const p = b.model.flameMount.getWorldPosition(new THREE.Vector3());
+        this.fx.smoke(p.x, p.y + 0.3, p.z);
+      }
+      b.flameHum -= dt;
+      if (!spraying) continue;
+      b.lastFired = this.time;
+      if (b.flameHum <= 0) {
+        b.flameHum = 0.32;
+        this.sfx.play('flame', b.pos);
+      }
+      const origin = b.model.flameMount.getWorldPosition(new THREE.Vector3());
+      const dir = flameDirection(b.model, new THREE.Vector3());
+      dir.y = 0;
+      dir.normalize();
+      this.fx.flameSpray(origin, dir, b.vel);
+      const c = new THREE.Vector3();
+      for (const o of this.boats) {
+        if (o === b || !o.alive) continue;
+        o.center(c).sub(origin);
+        const along = c.x * dir.x + c.z * dir.z;
+        if (along < -1 || along > FLAME_REACH) continue;
+        const side = Math.abs(c.x * dir.z - c.z * dir.x);
+        if (side > 2.4 + along * 0.32 || Math.abs(c.y) > 4) continue;
+        const last = b.flameTicks.get(o) ?? -Infinity;
+        if (this.time - last < 0.2) continue;
+        b.flameTicks.set(o, this.time);
+        if (this.damage(o, 3, b, 'flame')) this.ignite(o, b);
+      }
+    }
+  }
+
+  ignite(o, source) {
+    const duration = o.has('camo') ? BURN_TIME * 1.5 : BURN_TIME;
+    if (!o.burn) this.sfx.play('ignite', o.pos);
+    o.burn = { time: Math.max(o.burn?.time ?? 0, duration), source, tick: o.burn?.tick ?? 0 };
+  }
+
+  updateBurn(b, dt) {
+    if (!b.burn) return;
+    if (!b.alive) {
+      b.burn = null;
+      return;
+    }
+    b.burn.time -= dt;
+    b.burn.tick -= dt;
+    const c = b.center();
+    for (let i = 0; i < 2; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = Math.random() * 2.2;
+      const along = (Math.random() - 0.5) * HULL_L * 1.4;
+      this.fx.flame(
+        c.x + Math.sin(b.heading) * along + Math.cos(a) * r * 0.5,
+        c.y + 0.2,
+        c.z + Math.cos(b.heading) * along + Math.sin(a) * r * 0.5,
+        0, 4 + Math.random() * 3, 0,
+      );
+    }
+    if (Math.random() < 0.3) this.fx.smoke(c.x, c.y + 1.5, c.z);
+    if (b.burn.tick <= 0) {
+      b.burn.tick = 0.25;
+      this.damage(b, BURN_DPS * 0.25, b.burn.source, 'fire');
+    }
+    if (b.burn?.time <= 0) b.burn = null;
+  }
+
+  propaneBlast(b) {
+    const c = b.center();
+    this.fx.explosion(c.x, c.y, c.z, 2.6);
+    this.fx.ring(c.x, c.y, c.z, 0xff8a1f, 2, BLAST_RADIUS, 0.6);
+    this.fx.ring(c.x, b.waterY + 0.3, c.z, 0xffffff, 2, BLAST_RADIUS * 0.8, 0.8);
+    for (let i = 0; i < 4; i++) this.fx.sparkBurst(c.x, c.y + 1, c.z, i % 2 ? 0xffd23f : 0xff5a3a, 20);
+    this.sfx.play('boom', b.pos);
+    this.sfx.play('boom', b.pos);
+    if (this.player && Math.hypot(this.player.pos.x - c.x, this.player.pos.z - c.z) < BLAST_RADIUS * 2) this.emit('lockShake', { amount: 1.6 });
+    for (const o of this.boats) {
+      if (o === b || !o.alive) continue;
+      const dx = o.pos.x - b.pos.x;
+      const dz = o.pos.z - b.pos.z;
+      const d = Math.hypot(dx, dz);
+      if (d > BLAST_RADIUS) continue;
+      const f = 1 - d / BLAST_RADIUS;
+      const nx = d > 0.01 ? dx / d : Math.random() - 0.5;
+      const nz = d > 0.01 ? dz / d : Math.random() - 0.5;
+      o.vel.x += nx * fast(55) * f;
+      o.vel.z += nz * fast(55) * f;
+      this.damage(o, 4 + 12 * f, b, 'propane', { launch: 0.3 + 0.6 * f, spin: f > 0.4 ? 0.8 : 0 });
+    }
+  }
+
   laserHit(b, victim, end, dir, amount, bounce) {
     if (victim.has('saw')) {
       this.sfx.play('tink', victim.pos);
@@ -1126,6 +1252,7 @@ export class Race {
 
   gunArc(b, id, range) {
     if (b.model.backGuns.has(id)) return { range: Math.min(range, WATCH_RANGE), minDot: -1 };
+    if (id === 'flamethrower') return { range: FLAME_REACH, minDot: 0.75 };
     return { range, minDot: id === 'laser' ? 0.97 : 0.88 };
   }
 
@@ -1184,7 +1311,7 @@ export class Race {
     const watchAngle = watched ? this.relativeAngle(b, watched) : null;
     for (const t of b.turrets) {
       busy[t.id] = Math.max(0, (busy[t.id] ?? 0) - dt);
-      const firing = (t.id === 'machinegun' && b.gun.trigger) || (t.id === 'laser' && b.laser.trigger);
+      const firing = (t.id === 'machinegun' && b.gun.trigger) || (t.id === 'laser' && b.laser.trigger) || (t.id === 'flamethrower' && b.flame.trigger);
       let target;
       let rate = 5;
       if (t.id === 'missiles' && busy.missiles > 0) {
@@ -1360,12 +1487,13 @@ export class Race {
     if (b.flash > 0 || materials[0].emissiveIntensity > 0) {
       for (const m of materials) m.emissiveIntensity = b.flash * 0.7;
     }
-    root.visible = b.invuln > 0 && b.alive ? Math.floor(b.invuln * 12) % 2 === 0 : true;
+    root.visible = b.exploded ? false : b.invuln > 0 && b.alive ? Math.floor(b.invuln * 12) % 2 === 0 : true;
 
     if (b.model.sawYaw) this.updateSaw(b, dt);
     this.updateTurrets(b, dt);
     this.updateSulk(b, dt);
     this.updateRegen(b, dt);
+    this.updateBurn(b, dt);
     updateMineHolder(b.model, dt);
     updateMissileTips(b.model, dt);
 

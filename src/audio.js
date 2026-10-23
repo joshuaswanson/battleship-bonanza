@@ -154,6 +154,12 @@ export class Sfx {
       case 'heal':
         [660, 880, 1100, 1320].forEach((f, i) => this.tone(f, 0.16, { type: 'sine', vol: 0.12 * v, delay: i * 0.06 }));
         break;
+      case 'flame':
+        this.noise(0.4, { vol: 0.14 * v, freq: 500, type: 'lowpass', to: 900 });
+        break;
+      case 'ignite':
+        this.noise(0.3, { vol: 0.22 * v, freq: 2500, type: 'bandpass', to: 600 });
+        break;
       case 'dodge':
         this.noise(0.4, { vol: 0.25 * v, freq: 600, type: 'bandpass', to: 3000 });
         [880, 1320, 1760].forEach((f, i) => this.tone(f, 0.14, { type: 'triangle', vol: 0.14, delay: 0.05 + i * 0.06 }));
