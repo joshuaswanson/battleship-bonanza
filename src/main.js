@@ -190,6 +190,8 @@ function renderLanguagePicker() {
 }
 applyStatic();
 renderLanguagePicker();
+const touchOnly = matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches;
+document.body.classList.toggle('touch-only', touchOnly);
 
 $('btn-play').addEventListener('click', goLoadout);
 let howtoOpener = null;

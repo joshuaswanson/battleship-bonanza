@@ -7,6 +7,8 @@ export const LANGUAGES = [
 const STRINGS = {
   en: {
     credit: 'by Joshua Swanson',
+    mobileTitle: 'Grab a keyboard!',
+    mobileBody: 'Battleship Bonanza is played with a keyboard. Open this page on a laptop or desktop to race.',
     play: 'Play',
     howto: 'How to play',
     drive: 'Drive',
@@ -79,6 +81,8 @@ const STRINGS = {
   },
   fr: {
     credit: 'par Joshua Swanson',
+    mobileTitle: 'Il faut un clavier !',
+    mobileBody: 'Battleship Bonanza se joue au clavier. Ouvrez cette page sur un ordinateur pour faire la course.',
     play: 'Jouer',
     howto: 'Comment jouer',
     drive: 'Piloter',
@@ -151,6 +155,8 @@ const STRINGS = {
   },
   de: {
     credit: 'von Joshua Swanson',
+    mobileTitle: 'Hol dir eine Tastatur!',
+    mobileBody: 'Battleship Bonanza wird mit der Tastatur gespielt. Öffne diese Seite auf einem Laptop oder PC, um loszufahren.',
     play: 'Spielen',
     howto: 'Spielanleitung',
     drive: 'Fahren',
@@ -486,7 +492,9 @@ const PAIR_NAMES = {
 
 const ACRONYMS = new Set(['emp']);
 
-let lang = LANGUAGES.some((l) => l.id === localStorage.getItem('bb-lang')) ? localStorage.getItem('bb-lang') : 'en';
+const browserLang = (navigator.language ?? 'en').slice(0, 2);
+const savedLang = localStorage.getItem('bb-lang');
+let lang = LANGUAGES.some((l) => l.id === savedLang) ? savedLang : LANGUAGES.some((l) => l.id === browserLang) ? browserLang : 'en';
 
 export function getLang() {
   return lang;
