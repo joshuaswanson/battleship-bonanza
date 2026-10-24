@@ -37,11 +37,11 @@ const NAVY = {
   lampGlass: 0xfff1b0,
 };
 
+const BATTLESHIP_SCALE = 1.8;
 const BOX = new THREE.BoxGeometry(1, 1, 1);
 const CYL = new THREE.CylinderGeometry(1, 1, 1, 14);
 const CONE = new THREE.ConeGeometry(1, 1, 14);
 const BALL = new THREE.SphereGeometry(1, 14, 10);
-const DISH = new THREE.SphereGeometry(1, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2);
 
 function planeGeometry(kind) {
   const parts = [];
@@ -98,30 +98,6 @@ function planeGeometry(kind) {
 
 function propGeometry(size) {
   return new THREE.CylinderGeometry(size, size, 0.05, 20).rotateX(Math.PI / 2);
-}
-
-function parachuteGeometry() {
-  const parts = [];
-  const add = (geometry, color, m) => {
-    const g = (geometry.index ? geometry.toNonIndexed() : geometry.clone()).applyMatrix4(m);
-    g.deleteAttribute('uv');
-    const c = new THREE.Color(color);
-    const rgb = new Float32Array(g.attributes.position.count * 3);
-    for (let k = 0; k < g.attributes.position.count; k++) rgb.set([c.r, c.g, c.b], k * 3);
-    g.setAttribute('color', new THREE.BufferAttribute(rgb, 3));
-    parts.push(g);
-  };
-  const M = (x, y, z, sx, sy, sz, rx = 0, rz = 0) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, 0, rz)), new THREE.Vector3(sx, sy, sz));
-  add(DISH, 0xf2efe6, M(0, 4, 0, 3, 1.6, 3));
-  for (let k = 0; k < 8; k++) {
-    const a = (k / 8) * Math.PI * 2;
-    add(CYL, 0x8a8f96, M(Math.cos(a) * 1.4, 2, Math.sin(a) * 1.4, 0.04, 4.2, 0.04, Math.sin(a) * 0.6, -Math.cos(a) * 0.6));
-  }
-  add(CYL, 0x5f6b45, M(0, 0, 0, 0.35, 1.1, 0.35));
-  add(BALL, 0xffd2b0, M(0, 0.8, 0, 0.3, 0.3, 0.3));
-  const g = mergeGeometries(parts);
-  g.computeVertexNormals();
-  return g;
 }
 
 async function loadFighter(url) {
@@ -216,7 +192,7 @@ class Tracers {
     this.one = new THREE.Vector3(1, 1, 1);
   }
 
-  fire(from, to, speed, spread = 0.02, count = 1, gap = 0.07) {
+  fire(from, to, speed, spread = 0.02, count = 1, gap = 0.07, flash = false) {
     const dir = to.clone().sub(from).normalize();
     dir.x += (Math.random() - 0.5) * spread;
     dir.y += (Math.random() - 0.5) * spread;
@@ -225,7 +201,7 @@ class Tracers {
     const life = Math.min(2.2, from.distanceTo(to) / speed + 0.35);
     for (let k = 0; k < count; k++) {
       if (this.list.length >= this.max) return;
-      this.list.push({ pos: from.clone(), vel: dir.clone().multiplyScalar(speed), life: life + k * gap, wait: k * gap });
+      this.list.push({ pos: from.clone(), vel: dir.clone().multiplyScalar(speed), life: life + k * gap, wait: k * gap, flash });
     }
   }
 
@@ -237,6 +213,10 @@ class Tracers {
       if (t.wait > 0) {
         t.wait -= dt;
         return true;
+      }
+      if (t.flash) {
+        t.flash = false;
+        this.onFlash?.(t.pos, t.vel);
       }
       t.pos.addScaledVector(t.vel, dt);
       this.q.setFromUnitVectors(this.z, this.d.copy(t.vel).normalize());
@@ -344,7 +324,9 @@ export async function createMidway(group, track, fx) {
   place(0.14, 1, 44, 226, 46, -0.25, (x, z, yaw, g) => flatTop(x, z, yaw, g, false));
   const bigShip = (x, z, yaw, g) => {
     const before = turrets.length;
-    const size = bigBattleship(batch, dyn, x, z, yaw, rand, g.local, turrets, stacks);
+    const gunsBefore = g.local.length;
+    const size = bigBattleship(batch, dyn, x, z, yaw, rand, g.local, turrets, stacks, BATTLESHIP_SCALE);
+    for (const gun of g.local.slice(gunsBefore)) gun.multiplyScalar(BATTLESHIP_SCALE);
     tagTurrets(before);
     battleships.push({ x, z, yaw });
     return size;
@@ -355,8 +337,8 @@ export async function createMidway(group, track, fx) {
     tagTurrets(before);
     return size;
   };
-  place(0.33, -1, 16, 172, 30, 0.12, bigShip);
-  place(0.86, 1, 20, 172, 30, -0.18, bigShip);
+  place(0.33, -1, 16, 172 * BATTLESHIP_SCALE, 30 * BATTLESHIP_SCALE, 0.12, bigShip);
+  place(0.86, 1, 20, 172 * BATTLESHIP_SCALE, 30 * BATTLESHIP_SCALE, -0.18, bigShip);
   for (const [f, side, angle] of [[0.04, -1, 0.5], [0.48, 1, -0.4], [0.74, -1, 0.2], [0.24, 1, 0.9]]) {
     place(f, side, 10, 96, 11, angle, tinCan);
   }
@@ -440,9 +422,15 @@ export async function createMidway(group, track, fx) {
   const blue = new Squadron(air, fighter.geometry, { geometry: propGeometry(1.5), offsets: propAt }, 14, 0.05, fighter.blue);
   const green = new Squadron(air, fighter.geometry, { geometry: propGeometry(1.5), offsets: propAt }, 14, 0.05, fighter.green);
   const bombers = new Squadron(air, planeGeometry('bomber'), { geometry: propGeometry(1.9), offsets: [new THREE.Matrix4().makeTranslation(-5, -0.2, 4.3), new THREE.Matrix4().makeTranslation(5, -0.2, 4.3)] }, 6, 0.1);
-  const chutes = new Squadron(air, parachuteGeometry(), null, 10, 0.06);
   const tracers = new Tracers(air);
-  group.userData.squads = { blue, green, bombers, chutes };
+  const flashDir = new THREE.Vector3();
+  tracers.onFlash = (pos, vel) => {
+    const d = flashDir.copy(vel).normalize();
+    fx.fireCore.emit(pos.x, pos.y, pos.z, d.x * 4, d.y * 4, d.z * 4, 1.8 + Math.random() * 0.8, 0.06, 0xfff6d0, 0, 0, 1);
+    fx.fire.emit(pos.x + d.x * 1.4, pos.y + d.y * 1.4, pos.z + d.z * 1.4, d.x * 8, d.y * 8, d.z * 8, 2.4 + Math.random() * 1, 0.07, 0xffa23a, 0, 0, 1);
+    if (Math.random() < 0.3) fx.puffs.emit(pos.x, pos.y, pos.z, d.x * 3, d.y * 3 + 1, d.z * 3, 0.6 + Math.random() * 0.5, 0.7, 0xd9d1c3, 0, 0.8, 0);
+  };
+  group.userData.squads = { blue, green, bombers };
 
   const planes = [];
   for (let pair = 0; pair < 14; pair++) {
@@ -458,7 +446,6 @@ export async function createMidway(group, track, fx) {
     const lane = k < 3 ? 0 : 1;
     planes.push({ squad: bombers, index: k, bomber: { lane, slot: k % 3, offset: lane ? 900 : 0 } });
   }
-  const chuteState = Array.from({ length: 10 }, () => null);
 
   const pos = new THREE.Vector3();
   const ahead = new THREE.Vector3();
@@ -491,8 +478,6 @@ export async function createMidway(group, track, fx) {
     pathAt(p, t + 0.05, ahead);
     const vel = ahead.clone().sub(pos).multiplyScalar(20);
     p.fall = { pos: pos.clone(), vel, spin: (Math.random() < 0.5 ? -1 : 1) * (2 + Math.random() * 3), angle: 0, q: new THREE.Quaternion() };
-    const free = chuteState.findIndex((c) => !c);
-    if (free >= 0 && Math.random() < 0.55 && !p.bomber) chuteState[free] = { pos: pos.clone().add(new THREE.Vector3(0, -2, 0)), drift: new THREE.Vector3((Math.random() - 0.5) * 3, -4, (Math.random() - 0.5) * 3), sway: Math.random() * 6 };
     fx.fireCore.emit(pos.x, pos.y, pos.z, 0, 0, 0, 3, 0.3, 0xfff1b0, 0, 0, 1);
     fx.fire.emit(pos.x, pos.y, pos.z, 0, 0, 0, 5, 0.45, 0xff4a1a, 0, 0, 1);
   };
@@ -684,33 +669,16 @@ export async function createMidway(group, track, fx) {
       }
     }
     for (const s of [blue, green, bombers]) s.flush();
-    chuteState.forEach((c, i) => {
-      if (!c) {
-        chutes.set(i, m, false);
-        return;
-      }
-      c.sway += dt;
-      c.pos.addScaledVector(c.drift, dt);
-      if (c.pos.y < 0.5) {
-        fx.splash(c.pos.x, 0.3, c.pos.z, 0.4);
-        chuteState[i] = null;
-        chutes.set(i, m, false);
-        return;
-      }
-      q.setFromAxisAngle(zAxis, Math.sin(c.sway * 1.6) * 0.2);
-      chutes.set(i, m.compose(c.pos, q, one));
-    });
-    chutes.flush();
 
     aa -= dt;
     if (aa <= 0 && guns.length) {
-      aa = 0.018;
+      aa = 0.012;
       const gun = guns[Math.floor(Math.random() * guns.length)];
       const targets = planes.filter((p) => p.now && !p.fall && !p.respawn);
       const target = targets[Math.floor(Math.random() * targets.length)];
       if (target) {
         const aim = target.now.clone().add(new THREE.Vector3((Math.random() - 0.5) * 30, (Math.random() - 0.3) * 20, (Math.random() - 0.5) * 30));
-        tracers.fire(gun, aim, 150, 0.03, 6, 0.06);
+        tracers.fire(gun, aim, 150, 0.03, 6, 0.06, true);
       }
     }
     flak -= dt;

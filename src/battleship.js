@@ -107,7 +107,7 @@ const KIT_MATERIAL = () => (kitMaterial ??= toon(0xffffff, { vertexColors: true 
 const TURRET_SHAPE = new THREE.Shape([new THREE.Vector2(-3, -3.4), new THREE.Vector2(3, -3.4), new THREE.Vector2(3.2, 1.6), new THREE.Vector2(2.2, 3.6), new THREE.Vector2(-2.2, 3.6), new THREE.Vector2(-3.2, 1.6)]);
 const TURRET_BODY = new THREE.ExtrudeGeometry(TURRET_SHAPE, { depth: 2.4, bevelEnabled: false }).rotateX(-Math.PI / 2);
 
-export function mainTurret(put, dyn, x, y, z, ry, s, elevation, turrets, at, shipYaw, barrelCount = 3, length = 11) {
+export function mainTurret(put, dyn, x, y, z, ry, s, elevation, turrets, at, shipYaw, barrelCount = 3, length = 11, shipScale = 1) {
   put('steelDark', CYL, x, y + 0.5 * s, z, 3.4 * s, 1 * s, 3.4 * s);
   const body = kit();
   body.put('steel', TURRET_BODY, 0, 1, 0);
@@ -118,8 +118,8 @@ export function mainTurret(put, dyn, x, y, z, ry, s, elevation, turrets, at, shi
   for (const k of spots) body.put('steelDark', BOX, k, 2, 3.5, 0.9, 1.3, 0.6);
   const yawGroup = body.build();
   const p = at(x, z);
-  yawGroup.position.set(p.x, y, p.z);
-  yawGroup.scale.setScalar(s);
+  yawGroup.position.set(p.x, y * shipScale, p.z);
+  yawGroup.scale.setScalar(s * shipScale);
   const base = shipYaw + ry;
   yawGroup.rotation.y = base;
   const pitchGroup = new THREE.Group();
@@ -137,7 +137,7 @@ export function mainTurret(put, dyn, x, y, z, ry, s, elevation, turrets, at, shi
   pitchGroup.add(recoil);
   pitchGroup.rotation.x = -elevation;
   dyn.add(yawGroup);
-  turrets.push({ yawGroup, pitchGroup, recoil, base, yaw: 0, pitch: elevation, muzzles, size: s });
+  turrets.push({ yawGroup, pitchGroup, recoil, base, yaw: 0, pitch: elevation, muzzles, size: s * shipScale });
 }
 
 export function secondary(put, x, y, z, ry, s) {
@@ -186,14 +186,14 @@ function launch(put, x, y, z, ry, s) {
   for (const k of [-0.4, 0.4]) put('steelDark', BOX, x + Math.cos(ry) * k * s, y + 1.2 * s, z - Math.sin(ry) * k * s, 0.15, 0.3 * s, 6 * s, 0, ry, 0);
 }
 
-export function bigBattleship(batch, dyn, x, z, yaw, rand, guns, turrets, fires) {
+export function bigBattleship(batch, dyn, x, z, yaw, rand, guns, turrets, fires, S = 1) {
   const L = 172;
   const B = 30;
   const D = 7;
-  const put = frame(batch, x, 0, z, yaw, 0, 0, 1);
-  const at = (lx, lz) => new THREE.Vector3(x + lx * Math.cos(yaw) + lz * Math.sin(yaw), 0, z - lx * Math.sin(yaw) + lz * Math.cos(yaw));
+  const put = frame(batch, x, 0, z, yaw, 0, 0, S);
+  const at = (lx, lz) => new THREE.Vector3(x + S * (lx * Math.cos(yaw) + lz * Math.sin(yaw)), 0, z + S * (-lx * Math.sin(yaw) + lz * Math.cos(yaw)));
   const { hull, deck, width, sheer } = loftHull(L, B, D, rand);
-  const place = new THREE.Matrix4().compose(new THREE.Vector3(x, 0, z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw), new THREE.Vector3(1, 1, 1));
+  const place = new THREE.Matrix4().compose(new THREE.Vector3(x, 0, z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw), new THREE.Vector3(S, S, S));
   batch.add('hullDark', hull, place);
   batch.add('deck', deck, place);
   const deckY = (lz) => sheer(lz / L + 0.5);
@@ -227,12 +227,12 @@ export function bigBattleship(batch, dyn, x, z, yaw, rand, guns, turrets, fires)
   put('steelLight', CYL, 0, deckY(-L / 2 + 2) + 2.5, -L / 2 + 2, 0.08, 5, 0.08);
 
   const yA = deckY(52);
-  mainTurret(put, dyn, 0, yA, 52, 0, 1.15, 0.32, turrets, at, yaw);
-  mainTurret(put, dyn, 0, yA + 3.8, 36, 0, 1.15, 0.42, turrets, at, yaw);
+  mainTurret(put, dyn, 0, yA, 52, 0, 1.15, 0.32, turrets, at, yaw, 3, 11, S);
+  mainTurret(put, dyn, 0, yA + 3.8, 36, 0, 1.15, 0.42, turrets, at, yaw, 3, 11, S);
   put('steelDark', CYL, 0, yA + 1.9, 36, 4.2, 3.8, 4.2);
-  mainTurret(put, dyn, 0, deckY(-40) + 3.8, -40, Math.PI, 1.15, 0.38, turrets, at, yaw);
+  mainTurret(put, dyn, 0, deckY(-40) + 3.8, -40, Math.PI, 1.15, 0.38, turrets, at, yaw, 3, 11, S);
   put('steelDark', CYL, 0, deckY(-40) + 1.9, -40, 4.2, 3.8, 4.2);
-  mainTurret(put, dyn, 0, deckY(-56), -56, Math.PI, 1.15, 0.3, turrets, at, yaw);
+  mainTurret(put, dyn, 0, deckY(-56), -56, Math.PI, 1.15, 0.3, turrets, at, yaw, 3, 11, S);
 
   const y0 = deckY(5);
   put('hull', BOX, 0, y0 + 2.5, 2, 16, 5, 50);
@@ -279,7 +279,7 @@ export function bigBattleship(batch, dyn, x, z, yaw, rand, guns, turrets, fires)
     put('funnelTop', CYL, 0, fy + 12.2 * fs, fz - 0.9, 3.25 * fs, 1 * fs, 4.25 * fs, 0.06, 0, 0);
     for (let k = -2; k <= 2; k++) put('steelDark', BOX, k * 1.1 * fs, fy + 12.75 * fs, fz - 0.95, 0.12, 0.08, 7.6 * fs, 0.06, 0, 0);
     for (const side of [-1, 1]) put('steelLight', CYL, side * 3.6 * fs, fy + 6 * fs, fz - 0.4, 0.15, 10 * fs, 0.15, 0.06, 0, 0);
-    fires && fires.stacks.push(at(0, fz - 1.2).setY(fy + 12.8 * fs));
+    fires && fires.stacks.push(at(0, fz - 1.2).setY((fy + 12.8 * fs) * S));
   }
   put('hull', BOX, 0, y0 + 7.5, -14, 10, 4, 10);
   put('steelDark', CYL, 0, y0 + 14, -22, 0.3, 14, 0.3);
@@ -296,5 +296,5 @@ export function bigBattleship(batch, dyn, x, z, yaw, rand, guns, turrets, fires)
   put('steelDark', BOX, 3.2, catY + 7.6, -64, 6, 0.3, 0.3, 0, 0, 0.3);
   put('steelDark', CYL, 1, catY + 4.8, -64, 0.05, 5, 0.05);
   for (const lz of [64, 46, -48, -62]) for (const side of [-1, 1]) aa(put, side * (width(lz / L + 0.5) - 3), deckY(lz), lz, guns);
-  return { L, B, top: 50 };
+  return { L: L * S, B: B * S, top: 50 * S };
 }
