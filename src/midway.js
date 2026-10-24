@@ -5,6 +5,7 @@ import { toon, glow, outlineMaterial, mulberry32 } from './toon.js';
 import { Batcher, cullChunks, COLORS, createSky, createCloud, createArch, SUN_DIR } from './world.js';
 import { courseBuoys, ellipseHit } from './terrain.js';
 import { frame } from './alpine.js';
+import { bigBattleship } from './battleship.js';
 
 const NAVY = {
   ...COLORS,
@@ -28,6 +29,10 @@ const NAVY = {
   raft: 0xe8a33a,
   planeBlue: 0x3b5d8c,
   planeGreen: 0x5f6b45,
+  steelLight: 0x9aa4ae,
+  boatWhite: 0xe9ecef,
+  flagRed: 0xc0392b,
+  lampGlass: 0xfff1b0,
 };
 
 const BOX = new THREE.BoxGeometry(1, 1, 1);
@@ -126,36 +131,6 @@ function carrier(batch, x, z, yaw, rand, fires, guns, burning) {
     put('scorch', BOX, ix, 19, 10, 6.05, 3, 6);
   }
   return { L, B, top: 34 };
-}
-
-function battleship(batch, x, z, yaw, guns, cannons) {
-  const put = frame(batch, x, 0, z, yaw, 0, 0, 1);
-  const L = 100;
-  const B = 18;
-  batch.add('keelRed', hullGeometry(L - 4, B - 1, 3), new THREE.Matrix4().compose(new THREE.Vector3(x, -2.6, z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw), new THREE.Vector3(1, 1, 1)));
-  batch.add('hullDark', hullGeometry(L, B, 6), new THREE.Matrix4().compose(new THREE.Vector3(x, 0, z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw), new THREE.Vector3(1, 1, 1)));
-  put('boot', BOX, 0, 0.4, 0, B + 0.15, 0.6, L * 0.8);
-  put('deck', BOX, 0, 6.1, -2, B - 2, 0.2, L * 0.8);
-  put('hull', BOX, 0, 9, 0, 10, 6, 30);
-  put('hull', BOX, 0, 13.5, 4, 8, 3.5, 16);
-  put('window', BOX, 0, 13.8, 12.05, 6, 0.8, 0.1);
-  put('hullLight', BOX, 0, 18, 8, 5, 6, 7);
-  put('window', BOX, 0, 19.5, 11.6, 4, 0.8, 0.1);
-  put('hull', BOX, 0, 22.5, 8, 3.5, 3, 5);
-  put('steelDark', CYL, 0, 28, 8, 0.25, 10, 0.25);
-  put('steelDark', BOX, 0, 30, 8, 7, 0.25, 0.25);
-  put('funnel', CYL, 0, 15, -4, 2.4, 9, 3, 0.15, 0, 0);
-  put('funnelTop', CYL, 0, 19.6, -4.7, 2.45, 0.6, 3.05, 0.15, 0, 0);
-  const at = (lz) => new THREE.Vector3(Math.sin(yaw) * lz + x, 0, Math.cos(yaw) * lz + z);
-  for (const [tz, ry] of [[32, 0], [21, 0], [-28, Math.PI]]) {
-    turret(put, 0, tz === 21 ? 8 : 6.2, tz, ry, 1.1);
-    cannons.push({ at: at(tz + (ry ? -7 : 7)), y: 10, yaw: yaw + ry, timer: 2 + Math.random() * 5 });
-  }
-  for (const side of [-1, 1]) {
-    for (const lz of [-12, 0, 14]) aaMount(put, side * 7, 6.2, lz, guns.local);
-    turret(put, side * 6.5, 6.2, -6, Math.PI / 2 * side, 0.55, 0.9);
-  }
-  return { L, B, top: 30 };
 }
 
 function destroyer(batch, x, z, yaw, guns, cannons) {
@@ -294,8 +269,8 @@ class Squadron {
 }
 
 class Tracers {
-  constructor(group, max = 500) {
-    const geometry = new THREE.BoxGeometry(0.22, 0.22, 7).translate(0, 0, -3.5);
+  constructor(group, max = 1400) {
+    const geometry = new THREE.BoxGeometry(0.28, 0.28, 2.6).translate(0, 0, -1.3);
     this.mesh = new THREE.InstancedMesh(geometry, glow(0xffd36b), max);
     this.mesh.frustumCulled = false;
     this.mesh.count = 0;
@@ -309,14 +284,17 @@ class Tracers {
     this.one = new THREE.Vector3(1, 1, 1);
   }
 
-  fire(from, to, speed, spread = 0.02) {
-    if (this.list.length >= this.max) return;
+  fire(from, to, speed, spread = 0.02, count = 1, gap = 0.07) {
     const dir = to.clone().sub(from).normalize();
     dir.x += (Math.random() - 0.5) * spread;
     dir.y += (Math.random() - 0.5) * spread;
     dir.z += (Math.random() - 0.5) * spread;
     dir.normalize();
-    this.list.push({ pos: from.clone(), vel: dir.multiplyScalar(speed), life: Math.min(2, from.distanceTo(to) / speed + 0.3) });
+    const life = Math.min(2.2, from.distanceTo(to) / speed + 0.35);
+    for (let k = 0; k < count; k++) {
+      if (this.list.length >= this.max) return;
+      this.list.push({ pos: from.clone(), vel: dir.clone().multiplyScalar(speed), life: life + k * gap, wait: k * gap });
+    }
   }
 
   update(dt) {
@@ -324,6 +302,10 @@ class Tracers {
     this.list = this.list.filter((t) => {
       t.life -= dt;
       if (t.life <= 0) return false;
+      if (t.wait > 0) {
+        t.wait -= dt;
+        return true;
+      }
       t.pos.addScaledVector(t.vel, dt);
       this.q.setFromUnitVectors(this.z, this.d.copy(t.vel).normalize());
       this.mesh.setMatrixAt(n++, this.m.compose(t.pos, this.q, this.one));
@@ -406,8 +388,21 @@ export async function createMidway(group, track, fx) {
     return size;
   });
   place(0.14, 1, 40, 150, 30, -0.25, (x, z, yaw, g) => carrier(batch, x, z, yaw, rand, [], g, false));
-  place(0.33, -1, 18, 100, 18, 0.15, (x, z, yaw, g) => battleship(batch, x, z, yaw, g, cannons));
-  place(0.86, 1, 22, 100, 18, -0.2, (x, z, yaw, g) => battleship(batch, x, z, yaw, g, cannons));
+  const stacks = { stacks: [] };
+  const battleships = [];
+  group.userData.battleships = battleships;
+  const bigShip = (x, z, yaw, g) => {
+    const before = cannons.length;
+    const size = bigBattleship(batch, x, z, yaw, rand, g.local, cannons, stacks);
+    battleships.push({ x, z, yaw });
+    for (const c of cannons.slice(before)) {
+      c.yaw = yaw + c.dir;
+      c.timer = 1 + Math.random() * 6;
+    }
+    return size;
+  };
+  place(0.33, -1, 16, 172, 30, 0.12, bigShip);
+  place(0.86, 1, 20, 172, 30, -0.18, bigShip);
   for (const [f, side, angle] of [[0.04, -1, 0.5], [0.48, 1, -0.4], [0.74, -1, 0.2], [0.24, 1, 0.9]]) {
     place(f, side, 10, 48, 8, angle, (x, z, yaw, g) => destroyer(batch, x, z, yaw, g, cannons));
   }
@@ -418,7 +413,7 @@ export async function createMidway(group, track, fx) {
     const z = Math.sin(a) * d + 100;
     const yaw = rand() * Math.PI;
     const local = { local: [] };
-    if (k % 3 === 0) battleship(batch, x, z, yaw, local, cannons);
+    if (k % 3 === 0) bigBattleship(batch, x, z, yaw, rand, local.local, [], stacks);
     else destroyer(batch, x, z, yaw, local, cannons);
     if (k % 2 === 0) fires.push(new THREE.Vector3(x, 8, z));
   }
@@ -578,7 +573,7 @@ export async function createMidway(group, track, fx) {
           const lead = planes.find((o) => o.path === p.path && o.role === 'lead');
           if (lead && !lead.fall && !lead.respawn && lead.now) {
             const nose = new THREE.Vector3(0, 0, 4).applyQuaternion(q).add(pos);
-            tracers.fire(nose, lead.now, 200, 0.05);
+            tracers.fire(nose, lead.now, 190, 0.04, 3, 0.05);
           }
         }
         if (p.burst <= 0) p.burst = 1.2 + Math.random() * 2;
@@ -605,13 +600,13 @@ export async function createMidway(group, track, fx) {
 
     aa -= dt;
     if (aa <= 0 && guns.length) {
-      aa = 0.03;
+      aa = 0.018;
       const gun = guns[Math.floor(Math.random() * guns.length)];
       const targets = planes.filter((p) => p.now && !p.fall && !p.respawn);
       const target = targets[Math.floor(Math.random() * targets.length)];
       if (target) {
         const aim = target.now.clone().add(new THREE.Vector3((Math.random() - 0.5) * 30, (Math.random() - 0.3) * 20, (Math.random() - 0.5) * 30));
-        for (let k = 0; k < 3; k++) tracers.fire(gun, aim, 170, 0.04);
+        tracers.fire(gun, aim, 150, 0.03, 6, 0.06);
       }
     }
     flak -= dt;
@@ -630,11 +625,14 @@ export async function createMidway(group, track, fx) {
       c.timer -= dt;
       if (c.timer > 0) continue;
       c.timer = 3 + Math.random() * 5;
-      const dir = new THREE.Vector3(Math.sin(c.yaw), 0.6, Math.cos(c.yaw)).normalize();
+      const dir = new THREE.Vector3(Math.sin(c.yaw), Math.tan(c.elevation ?? 0.55), Math.cos(c.yaw)).normalize();
       const at = c.at.clone().setY(c.y);
       for (let k = 0; k < 10; k++) fx.fire.emit(at.x, at.y, at.z, dir.x * (10 + k * 3), dir.y * (10 + k * 3), dir.z * (10 + k * 3), 2 + Math.random(), 0.22, 0xff6a1a, 0, 3, 2);
       fx.fireCore.emit(at.x, at.y, at.z, dir.x * 12, dir.y * 12, dir.z * 12, 2.4, 0.15, 0xfff1b0, 0, 3, 2);
       for (let k = 0; k < 8; k++) fx.puffs.emit(at.x + dir.x * 6, at.y + dir.y * 6, at.z + dir.z * 6, dir.x * 8 + (Math.random() - 0.5) * 4, dir.y * 8 + Math.random() * 2, dir.z * 8 + (Math.random() - 0.5) * 4, 2 + Math.random() * 1.5, 1.8, 0xb9bec4, -1, 1, 0);
+    }
+    for (const st of stacks.stacks) {
+      if (Math.random() < dt * 5) fx.soot.emit(st.x + (Math.random() - 0.5) * 2, st.y, st.z + (Math.random() - 0.5) * 2, wind.x + (Math.random() - 0.5), 3 + Math.random() * 2, wind.z + (Math.random() - 0.5), 1.6 + Math.random() * 1.2, 3.5 + Math.random() * 1.5, Math.random() < 0.5 ? 0x5a5d63 : 0x74777d, -0.8, 0.2, 0);
     }
     for (const f of fires) {
       if (Math.random() < dt * 7) fx.column(f.x, f.y + 2, f.z, wind, f.y > 5 ? 1.4 : 0.8);
@@ -650,7 +648,7 @@ export async function createMidway(group, track, fx) {
     sun,
     shores,
     solid(p) {
-      return ellipseHit(shores, p, 30);
+      return ellipseHit(shores, p, 45);
     },
     update(t, dt, camera) {
       water.update(t);
