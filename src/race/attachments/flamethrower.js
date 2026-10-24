@@ -46,12 +46,12 @@ export const methods = {
     b.burn.time -= dt;
     b.burn.tick -= dt;
     const c = b.center();
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 3; i++) {
       const along = (Math.random() - 0.5) * HULL_L * 1.6;
       const side = (Math.random() - 0.5) * 2.4;
-      this.fx.blaze(
+      this.fx.ember(
         c.x + Math.sin(b.heading) * along + Math.cos(b.heading) * side,
-        c.y + 0.4 + Math.random(),
+        c.y + 1.5 + Math.random() * 1.5,
         c.z + Math.cos(b.heading) * along - Math.sin(b.heading) * side,
         b.vel,
       );

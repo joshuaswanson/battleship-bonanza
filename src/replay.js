@@ -27,6 +27,8 @@ function boatNodes(b) {
     m.empCore,
     m.empHalo,
     b.shadow,
+    m.fire,
+    ...(m.fire?.userData.tongues ?? []),
   ];
   return [...new Set(nodes.filter(Boolean))];
 }

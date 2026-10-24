@@ -571,6 +571,12 @@ export class Effects {
     this.sparks.emit(x, y, z, carry.x + (r() - 0.5) * 1.2, 1.5 + r() * 2.5, carry.z + (r() - 0.5) * 1.2, 0.7 + r() * 0.7, 0.28 + r() * 0.2, color, -7, 0, 2);
   }
 
+  ember(x, y, z, carry) {
+    const r = Math.random;
+    const color = r() < 0.3 ? 0xffe066 : r() < 0.7 ? 0xff8a1f : 0xff4a2a;
+    this.sparks.emit(x, y, z, carry.x + (r() - 0.5) * 3, 4 + r() * 5, carry.z + (r() - 0.5) * 3, 0.1 + r() * 0.12, 0.6 + r() * 0.6, color, -2, 1.2, 1);
+  }
+
   blackSmoke(x, y, z, carry) {
     const r = Math.random;
     this.puffs.emit(x, y, z, carry.x * 0.9 + (r() - 0.5) * 1.5, 3 + r() * 2, carry.z * 0.9 + (r() - 0.5) * 1.5, 0.8 + r() * 0.6, 1 + r() * 0.4, r() < 0.5 ? 0x3d3f46 : 0x5c5f68, -2, 0.3, 0);

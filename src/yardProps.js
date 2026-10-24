@@ -193,7 +193,8 @@ function crane(group, x, z, face) {
   const g = new THREE.Group();
   g.position.set(x, DECK, z);
   g.rotation.y = face;
-  part(g, BOX, C.craneDark, 0, 0.4, 0, 3.2, 0.8, 3.2);
+  part(g, BOX, 0xb9c2cc, 0, 0.4, 0, 3.2, 0.8, 3.2);
+  for (const [px, pz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) part(g, CYL, C.craneDark, px * 1.3, 0.85, pz * 1.3, 0.12, 0.12, 0.12, 0, 0, 0, 0.02);
   for (const [px, pz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) part(g, BOX, C.crane, px * 0.9, 6, pz * 0.9, 0.3, 11, 0.3);
   for (let y = 1.5; y < 11; y += 1.8) {
     for (const s of [-1, 1]) {
@@ -201,11 +202,14 @@ function crane(group, x, z, face) {
       part(g, BOX, C.crane, 0, y + 0.9, s * 0.9, 0.16, 2.5, 0.16, 0, 0, Math.PI / 4.8 * (s > 0 ? 1 : -1), 0.02);
     }
   }
-  part(g, BOX, C.craneDark, 0, 12.2, 0.5, 2.6, 2.2, 3, 0, 0, 0, 0.05);
-  part(g, BOX, 0x8fd3f4, 1.31, 12.5, 1.2, 0.05, 1, 1.2, 0, 0, 0, 0.02);
+  part(g, BOX, 0xff5a5f, 0, 12.2, 0.5, 2.6, 2.2, 3, 0, 0, 0, 0.05);
+  part(g, BOX, 0xffffff, 0, 13.4, 0.5, 2.9, 0.25, 3.3, 0, 0, 0, 0.04);
+  part(g, BOX, 0x8fd3f4, 1.31, 12.4, 0.9, 0.05, 1.1, 1.8, 0, 0, 0, 0.02);
+  part(g, BOX, 0x8fd3f4, 0, 12.4, 2.01, 1.8, 1.1, 0.05, 0, 0, 0, 0.02);
   part(g, BOX, C.crane, 0, 13.6, 4.5, 0.9, 0.9, 13, 0, 0, 0, 0.05);
   part(g, BOX, C.crane, 0, 13.6, -3, 0.9, 0.9, 4, 0, 0, 0, 0.05);
-  part(g, BOX, C.craneDark, 0, 13.2, -4.6, 1.8, 1.8, 1.4);
+  part(g, BOX, 0x8c98a6, 0, 13.2, -4.6, 1.8, 1.8, 1.4);
+  for (let k = -0.6; k <= 0.6; k += 0.6) part(g, BOX, k === 0 ? C.crane : C.craneDark, 0.91, 13.2 + k, -4.6, 0.04, 0.3, 1.42, 0, 0, 0, 0);
   part(g, BOX, C.crane, 0, 15.6, 0.5, 0.4, 3.6, 0.4);
   for (let k = -2; k <= 10; k += 1.6) part(g, BOX, C.craneDark, 0, 14.12, k, 0.92, 0.1, 0.1, 0, 0, 0, 0);
   const trolley = 9;

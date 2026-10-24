@@ -494,12 +494,37 @@ export function buildBoat(color, items) {
     m.emissiveIntensity = 0;
   }
   refs.char = { value: 0 };
+  refs.fire = buildFire(root);
   for (const m of [...refs.materials, ...heated]) charrable(m, refs.char);
   flattenStatic(root, refs);
   return refs;
 }
 
 export const charClock = { value: 0 };
+
+const CHAR_GLSL = /* glsl */ `
+  vec3 charHash(vec3 p) {
+    p = vec3(dot(p, vec3(127.1, 311.7, 74.7)), dot(p, vec3(269.5, 183.3, 246.1)), dot(p, vec3(113.5, 271.9, 124.6)));
+    return fract(sin(p) * 43758.5453);
+  }
+  vec3 charCells(vec3 x) {
+    vec3 n = floor(x);
+    vec3 f = fract(x);
+    float d1 = 8.0;
+    float d2 = 8.0;
+    float id = 0.0;
+    for (int k = -1; k <= 1; k++)
+    for (int j = -1; j <= 1; j++)
+    for (int i = -1; i <= 1; i++) {
+      vec3 g = vec3(float(i), float(j), float(k));
+      vec3 r = g + charHash(n + g) - f;
+      float d = dot(r, r);
+      if (d < d1) { d2 = d1; d1 = d; id = dot(n + g, vec3(7.0, 157.0, 113.0)); }
+      else if (d < d2) { d2 = d; }
+    }
+    return vec3(sqrt(d1), sqrt(d2), id);
+  }
+`;
 
 function charrable(material, char) {
   material.onBeforeCompile = (shader) => {
@@ -508,38 +533,122 @@ function charrable(material, char) {
     shader.vertexShader = 'varying vec3 vCharPos;\n' + shader.vertexShader.replace(
       '#include <begin_vertex>',
       `#include <begin_vertex>
-      vCharPos = (modelMatrix * vec4(transformed, 1.0)).xyz;`,
+      vCharPos = position;`,
     );
-    shader.fragmentShader = 'uniform float uChar;\nuniform float uCharTime;\nvarying vec3 vCharPos;\n' + shader.fragmentShader
+    shader.fragmentShader = 'uniform float uChar;\nuniform float uCharTime;\nvarying vec3 vCharPos;\n' + CHAR_GLSL + shader.fragmentShader
       .replace(
         '#include <color_fragment>',
         `#include <color_fragment>
         float charGlow = 0.0;
-        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.035, 0.03, 0.028), uChar * 0.97);`,
+        vec3 charHeat = vec3(0.0);
+        if (uChar > 0.5) {
+          vec3 cells = charCells(vCharPos * 1.15);
+          float edge = cells.y - cells.x;
+          float crack = 1.0 - smoothstep(0.004, 0.04, edge);
+          vec3 small = charCells(vCharPos * 3.1 + 11.0);
+          float fine = 1.0 - smoothstep(0.003, 0.022, small.y - small.x);
+          float seed = fract(sin(cells.z) * 43758.5453);
+          float lit = smoothstep(0.35, 0.75, sin(vCharPos.x * 1.3 + uCharTime * 0.7) * 0.5 + sin(vCharPos.z * 1.7 - uCharTime * 0.5 + vCharPos.y * 2.0) * 0.5 + 0.5);
+          float flick = 0.7 + 0.3 * sin(uCharTime * 11.0 + seed * 40.0) * sin(uCharTime * 4.1 + seed * 13.0);
+          float hot = smoothstep(0.85, 1.0, seed) * (0.5 + 0.5 * sin(uCharTime * 2.5 + seed * 30.0));
+          float soot = 0.55 + 0.45 * fract(sin(cells.z * 1.7) * 9123.1);
+          diffuseColor.rgb = vec3(0.05, 0.045, 0.042) * soot;
+          float glow = crack * (0.25 + 0.75 * lit) * flick + fine * lit * 0.45;
+          charGlow = clamp(glow + hot * 0.4, 0.0, 1.0);
+          charHeat = vec3(1.0, 0.36, 0.05) * glow * 2.2
+            + vec3(1.0, 0.8, 0.4) * crack * lit * flick * 0.9
+            + vec3(0.6, 0.1, 0.01) * hot * 0.7;
+        }`,
       )
       .replace(
         '#include <emissivemap_fragment>',
         `#include <emissivemap_fragment>
-        if (uChar > 0.001) {
-          vec3 q = vCharPos * 2.4;
-          float t = uCharTime;
-          float a = sin(q.x * 1.3 + sin(q.z * 1.7 + t * 0.6) * 1.8);
-          float b = sin(q.z * 1.6 + sin(q.y * 2.1 - t * 0.5) * 1.6);
-          float c = sin(q.y * 1.9 + q.x * 0.7 + t * 0.4);
-          float vein = 1.0 - smoothstep(0.0, 0.13, abs(a * b + c * 0.25));
-          float pulse = 0.6 + 0.4 * sin(t * 5.0 + q.x * 0.8 + q.z * 1.1);
-          float ember = vein * pulse;
-          charGlow = ember;
-          totalEmissiveRadiance += uChar * (vec3(1.0, 0.38, 0.06) * ember * 2.2 + vec3(0.16, 0.025, 0.0) * (0.3 + 0.3 * sin(t * 3.0 + q.y)));
-        }`,
+        totalEmissiveRadiance += charHeat;`,
       )
       .replace(
         '#include <opaque_fragment>',
-        `outgoingLight = mix(outgoingLight, outgoingLight * 0.3, uChar * (1.0 - charGlow));
+        `if (uChar > 0.5) outgoingLight = outgoingLight * mix(0.45, 1.0, charGlow);
         #include <opaque_fragment>`,
       );
   };
-  material.customProgramCacheKey = () => 'char';
+  material.customProgramCacheKey = () => 'char2';
+}
+
+let fireGlow = null;
+function FIRE_GLOW() {
+  if (fireGlow) return fireGlow;
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(255,190,90,0.75)');
+  grad.addColorStop(0.4, 'rgba(255,110,30,0.3)');
+  grad.addColorStop(1, 'rgba(255,80,20,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 64, 64);
+  fireGlow = new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+  return fireGlow;
+}
+
+function buildFire(root) {
+  const fire = new THREE.Group();
+  fire.visible = false;
+  const glowing = (color, opacity) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending });
+  const outer = glowing(0xff3a0a, 0.7);
+  const mid = glowing(0xff8a1c, 0.8);
+  const core = glowing(0xffe08a, 0.95);
+  const tongue = new THREE.SphereGeometry(1, 12, 10).translate(0, 1, 0);
+  const pos = tongue.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const y = pos.getY(i);
+    const taper = Math.pow(1 - y / 2, 1.4) * (y < 1 ? Math.sqrt(y) : 1);
+    pos.setX(i, pos.getX(i) * taper * 1.15);
+    pos.setZ(i, pos.getZ(i) * taper * 1.15);
+    pos.setY(i, y * 1.25);
+  }
+  tongue.computeVertexNormals();
+  const spots = [];
+  for (let k = 0; k < 18; k++) {
+    const z = -3.6 + (k / 17) * 7.2;
+    const across = 1.25 * Math.sqrt(Math.max(0, 1 - (Math.max(0, z) / 4.4) ** 2));
+    const x = (k % 3 === 0 ? -1 : k % 3 === 1 ? 1 : 0) * across * (0.55 + 0.45 * ((k * 7) % 5) / 4);
+    spots.push([x, 0.8 + ((k * 3) % 4) * 0.12, z, 0.75 + ((k * 5) % 7) / 12]);
+  }
+  fire.userData.tongues = spots.map(([x, y, z, size], n) => {
+    const g = new THREE.Group();
+    g.position.set(x, y, z);
+    for (const [material, k, r] of [[outer, 1.25, 0.95], [mid, 0.95, 0.72], [core, 0.6, 0.48]]) {
+      const m = new THREE.Mesh(tongue, material);
+      m.scale.set(r * size, k * size, r * size);
+      m.renderOrder = 6;
+      g.add(m);
+    }
+    if (n % 3 === 0) {
+      const halo = new THREE.Sprite(FIRE_GLOW());
+      halo.position.y = 1.2 * size;
+      halo.scale.setScalar(5 * size);
+      g.add(halo);
+    }
+    g.userData.phase = n * 1.7;
+    g.userData.size = size;
+    fire.add(g);
+    return g;
+  });
+  root.add(fire);
+  return fire;
+}
+
+export function stepFire(refs, burning, time) {
+  const fire = refs.fire;
+  fire.visible = burning;
+  if (!burning) return;
+  for (const g of fire.userData.tongues) {
+    const p = g.userData.phase;
+    const lick = 1 + 0.28 * Math.sin(time * 13 + p) + 0.14 * Math.sin(time * 29 + p * 2.3);
+    const sway = 0.22 * Math.sin(time * 7 + p) + 0.1 * Math.sin(time * 17 + p);
+    g.scale.set(1 + 0.12 * Math.sin(time * 11 + p * 3), lick, 1 + 0.12 * Math.cos(time * 12 + p));
+    g.rotation.set(-0.35 + sway * 0.4, 0, sway);
+  }
 }
 
 function referenced(refs) {

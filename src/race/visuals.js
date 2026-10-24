@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { updateMissileTips, updateMineHolder, HULL_L } from '../boatModel.js';
+import { updateMissileTips, updateMineHolder, stepFire, HULL_L } from '../boatModel.js';
 import { waveHeight, isWater } from '../water.js';
 import { BASE_SPEED, KO_TIME, clamp } from './shared.js';
 
@@ -53,9 +53,9 @@ export const methods = {
     body.scale.set(1 - sq * 0.6, 1 + sq, 1 - sq * 0.6);
     body.position.y = Math.sin(t * 3 + b.index) * 0.05;
 
-    const charTarget = b.burn && b.alive ? 1 : 0;
-    b.model.char.value += (charTarget - b.model.char.value) * (1 - Math.exp(-(charTarget ? 2.5 : 0.6) * dt));
-    if (b.model.char.value < 0.002) b.model.char.value = 0;
+    const burning = !!(b.burn && b.alive);
+    b.model.char.value = burning ? 1 : 0;
+    stepFire(b.model, burning, t);
     if (b.flash > 0 || materials[0].emissiveIntensity > 0) {
       for (const m of materials) m.emissiveIntensity = b.flash * 0.7;
     }
