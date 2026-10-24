@@ -659,6 +659,8 @@ const MODULES = {
     muzzle.position.set(0, 0.55, 2.3);
     m.add(muzzle);
     refs.gunMount = muzzle;
+    refs.muzzleFlash = buildMuzzleFlash();
+    muzzle.add(refs.muzzleFlash);
   },
 
   laser(m, mats, refs) {
@@ -1038,6 +1040,101 @@ function stepHeat(h, refs, id, dt, time) {
   return overheatedNow;
 }
 
+let flashTextures = null;
+function flashArt() {
+  if (flashTextures) return flashTextures;
+  const paint = (w, h, draw) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    draw(canvas.getContext('2d'), w, h);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+  };
+  const star = paint(128, 128, (g, w) => {
+    const c = w / 2;
+    const glowFill = g.createRadialGradient(c, c, 0, c, c, c);
+    glowFill.addColorStop(0, 'rgba(255,255,240,1)');
+    glowFill.addColorStop(0.18, 'rgba(255,236,140,1)');
+    glowFill.addColorStop(0.45, 'rgba(255,160,40,0.55)');
+    glowFill.addColorStop(1, 'rgba(255,90,0,0)');
+    g.fillStyle = glowFill;
+    g.fillRect(0, 0, w, w);
+    g.translate(c, c);
+    for (let k = 0; k < 7; k++) {
+      g.rotate((Math.PI * 2) / 7);
+      const reach = c * (0.75 + (k % 2) * 0.22);
+      const spike = g.createLinearGradient(0, 0, reach, 0);
+      spike.addColorStop(0, 'rgba(255,255,230,1)');
+      spike.addColorStop(0.5, 'rgba(255,214,90,0.9)');
+      spike.addColorStop(1, 'rgba(255,140,30,0)');
+      g.fillStyle = spike;
+      g.beginPath();
+      g.moveTo(0, -c * 0.1);
+      g.lineTo(reach, 0);
+      g.lineTo(0, c * 0.1);
+      g.fill();
+    }
+  });
+  const tongue = paint(128, 64, (g, w, h) => {
+    const fill = g.createLinearGradient(0, 0, w, 0);
+    fill.addColorStop(0, 'rgba(255,255,235,1)');
+    fill.addColorStop(0.35, 'rgba(255,220,100,0.95)');
+    fill.addColorStop(0.75, 'rgba(255,140,30,0.6)');
+    fill.addColorStop(1, 'rgba(255,90,0,0)');
+    g.fillStyle = fill;
+    g.beginPath();
+    g.moveTo(0, h * 0.3);
+    g.quadraticCurveTo(w * 0.35, 0, w * 0.55, h * 0.18);
+    g.lineTo(w * 0.7, h * 0.05);
+    g.lineTo(w * 0.72, h * 0.32);
+    g.lineTo(w, h * 0.5);
+    g.lineTo(w * 0.72, h * 0.68);
+    g.lineTo(w * 0.7, h * 0.95);
+    g.lineTo(w * 0.55, h * 0.82);
+    g.quadraticCurveTo(w * 0.35, h, 0, h * 0.7);
+    g.fill();
+  });
+  flashTextures = { star, tongue };
+  return flashTextures;
+}
+
+function buildMuzzleFlash() {
+  const { star, tongue } = flashArt();
+  const additive = (map) => new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
+  const flash = new THREE.Group();
+  const flame = additive(tongue);
+  const length = new THREE.PlaneGeometry(1, 0.55).translate(0.5, 0, 0).rotateY(-Math.PI / 2);
+  for (const roll of [0, Math.PI / 2]) {
+    const plane = new THREE.Mesh(length, flame);
+    plane.scale.setScalar(2.6);
+    plane.rotation.z = roll;
+    flash.add(plane);
+  }
+  const front = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), additive(star));
+  front.position.z = 0.25;
+  front.scale.setScalar(1.8);
+  flash.add(front);
+  const burst = new THREE.Sprite(new THREE.SpriteMaterial({ map: star, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+  burst.position.z = 0.35;
+  burst.scale.setScalar(2.4);
+  flash.add(burst);
+  flash.userData.burst = burst;
+  flash.visible = false;
+  return flash;
+}
+
+export function flashGun(refs) {
+  const flash = refs.muzzleFlash;
+  if (!flash) return;
+  refs.flashTime = 0.05;
+  flash.visible = true;
+  flash.rotation.z = Math.random() * Math.PI * 2;
+  flash.scale.setScalar(0.8 + Math.random() * 0.5);
+  flash.userData.burst.material.rotation = Math.random() * Math.PI * 2;
+}
+
 export function stepGun(gun, refs, dt, time) {
   const overheatedNow = stepHeat(gun, refs, 'machinegun', dt, time);
   let shots = 0;
@@ -1051,6 +1148,10 @@ export function stepGun(gun, refs, dt, time) {
     gun.timer = 0;
   }
   if (refs.minigun) refs.minigun.rotation.z += dt * (gun.firing ? 32 : 1.5);
+  if (refs.muzzleFlash) {
+    refs.flashTime = (refs.flashTime ?? 0) - dt;
+    refs.muzzleFlash.visible = refs.flashTime > 0;
+  }
   if (refs.gunSwivel) {
     const sway = gun.firing ? Math.sin(time * 11) * 0.22 + Math.sin(time * 23) * 0.09 : 0;
     refs.gunSwivel.rotation.y += (sway - refs.gunSwivel.rotation.y) * (1 - Math.exp(-20 * dt));

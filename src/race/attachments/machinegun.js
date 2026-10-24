@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { stepGun, gunDirection } from '../../boatModel.js';
+import { stepGun, gunDirection, flashGun } from '../../boatModel.js';
 import { waveHeight } from '../../water.js';
 import { BULLET_SPEED, HIT_RADIUS } from '../shared.js';
 
@@ -31,7 +31,9 @@ export const methods = {
     const vel = dir.clone().multiplyScalar(BULLET_SPEED).add(b.vel);
     this.bullets.push({ pos: origin, prev: origin.clone(), start: origin.clone(), vel, owner: b, life: 0.48 });
     this.ejectCasing(b.model, b.vel);
-    this.fx.sparkBurst(origin.x, origin.y, origin.z, 0xffffff, 2);
+    flashGun(b.model);
+    this.fx.sparkBurst(origin.x, origin.y, origin.z, Math.random() < 0.5 ? 0xffe066 : 0xffffff, 4);
+    if (Math.random() < 0.15) this.fx.puffs.emit(origin.x + dir.x * 1.5, origin.y + 0.2, origin.z + dir.z * 1.5, b.vel.x * 0.6 + dir.x * 3, 1.2, b.vel.z * 0.6 + dir.z * 3, 0.28, 0.45, 0xdfe6ee, -0.5, 2, 0);
     this.sfx.play('shoot', b.pos);
   },
 

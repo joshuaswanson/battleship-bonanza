@@ -16,6 +16,7 @@ function boatNodes(b) {
     m.sawYaw,
     m.minigun,
     m.gunSwivel,
+    m.muzzleFlash,
     ...m.spinners.map((s) => s.mesh),
     ...m.flames,
     ...m.missileTips,
