@@ -1022,10 +1022,6 @@ kbd {
   line-height: 1.1;
 }
 
-.stats-card .pips i {
-  max-width: none;
-}
-
 .tray .slots {
   margin-top: auto;
   padding-top: 0.4rem;
