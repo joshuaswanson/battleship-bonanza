@@ -116,15 +116,71 @@ export function carrier(batch, x, z, yaw, rand, fires, guns, burning, parked, st
   }
   const deckY = 17.5;
   const W = 38;
-  const DL = 226;
-  put('hullLight', BOX, 0, (hullTop(0) + deckY) / 2 - 0.4, -2, B - 1.5, deckY - hullTop(0) - 0.8, DL - 40);
+  const DL = L + 2;
+  const wall = (u) => Math.min((B - 1.5) / 2, width(u));
+  const deckHalf = (lz) => {
+    if (lz < -DL / 2 + 16) return W / 2 - 4 + 4 * ((lz + DL / 2) / 16);
+    if (lz > DL / 2 - 24) {
+      const t = (lz - (DL / 2 - 24)) / 24;
+      return W / 2 - 10 * t * t;
+    }
+    return W / 2;
+  };
+  const hangar = [];
+  const rows = 120;
+  for (let r = 0; r <= rows; r++) {
+    const u = 0.015 + (r / rows) * 0.97;
+    hangar.push({ lz: (u - 0.5) * L, w: wall(u), y0: hullTop((u - 0.5) * L) - 0.3 });
+  }
+  const verts = [];
+  const quad = (a, b, c, d) => verts.push(...a, ...b, ...c, ...a, ...c, ...d);
+  for (let r = 0; r < rows; r++) {
+    const p = hangar[r];
+    const q = hangar[r + 1];
+    for (const side of [-1, 1]) {
+      const A = [side * p.w, p.y0, p.lz];
+      const Bv = [side * q.w, q.y0, q.lz];
+      const C = [side * q.w, deckY, q.lz];
+      const D = [side * p.w, deckY, p.lz];
+      if (side > 0) quad(A, D, C, Bv);
+      else quad(A, Bv, C, D);
+    }
+  }
+  for (const [end, dir] of [[hangar[0], -1], [hangar[rows], 1]]) {
+    const A = [-end.w, end.y0, end.lz];
+    const Bv = [end.w, end.y0, end.lz];
+    const C = [end.w, deckY, end.lz];
+    const D = [-end.w, deckY, end.lz];
+    if (dir > 0) quad(A, D, C, Bv);
+    else quad(A, Bv, C, D);
+  }
+  const hangarGeometry = new THREE.BufferGeometry();
+  hangarGeometry.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+  hangarGeometry.computeVertexNormals();
+  batch.add('hullLight', hangarGeometry, place);
+  const wallAt = (lz) => wall(lz / L + 0.5);
   for (const side of [-1, 1]) {
     for (let k = -84; k <= 84; k += 14) {
-      put('window', BOX, side * ((B - 1.5) / 2 + 0.03), hullTop(0) + 2.6, k, 0.08, 2.6, 8.5);
-      put('steelDark', BOX, side * ((B - 1.5) / 2 + 0.06), hullTop(0) + 4.2, k, 0.1, 0.2, 9);
+      put('window', BOX, side * (wallAt(k) + 0.03), hullTop(k) + 2.6, k, 0.08, 2.6, 8.5);
+      put('steelDark', BOX, side * (wallAt(k) + 0.06), hullTop(k) + 4.2, k, 0.1, 0.2, 9);
     }
-    for (let k = -100; k <= 100; k += 12) {
-      put('steelDark', BOX, side * (W / 2 - 3.4), deckY - 2.6, k, 0.4, 4.6, 0.4, 0, 0, side * -0.55);
+  }
+  const strut = (ax, ay, az, bx, by, bz, r = 0.22) => {
+    const a = new THREE.Vector3(ax, ay, az);
+    const b = new THREE.Vector3(bx, by, bz);
+    const mid = a.clone().add(b).multiplyScalar(0.5);
+    const dir = b.clone().sub(a);
+    const e = new THREE.Euler().setFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize()));
+    put('steelDark', BOX, mid.x, mid.y, mid.z, r * 2, dir.length(), r * 2, e.x, e.y, e.z);
+  };
+  for (let lz = -DL / 2 + 3; lz <= DL / 2 - 3; lz += 7) {
+    const w = Math.max(0.5, wallAt(Math.max(-L / 2 + 2, Math.min(L / 2 - 2, lz))));
+    const reach = deckHalf(lz) - 0.6;
+    if (reach - w < 1.2) continue;
+    for (const side of [-1, 1]) {
+      const drop = Math.min(5.5, (reach - w) * 0.8 + 1);
+      strut(side * w, deckY - drop, lz, side * reach, deckY - 0.05, lz);
+      put('steelDark', BOX, side * (w + reach) / 2, deckY - 0.25, lz, reach - w, 0.4, 0.4);
     }
   }
   const deckShape = new THREE.Shape();
@@ -160,8 +216,11 @@ export function carrier(batch, x, z, yaw, rand, fires, guns, burning, parked, st
     for (const s of [-1, 1]) put('steelDark', BOX, lx + s * (w / 2 - 0.3), ly - 1.2, lz, 0.3, 2, 0.3, 0, 0, -s * 0.5);
   };
   put('hullLight', BOX, ix, dy + 4, 15, 5.4, 8, 32);
-  put('hullLight', BOX, ix + 3.6, deckY - 2.4, 15, 4, 8, 24);
-  put('steelDark', BOX, ix + 3.6, deckY - 6.5, 15, 4.2, 0.4, 24.4);
+  const sideWall = (B - 1.5) / 2;
+  const islandOut = W / 2 + 1.2;
+  const islandBase = hullTop(15) - 0.3;
+  put('hullLight', BOX, (sideWall + islandOut) / 2, (islandBase + deckY) / 2, 15, islandOut - sideWall + 0.2, deckY - islandBase, 24);
+  put('steelDark', BOX, (sideWall + islandOut) / 2, deckY + 0.2, 15, islandOut - sideWall + 0.6, 0.4, 24.4);
   for (let k = 1; k <= 29; k += 2.8) {
     put('window', BOX, ix - 2.72, dy + 2.4, k, 0.08, 0.9, 1.3);
     put('window', BOX, ix - 2.72, dy + 5.6, k, 0.08, 0.9, 1.3);
@@ -210,8 +269,8 @@ export function carrier(batch, x, z, yaw, rand, fires, guns, burning, parked, st
     put('lampGlass', CYL, mx + side * 1.4, mastBase + 1, mz + 1.92, 0.4, 0.05, 0.4, Math.PI / 2, 0, 0);
   }
   for (const [lz, side] of [[-102, -1], [-102, 1], [104, -1], [104, 1]]) {
-    put('steelDark', CYL, side * (W / 2 - 2), dy + 0.3, lz, 0.5, 0.6, 0.5);
-    put('steelDark', BOX, side * (W / 2 - 2), dy + 1.3, lz, 0.25, 2, 0.25);
+    put('steelDark', CYL, side * (deckHalf(lz) - 2), dy + 0.3, lz, 0.5, 0.6, 0.5);
+    put('steelDark', BOX, side * (deckHalf(lz) - 2), dy + 1.3, lz, 0.25, 2, 0.25);
   }
   for (let k = 0; k < 4; k++) {
     put('steelLight', BOX, -12 + k * 2.4, dy + 0.5, 52, 1.6, 1, 2.6);
@@ -224,17 +283,24 @@ export function carrier(batch, x, z, yaw, rand, fires, guns, burning, parked, st
   for (const side of [-1, 1]) {
     for (const lz of [-94, -76, -40, 40, 76, 92]) {
       if (side > 0 && lz > -2 && lz < 34) continue;
-      const sx = side * (W / 2 + 1.6);
+      const edgeX = deckHalf(lz);
+      const sx = side * (edgeX + 1.6);
       put('steelDark', BOX, sx, deckY - 0.2, lz, 3.6, 0.5, 7);
       rails(put, [[sx + side * 1.7, lz - 3.4], [sx + side * 1.7, lz + 3.4]], deckY);
+      const inner = Math.max(0.5, wallAt(lz));
+      for (const dz of [-3, 3]) strut(sx + side * 1.6, deckY - 0.4, lz + dz, side * inner, deckY - Math.min(7, edgeX - inner + 3), lz + dz);
       aa(put, sx, deckY, lz - 1.6, guns.local);
       aa(put, sx, deckY, lz + 1.8, guns.local);
     }
   }
   for (const side of [-1, 1]) {
     for (let k = -80; k <= 80; k += 40) {
-      put('boatWhite', BALL, side * ((B - 1.5) / 2 + 1.2), hullTop(0) + 5, k, 0.9, 0.7, 3);
-      put('steelDark', BOX, side * ((B - 1.5) / 2 + 0.6), hullTop(0) + 5.8, k, 1.2, 0.15, 4);
+      const bw = wallAt(k);
+      put('boatWhite', BALL, side * (bw + 1.6), hullTop(k) + 5, k, 0.9, 0.7, 3);
+      for (const dz of [-1.6, 1.6]) {
+        put('steelDark', BOX, side * (bw + 0.9), hullTop(k) + 6.2, k + dz, 1.8, 0.18, 0.18);
+        put('steelDark', BOX, side * (bw + 1.6), hullTop(k) + 5.7, k + dz, 0.12, 1.1, 0.12);
+      }
     }
   }
 
