@@ -46,13 +46,13 @@ jobs:
         run: npx vite --port 5288 > /tmp/vite.log 2>&1 &
       - run: for i in $(seq 60); do curl -sf http://localhost:5288/ > /dev/null && break; sleep 1; done
       - name: Race on every course
-        run: node tools/smoke.mjs
+        run: node tools/checks/smoke.mjs
       - run: npm run build
       - name: Start the production preview
         run: npx vite preview --port 5291 > /tmp/preview.log 2>&1 &
       - run: for i in $(seq 60); do curl -sf http://localhost:5291/battleship-bonanza/ > /dev/null && break; sleep 1; done
       - name: Start a race from the menus on every course
-        run: node tools/prodsmoke.mjs
+        run: node tools/checks/prodsmoke.mjs
         env:
           BB_URL: http://localhost:5291/battleship-bonanza/
 

@@ -1,0 +1,41 @@
+import { launch, wait, check } from '../lib.mjs';
+
+const { browser, page } = await launch({ width: 1280, height: 800 });
+await page.evaluate(() => localStorage.clear());
+await page.reload({ waitUntil: 'networkidle0' });
+await wait(1500);
+await page.screenshot({ path: 'tools/shots/screen-title.png' });
+await page.click('#btn-howto');
+await wait(500);
+await page.screenshot({ path: 'tools/shots/screen-howto.png' });
+await page.click('#btn-howto-close');
+await page.click('#btn-settings');
+await wait(500);
+await page.screenshot({ path: 'tools/shots/screen-settings.png' });
+await page.click('#toggle-music');
+check('music toggle saves', await page.evaluate(() => localStorage.getItem('bb-music') === '0'));
+await page.click('#toggle-music');
+await page.click('#btn-settings-close');
+await page.click('#btn-play');
+await wait(1600);
+await page.screenshot({ path: 'tools/shots/screen-shipyard.png' });
+const pick = async (ids) => {
+  await page.evaluate(() => {
+    for (const t of document.querySelectorAll('.tile[aria-pressed="true"]')) t.click();
+  });
+  for (const id of ids) await page.evaluate((id) => document.querySelector(`.tile[data-id="${id}"]`).click(), id);
+  return page.evaluate(() => window.__bb.setup.items.join(','));
+};
+check('jet pack goes in the back', (await pick(['jetpack', 'laser'])) === 'laser,jetpack');
+check('grappling hook goes in the front', (await pick(['laser', 'grapple'])) === 'grapple,laser');
+check('two locked items keep their slots', (await pick(['jetpack', 'grapple'])) === 'grapple,jetpack');
+check('free items can swap', (await pick(['spikes', 'saw'])) === 'spikes,saw' && (await page.evaluate(() => !!document.querySelector('.slot-swap'))));
+await page.click('#btn-start');
+await wait(1600);
+await page.screenshot({ path: 'tools/shots/screen-courses.png' });
+await page.click('.map-card[data-map="jungle"]');
+await page.click('#btn-go');
+await page.waitForFunction(() => window.__bb.race && !window.__bb.race.attract, { timeout: 60000 });
+check('chosen course is raced', await page.evaluate(() => window.__bb.race.track.map.id === 'jungle'));
+check('no page errors', page.errors.length === 0, page.errors[0]);
+await browser.close();
