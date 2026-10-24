@@ -741,16 +741,16 @@ export class Effects {
     else this.timers.push({ at: this.clock + delay, fn });
   }
 
-  beam(from, to, color, width = 0.35, life = 0.4, sparks = 6) {
+  beam(from, to, color, width = 0.35, life = 0.4, sparks = 6, anchor = null) {
     const a = from.clone();
     const b = to.clone();
-    const length = a.distanceTo(b);
     for (const [w, c] of [[width, color], [width * 0.3, 0xfff0e8]]) {
       this.beams.take(c, life, (mesh, k) => {
+        if (anchor) anchor.getWorldPosition(a);
         mesh.position.copy(a);
         mesh.lookAt(b);
         const s = w * (1 - k);
-        mesh.scale.set(s, s, length);
+        mesh.scale.set(s, s, a.distanceTo(b));
         mesh.material.opacity = 1 - k * k;
       });
     }

@@ -37,7 +37,7 @@ export const methods = {
         const { tree, point } = trunk;
         const cutY = Math.min(Math.max(point.y, tree.base + 0.6), tree.base + tree.height * 0.45);
         this.chopper.chop(tree.id, cutY, dir.clone());
-        this.fx.beam(origin, point, 0xff2a2a, 0.5, 0.05, 1);
+        this.fx.beam(origin, point, 0xff2a2a, 0.5, 0.05, 1, b.model.laserMount);
         this.fx.sparkBurst(point.x, cutY, point.z, 0xffb070, 14);
         for (let k = 0; k < 10; k++) this.fx.puffs.emit(point.x, cutY, point.z, (Math.random() - 0.5) * 8, 2 + Math.random() * 5, (Math.random() - 0.5) * 8, 0.18 + Math.random() * 0.12, 0.8, 0xc99a5c, 18, 0.6, 1);
         this.sfx.play('tink', point);
@@ -45,7 +45,7 @@ export const methods = {
       }
       if (wall && !hit) {
         const end = wall.point;
-        this.fx.beam(origin, end, 0xff2a2a, 0.5, 0.05, 1);
+        this.fx.beam(origin, end, 0xff2a2a, 0.5, 0.05, 1, b.model.laserMount);
         const gap = b.lastBurn ? b.lastBurn.distanceTo(end) : Infinity;
         if (gap > 0.3) {
           const steps = gap < 5 ? Math.ceil(gap / 0.3) : 1;
@@ -61,7 +61,7 @@ export const methods = {
       }
       const shielded = hit && hit.boat.model.sawYaw && this.inArc(hit.boat, hit.boat.items.indexOf('saw'), origin.x, origin.z);
       const end = shielded ? this.shieldAgainst(hit.boat, b) : origin.clone().addScaledVector(dir, hit ? hit.t : reach);
-      this.fx.beam(origin, end, 0xff2a2a, 0.5, 0.05, 1);
+      this.fx.beam(origin, end, 0xff2a2a, 0.5, 0.05, 1, b.model.laserMount);
       let bounce = null;
       if (shielded) {
         b.bounceDrift = (b.bounceDrift ?? Math.random() * 6) + dt * 1.3;
