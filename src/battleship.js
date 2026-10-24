@@ -10,16 +10,16 @@ const CONE = new THREE.ConeGeometry(1, 1, 16);
 const BALL = new THREE.SphereGeometry(1, 14, 10);
 const DISH = new THREE.CylinderGeometry(1, 0.6, 1, 16);
 
-function loftHull(L, B, depth, rand) {
+export function loftHull(L, B, depth, rand, { rise = 3.2, fine = 0.62, transom = 0.72 } = {}) {
   const rows = 40;
   const ring = 12;
   const positions = [];
   const width = (u) => {
-    const bow = u > 0.62 ? Math.sqrt(Math.max(0, 1 - ((u - 0.62) / 0.38) ** 1.6)) : 1;
-    const stern = u < 0.12 ? 0.72 + 0.28 * Math.sin((u / 0.12) * Math.PI / 2) : 1;
+    const bow = u > fine ? Math.sqrt(Math.max(0, 1 - ((u - fine) / (1 - fine)) ** 1.6)) : 1;
+    const stern = u < 0.12 ? transom + (1 - transom) * Math.sin((u / 0.12) * Math.PI / 2) : 1;
     return (B / 2) * Math.min(bow, stern);
   };
-  const sheer = (u) => depth + 3.2 * Math.max(0, (u - 0.55) / 0.45) ** 2 + 0.6 * Math.max(0, (0.15 - u) / 0.15);
+  const sheer = (u) => depth + rise * Math.max(0, (u - 0.55) / 0.45) ** 2 + 0.6 * Math.max(0, (0.15 - u) / 0.15);
   const keel = -3;
   const section = (u) => {
     const z = (u - 0.5) * L;
@@ -80,7 +80,7 @@ function loftHull(L, B, depth, rand) {
 
 const KIT_COLORS = { steel: 0x5a636e, steelDark: 0x3a4048, steelLight: 0x9aa4ae, gun: 0x3a4048, window: 0x1e242c };
 
-function kit() {
+export function kit() {
   const parts = [];
   const put = (key, geometry, x, y, z, sx = 1, sy = 1, sz = 1, rx = 0, ry = 0, rz = 0) => {
     const m = new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), new THREE.Vector3(sx, sy, sz));
@@ -107,14 +107,15 @@ const KIT_MATERIAL = () => (kitMaterial ??= toon(0xffffff, { vertexColors: true 
 const TURRET_SHAPE = new THREE.Shape([new THREE.Vector2(-3, -3.4), new THREE.Vector2(3, -3.4), new THREE.Vector2(3.2, 1.6), new THREE.Vector2(2.2, 3.6), new THREE.Vector2(-2.2, 3.6), new THREE.Vector2(-3.2, 1.6)]);
 const TURRET_BODY = new THREE.ExtrudeGeometry(TURRET_SHAPE, { depth: 2.4, bevelEnabled: false }).rotateX(-Math.PI / 2);
 
-function mainTurret(put, dyn, x, y, z, ry, s, elevation, turrets, at, shipYaw) {
+export function mainTurret(put, dyn, x, y, z, ry, s, elevation, turrets, at, shipYaw, barrelCount = 3, length = 11) {
   put('steelDark', CYL, x, y + 0.5 * s, z, 3.4 * s, 1 * s, 3.4 * s);
   const body = kit();
   body.put('steel', TURRET_BODY, 0, 1, 0);
   body.put('steelLight', BOX, 0, 3.45, -0.6, 5.6, 0.12, 5.4);
   for (const side of [-1, 1]) body.put('steelDark', CYL, side * 2.9, 3.1, -1.6, 0.5, 1.6, 0.5, 0, 0, (Math.PI / 2) * side);
   body.put('window', BOX, 0, 2.6, 3.62, 4, 0.25, 0.1);
-  for (const k of [-1.4, 0, 1.4]) body.put('steelDark', BOX, k, 2, 3.5, 0.9, 1.3, 0.6);
+  const spots = barrelCount === 3 ? [-1.4, 0, 1.4] : barrelCount === 2 ? [-0.9, 0.9] : [0];
+  for (const k of spots) body.put('steelDark', BOX, k, 2, 3.5, 0.9, 1.3, 0.6);
   const yawGroup = body.build();
   const p = at(x, z);
   yawGroup.position.set(p.x, y, p.z);
@@ -126,11 +127,11 @@ function mainTurret(put, dyn, x, y, z, ry, s, elevation, turrets, at, shipYaw) {
   yawGroup.add(pitchGroup);
   const barrels = kit();
   const muzzles = [];
-  for (const k of [-1.4, 0, 1.4]) {
+  for (const k of spots) {
     barrels.put('steelDark', CYL, k, 0, 0.3, 0.75, 1.4, 0.75, Math.PI / 2, 0, 0);
-    barrels.put('gun', CYL, k, 0, 5.8, 0.36, 11, 0.36, Math.PI / 2, 0, 0);
-    barrels.put('gun', CYL, k, 0, 11.2, 0.46, 0.6, 0.46, Math.PI / 2, 0, 0);
-    muzzles.push(new THREE.Vector3(k, 0, 11.6));
+    barrels.put('gun', CYL, k, 0, 0.8 + length / 2, 0.36, length, 0.36, Math.PI / 2, 0, 0);
+    barrels.put('gun', CYL, k, 0, length + 0.2, 0.46, 0.6, 0.46, Math.PI / 2, 0, 0);
+    muzzles.push(new THREE.Vector3(k, 0, length + 0.6));
   }
   const recoil = barrels.build();
   pitchGroup.add(recoil);
@@ -139,7 +140,7 @@ function mainTurret(put, dyn, x, y, z, ry, s, elevation, turrets, at, shipYaw) {
   turrets.push({ yawGroup, pitchGroup, recoil, base, yaw: 0, pitch: elevation, muzzles, size: s });
 }
 
-function secondary(put, x, y, z, ry, s) {
+export function secondary(put, x, y, z, ry, s) {
   put('steelDark', CYL, x, y + 0.3, z, 1.6 * s, 0.6, 1.6 * s);
   put('steel', BOX, x, y + 1.2 * s, z, 2.6 * s, 1.6 * s, 2.8 * s, 0, ry, 0);
   for (const k of [-0.5, 0.5]) {
@@ -147,7 +148,7 @@ function secondary(put, x, y, z, ry, s) {
   }
 }
 
-function aa(put, x, y, z, guns) {
+export function aa(put, x, y, z, guns) {
   put('steelDark', CYL, x, y + 0.4, z, 1.3, 0.8, 1.3);
   put('steelLight', CYL, x, y + 0.85, z, 1.45, 0.12, 1.45);
   put('steel', BOX, x, y + 1.2, z, 0.9, 0.8, 1.1);
@@ -155,7 +156,7 @@ function aa(put, x, y, z, guns) {
   guns.push(new THREE.Vector3(x, y + 3.2, z + 0.9));
 }
 
-function rails(put, points, y) {
+export function rails(put, points, y) {
   for (let i = 0; i < points.length - 1; i++) {
     const [ax, az] = points[i];
     const [bx, bz] = points[i + 1];
@@ -168,7 +169,7 @@ function rails(put, points, y) {
   }
 }
 
-function floatplane(put, x, y, z, ry) {
+export function floatplane(put, x, y, z, ry) {
   put('planeBlue', CYL, x, y + 1.3, z, 0.5, 4.6, 0.5, Math.PI / 2, ry, 0);
   put('planeBlue', BOX, x, y + 1.8, z, 8.5, 0.18, 1.5, 0, ry, 0);
   put('planeBlue', BOX, x - Math.sin(ry) * 2.2, y + 1.5, z - Math.cos(ry) * 2.2, 3, 0.14, 0.8, 0, ry, 0);
