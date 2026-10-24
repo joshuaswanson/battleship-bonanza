@@ -554,7 +554,13 @@ kbd {
 
 .map-card:not(.surprise) .map-art {
   aspect-ratio: auto;
-  height: clamp(36px, calc((100vh - 250px) / 2 - 50px), 200px);
+  height: clamp(36px, calc((100vh - 410px) / 2), 200px);
+}
+
+@media (max-height: 560px) {
+  .map-card:not(.surprise) .map-art {
+    height: clamp(36px, calc((100vh - 330px) / 2), 200px);
+  }
 }
 
 @media (max-height: 420px) {
@@ -608,14 +614,16 @@ kbd {
 }
 
 .map-art.random {
-  background:
-    linear-gradient(var(--ink), var(--ink)) center / 3px 100% no-repeat,
-    linear-gradient(var(--ink), var(--ink)) center / 100% 3px no-repeat,
-    url('/maps/bay.jpg') 0 0 / 50% 50% no-repeat,
-    url('/maps/jungle.jpg') 100% 0 / 50% 50% no-repeat,
-    url('/maps/alps.jpg') 0 100% / 50% 50% no-repeat,
-    url('/maps/venice.jpg') 100% 100% / 50% 50% no-repeat,
-    #35d6e0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 3px;
+  background: var(--ink);
+}
+
+.map-art.random span {
+  background-size: cover;
+  background-position: center;
 }
 
 .map-art.random::after {
