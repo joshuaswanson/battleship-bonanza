@@ -44,8 +44,9 @@ export const methods = {
     const inReach = target && s.shield <= 0 && target.distanceToAxis2D(blade.x, blade.z) < HIT_RADIUS + 1.4;
     const cutting = armed && inReach;
     s.chop = cutting ? (s.chop ?? 0) + dt : 0;
+    s.swing = armed ? (s.swing ?? 0) + dt : 0;
     const arm = refs.modules.saw;
-    const pitch = cutting ? Math.sin(s.chop * 16) * 0.2 + 0.08 : 0;
+    const pitch = cutting ? Math.sin(s.chop * 16) * 0.2 + 0.08 : armed ? Math.sin(s.swing * 9) * 0.28 + 0.06 : 0;
     arm.rotation.x += (pitch - arm.rotation.x) * (1 - Math.exp(-25 * dt));
     if (cutting) {
       const toward = target.center().sub(blade).setY(0).normalize();
