@@ -73,15 +73,16 @@ export const methods = {
     const t = this.track;
     const idx = t.wrap(b.trackIdx + Math.round(12 / t.spacing));
     const pr = t.project(b.pos.x, b.pos.z, b.trackIdx);
-    return t.point(idx, Math.sign(pr.lateral) * (t.halfWidth - 6));
+    return t.point(idx, Math.sign(pr.lateral) * (t.hw[idx] - 6));
   },
 
   whitecaps(dt) {
     const focus = this.player ?? this.boats[0];
     if (!focus || Math.random() > dt * 5) return;
     let x, z;
-    if (this.track.river) {
-      const p = this.track.point(focus.trackIdx + Math.round((Math.random() - 0.3) * 60), (Math.random() - 0.5) * 2 * this.track.halfWidth);
+    if (this.track.banked) {
+      const idx = focus.trackIdx + Math.round((Math.random() - 0.3) * 60);
+      const p = this.track.point(idx, (Math.random() - 0.5) * 2 * this.track.widthAt(idx));
       x = p.x;
       z = p.z;
       if (!isWater(x, z)) return;

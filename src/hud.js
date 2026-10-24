@@ -519,19 +519,19 @@ export class Hud {
     ctx.clearRect(0, 0, w, w);
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
-    const path = new Path2D();
-    for (let i = 0; i <= track.N; i += 6) {
-      const [x, y] = this.toMap(track.px[i % track.N], track.pz[i % track.N]);
-      if (i === 0) path.moveTo(x, y);
-      else path.lineTo(x, y);
-    }
-    path.closePath();
-    ctx.strokeStyle = '#0E2A47';
-    ctx.lineWidth = track.halfWidth * 2 * this.mapScale + 6;
-    ctx.stroke(path);
-    ctx.strokeStyle = '#7FE6EE';
-    ctx.lineWidth = track.halfWidth * 2 * this.mapScale;
-    ctx.stroke(path);
+    const band = (color, grow) => {
+      ctx.strokeStyle = color;
+      for (let i = 0; i < track.N; i += 6) {
+        const j = (i + 6) % track.N;
+        ctx.lineWidth = Math.max(track.hw[i], track.hw[j]) * 2 * this.mapScale + grow;
+        ctx.beginPath();
+        ctx.moveTo(...this.toMap(track.px[i], track.pz[i]));
+        ctx.lineTo(...this.toMap(track.px[j], track.pz[j]));
+        ctx.stroke();
+      }
+    };
+    band('#0E2A47', 6);
+    band('#7FE6EE', 0);
 
     const [sx, sy] = this.toMap(track.px[0], track.pz[0]);
     ctx.fillStyle = '#FFFFFF';

@@ -20,7 +20,6 @@ export function createAI() {
 export function driveAI(race, b, dt) {
   const ai = b.ai;
   const track = race.track;
-  const half = track.halfWidth;
 
   ai.laneT += dt * 0.3;
   ai.dodgeTime -= dt;
@@ -28,6 +27,7 @@ export function driveAI(race, b, dt) {
 
   const look = Math.round((16 + Math.abs(b.speed) * 0.5) / track.spacing);
   const idx = track.wrap(b.trackIdx + look);
+  const half = track.hw[idx];
   const feature = ai.thrillSeeker ? race.features.nearestAhead(b, 70) : null;
   const wanted = feature ? feature.lateral : ai.lane + Math.sin(ai.laneT) * 6;
   const lane = clamp(wanted + ai.dodge, -(half - 5), half - 5);

@@ -248,11 +248,11 @@ export class Race {
     b.trackIdx = pr.idx;
     if (t.river) this.followRiver(b, pr.s);
 
-    b.offCourse = Math.abs(pr.lateral) > t.halfWidth + 1.5 ? b.offCourse + dt : 0;
+    b.offCourse = Math.abs(pr.lateral) > t.hw[pr.idx] + 1.5 ? b.offCourse + dt : 0;
     if (b.offCourse > 0 && b.speed > OFF_COURSE_SPEED * BASE_SPEED) b.speed *= Math.exp(-1.5 * dt);
     this.collideShores(b);
 
-    const lim = t.halfWidth + (t.river ? -BANK_MARGIN : OUTER_LIMIT);
+    const lim = t.hw[pr.idx] + (t.banked ? -BANK_MARGIN : OUTER_LIMIT);
     if (Math.abs(pr.lateral) > lim) {
       const sgn = Math.sign(pr.lateral);
       const nx = t.nx[pr.idx];
