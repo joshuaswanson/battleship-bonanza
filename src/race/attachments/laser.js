@@ -27,9 +27,21 @@ export const methods = {
       const drop = (b.model.laserMount.getWorldPosition(new THREE.Vector3()).y - b.waterY) / LASER_REACH;
       dir.y = wobble.lift - drop;
       dir.normalize();
-      const origin = pointLaserGun(b.model, dir, new THREE.Vector3());
-      if (b.isPlayer) this.lastLaserDir = dir;
+      let origin = pointLaserGun(b.model, dir, new THREE.Vector3());
       const reach = LASER_REACH * Math.hypot(1, drop);
+      const ahead = this.chopper?.trunkAhead(origin, dir, LASER_REACH);
+      if (ahead && !this.raycastBoats(origin, dir, reach, b)) {
+        for (const up of [1.2, 2.5, 4, 6, ahead.height * 0.45]) {
+          const toward = new THREE.Vector3(ahead.x, ahead.base + Math.min(up, ahead.height * 0.45) + wobble.lift * 4, ahead.z).sub(origin);
+          const length = toward.length();
+          toward.divideScalar(length);
+          if (this.marchSurface(origin, toward, length - ahead.radius - 0.6)) continue;
+          dir.copy(toward);
+          origin = pointLaserGun(b.model, dir, origin);
+          break;
+        }
+      }
+      if (b.isPlayer) this.lastLaserDir = dir;
       const wall = this.marchSurface(origin, dir, reach);
       const trunk = this.chopper?.march(origin, dir, wall ? wall.t + 3 : reach);
       let hit = this.raycastBoats(origin, dir, trunk ? trunk.t : wall ? wall.t : reach, b);

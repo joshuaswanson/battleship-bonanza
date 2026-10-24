@@ -121,6 +121,21 @@ export class Chopper {
     return null;
   }
 
+  trunkAhead(origin, dir, reach) {
+    if (!this.trees.length) return null;
+    const flat = new THREE.Vector3(dir.x, 0, dir.z).normalize();
+    const p = new THREE.Vector3();
+    for (let t = 1; t <= reach; t += 0.6) {
+      p.copy(origin).addScaledVector(flat, t);
+      const list = this.grid.get(`${Math.floor(p.x / 12)},${Math.floor(p.z / 12)}`);
+      if (!list) continue;
+      for (const tree of list) {
+        if (!tree.cut && Math.hypot(p.x - tree.x, p.z - tree.z) < tree.radius) return tree;
+      }
+    }
+    return null;
+  }
+
   march(origin, dir, reach) {
     if (!this.trees.length) return null;
     const p = new THREE.Vector3();
