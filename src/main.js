@@ -881,7 +881,7 @@ function frame(now) {
   }
   updateSawSound();
 
-  renderer.render(scene, camera);
+  if (!(import.meta.env.DEV && window.__bb?.skipRender)) renderer.render(scene, camera);
   adaptResolution(dt);
   if (mode === 'loadout') loadout.render(dt);
   requestAnimationFrame(frame);

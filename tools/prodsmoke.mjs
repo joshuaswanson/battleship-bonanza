@@ -1,7 +1,7 @@
 import { launch, wait, check } from './lib.mjs';
 
 const click = (page, sel) => page.evaluate((sel) => document.querySelector(sel).click(), sel);
-const settled = (page, id) => page.waitForFunction((id) => !document.getElementById(id).classList.contains('hidden') && !document.getElementById('wipe').classList.contains('on'), { polling: 100, timeout: 60000 }, id);
+const settled = (page, id) => page.waitForFunction((id) => !document.getElementById(id).classList.contains('hidden') && !document.getElementById('wipe').classList.contains('on'), { polling: 100, timeout: 240000 }, id);
 
 for (const map of (process.argv[2] ?? 'bay,jungle,alps,venice,midway').split(',')) {
   const { browser, page } = await launch();

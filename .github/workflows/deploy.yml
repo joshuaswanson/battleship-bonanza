@@ -30,8 +30,34 @@ jobs:
         with:
           path: dist
 
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CHROME_PATH: /usr/bin/google-chrome
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Start the dev server
+        run: npx vite --port 5288 > /tmp/vite.log 2>&1 &
+      - run: for i in $(seq 60); do curl -sf http://localhost:5288/ > /dev/null && break; sleep 1; done
+      - name: Race on every course
+        run: node tools/smoke.mjs
+      - run: npm run build
+      - name: Start the production preview
+        run: npx vite preview --port 5291 > /tmp/preview.log 2>&1 &
+      - run: for i in $(seq 60); do curl -sf http://localhost:5291/battleship-bonanza/ > /dev/null && break; sleep 1; done
+      - name: Start a race from the menus on every course
+        run: node tools/prodsmoke.mjs
+        env:
+          BB_URL: http://localhost:5291/battleship-bonanza/
+
   deploy:
-    needs: build
+    needs: [build, test]
     runs-on: ubuntu-latest
     environment:
       name: github-pages

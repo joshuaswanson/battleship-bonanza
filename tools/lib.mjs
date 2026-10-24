@@ -3,20 +3,26 @@ import puppeteer from 'puppeteer-core';
 export const URL = process.env.BB_URL ?? 'http://localhost:5288/';
 export const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
+const CHROME = process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const GPU = process.env.CI ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox'] : ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'];
+
 export async function launch({ width = 1280, height = 760, scale = 1, args = [] } = {}) {
   const browser = await puppeteer.launch({
-    executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    executablePath: CHROME,
     headless: 'new',
-    args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist', '--enable-precise-memory-info', ...args],
+    protocolTimeout: process.env.CI ? 600000 : 180000,
+    args: [...GPU, '--enable-precise-memory-info', ...args],
     defaultViewport: { width, height, deviceScaleFactor: scale },
   });
   const page = await browser.newPage();
+  page.setDefaultTimeout(process.env.CI ? 300000 : 30000);
   page.errors = [];
   page.on('pageerror', (e) => {
     page.errors.push(e.message);
-    console.log('[pageerror]', e.message);
+    console.log('[pageerror]', process.env.BB_STACK ? e.stack : e.message);
   });
   await page.goto(URL, { waitUntil: 'networkidle0' });
+  if (process.env.CI) await page.evaluate(() => { if (window.__bb) window.__bb.skipRender = true; });
   return { browser, page };
 }
 
@@ -35,7 +41,7 @@ export async function startRace(page, { map = 'bay', items } = {}) {
   await page.evaluate(() => document.getElementById('btn-start').click());
   await page.waitForFunction(() => !document.getElementById('screen-maps').classList.contains('hidden') && !document.getElementById('wipe').classList.contains('on'), { polling: 100 });
   await page.evaluate(() => document.getElementById('btn-go').click());
-  await page.waitForFunction(() => window.__bb.race && !window.__bb.race.attract && !document.getElementById('wipe').classList.contains('on'), { polling: 100, timeout: 60000 });
+  await page.waitForFunction(() => window.__bb.race && !window.__bb.race.attract && !document.getElementById('wipe').classList.contains('on'), { polling: 100, timeout: process.env.CI ? 300000 : 60000 });
 }
 
 export async function waitForGo(page) {
