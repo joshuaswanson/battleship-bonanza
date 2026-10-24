@@ -101,16 +101,27 @@ export async function createAlps(group, track, fx) {
     return y;
   };
   const tint = new THREE.Color();
-  const paint = (x, y, z, ny, color) => {
-    const snowLine = 105 + 30 * noise(x * 2, z * 2);
-    if (y < 0.8) color.set(0xcfc6ad);
-    else if (y > snowLine && ny > 0.4) color.set(0xf6f9ff);
-    else if (ny < 0.66) color.set(y > snowLine - 30 ? 0x8f8c8a : 0xa49e95);
-    else if (y > 70) color.set(0xa3b06e);
-    else color.set(noise(x * 3, z * 3) > 0.55 ? 0x7bd35a : 0x93df63);
-    color.multiply(tint.setScalar(0.93 + 0.1 * noise(x * 5 + 7, z * 5)));
+  const shades = {
+    sand: new THREE.Color(0xcfc6ad),
+    grass: new THREE.Color(0x8bdc5e),
+    grassDeep: new THREE.Color(0x6fc94f),
+    alp: new THREE.Color(0xa3b06e),
+    rock: new THREE.Color(0xa49e95),
+    rockHigh: new THREE.Color(0x8f8c8a),
+    snow: new THREE.Color(0xf6f9ff),
   };
-  group.add(await buildHeightfield({ bounds: surface.bounds, step: 5, height, paint, tick }));
+  const mixed = new THREE.Color();
+  const paint = (x, y, z, ny, color) => {
+    color.copy(shades.grass).lerp(shades.grassDeep, smooth(0.35, 0.75, noise(x * 1.6, z * 1.6)));
+    color.lerp(shades.alp, smooth(55, 85, y));
+    mixed.copy(shades.rock).lerp(shades.rockHigh, smooth(60, 110, y));
+    color.lerp(mixed, smooth(0.8, 0.6, ny));
+    const snowLine = 105 + 30 * noise(x * 2, z * 2);
+    color.lerp(shades.snow, smooth(snowLine - 6, snowLine + 6, y) * smooth(0.35, 0.55, ny));
+    color.lerp(shades.sand, smooth(2.2, 0.4, y));
+    color.multiply(tint.setScalar(0.94 + 0.08 * noise(x * 5 + 7, z * 5)));
+  };
+  group.add(await buildHeightfield({ bounds: surface.bounds, step: 4, height, paint, tick, smooth: true }));
 
   const water = createWater({ deep: 0x1677b8, shallow: 0x4fd0e6 });
   group.add(water.mesh);

@@ -75,7 +75,7 @@ export async function courseSurface(track, tick, { margin = 340, cell = 3, amp =
   };
 }
 
-export async function buildHeightfield({ bounds, step, height, paint, tick, hidden = -2.5 }) {
+export async function buildHeightfield({ bounds, step, height, paint, tick, hidden = -2.5, smooth = false }) {
   const { minX, maxX, minZ, maxZ } = bounds;
   const cols = Math.ceil((maxX - minX) / step) + 1;
   const rows = Math.ceil((maxZ - minZ) / step) + 1;
@@ -84,6 +84,7 @@ export async function buildHeightfield({ bounds, step, height, paint, tick, hidd
     await tick();
     for (let c = 0; c < cols; c++) heights[r * cols + c] = height(minX + c * step, minZ + r * step);
   }
+  if (smooth) return smoothField({ minX, minZ, cols, rows, step, heights, paint, tick, hidden });
   const positions = [];
   const colors = [];
   const a = new THREE.Vector3();
@@ -121,6 +122,42 @@ export async function buildHeightfield({ bounds, step, height, paint, tick, hidd
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  geometry.computeVertexNormals();
+  return new THREE.Mesh(geometry, toon(0xffffff, { vertexColors: true }));
+}
+
+async function smoothField({ minX, minZ, cols, rows, step, heights, paint, tick, hidden }) {
+  const count = cols * rows;
+  const positions = new Float32Array(count * 3);
+  const colors = new Float32Array(count * 3);
+  const color = new THREE.Color();
+  const at = (c, r) => heights[Math.min(rows - 1, Math.max(0, r)) * cols + Math.min(cols - 1, Math.max(0, c))];
+  for (let r = 0; r < rows; r++) {
+    if (r % 20 === 0) await tick();
+    for (let c = 0; c < cols; c++) {
+      const i = r * cols + c;
+      const x = minX + c * step;
+      const z = minZ + r * step;
+      const y = heights[i];
+      positions.set([x, y, z], i * 3);
+      const gx = (at(c + 1, r) - at(c - 1, r)) / (2 * step);
+      const gz = (at(c, r + 1) - at(c, r - 1)) / (2 * step);
+      paint(x, y, z, 1 / Math.hypot(gx, gz, 1), color);
+      colors.set([color.r, color.g, color.b], i * 3);
+    }
+  }
+  const index = [];
+  for (let r = 0; r < rows - 1; r++) {
+    for (let c = 0; c < cols - 1; c++) {
+      const i = r * cols + c;
+      if (heights[i] < hidden && heights[i + 1] < hidden && heights[i + cols] < hidden && heights[i + cols + 1] < hidden) continue;
+      index.push(i, i + cols, i + 1, i + 1, i + cols, i + cols + 1);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geometry.setIndex(index);
   geometry.computeVertexNormals();
   return new THREE.Mesh(geometry, toon(0xffffff, { vertexColors: true }));
 }
