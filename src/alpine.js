@@ -116,10 +116,11 @@ export function tree(batch, x, y, z, rand, scale = 1) {
   const bend = rand() < 0.15 ? (rand() - 0.5) * 0.6 : (rand() - 0.5) * 0.1;
   put(topKey, SPIKE, Math.cos(sweepDir) * sweep * girth * 0.15, height * 0.97, Math.sin(sweepDir) * sweep * girth * 0.15, girth * 0.11, height * (0.1 + rand() * 0.08), girth * 0.11, bend, 0, bend * 0.5);
   if (rand() < 0.06) put(topKey, SPIKE, girth * 0.08, height * 0.9, 0, girth * 0.07, height * 0.08, girth * 0.07, 0, 0, 0.5);
+  return { height, girth };
 }
 
 export function sapling(batch, x, y, z, rand) {
-  tree(batch, x, y, z, rand, 0.2 + rand() * 0.15);
+  return tree(batch, x, y, z, rand, 0.2 + rand() * 0.15);
 }
 
 export function boulder(batch, x, y, z, rand, size) {

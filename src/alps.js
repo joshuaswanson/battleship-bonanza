@@ -4,6 +4,7 @@ import { toon, mulberry32 } from './toon.js';
 import { Batcher, cullChunks, slicer, COLORS, mat, ROCK, createSky, createCloud, createArch, SUN_DIR } from './world.js';
 import { courseSurface, buildHeightfield, courseBuoys, swissFlag, flagClock, groundHit, smooth, noise } from './terrain.js';
 import { FLORA_COLORS, tree, sapling, boulder, cow, loadCowKit } from './alpine.js';
+import { Chopper } from './chop.js';
 import { LANDMARK_COLORS, castle, coveredBridge, waterTower, buildSteamer, chalet } from './alpsLandmarks.js';
 
 const ALPS_COLORS = {
@@ -199,6 +200,15 @@ export async function createAlps(group, track, fx) {
     return y > 2 && y < 40 && shoreOf(x, z) > 7 && slope(x, z) > 0.88;
   };
   const cowKit = await loadCowKit(`${import.meta.env.BASE_URL}models/cow.glb`);
+  const chopper = new Chopper(group);
+  batch.chopper = chopper;
+  const plantTree = (grow, x, y, z, scale) => {
+    if (shoreOf(x, z) > 22) return grow(batch, x, y, z, rand, scale);
+    const proxy = chopper.plant(batch, { x, z, base: y - 0.3, height: 10, radius: 1 });
+    const size = grow(proxy, x, y, z, rand, scale);
+    Object.assign(chopper.trees.at(-1), { height: size.height, radius: Math.max(0.9, size.girth * 0.14) });
+    return size;
+  };
   const herdBatch = new Batcher();
   const herdSpots = [];
   group.userData.herds = herdSpots;
@@ -266,7 +276,7 @@ export async function createAlps(group, track, fx) {
       const y = height(x, z);
       if (y < 2 || y > 102 || slope(x, z) < 0.7 || !free(x, z, 3)) continue;
       const edge = d / spread;
-      tree(batch, x, y, z, rand, (1.15 - edge * 0.45) * (y > 85 ? 0.7 : 1));
+      plantTree(tree, x, y, z, (1.15 - edge * 0.45) * (y > 85 ? 0.7 : 1));
       trees++;
       if (rand() < 0.15) {
         const sx = x + (rand() - 0.5) * 6;
@@ -282,11 +292,12 @@ export async function createAlps(group, track, fx) {
     const y = height(p.x, p.z);
     if (y < 1.5 || y > 60 || shoreOf(p.x, p.z) < 5 || !free(p.x, p.z, 4)) continue;
     if (rand() < 0.35) sapling(batch, p.x, y, p.z, rand);
-    else tree(batch, p.x, y, p.z, rand, 0.7 + rand() * 0.6);
+    else plantTree(tree, p.x, y, p.z, 0.7 + rand() * 0.6);
     singles++;
   }
 
   const scenery = new THREE.Group();
+  chopper.finish(ALPS_COLORS);
   const chunks = await batch.buildAsync(scenery, 0.1, ALPS_COLORS, undefined, tick);
   chunks.push(...(await herdBatch.buildAsync(scenery, 0.045, ALPS_COLORS, undefined, tick)));
   group.add(scenery);
@@ -349,6 +360,7 @@ export async function createAlps(group, track, fx) {
     sun,
     surface,
     shores,
+    chopper,
     solid(p) {
       if (Math.hypot(p.x - castleAt.p.x, p.z - castleAt.p.z) < 17 && p.y < 16) {
         return new THREE.Vector3(p.x - castleAt.p.x, 0, p.z - castleAt.p.z).normalize();
@@ -365,6 +377,14 @@ export async function createAlps(group, track, fx) {
         if (cloud.position.x > 800) cloud.position.x = -800;
       }
       flagClock.value = t;
+      chopper.update(dt, (f) => {
+        const tip = f.pivot.clone().addScaledVector(new THREE.Vector3(-f.axis.z, 0, f.axis.x), f.height * 0.6);
+        if (height(tip.x, tip.z) < -1) fx.splash(tip.x, 0.2, tip.z, 1.2);
+        for (let k = 0; k < 14; k++) {
+          const at = f.pivot.clone().lerp(tip, Math.random());
+          fx.puffs.emit(at.x, Math.max(at.y, height(at.x, at.z)) + 0.5, at.z, (Math.random() - 0.5) * 4, 2 + Math.random() * 3, (Math.random() - 0.5) * 4, 0.6 + Math.random() * 0.6, 0.9, k % 2 ? 0x3f8f4f : 0xd9cbb0, 3, 1.5, 0);
+        }
+      });
       if (route) {
         const u = ((t * 5) / routeLength) % 1;
         const p = route.getPointAt(u);

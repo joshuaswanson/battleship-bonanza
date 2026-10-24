@@ -31,7 +31,18 @@ export const methods = {
       if (b.isPlayer) this.lastLaserDir = dir;
       const reach = LASER_REACH * Math.hypot(1, drop);
       const wall = this.marchSurface(origin, dir, reach);
-      let hit = this.raycastBoats(origin, dir, wall ? wall.t : reach, b);
+      const trunk = this.chopper?.march(origin, dir, wall ? wall.t : reach);
+      let hit = this.raycastBoats(origin, dir, trunk ? trunk.t : wall ? wall.t : reach, b);
+      if (trunk && !hit) {
+        const { tree, point } = trunk;
+        const cutY = Math.min(Math.max(point.y, tree.base + 0.6), tree.base + tree.height * 0.45);
+        this.chopper.chop(tree.id, cutY, dir.clone());
+        this.fx.beam(origin, point, 0xff2a2a, 0.5, 0.05, 1);
+        this.fx.sparkBurst(point.x, cutY, point.z, 0xffb070, 14);
+        for (let k = 0; k < 10; k++) this.fx.puffs.emit(point.x, cutY, point.z, (Math.random() - 0.5) * 8, 2 + Math.random() * 5, (Math.random() - 0.5) * 8, 0.18 + Math.random() * 0.12, 0.8, 0xc99a5c, 18, 0.6, 1);
+        this.sfx.play('tink', point);
+        continue;
+      }
       if (wall && !hit) {
         const end = wall.point;
         this.fx.beam(origin, end, 0xff2a2a, 0.5, 0.05, 1);

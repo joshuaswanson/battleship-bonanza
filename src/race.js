@@ -31,9 +31,10 @@ const MODULES = [machinegun, missiles, mines, grapple, emp, jetpack, laser, flam
 export class Race {
   actions = Object.assign({}, ...MODULES.map((m) => m.actions ?? {}));
 
-  constructor({ scene, track, fx, sfx, defs, shores = [], solid = null, attract = false, laps = LAPS }) {
+  constructor({ scene, track, fx, sfx, defs, shores = [], solid = null, chopper = null, attract = false, laps = LAPS }) {
     this.shores = shores;
     this.solid = solid;
+    this.chopper = chopper;
     this.scene = scene;
     this.track = track;
     this.fx = fx;

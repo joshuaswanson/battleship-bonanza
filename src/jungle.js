@@ -3,6 +3,7 @@ import { createWater } from './water.js';
 import { toon, glow, mulberry32 } from './toon.js';
 import { groundHit } from './terrain.js';
 import { frame, STONES } from './alpine.js';
+import { Chopper } from './chop.js';
 import { Batcher, cullChunks, slicer, COLORS, mat, CONE, ROCK, addPalm, createSky, createCloud, createArch, SUN_DIR } from './world.js';
 
 const CELL = 3;
@@ -1241,11 +1242,20 @@ export async function createJungle(group, track, fx) {
       n++;
     }
   };
-  await place(300, 9, 50, (x, y, z, river) => addGiant(batch, x, y, z, rand, 1, river));
-  await place(850, 6, 40, (x, y, z, river) => addBroadleaf(batch, x, y, z, rand, 0.9 + rand() * 0.5, river));
+  const chopper = new Chopper(group);
+  batch.chopper = chopper;
+  const choppable = (x, y, z, height, radius, build) => build(surface.sample(x, z).dist > hw + 22 ? batch : chopper.plant(batch, { x, z, base: y - 1, height, radius }));
+  await place(300, 9, 50, (x, y, z, river) => choppable(x, y, z, 24, 1.7, (b) => addGiant(b, x, y, z, rand, 1, river)));
+  await place(850, 6, 40, (x, y, z, river) => choppable(x, y, z, 12, 1, (b) => addBroadleaf(b, x, y, z, rand, 0.9 + rand() * 0.5, river)));
   await place(500, 6, 45, (x, y, z) => addBanana(batch, x, y, z, rand, true));
-  await place(180, 5, 30, (x, y, z) => addPalm(batch, x, y - 0.5, z, rand, { height: 4 + rand() * 4, lean: rand() * 0.2, dir: rand() * Math.PI * 2 }));
-  await place(160, 6, 30, (x, y, z) => addPalm(batch, x, y - 0.5, z, rand, { height: 11 + rand() * 8, lean: rand() * 0.5, dir: rand() * Math.PI * 2 }));
+  await place(180, 5, 30, (x, y, z) => {
+    const height = 4 + rand() * 4;
+    choppable(x, y, z, height, 0.8, (b) => addPalm(b, x, y - 0.5, z, rand, { height, lean: rand() * 0.2, dir: rand() * Math.PI * 2 }));
+  });
+  await place(160, 6, 30, (x, y, z) => {
+    const height = 11 + rand() * 8;
+    choppable(x, y, z, height, 0.9, (b) => addPalm(b, x, y - 0.5, z, rand, { height, lean: rand() * 0.5, dir: rand() * Math.PI * 2 }));
+  });
   await place(800, 3, 22, (x, y, z) => addBanana(batch, x, y, z, rand));
   await place(700, 3.5, 16, (x, y, z) => addBush(batch, x, y, z, rand));
   await place(400, 5, 30, (x, y, z) => addFern(batch, x, y, z, rand));
@@ -1291,6 +1301,7 @@ export async function createJungle(group, track, fx) {
     }
   }
   const scenery = new THREE.Group();
+  chopper.finish(JUNGLE_COLORS);
   const chunks = await batch.buildAsync(scenery, 0.1, JUNGLE_COLORS, undefined, tick);
   group.add(scenery);
 
@@ -1313,6 +1324,7 @@ export async function createJungle(group, track, fx) {
     sun,
     surface,
     shores: tunnel.userData.blobs,
+    chopper,
     solid(p) {
       const { s, dist, idx, level } = surface.sample(p.x, p.z);
       if (track.inTunnel(s)) {
@@ -1327,6 +1339,15 @@ export async function createJungle(group, track, fx) {
       water.update(t);
       cullChunks(chunks, camera, fog.far);
       cullChunks(tunnel.userData.chunks, camera, fog.far);
+      chopper.update(dt, (f) => {
+        const tip = f.pivot.clone().addScaledVector(new THREE.Vector3(-f.axis.z, 0, f.axis.x), f.height * 0.6);
+        const ground = terrainHeight(surface, track, tip.x, tip.z);
+        if (ground < surface.sample(tip.x, tip.z).level) fx.splash(tip.x, surface.sample(tip.x, tip.z).level + 0.2, tip.z, 1.2);
+        for (let k = 0; k < 16; k++) {
+          const at = f.pivot.clone().lerp(tip, Math.random());
+          fx.puffs.emit(at.x, at.y + 0.5, at.z, (Math.random() - 0.5) * 4, 2 + Math.random() * 3, (Math.random() - 0.5) * 4, 0.6 + Math.random() * 0.6, 0.9, k % 2 ? 0x3f9a45 : 0xc9a46b, 3, 1.5, 0);
+        }
+      });
       tunnel.userData.torches.userData.update(t);
       for (const f of falls) f.material.uniforms.uTime.value = t;
       sky.position.copy(camera.position);

@@ -57,7 +57,7 @@ export class Batcher {
   constructor() {
     this.groups = new Map();
   }
-  add(key, geometry, matrix = IDENTITY) {
+  add(key, geometry, matrix = IDENTITY, tag = null) {
     if (!this.groups.has(key)) this.groups.set(key, []);
     let x;
     let z;
@@ -72,7 +72,7 @@ export class Batcher {
       if (!geometry.boundingSphere) geometry.computeBoundingSphere();
       r = geometry.boundingSphere.radius * matrix.getMaxScaleOnAxis() + geometry.boundingSphere.center.length();
     }
-    this.groups.get(key).push({ geometry, matrix: matrix === IDENTITY ? IDENTITY : matrix.clone(), x, z, r });
+    this.groups.get(key).push({ geometry, matrix: matrix === IDENTITY ? IDENTITY : matrix.clone(), x, z, r, tag });
   }
   build(parent, outline = 0.12, colors = COLORS, size = CHUNK) {
     const steps = this.steps(parent, outline, colors, size);
@@ -117,9 +117,30 @@ export class Batcher {
       if (!shapes.has(e.geometry)) shapes.set(e.geometry, []);
       shapes.get(e.geometry).push(e);
     }
-    const merged = { lined: [], plain: [], mossy: [] };
+    const merged = { lined: [], plain: [], mossy: [], chop: [] };
     const tint = new THREE.Color();
-    for (const [geometry, list] of shapes) {
+    for (const [geometry, all] of shapes) {
+      const tagged = this.chopper ? all.filter((e) => e.tag) : [];
+      const list = tagged.length ? all.filter((e) => !e.tag) : all;
+      for (const e of tagged) {
+        const g = geometry.clone().applyMatrix4(e.matrix);
+        if (g.hasAttribute('uv')) g.deleteAttribute('uv');
+        if (!g.hasAttribute('normal')) g.computeVertexNormals();
+        const n = g.attributes.position.count;
+        if (!g.index) g.setIndex(Array.from({ length: n }, (_, k) => k));
+        if (!g.hasAttribute('color')) {
+          tint.set(colors[e.key]);
+          const rgb = new Float32Array(n * 3);
+          for (let k = 0; k < n; k++) rgb.set([tint.r, tint.g, tint.b], k * 3);
+          g.setAttribute('color', new THREE.BufferAttribute(rgb, 3));
+        }
+        const chop = new Float32Array(n * 2);
+        for (let k = 0; k < n; k++) chop.set([e.tag.id, e.tag.trunk ? 1 : 0], k * 2);
+        g.setAttribute('aChop', new THREE.BufferAttribute(chop, 2));
+        for (const name of Object.keys(g.attributes)) if (!['position', 'normal', 'color', 'aChop'].includes(name)) g.deleteAttribute(name);
+        merged.chop.push(g);
+      }
+      if (!list.length) continue;
       const mossy = geometry.hasAttribute('aGreen');
       const painted = geometry.hasAttribute('color');
       if (list.length < INSTANCE_MIN || painted || mossy) {
@@ -162,6 +183,11 @@ export class Batcher {
       for (const g of list) g.dispose();
       geometry.computeBoundingSphere();
       for (const attribute of Object.values(geometry.attributes)) attribute.onUpload(releaseArray);
+      if (kind === 'chop') {
+        parent.add(new THREE.Mesh(geometry, this.chopper.material()));
+        if (outline) parent.add(new THREE.Mesh(geometry, this.chopper.outline(outline)));
+        continue;
+      }
       parent.add(new THREE.Mesh(geometry, kind === 'mossy' ? mossyRock() : VERTEX_TOON()));
       if (outline && kind !== 'plain') parent.add(new THREE.Mesh(geometry, outlineMaterial(outline)));
     }

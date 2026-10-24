@@ -37,6 +37,7 @@ for (const el of document.querySelectorAll('[data-logo]')) {
 
 const canvas = $('game');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.localClippingEnabled = true;
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(66, 1, 0.5, 3000);
@@ -189,7 +190,8 @@ function newRace(attract, map = pickMap(attract)) {
   race?.dispose();
   fx.decals.clear();
   useVenue(map);
-  race = new Race({ scene, track: current.track, fx, sfx: attract ? SILENT : sfx, shores: current.world.shores, solid: current.world.solid, defs: makeDefs(attract ? null : setup), attract });
+  current.world.chopper?.reset();
+  race = new Race({ scene, track: current.track, fx, sfx: attract ? SILENT : sfx, shores: current.world.shores, solid: current.world.solid, chopper: current.world.chopper ?? null, defs: makeDefs(attract ? null : setup), attract });
   if (!attract) recorder = new Recorder(race, fx);
   cam.snap = true;
 }
@@ -823,7 +825,7 @@ if (import.meta.env.DEV) {
       race?.dispose();
       const defs = PAINTS.map((paint, i) => ({ name: `Boat ${i + 1}`, color: paint.value, items: arrange(shuffle(ITEM_IDS).slice(0, 2)) }));
       useVenue(map);
-      race = new Race({ scene, track: current.track, fx, sfx, shores: current.world.shores, solid: current.world.solid, defs, attract: false });
+      race = new Race({ scene, track: current.track, fx, sfx, shores: current.world.shores, solid: current.world.solid, chopper: current.world.chopper ?? null, defs, attract: false });
       mode = 'sim';
       hud.show(false);
       showScreen(null);
