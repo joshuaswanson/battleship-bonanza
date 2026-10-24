@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { createWater } from './water.js';
 import { toon, glow, mulberry32 } from './toon.js';
 import { groundHit } from './terrain.js';
+import { frame, STONES } from './alpine.js';
 import { Batcher, cullChunks, slicer, COLORS, mat, CONE, ROCK, addPalm, createSky, createCloud, createArch, SUN_DIR } from './world.js';
 
 const CELL = 3;
@@ -24,13 +25,21 @@ const JUNGLE_COLORS = {
   caveRock: 0x6a5c4f,
   caveRockDark: 0x4e4238,
   caveRockLight: 0x84735f,
-  caveIn: 0x3a3129,
-  caveInDark: 0x2c251f,
-  caveInLight: 0x4a3f35,
-  tiki: 0x9c8b70,
-  tikiDark: 0x3b3029,
+  caveIn: 0x302822,
+  caveInDark: 0x241e19,
+  caveInLight: 0x3d342c,
+  tikiWood: 0x9a6a3e,
+  tikiLight: 0xb8865a,
+  tikiDark: 0x4a3020,
+  tikiStone: 0x7d7468,
+  eyeWhite: 0xf6f0de,
+  mouth: 0x2a1610,
+  tongue: 0xd8484a,
+  flowerPink: 0xff7ab8,
+  flowerYellow: 0xffd23f,
+  flowerWhite: 0xffffff,
+  flowerRed: 0xe8344a,
   tooth: 0xf4ead0,
-  lip: 0xd0563b,
   paintTeal: 0x2fb5a3,
   paintYellow: 0xffc93c,
   paintRed: 0xe0503a,
@@ -259,7 +268,7 @@ function caveWaterShade(torches, ends) {
   return (x, y, z, k) => {
     const day = Math.max(0, 1 - Math.min(...ends.map((e) => Math.abs(k - e))) / 14);
     const lit = Math.min(1, torchLight(p.set(x, y, z), torches));
-    const dark = 0.18 + 0.82 * day;
+    const dark = 0.13 + 0.87 * day;
     return [dark + 0.75 * lit, dark + 0.45 * lit, dark + 0.12 * lit];
   };
 }
@@ -352,7 +361,7 @@ function buildTube(track, from, to, levelAt, ends, torches) {
     for (const p of [a, b, d]) {
       positions.push(p.x, p.y, p.z);
       const lit = Math.min(1, torchLight(p, torches));
-      const shade = 0.13 + 0.87 * daylight + 1.1 * lit;
+      const shade = 0.08 + 0.92 * daylight + 1.15 * lit;
       colors.push(c.r * shade + 0.2 * lit, c.g * shade + 0.09 * lit, c.b * shade);
     }
   };
@@ -593,74 +602,139 @@ function buildTorches(batch, torches) {
   return group;
 }
 
-const PYRAMID = new THREE.ConeGeometry(1, 1, 4).rotateY(Math.PI / 4);
-const BALL = new THREE.SphereGeometry(1, 16, 12);
-const BLOCK = new THREE.BoxGeometry(1, 1, 1);
-const FEATHER = new THREE.ConeGeometry(1, 1, 5).translate(0, 0.5, 0);
 
-function buildFace(track, k, levelAt, batch, rand) {
-  const i = track.wrap(k);
-  const base = levelAt(k * track.spacing);
-  const n = new THREE.Vector3(track.nx[i], 0, track.nz[i]);
-  const t = new THREE.Vector3(track.tx[i], 0, track.tz[i]);
-  const frame = new THREE.Matrix4().makeBasis(n, new THREE.Vector3(0, 1, 0), t);
-  if (frame.determinant() < 0) frame.makeBasis(n.negate(), new THREE.Vector3(0, 1, 0), t);
-  frame.setPosition(track.px[i], base, track.pz[i]);
-  const at = (lat, up, along) => new THREE.Vector3(lat, up, along).applyMatrix4(frame);
-  const put = (key, geometry, lat, up, along, sx, sy, sz, rx = 0, ry = 0, rz = 0) => batch.add(key, geometry, frame.clone().multiply(mat(lat, up, along, sx, sy, sz, rx, ry, rz)));
-
-  const rim = [];
-  for (let j = 0; j <= CAVE_STEPS; j++) {
-    const { lat, up } = profile(k, j, 1.2);
-    rim.push(at(lat, up, -1.2));
-  }
-  batch.add('lip', new THREE.TubeGeometry(new THREE.CatmullRomCurve3(rim), 60, 1.9, 8));
-  for (let j = 8; j <= CAVE_STEPS - 8; j += 2) {
-    const { lat, up } = profile(k, j, -0.4);
-    const len = 2.6 + (j % 4 === 0 ? 1.6 : 0) + rand() * 0.8;
-    put('tooth', DRIP, lat, up - len / 2 + 0.4, -1.4, 1.05, len, 1.05);
-  }
-  for (const side of [-1, 1]) {
-    const { lat } = profile(k, side < 0 ? CAVE_STEPS - 3 : 3);
-    put('tooth', CONE, lat - side * 2.5, 1.5, -2, 1.5, 7, 1.5, 0, 0, side * 0.12);
-
-    put('tikiDark', BALL, side * 12.5, 33, -0.6, 7.2, 6.2, 2.4);
-    put('tooth', BALL, side * 12.5, 32.6, -1.8, 5.2, 4.6, 2.2);
-    put('tikiDark', BLOCK, side * 12.5, 40.5, -2.4, 14, 3.2, 4, 0, 0, side * 0.26);
-    put('paintTeal', BLOCK, side * 13, 25, -0.9, 6, 1.4, 1.2, 0, 0, -side * 0.35);
-    put('paintTeal', BLOCK, side * 13, 22.5, -0.9, 5, 1.4, 1.2, 0, 0, -side * 0.35);
-    put('tikiDark', BALL, side * 2.4, 18.4, -4.3, 1.3, 1, 1);
-  }
-  put('tiki', PYRAMID, 0, 23, -1.8, 5.5, 11, 4.2);
-  for (let lat = -30, c = 0; lat <= 30; lat += 6, c++) {
-    put(['paintRed', 'paintYellow', 'paintTeal'][c % 3], BLOCK, lat, 47.5, -1.6, 5.6, 4.2, 3.2);
-  }
-  for (let f = -6; f <= 6; f++) {
-    const lat = f * 4.6;
-    const h = 9 + 4 * Math.cos((f / 6) * 1.3) + rand() * 2;
-    put(['paintYellow', 'paintRed', 'paintTeal', 'leafLight'][(f + 12) % 4], FEATHER, lat, 49.5, -0.4, 2.2, h, 1.2, 0, 0, -f * 0.09);
-  }
-  for (let v = 0; v < 9; v++) {
-    const lat = (rand() - 0.5) * 60;
-    vine(batch, at(lat, 45 + rand() * 4, -3.2), 6 + rand() * 14, rand, new THREE.Vector3(0, 0, 0));
-  }
-
-  const eyes = new THREE.Group();
-  const eyeMat = glow(0xffb21f);
-  for (const side of [-1, 1]) {
-    const pupil = new THREE.Mesh(BALL, eyeMat);
-    pupil.position.copy(at(side * 12, 31.4, -3.7));
-    pupil.scale.set(2.3, 2.3, 2.3);
-    eyes.add(pupil);
-  }
-  const torches = [-1, 1].map((side) => {
-    const { lat } = profile(k, side < 0 ? CAVE_STEPS - 6 : 6, 3);
-    return torchAt(at(lat + side * 2, 7, -2.5), n.clone().multiplyScalar(-side).setY(0).normalize().add(t.clone().multiplyScalar(-0.6)).normalize(), 1.7);
-  });
-  return { eyes, torches };
+function tikiLimb(put, key, a, b, r) {
+  const mid = a.clone().add(b).multiplyScalar(0.5);
+  const dir = b.clone().sub(a);
+  const e = new THREE.Euler().setFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize()));
+  put(key, TIKI_LIMB, mid.x, mid.y, mid.z, r, dir.length(), r, e.x, e.y, e.z);
+  put(key, SOFT, b.x, b.y, b.z, r, r, r);
 }
 
-function buildTunnel(track) {
+const TIKI_LIMB = new THREE.CylinderGeometry(1, 1, 1, 14);
+const HEAD = new THREE.LatheGeometry(
+  [[0.01, 0], [0.86, 0.04], [0.98, 0.25], [1.0, 0.55], [0.96, 0.8], [0.82, 0.95], [0.5, 1.02], [0.01, 1.03]].map(([r, y]) => new THREE.Vector2(r, y)),
+  28,
+);
+const TRUNK_BODY = new THREE.LatheGeometry(
+  [[0.01, 0], [0.86, 0], [0.92, 0.15], [1.0, 0.45], [0.95, 0.75], [0.8, 0.95], [0.7, 1], [0.01, 1]].map(([r, y]) => new THREE.Vector2(r, y)),
+  24,
+);
+const RING = new THREE.TorusGeometry(1, 0.22, 8, 24);
+const SOFT = new THREE.SphereGeometry(1, 16, 12);
+const WEDGE = new THREE.ConeGeometry(1, 1, 3);
+const FEATHER_TALL = new THREE.ConeGeometry(1, 1, 6).translate(0, 0.5, 0);
+const PLINTH = new THREE.CylinderGeometry(1, 1.1, 1, 10);
+
+function tiki(batch, x, y, z, yaw, rand, { tongue, crown }) {
+  const put = frame(batch, x, y, z, yaw, 0, 0, TIKI_SCALE);
+  const V = (a, b, c) => new THREE.Vector3(a, b, c);
+  put('tikiStone', PLINTH, 0, 0.4, 0, 3.6, 1.8, 3.6);
+  for (let k = 0; k < 9; k++) {
+    const a = (k / 9) * Math.PI * 2 + rand() * 0.3;
+    const s = 0.8 + rand() * 0.9;
+    put(k % 2 ? 'caveRock' : 'caveRockDark', STONES[k % STONES.length], Math.cos(a) * 3.8, 0.3, Math.sin(a) * 3.8, s, s * 0.7, s, rand(), rand() * 6, rand());
+  }
+  for (const sx of [-1, 1]) {
+    put('tikiWood', SOFT, sx * 1.15, 1.75, 0.7, 1.05, 0.55, 1.5);
+    for (let t = -1; t <= 1; t++) put('tikiDark', BOX, sx * 1.15 + t * 0.32, 1.75, 2.12, 0.08, 0.45, 0.25);
+    tikiLimb(put, 'tikiWood', V(sx * 1.15, 2, 0.2), V(sx * 1.25, 3.7, 0.3), 0.85);
+  }
+  put('tikiWood', TRUNK_BODY, 0, 3.4, 0, 2.5, 6.8, 2.2);
+  for (const yy of [3.6, 10]) put('tikiDark', RING, 0, yy, 0, 2.18, 2.18, 1.2, Math.PI / 2, 0, 0);
+  for (let k = 0; k < 18; k++) {
+    const a = (k / 18) * Math.PI * 2;
+    put(k % 2 ? 'paintTeal' : 'paintRed', WEDGE, Math.sin(a) * 2.25, 4.25, Math.cos(a) * 2.0, 0.42, 0.7, 0.18, 0, a, 0);
+  }
+  for (const a of [-0.9, -0.45, 0.45, 0.9, Math.PI - 0.3, Math.PI + 0.3]) put('tikiDark', BOX, Math.sin(a) * 2.45, 7.2, Math.cos(a) * 2.2, 0.12, 3.6, 0.12, 0, a, 0);
+  for (const sx of [-1, 1]) {
+    const shoulder = V(sx * 2.15, 9.2, 0.4);
+    const elbow = V(sx * 2.65, 6.9, 1.2);
+    const wrist = V(sx * 1.0, 6.3, 2.25);
+    tikiLimb(put, 'tikiWood', shoulder, elbow, 0.62);
+    tikiLimb(put, 'tikiWood', elbow, wrist, 0.55);
+    put('tikiWood', SOFT, sx * 0.75, 6.3, 2.4, 0.75, 0.6, 0.38);
+    for (let f = 0; f < 4; f++) put('tikiDark', BOX, sx * (0.45 + f * 0.2), 6.3, 2.75, 0.05, 0.85, 0.05, 0, 0, sx * 0.2);
+    put('tikiWood', SOFT, sx * 2.25, 9.4, 0.3, 0.9, 0.75, 0.9);
+  }
+  put('tikiDark', RING, 0, 5.15, 2.3, 0.22, 0.22, 0.3);
+  const colors = ['flowerPink', 'flowerYellow', 'flowerWhite', 'flowerRed'];
+  for (let k = 0; k < 22; k++) {
+    const a = (k / 22) * Math.PI * 2;
+    const droop = Math.max(0, Math.cos(a)) * 0.9;
+    put(colors[k % 4], SOFT, Math.sin(a) * 1.95, 10.4 - droop, Math.cos(a) * 1.85 + 0.15, 0.32, 0.3, 0.32);
+  }
+  put('tikiWood', HEAD, 0, 10.4, 0.15, 3.2, 6.6, 2.85);
+  put('tikiDark', BOX, 0, 15.1, 2.55, 5.6, 0.95, 1.1, -0.12);
+  for (const sx of [-1, 1]) put('tikiWood', BOX, sx * 1.4, 15.0, 2.6, 2.7, 0.8, 1.1, -0.1, 0, sx * 0.14);
+  for (const sx of [-1, 1]) {
+    put('tikiDark', RING, sx * 1.35, 13.95, 2.6, 0.95, 0.95, 0.9);
+    put('eyeWhite', SOFT, sx * 1.35, 13.95, 2.62, 0.78, 0.78, 0.32);
+    put('tikiDark', RING, sx * 1.35, 13.95, 2.84, 0.42, 0.42, 0.4);
+    put('tikiWood', SOFT, sx * 3.15, 13.4, 0.1, 0.45, 1.5, 0.95);
+    put('tikiDark', RING, sx * 3.38, 13.4, 0.15, 0.45, 0.6, 0.5, 0, Math.PI / 2, 0);
+    put('tikiDark', RING, sx * 2.1, 12.3, 2.35, 0.42, 0.42, 0.4, 0, sx * 0.5, 0);
+  }
+  put('tikiWood', SOFT, 0, 12.75, 2.95, 1.25, 0.95, 0.8);
+  for (const sx of [-1, 1]) put('tikiDark', SOFT, sx * 0.48, 12.4, 3.5, 0.24, 0.17, 0.15);
+  put('tikiLight', RING, 0, 11.05, 2.55, 2.1, 1.0, 1.1);
+  put('mouth', SOFT, 0, 11.05, 2.6, 1.85, 0.82, 0.35);
+  for (let k = 0; k < 7; k++) {
+    const tx = -1.5 + k * 0.5;
+    const tz = 2.75 - Math.abs(tx) * 0.12;
+    put('tooth', BOX, tx, 11.55, tz, 0.36, 0.42, 0.2);
+    if (k > 0 && k < 6) put('tooth', BOX, tx, 10.55, tz, 0.36, 0.4, 0.2);
+  }
+  if (tongue) put('tongue', SOFT, 0, 10.45, 3.15, 0.75, 0.3, 0.95, 0.5, 0, 0);
+  put(crown[0], RING, 0, 16.9, 0.1, 2.65, 2.5, 1.4, Math.PI / 2, 0, 0);
+  for (let k = 0; k < 13; k++) {
+    const a = ((k - 6) / 6) * 1.25;
+    const len = 3 + Math.cos(a) * 2.2 + rand() * 0.6;
+    put(crown[(k % (crown.length - 1)) + 1], FEATHER_TALL, Math.sin(a) * 1.9, 16.9, Math.cos(a) * 0.6 - 0.3, 0.42, len, 0.2, -0.15, 0, -a * 0.75);
+  }
+  for (let k = 0; k < 4; k++) put('moss', SOFT, (rand() - 0.5) * 3, 17.1 + rand() * 0.3, -1 + rand() * 1.5, 0.8 + rand() * 0.4, 0.3, 0.7);
+  return [V(-1.35, 13.95, 2.9), V(1.35, 13.95, 2.9)].map((v) => v.multiplyScalar(TIKI_SCALE).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw).add(new THREE.Vector3(x, y, z)));
+}
+
+function buildTikis(track, k, levelAt, batch, rand, ground) {
+  const i = track.wrap(k);
+  const eyes = new THREE.Group();
+  const eyeMat = glow(0xffb21f);
+  const torches = [];
+  const blobs = [];
+  for (const side of [-1, 1]) {
+    const ahead = track.wrap(i - Math.round(13 / track.spacing));
+    const lat = track.hw[ahead] + 3.5;
+    const p = track.point(ahead, side * lat);
+    const level = levelAt(k * track.spacing);
+    const y = Math.max(level + 0.4, Math.min(level + 2.5, ground(p.x, p.z) - 0.4));
+    blobs.push({ x: p.x, z: p.z, rx: 4.6, rz: 4.6, rot: 0 });
+    const center = track.point(ahead - Math.round(25 / track.spacing), 0);
+    const yaw = Math.atan2(center.x - p.x, center.z - p.z);
+    const pupils = tiki(batch, p.x, y, p.z, yaw, rand, side < 0 ? { tongue: true, crown: ['paintRed', 'paintYellow', 'paintTeal', 'leafLight', 'paintRed'] } : { tongue: false, crown: ['paintTeal', 'paintRed', 'paintYellow', 'paintTeal', 'leafLight'] });
+    for (const at of pupils) {
+      const pupil = new THREE.Mesh(SOFT, eyeMat);
+      pupil.position.copy(at);
+      pupil.scale.set(0.42, 0.42, 0.25);
+      pupil.rotation.y = yaw;
+      eyes.add(pupil);
+    }
+    for (const off of [-5.5, 5.5]) {
+      const q = new THREE.Vector3(Math.cos(yaw) * off, 0, -Math.sin(yaw) * off).add(new THREE.Vector3(p.x, 0, p.z)).add(new THREE.Vector3(Math.sin(yaw) * 3, 0, Math.cos(yaw) * 3));
+      const base = new THREE.Vector3(q.x, y + 0.6, q.z);
+      for (let b = 0; b < 4; b++) batch.add('torchWood', BAMBOO, mat(base.x, base.y + 0.9 + b * 1.75, base.z, 0.24, 1.7, 0.24));
+      torches.push(torchAt(base.clone().add(new THREE.Vector3(0, 5.6, 0)), new THREE.Vector3(), 1.6));
+    }
+  }
+  return { eyes, torches, blobs };
+}
+
+const TIKI_SCALE = 1.45;
+
+const BAMBOO = new THREE.CylinderGeometry(1, 1.1, 1, 8);
+const BOX = new THREE.BoxGeometry(1, 1, 1);
+
+function buildTunnel(track, ground) {
   const { river, spacing } = track;
   const kIn = Math.round(river.tunnelIn / spacing);
   const kOut = Math.round(river.tunnelOut / spacing);
@@ -677,17 +751,19 @@ function buildTunnel(track) {
   caveDetails(batch, track, kIn, kOut, low);
   caveDetails(batch, track, highFrom, kOut, high);
   const rand = mulberry32(4411);
-  const face = buildFace(track, kIn, low, batch, rand);
+  const face = buildTikis(track, kIn, low, batch, rand, ground);
+  mouthRocks(batch, track, kIn, low, -1, rand);
   mouthRocks(batch, track, kOut, high, 1, rand);
   const torches = [...lowTorches, ...highOnly, ...face.torches];
   const flames = buildTorches(batch, torches);
   group.add(flames, face.eyes);
+  group.userData.blobs = face.blobs;
   group.userData.torches = flames;
   const details = new THREE.Group();
   group.userData.chunks = batch.build(details, 0.08, JUNGLE_COLORS);
   group.add(details);
   group.add(buildShell(track, kIn, kOut));
-  group.add(buildMouth(track, kIn, low, highLevel(track, river.tunnelIn) + LID, JUNGLE_COLORS.tiki));
+  group.add(buildMouth(track, kIn, low, highLevel(track, river.tunnelIn) + LID));
   group.add(buildMouth(track, kOut, high, highLevel(track, river.tunnelOut) + LID));
   group.add(buildCap(track, kOut, low, 0xdff7ec, 3));
   group.add(buildCap(track, kSeam - GHOST, high, 0x15110d));
@@ -1042,7 +1118,7 @@ export async function createJungle(group, track, fx) {
   const falls = track.river.drops.map((drop) => buildFalls(track, drop));
   for (const f of falls) group.add(f.mesh);
   await tick();
-  const tunnel = buildTunnel(track);
+  const tunnel = buildTunnel(track, (x, z) => terrainHeight(surface, track, x, z));
   await tick();
   group.add(tunnel);
   const kExit = Math.round(track.river.tunnelOut / track.spacing);
@@ -1154,7 +1230,7 @@ export async function createJungle(group, track, fx) {
     water,
     sun,
     surface,
-    shores: [],
+    shores: tunnel.userData.blobs,
     solid(p) {
       const { s, dist, idx, level } = surface.sample(p.x, p.z);
       if (track.inTunnel(s)) {
