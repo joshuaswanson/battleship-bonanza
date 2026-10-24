@@ -23,6 +23,9 @@ const JUNGLE_COLORS = {
   caveRock: 0x6a5c4f,
   caveRockDark: 0x4e4238,
   caveRockLight: 0x84735f,
+  caveIn: 0x3a3129,
+  caveInDark: 0x2c251f,
+  caveInLight: 0x4a3f35,
   tiki: 0x9c8b70,
   tikiDark: 0x3b3029,
   tooth: 0xf4ead0,
@@ -254,7 +257,7 @@ function caveWaterShade(torches, ends) {
   return (x, y, z, k) => {
     const day = Math.max(0, 1 - Math.min(...ends.map((e) => Math.abs(k - e))) / 14);
     const lit = Math.min(1, torchLight(p.set(x, y, z), torches));
-    const dark = 0.36 + 0.64 * day;
+    const dark = 0.18 + 0.82 * day;
     return [dark + 0.75 * lit, dark + 0.45 * lit, dark + 0.12 * lit];
   };
 }
@@ -347,7 +350,7 @@ function buildTube(track, from, to, levelAt, ends, torches) {
     for (const p of [a, b, d]) {
       positions.push(p.x, p.y, p.z);
       const lit = Math.min(1, torchLight(p, torches));
-      const shade = 0.34 + 0.66 * daylight + 0.85 * lit;
+      const shade = 0.13 + 0.87 * daylight + 1.1 * lit;
       colors.push(c.r * shade + 0.2 * lit, c.g * shade + 0.09 * lit, c.b * shade);
     }
   };
@@ -375,6 +378,7 @@ function buildTube(track, from, to, levelAt, ends, torches) {
 }
 
 const CAVE_KEYS = ['caveRock', 'caveRockDark', 'caveRockLight'];
+const INNER_KEYS = ['caveIn', 'caveInDark', 'caveInLight'];
 const DRIP = new THREE.ConeGeometry(1, 1, 6).rotateX(Math.PI);
 
 function caveDetails(batch, track, from, to, levelAt) {
@@ -388,7 +392,7 @@ function caveDetails(batch, track, from, to, levelAt) {
         const r = 0.35 + hash(k, 40 + n) * 0.6;
         const ox = (hash(k, 50 + n) - 0.5) * 2.4;
         const oz = (hash(k, 60 + n) - 0.5) * 2.4;
-        batch.add(CAVE_KEYS[(k + n) % 3], DRIP, mat(top.x + ox, top.y - len / 2 + 0.3, top.z + oz, r, len, r));
+        batch.add(INNER_KEYS[(k + n) % 3], DRIP, mat(top.x + ox, top.y - len / 2 + 0.3, top.z + oz, r, len, r));
       }
     }
     for (const side of [0, 1]) {
@@ -396,10 +400,10 @@ function caveDetails(batch, track, from, to, levelAt) {
       const j = side ? CAVE_STEPS - 2 - Math.floor(hash(k, 80) * 2) : 2 + Math.floor(hash(k, 81) * 2);
       const p = tubePoint(track, k, j, levelAt, -0.6);
       const size = 1 + hash(k, 90 + side) * 1.8;
-      batch.add(CAVE_KEYS[(k + side) % 3], ROCK, mat(p.x, Math.max(p.y, levelAt(k * track.spacing) + size * 0.2), p.z, size, size * (0.6 + hash(k, 95) * 0.6), size, hash(k, 1), hash(k, 2) * 6, hash(k, 3)));
+      batch.add(INNER_KEYS[(k + side) % 3], ROCK, mat(p.x, Math.max(p.y, levelAt(k * track.spacing) + size * 0.2), p.z, size, size * (0.6 + hash(k, 95) * 0.6), size, hash(k, 1), hash(k, 2) * 6, hash(k, 3)));
       if (hash(k, 99 + side) < 0.3) {
         const h = 1.5 + hash(k, 100) * 2.5;
-        batch.add(CAVE_KEYS[(k + 1) % 3], CONE, mat(p.x, levelAt(k * track.spacing) + h / 2, p.z, 0.7, h, 0.7));
+        batch.add(INNER_KEYS[(k + 1) % 3], CONE, mat(p.x, levelAt(k * track.spacing) + h / 2, p.z, 0.7, h, 0.7));
       }
     }
   }
@@ -493,31 +497,9 @@ function buildCap(track, k, levelAt, color, along = 0) {
   return mesh;
 }
 
-function buildCrystals(track, from, to, levelAt) {
-  const group = new THREE.Group();
-  const materials = [glow(0x6cf2ff), glow(0xff7ad9), glow(0xb6ff6c)];
-  for (let k = from; k < to; k++) {
-    if (k % 11 !== 0) continue;
-    for (const side of [-1, 1]) {
-      const p = tubePoint(track, k, side < 0 ? CAVE_STEPS - 5 : 5, levelAt, -0.8);
-      for (let n = 0; n < 3; n++) {
-        const seed = Math.sin((k * 7 + n * 13 + side * 5) * 12.9898) * 43758.5453;
-        const r = seed - Math.floor(seed);
-        const mesh = new THREE.Mesh(CRYSTAL, materials[(k + n + (side > 0 ? 1 : 0)) % 3]);
-        mesh.position.set(p.x + (r - 0.5) * 1.6, p.y - 0.4 + n * 0.3, p.z + (r - 0.5) * 1.6);
-        mesh.scale.set(0.35 + r * 0.25, 0.9 + r * 0.9, 0.35 + r * 0.25);
-        mesh.rotation.set((r - 0.5) * 0.8, r * 3, (n - 1) * 0.5 * side);
-        group.add(mesh);
-      }
-    }
-  }
-  return group;
-}
-
-const CRYSTAL = new THREE.OctahedronGeometry(1, 0);
 
 const TORCH_EVERY = 10;
-const TORCH_REACH = 20;
+const TORCH_REACH = 15;
 const FLAME = new THREE.ConeGeometry(0.55, 1.7, 7).translate(0, 0.75, 0);
 const FLAME_CORE = new THREE.ConeGeometry(0.3, 1.1, 6).translate(0, 0.5, 0);
 const STICK = new THREE.CylinderGeometry(0.16, 0.22, 2.4, 6);
@@ -702,8 +684,6 @@ function buildTunnel(track) {
   const details = new THREE.Group();
   group.userData.chunks = batch.build(details, 0.08, JUNGLE_COLORS);
   group.add(details);
-  group.add(buildCrystals(track, kIn, kOut, low));
-  group.add(buildCrystals(track, kSeam - GHOST, kOut, high));
   group.add(buildShell(track, kIn, kOut));
   group.add(buildMouth(track, kIn, low, highLevel(track, river.tunnelIn) + LID, JUNGLE_COLORS.tiki));
   group.add(buildMouth(track, kOut, high, highLevel(track, river.tunnelOut) + LID));
