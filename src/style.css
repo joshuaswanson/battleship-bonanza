@@ -920,6 +920,31 @@ kbd {
   min-height: 3rem;
 }
 
+.yard-title {
+  margin: 0;
+  font-family: var(--race);
+  font-weight: 900;
+  font-size: clamp(2rem, 3.4vw, 2.9rem);
+  line-height: 1;
+  color: var(--sun);
+  text-align: center;
+  transform: skewX(-10deg);
+  -webkit-text-stroke: 3px var(--ink);
+  paint-order: stroke fill;
+  text-shadow: 0 4px 0 var(--ink);
+}
+
+.stage .combo {
+  position: absolute;
+  top: 0.7rem;
+  left: 1rem;
+  right: 1rem;
+  font-size: clamp(1.4rem, 2.3vw, 2rem);
+  text-align: left;
+  transform-origin: left;
+  pointer-events: none;
+}
+
 .yard-head #btn-back {
   position: absolute;
   left: 0;
@@ -1028,35 +1053,41 @@ kbd {
 }
 
 .tabs {
+  position: relative;
+  z-index: 1;
   display: flex;
-  gap: 0.5rem;
+  align-items: flex-end;
+  gap: 0.35rem;
+  padding: 0 1.1rem;
+  margin-bottom: -4px;
 }
 
 .tab {
   flex: 1;
-  padding: 0.45rem 0.6rem;
+  padding: 0.4rem 0.6rem 0.45rem;
   font-family: var(--race);
   font-weight: 800;
-  font-size: 1.35rem;
+  font-size: 1.3rem;
   line-height: 1.1;
-  color: var(--ink);
-  background: #ffffff;
-  border: 3px solid var(--ink);
-  border-radius: 14px;
-  box-shadow: 0 4px 0 var(--ink);
+  color: #4b6889;
+  background: #cfe3ef;
+  border: 4px solid var(--ink);
+  border-bottom: none;
+  border-radius: 16px 16px 0 0;
   cursor: pointer;
-  transition: transform 90ms ease, box-shadow 90ms ease, background-color 120ms ease;
+  transition: background-color 120ms ease, color 120ms ease, padding 120ms ease;
 }
 
 .tab:hover {
-  background: var(--foam);
+  color: var(--ink);
+  background: #e4f1f8;
 }
 
 .tab[aria-selected='true'] {
-  color: #ffffff;
-  background: var(--ink);
-  transform: translateY(2px);
-  box-shadow: 0 2px 0 var(--ink);
+  padding-top: 0.6rem;
+  padding-bottom: calc(0.45rem + 4px);
+  color: var(--ink);
+  background: var(--foam);
 }
 
 .tab:focus-visible {
@@ -1547,6 +1578,9 @@ kbd {
 #btn-start {
   align-self: center;
   width: min(100%, 440px);
+  height: 4.2rem;
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
 .btn-launch {
@@ -2778,14 +2812,29 @@ kbd {
   .stats-card {
     display: none;
   }
-  .combo {
+  .combo,
+  .yard-title {
     font-size: 1.3rem;
     -webkit-text-stroke: 2px var(--ink);
   }
+  .stage .combo {
+    top: 0.4rem;
+    left: 0.6rem;
+    font-size: 1.05rem;
+  }
+  .tabs {
+    padding: 0 0.6rem;
+    margin-bottom: -3px;
+  }
   .tab {
     font-size: 0.95rem;
-    padding: 0.25rem 0.4rem;
-    border-radius: 10px;
+    padding: 0.2rem 0.4rem 0.25rem;
+    border-width: 3px;
+    border-radius: 10px 10px 0 0;
+  }
+  .tab[aria-selected='true'] {
+    padding-top: 0.32rem;
+    padding-bottom: calc(0.25rem + 3px);
   }
   .slot-chip {
     height: 62px;
@@ -2835,6 +2884,12 @@ kbd {
     font-size: 1.15rem;
     padding: 0.35em 0.8em;
     border-radius: 14px;
+  }
+  #btn-start {
+    height: 2.6rem;
+  }
+  .btn-launch:disabled {
+    font-size: 0.95rem;
   }
   .item-detail {
     width: 260px;
