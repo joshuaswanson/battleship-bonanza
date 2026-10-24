@@ -416,10 +416,11 @@ export async function createMidway(group, track, fx) {
   for (let pair = 0; pair < 14; pair++) {
     const near = track.point(Math.floor(rand() * track.N), (rand() - 0.5) * 80);
     const center = pair % 2 ? new THREE.Vector3(near.x, 0, near.z) : new THREE.Vector3((rand() - 0.5) * 700, 0, (rand() - 0.5) * 600 + 100);
-    const path = { center, radius: 40 + rand() * 50, height: pair % 2 ? 28 + rand() * 30 : 55 + rand() * 70, speed: (0.35 + rand() * 0.2) * (rand() < 0.5 ? -1 : 1), phase: rand() * Math.PI * 2, wobble: rand() * 6 };
+    const radius = 110 + rand() * 110;
+    const path = { center, radius, height: pair % 2 ? 30 + rand() * 30 : 60 + rand() * 70, speed: ((120 + rand() * 50) / radius) * (rand() < 0.5 ? -1 : 1), phase: rand() * Math.PI * 2, wobble: rand() * 6 };
     const blueLeads = pair % 2 === 0;
     planes.push({ squad: blueLeads ? blue : green, index: pair, path, lag: 0, role: 'lead' });
-    planes.push({ squad: blueLeads ? green : blue, index: pair, path, lag: 0.32, role: 'chase' });
+    planes.push({ squad: blueLeads ? green : blue, index: pair, path, lag: 38 / radius, role: 'chase' });
   }
   for (let k = 0; k < 6; k++) {
     const lane = k < 3 ? 0 : 1;
@@ -440,7 +441,7 @@ export async function createMidway(group, track, fx) {
     if (p.bomber) {
       const dir = p.bomber.lane ? new THREE.Vector3(-0.8, 0, 0.6).normalize() : new THREE.Vector3(1, 0, 0.25).normalize();
       const side = new THREE.Vector3(-dir.z, 0, dir.x);
-      const travel = (((t * 38 + p.bomber.offset) % 1800) + 1800) % 1800 - 900;
+      const travel = (((t * 95 + p.bomber.offset) % 1800) + 1800) % 1800 - 900;
       const slot = [0, -1, 1][p.bomber.slot];
       return out.copy(dir).multiplyScalar(travel - Math.abs(slot) * 14).addScaledVector(side, slot * 16).add(new THREE.Vector3(0, 150 + p.bomber.lane * 20, 100));
     }
@@ -591,7 +592,7 @@ export async function createMidway(group, track, fx) {
       if (p.fall) {
         const f = p.fall;
         f.vel.y -= 22 * dt;
-        f.vel.multiplyScalar(Math.exp(-0.2 * dt));
+        f.vel.multiplyScalar(Math.exp(-0.7 * dt));
         f.pos.addScaledVector(f.vel, dt);
         f.angle += f.spin * dt;
         ahead.copy(f.pos).add(f.vel);
@@ -613,7 +614,7 @@ export async function createMidway(group, track, fx) {
       pathAt(p, t, pos);
       pathAt(p, t + 0.05, ahead);
       m.lookAt(ahead, pos, up);
-      const bank = p.bomber ? 0 : -0.42 * Math.sign(p.path.speed);
+      const bank = p.bomber ? 0 : -0.75 * Math.sign(p.path.speed);
       q.setFromRotationMatrix(m).multiply(roll.setFromAxisAngle(zAxis, bank));
       p.squad.set(p.index, m.compose(pos, q, one));
       p.now = (p.now ?? new THREE.Vector3()).copy(pos);
@@ -623,7 +624,8 @@ export async function createMidway(group, track, fx) {
           const lead = planes.find((o) => o.path === p.path && o.role === 'lead');
           if (lead && !lead.fall && !lead.respawn && lead.now) {
             const nose = new THREE.Vector3(0, 0, 4).applyQuaternion(q).add(pos);
-            tracers.fire(nose, lead.now, 190, 0.04, 3, 0.05);
+            const aim = pathAt(lead, t + nose.distanceTo(lead.now) / 420, new THREE.Vector3());
+            tracers.fire(nose, aim, 420, 0.02, 3, 0.04);
           }
         }
         if (p.burst <= 0) p.burst = 1.2 + Math.random() * 2;
