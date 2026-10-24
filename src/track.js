@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 
-export function createTrack(map) {
+export function createTrack(map, scale = 1) {
   const curve = new THREE.CatmullRomCurve3(
-    map.control.map(([x, z]) => new THREE.Vector3(x, 0, z)),
+    map.control.map(([x, z]) => new THREE.Vector3(x * scale, 0, z * scale)),
     true,
     'centripetal',
   );
@@ -37,7 +37,7 @@ export function createTrack(map) {
   const wrap = (i) => ((i % N) + N) % N;
 
   const hw = new Float32Array(N);
-  const keys = map.widths ?? [[0, map.halfWidth]];
+  const keys = (map.widths ?? [[0, map.halfWidth]]).map(([f, w]) => [f, w * scale]);
   for (let i = 0; i < N; i++) {
     const f = i / N;
     let a = keys[keys.length - 1];
@@ -123,5 +123,5 @@ export function createTrack(map) {
     return ahead(river.seam, s) < ahead(river.seam, river.tunnelOut) + 100;
   }
 
-  return { N, length, spacing, px, pz, tx, tz, nx, nz, wrap, project, point, heading, halfWidth: map.halfWidth, hw, widthAt, banked: !!(map.river || map.banked), map, river, level, inTunnel, pastSeam, ahead };
+  return { N, length, spacing, px, pz, tx, tz, nx, nz, wrap, project, point, heading, halfWidth: map.halfWidth * scale, hw, scale, widthAt, banked: !!(map.river || map.banked), map, river, level, inTunnel, pastSeam, ahead };
 }

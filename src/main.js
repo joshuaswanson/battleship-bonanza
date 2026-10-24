@@ -104,14 +104,44 @@ function venue(id) {
   return venues[id];
 }
 
+function scaleWorld(group, world, scale) {
+  const scenery = new THREE.Group();
+  for (const child of [...group.children]) {
+    if (child === world.water?.mesh || child.isLight) continue;
+    scenery.add(child);
+  }
+  scenery.scale.setScalar(scale);
+  group.add(scenery);
+  world.shores = world.shores.map((b) => ({ ...b, x: b.x * scale, z: b.z * scale, rx: b.rx * scale, rz: b.rz * scale }));
+  if (world.solid) {
+    const solid = world.solid;
+    const p = new THREE.Vector3();
+    world.solid = (q) => solid(p.set(q.x / scale, q.y / scale, q.z / scale));
+  }
+  if (world.surface) {
+    const sample = world.surface.sample.bind(world.surface);
+    world.surface = { ...world.surface, sample: (x, z) => sample(x / scale, z / scale) };
+  }
+  const update = world.update.bind(world);
+  world.update = (t, dt, camera) => {
+    const real = camera.position.clone();
+    camera.position.divideScalar(scale);
+    update(t, dt, camera);
+    camera.position.copy(real);
+  };
+}
+
 function prepareVenue(id) {
   if (venues[id]) return Promise.resolve(venues[id]);
   building[id] ??= (async () => {
-    const track = createTrack(MAPS[id]);
+    const scale = MAPS[id].scale ?? 1;
     const group = new THREE.Group();
     group.visible = false;
     const builders = { jungle: createJungle, alps: createAlps, venice: createVenice, midway: createMidway };
-    const world = builders[id] ? await builders[id](group, track, fx) : createWorld(group, track);
+    const built = createTrack(MAPS[id]);
+    const world = builders[id] ? await builders[id](group, built, fx) : createWorld(group, built);
+    const track = scale === 1 ? built : createTrack(MAPS[id], scale);
+    if (scale !== 1) scaleWorld(group, world, scale);
     scene.add(group);
     venues[id] = { track, world, group };
     return venues[id];

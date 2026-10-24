@@ -42,6 +42,7 @@ export const MAPS = {
   venice: {
     id: 'venice',
     halfWidth: 26,
+    scale: 1.12,
     banked: true,
     widths: [[0, 40], [0.06, 48], [0.1, 44], [0.15, 26], [0.5, 26], [0.56, 17], [0.84, 17], [0.9, 30], [0.95, 40]],
     control: [
