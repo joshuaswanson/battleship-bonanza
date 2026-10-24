@@ -396,6 +396,7 @@ export class Loadout {
   demo(slot) {
     const id = this.setup.items[slot];
     if (!id || !this.boat) return;
+    if (id === 'grapple' && this.movers.some((m) => m.grapple)) return;
     this.sfx.unlock();
     this.busy[id] = id === 'saw' ? 1.8 : 2.2;
     const b = this.boat;
