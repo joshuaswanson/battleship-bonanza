@@ -665,10 +665,10 @@ function addIsland(batch, x, z, r, rand, { clearCenter = 0 } = {}) {
   return sand;
 }
 
-const PILLAR_DARK = new THREE.Color(0x6b6e70);
-const PILLAR_STREAK = new THREE.Color(0x85888a);
-const PILLAR_LIGHT = new THREE.Color(0xa7a9a7);
-const PILLAR_WET = new THREE.Color(0x4a4e52);
+const PILLAR_DARK = new THREE.Color(0xb07a4f);
+const PILLAR_STREAK = new THREE.Color(0xdcb183);
+const PILLAR_LIGHT = new THREE.Color(0xf4e2c0);
+const PILLAR_WET = new THREE.Color(0x6b5442);
 
 function paintPillar(g, top) {
   g.computeVertexNormals();
@@ -688,7 +688,8 @@ function paintPillar(g, top) {
     if (y < 1.6) color.lerp(PILLAR_WET, 1 - THREE.MathUtils.smoothstep(y, -1, 1.6));
     colors.push(color.r, color.g, color.b);
     const ny = nor.getY(i);
-    const hang = THREE.MathUtils.smoothstep(y, top - 4, top - 0.5) * (0.5 + 0.5 * Math.sin(Math.atan2(z, x) * 5 + x)) * 0.62;
+    const drape = 0.5 + 0.5 * Math.sin(Math.atan2(z, x) * 5 + x);
+    const hang = THREE.MathUtils.smoothstep(y, top - 4 - 9 * drape * drape, top - 0.5) * drape * 0.75;
     greens.push(Math.max(THREE.MathUtils.smoothstep(ny, 0.55, 0.75) * THREE.MathUtils.smoothstep(y, top - 3, top - 1), hang));
     const tone = streak > 0.2 ? GRASS_EDGE : GRASS_TONE;
     moss.push(tone.r, tone.g, tone.b);
@@ -986,7 +987,7 @@ function createMarkerBuoy(kind) {
 }
 
 export function createWorld(scene, track) {
-  const fog = new THREE.Fog(SKY_HORIZON, 260, 950);
+  const fog = new THREE.Fog(SKY_HORIZON, 480, 950);
 
   const sky = createSky();
   scene.add(sky);
