@@ -151,7 +151,7 @@ function lifebuoyPost(group, x, z, face) {
 }
 
 const CONE_BODY = new THREE.LatheGeometry(
-  [[0.0, 1.45], [0.07, 1.45], [0.1, 1.4], [0.42, 0.18], [0.44, 0.1], [0.0, 0.1]].map(([r, y]) => new THREE.Vector2(r, y)),
+  [[0.0, 0.1], [0.44, 0.1], [0.42, 0.18], [0.1, 1.4], [0.07, 1.45], [0.0, 1.45]].map(([r, y]) => new THREE.Vector2(r, y)),
   28,
 );
 const CONE_BASE = new THREE.BoxGeometry(1, 1, 1);
