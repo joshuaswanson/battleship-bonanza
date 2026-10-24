@@ -44,6 +44,11 @@ export const LANDMARK_COLORS = {
   rock0: 0x8a857e,
   rock1: 0x9d978e,
   rock2: 0xb1aca3,
+  rope: 0xe8d6a8,
+  crate: 0xd59b5b,
+  crateDark: 0x9c6436,
+  plankPale: 0xc89a66,
+  nail: 0x4a4038,
   chaletPlaster: 0xf7f2e6,
   chaletWood: 0x9b5f32,
   chaletWoodRed: 0x8a4a2a,
@@ -65,6 +70,7 @@ const CONE = new THREE.ConeGeometry(1, 1, 24);
 const OCT_SPIRE = new THREE.ConeGeometry(1, 1, 8).rotateY(Math.PI / 8);
 const PYRAMID = new THREE.ConeGeometry(Math.SQRT2 / 2, 1, 4).rotateY(Math.PI / 4);
 const BALL = new THREE.SphereGeometry(1, 14, 10);
+const TORUS = new THREE.TorusGeometry(1, 0.3, 8, 18);
 const ARCH = new THREE.CylinderGeometry(1, 1, 1, 14, 1, false, -Math.PI / 2, Math.PI).rotateX(-Math.PI / 2);
 const HALF_DRUM = new THREE.CylinderGeometry(1, 1, 1, 32, 1, false, 0, Math.PI).rotateZ(Math.PI / 2);
 const BATTER = new THREE.CylinderGeometry(1, 1.18, 1, 24);
@@ -416,6 +422,57 @@ export function chalet(batch, x, y, z, yaw, rand) {
   }
   put('stone', BOX, -w / 4, top + rise * 0.55, -d / 4, 0.9, 2.6, 0.9);
   put('slate', BOX, -w / 4, top + rise * 0.55 + 1.45, -d / 4, 1.3, 0.2, 1.3);
+}
+
+export function lakeDock(batch, x, z, yaw, length, rand) {
+  const put = frame(batch, x, 0, z, yaw, 0, 0, 1);
+  const W = 4.6;
+  const deck = 1.5;
+  const L = length;
+  const tones = ['timber', 'shingle', 'timber', 'plankPale'];
+  for (let k = -L / 2 + 0.3; k < L / 2; k += 0.58) {
+    const lift = (rand() - 0.5) * 0.05;
+    const warp = (rand() - 0.5) * 0.02;
+    const tone = tones[Math.floor(rand() * tones.length)];
+    const shift = (rand() - 0.5) * 0.25;
+    put(tone, BOX, shift, deck + lift, k, W + (rand() - 0.5) * 0.3, 0.2, 0.52, warp, (rand() - 0.5) * 0.012, warp * 0.5);
+    for (const side of [-1, 1]) for (const dz of [-0.13, 0.13]) put('nail', CYL, side * (W / 2 - 0.35), deck + lift + 0.105, k + dz, 0.04, 0.02, 0.04);
+    if (rand() < 0.15) put('timberDark', BOX, (rand() - 0.5) * W * 0.6, deck + lift + 0.1, k, 0.5 + rand() * 0.6, 0.012, 0.05);
+  }
+  for (const side of [-1, 1]) {
+    put('timberDark', BOX, side * (W / 2 - 0.35), deck - 0.33, 0, 0.32, 0.4, L);
+    put('timberDark', BOX, side * (W / 2 + 0.05), deck - 0.12, 0, 0.16, 0.45, L);
+  }
+  for (let k = -L / 2 + 0.6; k <= L / 2; k += 3) {
+    for (const side of [-1, 1]) {
+      put('timberDark', CYL, side * (W / 2 - 0.15), deck - 2.6, k, 0.24, 6, 0.24);
+      put('rope', CYL, side * (W / 2 - 0.15), deck - 0.95, k, 0.26, 0.22, 0.26);
+    }
+    put('timberDark', BOX, 0, deck - 0.58, k, W, 0.28, 0.28);
+  }
+  for (let k = -L / 2 + 2.5; k <= L / 2 - 1; k += 6) {
+    for (const side of [-1, 1]) {
+      put('timberDark', CYL, side * (W / 2 - 0.3), deck + 0.4, k, 0.18, 0.7, 0.18);
+      put('timberDark', CYL, side * (W / 2 - 0.3), deck + 0.82, k, 0.24, 0.14, 0.24);
+      if (rand() < 0.5) put('rope', TORUS, side * (W / 2 - 0.3), deck + 0.42, k, 0.26, 0.26, 0.3, Math.PI / 2, 0, 0, 0.02);
+    }
+  }
+  const lamp = (lx, lz) => {
+    put('iron', CYL, lx, deck + 1.9, lz, 0.1, 3.8, 0.1);
+    put('iron', BOX, lx, deck + 3.9, lz, 0.5, 0.6, 0.5);
+    put('lampGlow', BOX, lx, deck + 3.9, lz, 0.38, 0.45, 0.38);
+    put('iron', CONE, lx, deck + 4.35, lz, 0.4, 0.3, 0.4);
+  };
+  lamp(-W / 2 + 0.3, L / 2 - 3);
+  lamp(W / 2 - 0.3, -L / 2 + 4);
+  crate(put, 1.1, deck + 0.1, -L / 2 + 1.6, 1.2, 0.3);
+  crate(put, 1.4, deck + 1.3, -L / 2 + 1.7, 0.9, 0.7);
+  crate(put, -1.2, deck + 0.1, -L / 2 + 2.4, 1, -0.2);
+}
+
+function crate(put, x, y, z, size, spin) {
+  put('crate', BOX, x, y + size / 2, z, size, size, size, 0, spin, 0);
+  for (const side of [-1, 1]) put('crateDark', BOX, x + Math.sin(spin) * side * (size / 2 + 0.02), y + size / 2, z + Math.cos(spin) * side * (size / 2 + 0.02), size * 1.02, size * 0.14, 0.06, 0, spin, 0);
 }
 
 export function coveredBridge(batch, track, idx, height) {

@@ -5,7 +5,7 @@ import { Batcher, cullChunks, slicer, COLORS, mat, ROCK, createSky, createCloud,
 import { courseSurface, buildHeightfield, courseBuoys, swissFlag, flagClock, groundHit, smooth, noise } from './terrain.js';
 import { FLORA_COLORS, tree, sapling, boulder, cow, loadCowKit } from './alpine.js';
 import { Chopper } from './chop.js';
-import { LANDMARK_COLORS, castle, coveredBridge, waterTower, buildSteamer, chalet } from './alpsLandmarks.js';
+import { LANDMARK_COLORS, castle, coveredBridge, waterTower, buildSteamer, chalet, lakeDock } from './alpsLandmarks.js';
 
 const ALPS_COLORS = {
   ...COLORS,
@@ -171,14 +171,13 @@ export async function createAlps(group, track, fx) {
     if (edge) {
       const i = track.wrap(idx);
       const yaw = track.heading(i) + Math.PI / 2;
-      const put = placer(batch);
       const pierLen = edge.lat - track.hw[i] + 4;
       const start = track.point(i, villageSide * (track.hw[i] + 5 + pierLen / 2));
-      put('wood', BOX, new THREE.Vector3(start.x, 0, start.z), yaw, 0, 1.2, 0, 4, 0.5, pierLen);
-      shores.push({ x: start.x, z: start.z, rx: 2, rz: pierLen / 2, rot: yaw });
-      for (let k = -pierLen / 2; k <= pierLen / 2; k += 4) for (const lx of [-1.8, 1.8]) put('woodDark', BOX, new THREE.Vector3(start.x, 0, start.z), yaw, lx, -0.5, k, 0.4, 3.5, 0.4);
+      const dockYaw = yaw + (villageSide > 0 ? 0 : Math.PI);
+      lakeDock(batch, start.x, start.z, dockYaw, pierLen, rand);
+      shores.push({ x: start.x, z: start.z, rx: 3, rz: pierLen / 2, rot: yaw });
       const flagAt = track.point(i, villageSide * (track.hw[i] + 6));
-      swissFlag(batch, group, flagAt.x, 1.4, flagAt.z, yaw, 1);
+      swissFlag(batch, group, flagAt.x, 1.6, flagAt.z, yaw, 1);
     }
   }
 
