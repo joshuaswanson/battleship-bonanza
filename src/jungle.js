@@ -1327,8 +1327,10 @@ export async function createJungle(group, track, fx) {
     chopper,
     solid(p) {
       const { s, dist, idx, level } = surface.sample(p.x, p.z);
+      const pastExit = track.ahead(track.river.tunnelOut, s);
+      if ((track.inTunnel(s) || pastExit < 12) && dist < track.halfWidth + 6) return null;
+      if (pastExit < 120 && p.y < level - 12) return null;
       if (track.inTunnel(s)) {
-        if (dist < track.halfWidth + 6 && p.y < level + ARCH_TOP - 4) return null;
         const i = track.wrap(idx);
         const side = (p.x - track.px[i]) * track.nx[i] + (p.z - track.pz[i]) * track.nz[i] > 0 ? 1 : -1;
         return p.y >= level + ARCH_TOP - 4 ? new THREE.Vector3(0, -1, 0) : new THREE.Vector3(-track.nx[i] * side, 0, -track.nz[i] * side);
