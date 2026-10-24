@@ -51,21 +51,31 @@ export const methods = {
       const toward = target.center().sub(blade).setY(0).normalize();
       const contact = blade.clone().addScaledVector(toward, 1.5);
       contact.y -= 0.5;
-      if (Math.random() < 0.7) this.fx.sparkBurst(contact.x, contact.y, contact.z, Math.random() < 0.5 ? 0xffe066 : 0xffffff, 3);
+      const away = blade.clone().sub(target.center()).setY(0).normalize();
+      this.fx.grind(contact.x, contact.y, contact.z, away, 14);
       s.tick -= dt;
       if (s.tick <= 0) {
         s.tick = 0.22;
         this.damage(target, 4, b, 'saw', { stun: 0.15 });
-        this.fx.sparkBurst(contact.x, contact.y, contact.z, 0xffa62b, 12);
+        this.fx.grind(contact.x, contact.y + 0.3, contact.z, away, 45);
+        this.fx.sparkBurst(contact.x, contact.y, contact.z, 0xffa62b, 16);
       }
     }
-    const spinning = armed || s.shield > 0 || !!target;
+    const spinning = armed;
     s.spin += ((spinning ? 42 : 0) - s.spin) * (1 - Math.exp(-(spinning ? 6 : 2) * dt));
     refs.saw.rotation.x += s.spin * dt;
 
     s.shield = Math.max(0, s.shield - dt);
     const shield = refs.sawShield;
-    const glowAmount = s.shield > 0 ? 0.6 + 0.25 * Math.sin(this.time * 45) : 0;
+    const glowAmount = s.shield > 0 ? 0.6 + 0.25 * Math.sin(this.time * 45) : armed ? 0.55 + 0.25 * Math.sin(this.time * 45) : 0;
+    if (armed) {
+      s.flicker = (s.flicker ?? 0) - dt;
+      if (s.flicker <= 0) {
+        s.flicker = 0.16;
+        s.flip = !s.flip;
+        this.fx.sparkBurst(blade.x, blade.y, blade.z, s.flip ? 0xff8a7a : 0xffe066, 8);
+      }
+    }
     shield.material.opacity += (glowAmount - shield.material.opacity) * (1 - Math.exp(-18 * dt));
     shield.scale.setScalar(1 + 0.08 * Math.sin(this.time * 30));
   },

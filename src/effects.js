@@ -538,6 +538,18 @@ export class Effects {
     }
   }
 
+  grind(x, y, z, dir, count = 20) {
+    const r = Math.random;
+    for (let i = 0; i < count; i++) {
+      const sp = 10 + r() * 22;
+      const spread = 0.9;
+      const vx = dir.x * sp * 0.7 + (r() - 0.5) * sp * spread;
+      const vz = dir.z * sp * 0.7 + (r() - 0.5) * sp * spread;
+      const color = r() < 0.4 ? 0xffffff : r() < 0.7 ? 0xffe066 : 0xffa62b;
+      this.sparks.emit(x, y, z, vx, 4 + r() * sp * 0.6, vz, 0.1 + r() * 0.12, 0.35 + r() * 0.45, color, 26, 0.4, 1);
+    }
+  }
+
   mist(x, y, z) {
     const r = Math.random;
     this.puffs.emit(x, y, z, (r() - 0.5) * 4, 2 + r() * 4, (r() - 0.5) * 4, 1.6 + r() * 1.6, 1.3 + r() * 0.8, r() < 0.5 ? 0xffffff : 0xe6fbff, -1.5, 1.2, 0);
