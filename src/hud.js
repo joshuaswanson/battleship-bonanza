@@ -148,7 +148,7 @@ export class Hud {
       li.innerHTML = icon + '<span class="feed-text"></span>';
       li.lastChild.textContent = e.text;
     } else {
-      li.innerHTML = `${icon}<span class="feed-text">${t(`feed_${e.kind}`, { a: tag(e.killer), b: tag(e.victim) })}</span><span class="feed-stamp">${t('sunk')}</span>`;
+      li.innerHTML = `${icon}<span class="feed-text">${t(`feed_${e.kind}`, { a: tag(e.killer), b: tag(e.victim) })}</span>`;
     }
     if (e.player) li.classList.add('mine');
     this.feed.prepend(li);
