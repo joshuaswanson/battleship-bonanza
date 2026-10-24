@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { createWater, waveHeight } from './water.js';
-import { ellipseHit } from './terrain.js';
+import { ellipseHit, courseBuoys } from './terrain.js';
 import { toon, outlineMaterial, mulberry32 } from './toon.js';
 
 const SKY_TOP = 0x3fa9f5;
@@ -1072,29 +1072,8 @@ export function createWorld(scene, track) {
   const chunks = batch.build(scenery);
   scene.add(scenery);
 
-  const buoySpacing = 15;
-  const buoyCount = Math.floor(track.length / buoySpacing);
-  const buoyGeometry = new THREE.SphereGeometry(1, 14, 10);
-  buoyGeometry.scale(0.95, 0.8, 0.95);
-  const buoys = new THREE.InstancedMesh(buoyGeometry, toon(0xffffff), buoyCount * 2);
-  const buoyOutline = new THREE.InstancedMesh(buoyGeometry, outlineMaterial(0.14), buoyCount * 2);
-  const buoyPositions = [];
-  const red = new THREE.Color(COLORS.stripeRed);
-  const white = new THREE.Color(0xffffff);
-  for (let i = 0; i < buoyCount; i++) {
-    const idx = Math.round((i * buoySpacing) / track.spacing);
-    for (const side of [-1, 1]) {
-      const p = track.point(idx, side * (half + 1.5));
-      const n = buoyPositions.length;
-      buoyPositions.push(p);
-      buoys.setColorAt(n, (i + (side > 0 ? 1 : 0)) % 2 ? red : white);
-    }
-  }
-  buoys.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-  buoyOutline.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-  buoys.frustumCulled = false;
-  buoyOutline.frustumCulled = false;
-  scene.add(buoys, buoyOutline);
+  const buoys = courseBuoys(track, () => true);
+  scene.add(buoys);
 
   const arch = createArch(track, half);
   scene.add(arch);
@@ -1144,16 +1123,7 @@ export function createWorld(scene, track) {
       water.update(t);
       cullChunks(chunks, camera, fog.far);
       sky.position.copy(camera.position);
-      for (let i = 0; i < buoyPositions.length; i++) {
-        const p = buoyPositions[i];
-        dummy.position.set(p.x, waveHeight(p.x, p.z, t) + 0.15, p.z);
-        dummy.rotation.set(Math.sin(t * 1.7 + i) * 0.15, 0, Math.cos(t * 1.3 + i * 0.7) * 0.15);
-        dummy.updateMatrix();
-        buoys.setMatrixAt(i, dummy.matrix);
-        buoyOutline.setMatrixAt(i, dummy.matrix);
-      }
-      buoys.instanceMatrix.needsUpdate = true;
-      buoyOutline.instanceMatrix.needsUpdate = true;
+      buoys.userData.update(t);
       for (const cloud of clouds) {
         cloud.position.x += cloud.userData.speed * dt;
         if (cloud.position.x > 800) cloud.position.x = -800;

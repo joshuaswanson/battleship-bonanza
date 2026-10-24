@@ -169,7 +169,7 @@ export function courseBuoys(track, keep, spacing = 15) {
   for (let i = 0; i < count; i++) {
     const idx = track.wrap(Math.round((i * spacing) / track.spacing));
     for (const side of [-1, 1]) {
-      if (keep(idx, side)) spots.push({ p: track.point(idx, side * (track.hw[idx] + 1.5)), red: (i + (side > 0 ? 1 : 0)) % 2 === 1 });
+      if (keep(idx, side)) spots.push({ p: track.point(idx, side * (track.hw[idx] + 1.5)), red: (i + (side > 0 ? 1 : 0)) % 2 === 1, side, i });
     }
   }
   const buoys = new THREE.InstancedMesh(geometry, toon(0xffffff), Math.max(1, spots.length));
@@ -179,10 +179,54 @@ export function courseBuoys(track, keep, spacing = 15) {
   const white = new THREE.Color(0xffffff);
   spots.forEach((s, i) => buoys.setColorAt(i, s.red ? red : white));
   buoys.frustumCulled = lines.frustumCulled = false;
+  const links = [];
+  for (const side of [-1, 1]) {
+    const row = spots.filter((s) => s.side === side);
+    for (let k = 0; k < row.length; k++) {
+      const a = row[k];
+      const b = row[(k + 1) % row.length];
+      const step = (b.i - a.i + count) % count;
+      if (step === 1) links.push([a.p, b.p]);
+    }
+  }
+  const PARTS = 4;
+  const rope = new THREE.InstancedMesh(new THREE.CylinderGeometry(1, 1, 1, 5).rotateX(Math.PI / 2).translate(0, 0, 0.5), toon(0xf3e2b8), Math.max(1, links.length * PARTS));
+  const floats = new THREE.InstancedMesh(new THREE.CylinderGeometry(1, 1, 1, 10).rotateZ(Math.PI / 2), toon(0xffffff), Math.max(1, links.length * (PARTS - 1)));
+  rope.count = links.length * PARTS;
+  floats.count = links.length * (PARTS - 1);
+  for (let k = 0; k < floats.count; k++) floats.setColorAt(k, k % 2 ? red : white);
+  rope.frustumCulled = floats.frustumCulled = false;
+  const a = new THREE.Vector3();
+  const b = new THREE.Vector3();
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const z = new THREE.Vector3(0, 0, 1);
+  const dir = new THREE.Vector3();
+  const sc = new THREE.Vector3();
+  const pointAt = (p0, p1, u, t, out) => {
+    out.lerpVectors(p0, p1, u);
+    out.y = waveHeight(out.x, out.z, t) + (u === 0 || u === 1 ? 0.45 : 0.06);
+    return out;
+  };
   const dummy = new THREE.Object3D();
   const group = new THREE.Group();
-  group.add(buoys, lines);
+  group.add(buoys, lines, rope, floats);
   group.userData.update = (t) => {
+    links.forEach(([p0, p1], li) => {
+      for (let k = 0; k < PARTS; k++) {
+        pointAt(p0, p1, k / PARTS, t, a);
+        pointAt(p0, p1, (k + 1) / PARTS, t, b);
+        dir.subVectors(b, a);
+        const len = dir.length();
+        q.setFromUnitVectors(z, dir.divideScalar(len || 1));
+        rope.setMatrixAt(li * PARTS + k, m.compose(a, q, sc.set(0.07, 0.07, len)));
+        if (k > 0) {
+          floats.setMatrixAt(li * (PARTS - 1) + k - 1, m.compose(a, q, sc.set(0.32, 0.22, 0.22)));
+        }
+      }
+    });
+    rope.instanceMatrix.needsUpdate = true;
+    floats.instanceMatrix.needsUpdate = true;
     spots.forEach(({ p }, i) => {
       dummy.position.set(p.x, waveHeight(p.x, p.z, t) + 0.15, p.z);
       dummy.rotation.set(Math.sin(t * 1.7 + i) * 0.15, 0, Math.cos(t * 1.3 + i * 0.7) * 0.15);
