@@ -24,15 +24,23 @@ export class Sfx {
     return this.ctx ? (this.ctx.outputLatency || 0) + (this.ctx.baseLatency || 0) : 0;
   }
 
-  playMusic(name) {
+  playMusic(name, { at, loop = true } = {}) {
     if (name !== this.musicWanted) {
       for (const audio of Object.values(this.tracks)) audio.pause();
       if (name) this.tracks[name].currentTime = 0;
     }
     this.musicWanted = name;
-    if (name) this.music = this.tracks[name];
+    if (name) {
+      this.music = this.tracks[name];
+      this.music.loop = loop;
+      if (at !== undefined) this.music.currentTime = at;
+    }
     if (name && this.musicOn && this.ctx) this.music.play().catch(() => {});
     else this.music.pause();
+  }
+
+  musicLength(name) {
+    return this.tracks[name].duration || Infinity;
   }
 
   duckMusic(on) {

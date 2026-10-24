@@ -225,6 +225,7 @@ const HURT_SHAKE = { bullet: 0.25, laser: 0.3, reflect: 0.3, saw: 0.5, flame: 0,
 
 let recorder = null;
 let replay = null;
+let replaySongAt = null;
 
 function newRace(attract, map = pickMap(attract)) {
   recorder?.detach();
@@ -245,6 +246,9 @@ function startReplay() {
   if (!recorder?.frames.length) return;
   recorder.detach();
   replay = new Replay(recorder, scene, sfx);
+  replaySongAt = (recorder.start ?? replay.time) + 1;
+  replay.end = Math.min(replay.end, replaySongAt + sfx.musicLength('race') + 1);
+  sfx.playMusic(null);
   race.wakes.trails.clear();
   mode = 'replay';
   showScreen(null);
@@ -255,6 +259,8 @@ function startReplay() {
 }
 
 function endReplay() {
+  replaySongAt = null;
+  sfx.playMusic('race');
   for (const b of race.boats) b.air = null;
   race.frozen = true;
   mode = 'results';
@@ -831,6 +837,10 @@ function frame(now) {
     const steps = import.meta.env.DEV ? (window.__bb?.steps ?? 1) : 1;
     if (mode === 'replay') {
       for (let i = 0; i < steps; i++) replay.step(dt);
+      if (replaySongAt !== null && replay.time >= replaySongAt) {
+        sfx.playMusic('race', { at: replay.time - replaySongAt, loop: false });
+        replaySongAt = null;
+      }
       if (replay.done) endReplay();
     } else if (!race.frozen) {
       for (let i = 0; i < steps; i++) {
@@ -907,6 +917,9 @@ if (import.meta.env.DEV) {
     cam,
     get recorder() {
       return recorder;
+    },
+    get replay() {
+      return replay;
     },
     get world() {
       return current.world;
