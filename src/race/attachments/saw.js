@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { stepSaw, slotCenter } from '../../boatModel.js';
 import { HALF_ARC, HIT_RADIUS, WATCH_RANGE, clamp, wrapAngle } from '../shared.js';
 
+const SPIN_UP_RANGE = 35;
+
 export const methods = {
   updateSaw(b, dt) {
     const refs = b.model;
@@ -59,7 +61,7 @@ export const methods = {
         this.fx.sparkBurst(contact.x, contact.y, contact.z, 0xffa62b, 12);
       }
     }
-    const spinning = armed || s.shield > 0;
+    const spinning = armed || s.shield > 0 || (target && best < SPIN_UP_RANGE);
     s.spin += ((spinning ? 42 : 0) - s.spin) * (1 - Math.exp(-(spinning ? 6 : 2) * dt));
     refs.saw.rotation.x += s.spin * dt;
 
