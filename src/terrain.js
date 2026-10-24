@@ -159,16 +159,51 @@ export function courseBuoys(track, keep, spacing = 15) {
   return group;
 }
 
-export function swissFlag(batch, x, y, z, yaw, size = 1) {
-  const pole = new THREE.Matrix4();
-  batch.add('flagPole', POLE, pole.compose(new THREE.Vector3(x, y + 5 * size, z), new THREE.Quaternion(), new THREE.Vector3(size, 10 * size, size)));
-  const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, 0));
-  const off = new THREE.Vector3(1.6 * size, 0, 0).applyQuaternion(q);
-  const at = (dx, dy, sx, sy, sz) => new THREE.Matrix4().compose(new THREE.Vector3(x + off.x * dx, y + dy * size, z + off.z * dx), q, new THREE.Vector3(sx * size, sy * size, sz * size));
-  batch.add('flagRed', BOX, at(1, 9, 3, 3, 0.2));
-  batch.add('flagWhite', BOX, at(1, 9, 1.9, 0.6, 0.3));
-  batch.add('flagWhite', BOX, at(1, 9, 0.6, 1.9, 0.3));
+export const flagClock = { value: 0 };
+let flagMaterial = null;
+function clothMaterial() {
+  if (flagMaterial) return flagMaterial;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 64;
+  const g = canvas.getContext('2d');
+  g.fillStyle = '#e5332a';
+  g.fillRect(0, 0, 64, 64);
+  g.fillStyle = '#ffffff';
+  g.fillRect(12, 26, 40, 12);
+  g.fillRect(26, 12, 12, 40);
+  const map = new THREE.CanvasTexture(canvas);
+  map.colorSpace = THREE.SRGBColorSpace;
+  flagMaterial = toon(0xffffff, { map, side: THREE.DoubleSide });
+  flagMaterial.onBeforeCompile = (shader) => {
+    shader.uniforms.uTime = flagClock;
+    shader.vertexShader = 'uniform float uTime;\n' + shader.vertexShader.replace(
+      '#include <begin_vertex>',
+      `#include <begin_vertex>
+      float phase = modelMatrix[3].x * 0.37 + modelMatrix[3].z * 0.23;
+      float reach = position.x / 1.5;
+      transformed.z += (sin(position.x * 3.1 - uTime * 7.0 + phase) * 0.16 + sin(position.x * 5.3 - uTime * 11.0 + position.y * 2.0 + phase) * 0.05) * reach;
+      transformed.y -= reach * reach * 0.12 * (0.6 + 0.4 * sin(uTime * 1.3 + phase));`,
+    );
+  };
+  return flagMaterial;
+}
+const CLOTH = new THREE.PlaneGeometry(1.5, 1.5, 14, 8).translate(0.75, 0, 0);
+
+export function flagCloth(size = 1) {
+  const mesh = new THREE.Mesh(CLOTH, clothMaterial());
+  mesh.scale.setScalar(size * 2);
+  return mesh;
 }
 
-const POLE = new THREE.CylinderGeometry(0.12, 0.12, 1, 6);
+export function swissFlag(batch, group, x, y, z, yaw, size = 1) {
+  batch.add('flagPole', POLE, new THREE.Matrix4().compose(new THREE.Vector3(x, y + 5 * size, z), new THREE.Quaternion(), new THREE.Vector3(size, 10 * size, size)));
+  batch.add('bell', KNOB, new THREE.Matrix4().compose(new THREE.Vector3(x, y + 10.1 * size, z), new THREE.Quaternion(), new THREE.Vector3(size * 0.3, size * 0.3, size * 0.3)));
+  const cloth = flagCloth(size);
+  cloth.position.set(x, y + 8.4 * size, z);
+  cloth.rotation.y = yaw;
+  group.add(cloth);
+}
+
+const POLE = new THREE.CylinderGeometry(0.12, 0.12, 1, 8);
+const KNOB = new THREE.SphereGeometry(1, 10, 8);
 const BOX = new THREE.BoxGeometry(1, 1, 1);
