@@ -252,7 +252,7 @@ export class Race {
     if (b.offCourse > 0 && b.speed > OFF_COURSE_SPEED * BASE_SPEED) b.speed *= Math.exp(-1.5 * dt);
     this.collideShores(b);
 
-    const lim = t.hw[pr.idx] + (t.banked ? -BANK_MARGIN : OUTER_LIMIT);
+    const lim = t.reach ? t.reach[pr.lateral > 0 ? 1 : 0][pr.idx] : t.hw[pr.idx] + (t.banked ? -BANK_MARGIN : OUTER_LIMIT);
     if (Math.abs(pr.lateral) > lim) {
       const sgn = Math.sign(pr.lateral);
       const nx = t.nx[pr.idx];
