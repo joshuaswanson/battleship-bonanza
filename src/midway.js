@@ -153,6 +153,21 @@ async function loadFighter(url) {
   return { geometry, green, blue, nose: geometry.boundingBox.max.z * 1.35 - c.z * 1.35 };
 }
 
+function deckProfiles(hulls, targets) {
+  const ray = new THREE.Raycaster();
+  const down = new THREE.Vector3(0, -1, 0);
+  const from = new THREE.Vector3();
+  return hulls.map((h) => {
+    const tops = [];
+    for (let k = 0; k < 40; k++) {
+      const lz = ((k + 0.5) / 40 - 0.5) * 2 * h.rz;
+      ray.set(from.set(h.x + Math.sin(h.rot) * lz, 300, h.z + Math.cos(h.rot) * lz), down);
+      tops.push(ray.intersectObjects(targets, true)[0]?.point.y ?? 0);
+    }
+    return { ...h, tops };
+  });
+}
+
 class Squadron {
   constructor(group, geometry, prop, count, outline, material = toon(0xffffff, { vertexColors: true })) {
     this.mesh = new THREE.InstancedMesh(geometry, material, count);
@@ -373,6 +388,23 @@ export async function createMidway(group, track, fx) {
   group.userData.burningCarrier = burningCarrier;
   const scenery = new THREE.Group();
   const chunks = batch.build(scenery, 0.1, NAVY);
+  scenery.updateMatrixWorld(true);
+  const decks = deckProfiles(shores, chunks.map((c) => c.group));
+  group.userData.decks = decks;
+  const shipTop = (p) => {
+    for (const d of decks) {
+      const dx = p.x - d.x;
+      const dz = p.z - d.z;
+      const c = Math.cos(d.rot);
+      const s = Math.sin(d.rot);
+      const lx = dx * c - dz * s;
+      const lz = dx * s + dz * c;
+      if ((lx / d.rx) ** 2 + (lz / d.rz) ** 2 >= 1) continue;
+      const top = d.tops[Math.min(d.tops.length - 1, Math.max(0, Math.floor((lz / (2 * d.rz) + 0.5) * d.tops.length)))];
+      if (p.y < top) return top;
+    }
+    return null;
+  };
   group.add(scenery);
 
   const buoys = courseBuoys(track, () => true);
@@ -564,6 +596,22 @@ export async function createMidway(group, track, fx) {
     events.push({ type: 'splash', pos: p.clone(), power: 1.2 });
   };
 
+  const hitFires = [];
+  const hitShip = (p, power) => {
+    fx.explosion(p.x, p.y, p.z, power);
+    for (let k = 0; k < 16; k++) {
+      const a = Math.random() * Math.PI * 2;
+      const sp = 4 + Math.random() * 10;
+      fx.fire.emit(p.x, p.y + 0.5, p.z, Math.cos(a) * sp, 4 + Math.random() * 8, Math.sin(a) * sp, 1.6 + Math.random() * 1.6, 0.6, 0xff4a1a, -6, 1, 2);
+    }
+    events.push({ type: 'boom', pos: p.clone(), power: power * 1.4 });
+    fx.impact('crater', p, up, 5 + power * 2);
+    if (hitFires.length >= 12) hitFires.shift();
+    hitFires.push({ x: p.x, y: p.y, z: p.z, life: 8 + Math.random() * 6 });
+  };
+
+  group.userData.hitShip = hitShip;
+
   let nextKill = 2;
   let flak = 0;
   let aa = 0;
@@ -602,9 +650,13 @@ export async function createMidway(group, track, fx) {
         if (Math.random() < dt * 30) fx.blackSmoke(f.pos.x, f.pos.y, f.pos.z, new THREE.Vector3());
         if (Math.random() < dt * 40) fx.fire.emit(f.pos.x, f.pos.y, f.pos.z, (Math.random() - 0.5) * 3, 2, (Math.random() - 0.5) * 3, 1.2 + Math.random(), 0.35, 0xff4a1a, -4, 1, 2);
         if (Math.random() < dt * 30) fx.fireCore.emit(f.pos.x, f.pos.y, f.pos.z, 0, 1, 0, 0.7, 0.25, 0xffe680, 0, 1, 2);
-        if (f.pos.y <= 0.3) {
-          fx.explosion(f.pos.x, 0.5, f.pos.z, p.bomber ? 2.2 : 1.4);
-          fx.splash(f.pos.x, 0.3, f.pos.z, p.bomber ? 2.2 : 1.6);
+        const deck = shipTop(f.pos);
+        if (deck !== null || f.pos.y <= 0.3) {
+          if (deck !== null) hitShip(f.pos.setY(Math.min(f.pos.y, deck)), p.bomber ? 2.4 : 1.6);
+          else {
+            fx.explosion(f.pos.x, 0.5, f.pos.z, p.bomber ? 2.2 : 1.4);
+            fx.splash(f.pos.x, 0.3, f.pos.z, p.bomber ? 2.2 : 1.6);
+          }
           p.fall = null;
           p.respawn = 4 + Math.random() * 5;
           p.squad.set(p.index, m, false);
@@ -705,7 +757,11 @@ export async function createMidway(group, track, fx) {
       sh.vel.y -= GRAVITY * dt;
       sh.pos.addScaledVector(sh.vel, dt);
       if (Math.random() < dt * 25) fx.puffs.emit(sh.pos.x, sh.pos.y, sh.pos.z, 0, 0.5, 0, 0.5, 0.6, 0xd9d1c3, 0, 1, 1);
-      if (sh.pos.y <= 0.3) {
+      const deck = shipTop(sh.pos);
+      if (deck !== null) {
+        hitShip(sh.pos.setY(Math.min(sh.pos.y, deck)), 1.8);
+        shells.splice(i, 1);
+      } else if (sh.pos.y <= 0.3) {
         splashShell(sh.pos);
         shells.splice(i, 1);
       }
@@ -720,6 +776,18 @@ export async function createMidway(group, track, fx) {
       if (Math.random() < dt * 7) fx.column(f.x, f.y + 2, f.z, wind, f.y > 5 ? 1.4 : 0.8);
       if (Math.random() < dt * 22) fx.fire.emit(f.x + (Math.random() - 0.5) * 5, f.y + 0.5, f.z + (Math.random() - 0.5) * 5, (Math.random() - 0.5), 3 + Math.random() * 3, (Math.random() - 0.5), 1.4 + Math.random() * 1.2, 0.5, 0xff4a1a, -3, 1, 2);
       if (Math.random() < dt * 14) fx.fireMid.emit(f.x + (Math.random() - 0.5) * 3, f.y + 0.6, f.z + (Math.random() - 0.5) * 3, 0, 3 + Math.random() * 2, 0, 0.9 + Math.random() * 0.6, 0.4, 0xff9a2a, -3, 1, 2);
+    }
+    for (let i = hitFires.length - 1; i >= 0; i--) {
+      const f = hitFires[i];
+      f.life -= dt;
+      if (f.life <= 0) {
+        hitFires.splice(i, 1);
+        continue;
+      }
+      const heat = Math.min(1, f.life / 4);
+      if (Math.random() < dt * 6 * heat) fx.column(f.x, f.y + 1, f.z, wind, 0.8 + heat * 0.6);
+      if (Math.random() < dt * 30 * heat) fx.fire.emit(f.x + (Math.random() - 0.5) * 3, f.y + 0.4, f.z + (Math.random() - 0.5) * 3, Math.random() - 0.5, 2.5 + Math.random() * 2.5, Math.random() - 0.5, (1.6 + Math.random() * 1.4) * heat + 0.5, 0.55, 0xff4a1a, -3, 1, 2);
+      if (Math.random() < dt * 10 * heat) fx.fireMid.emit(f.x + (Math.random() - 0.5) * 2, f.y + 0.5, f.z + (Math.random() - 0.5) * 2, 0, 2.5 + Math.random() * 2, 0, (0.7 + Math.random() * 0.5) * heat + 0.3, 0.35, 0xff9a2a, -3, 1, 2);
     }
     tracers.update(dt);
   };
