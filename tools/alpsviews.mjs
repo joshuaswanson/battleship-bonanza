@@ -27,4 +27,18 @@ for (const [name, [f, lat, y, f2, lat2, y2]] of Object.entries(views)) {
   await wait(500);
   await page.screenshot({ path: `tools/shots/alps-${name}-${tag}.png` });
 }
+const fixed = {
+  peak: [[0, 40, 150], [110, 150, 500]],
+  cliffs: [[-150, 70, 0], [-400, 60, 200]],
+  meadow: [[60, 14, -40], [140, 0, -60]],
+};
+for (const [name, [from, to]] of Object.entries(fixed)) {
+  await page.evaluate(([from, to]) => {
+    const cam = window.__bb.camera;
+    cam.position.set(...from);
+    cam.lookAt(...to);
+  }, [from, to]);
+  await wait(500);
+  await page.screenshot({ path: `tools/shots/alps-${name}-${tag}.png` });
+}
 await browser.close();

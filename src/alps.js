@@ -5,6 +5,7 @@ import { Batcher, cullChunks, slicer, COLORS, mat, ROCK, createSky, createCloud,
 import { courseSurface, buildHeightfield, courseBuoys, swissFlag, flagClock, groundHit, smooth, noise } from './terrain.js';
 import { FLORA_COLORS, tree, sapling, boulder, cow, loadCowKit } from './alpine.js';
 import { Chopper } from './chop.js';
+import { alpineGround } from './groundShader.js';
 import { LANDMARK_COLORS, castle, coveredBridge, waterTower, buildSteamer, chalet, lakeDock } from './alpsLandmarks.js';
 
 const ALPS_COLORS = {
@@ -103,9 +104,9 @@ export async function createAlps(group, track, fx) {
   const tint = new THREE.Color();
   const shades = {
     sand: new THREE.Color(0xcfc6ad),
-    grass: new THREE.Color(0x8bdc5e),
-    grassDeep: new THREE.Color(0x6fc94f),
-    alp: new THREE.Color(0xa3b06e),
+    grass: new THREE.Color(0x6cb83f),
+    grassDeep: new THREE.Color(0x4f9b33),
+    alp: new THREE.Color(0x8fa556),
     rock: new THREE.Color(0xa49e95),
     rockHigh: new THREE.Color(0x8f8c8a),
     snow: new THREE.Color(0xf6f9ff),
@@ -115,13 +116,16 @@ export async function createAlps(group, track, fx) {
     color.copy(shades.grass).lerp(shades.grassDeep, smooth(0.35, 0.75, noise(x * 1.6, z * 1.6)));
     color.lerp(shades.alp, smooth(55, 85, y));
     mixed.copy(shades.rock).lerp(shades.rockHigh, smooth(60, 110, y));
-    color.lerp(mixed, smooth(0.8, 0.6, ny));
+    const cliff = 0.68 + 0.1 * (noise(x * 0.9 + 30, z * 0.9) - 0.5);
+    color.lerp(mixed, smooth(cliff + 0.04, cliff - 0.04, ny));
     const snowLine = 105 + 30 * noise(x * 2, z * 2);
     color.lerp(shades.snow, smooth(snowLine - 6, snowLine + 6, y) * smooth(0.35, 0.55, ny));
     color.lerp(shades.sand, smooth(2.2, 0.4, y));
     color.multiply(tint.setScalar(0.94 + 0.08 * noise(x * 5 + 7, z * 5)));
   };
-  group.add(await buildHeightfield({ bounds: surface.bounds, step: 4, height, paint, tick, smooth: true }));
+  const ground = await buildHeightfield({ bounds: surface.bounds, step: 4, height, paint, tick, smooth: true });
+  alpineGround(ground.material);
+  group.add(ground);
 
   const water = createWater({ deep: 0x1677b8, shallow: 0x4fd0e6 });
   group.add(water.mesh);
