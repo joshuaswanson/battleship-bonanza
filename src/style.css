@@ -1208,6 +1208,56 @@ kbd {
   box-shadow: 0 6px 0 var(--ink);
 }
 
+.tray {
+  scrollbar-width: none;
+  padding-right: 34px;
+}
+
+.tray::-webkit-scrollbar {
+  display: none;
+}
+
+.tray-col {
+  position: relative;
+}
+
+.tray-scroll {
+  position: absolute;
+  top: 22px;
+  right: 12px;
+  width: 15px;
+  bottom: 0;
+  background: #d6ecf7;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.tray-scroll[hidden] {
+  display: none;
+}
+
+.tray-thumb {
+  position: absolute;
+  left: -3px;
+  right: -3px;
+  min-height: 34px;
+  background: var(--sun);
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.55), 0 3px 0 var(--ink);
+  cursor: grab;
+}
+
+.tray-thumb:hover {
+  background: #ffe066;
+}
+
+.tray-thumb:active {
+  cursor: grabbing;
+}
+
 .item-groups {
   display: flex;
   flex-direction: column;

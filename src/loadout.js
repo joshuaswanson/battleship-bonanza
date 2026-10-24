@@ -60,6 +60,7 @@ export class Loadout {
     this.buildTray();
     this.buildIdentity();
     this.initPreview();
+    this.initScrollbar();
     this.heat = { machinegun: newHeat(), laser: newHeat(), flamethrower: newHeat(), saw: newHeat() };
     this.busy = {};
     this.heldSlots = new Set();
@@ -278,6 +279,49 @@ export class Loadout {
 
     this.rebuildBoat();
     this.onChange();
+  }
+
+  initScrollbar() {
+    const tray = document.querySelector('.tray');
+    const bar = $('tray-scroll');
+    const thumb = bar.firstElementChild;
+    const place = () => {
+      const trayBox = tray.getBoundingClientRect();
+      const colBox = tray.parentElement.getBoundingClientRect();
+      const zoom = trayBox.height / tray.offsetHeight || 1;
+      bar.style.top = `${(trayBox.top - colBox.top) / zoom + 22}px`;
+      bar.style.height = `${tray.offsetHeight - 44}px`;
+      bar.style.bottom = 'auto';
+      const overflow = tray.scrollHeight - tray.clientHeight;
+      bar.hidden = overflow < 2;
+      if (bar.hidden) return;
+      const track = bar.clientHeight;
+      const size = Math.max(34, (track * tray.clientHeight) / tray.scrollHeight);
+      thumb.style.height = `${size}px`;
+      thumb.style.top = `${((track - size) * tray.scrollTop) / overflow - 3}px`;
+    };
+    tray.addEventListener('scroll', place);
+    new ResizeObserver(place).observe(tray);
+    new ResizeObserver(place).observe(document.getElementById('item-groups'));
+    let drag = null;
+    thumb.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      thumb.setPointerCapture(e.pointerId);
+      drag = { y: e.clientY, top: tray.scrollTop };
+    });
+    thumb.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      const zoom = tray.getBoundingClientRect().height / tray.offsetHeight || 1;
+      const track = bar.clientHeight - thumb.offsetHeight;
+      tray.scrollTop = drag.top + (((e.clientY - drag.y) / zoom) * (tray.scrollHeight - tray.clientHeight)) / track;
+    });
+    thumb.addEventListener('pointerup', () => (drag = null));
+    bar.addEventListener('pointerdown', (e) => {
+      const up = e.clientY < thumb.getBoundingClientRect().top;
+      tray.scrollBy({ top: (up ? -1 : 1) * tray.clientHeight * 0.8, behavior: 'smooth' });
+    });
+    this.placeScrollbar = place;
+    place();
   }
 
   initPreview() {
