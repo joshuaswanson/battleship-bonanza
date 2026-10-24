@@ -118,7 +118,7 @@ export const methods = {
       const mesh = buildMissile();
       mesh.scale.setScalar(0.75);
       this.scene.add(mesh);
-      this.missiles.push({ pos, dir, speed: Math.max(fast(30), b.speed + fast(8)), owner: b, target: q.target, life: 5, fizzle: 0, mesh, lockTime: Math.random() < 0.35 ? 0.5 + Math.random() : Infinity });
+      this.missiles.push({ pos, dir, speed: Math.max(fast(30), b.speed + fast(8)), owner: b, target: q.target, life: 5, fizzle: 0, mesh, lockTime: Math.random() < 0.12 ? 0.5 + Math.random() : Infinity });
       this.sfx.play('missile', b.pos);
     }
   },
