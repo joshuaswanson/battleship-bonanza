@@ -429,8 +429,7 @@ export class Hud {
     const ready = slot >= 0 && p.alive && race.state === 'racing' && !p.finished && p.charges[slot].left > 0 && p.disabled <= 0;
     const target = ready ? race.findTarget(p, TARGETING.missiles) : null;
     const s = this.seek;
-    const v = target?.center(this.projected).project(camera);
-    if (!target || v.z > 1) {
+    if (!target) {
       s.target = null;
       this.seeker.classList.remove('on', 'locked');
       return;
@@ -445,8 +444,19 @@ export class Hud {
     const before = s.t;
     s.t += dt;
     const k = Math.min(1, s.t / SEEK_TIME);
-    const x = (v.x * 0.5 + 0.5) * innerWidth;
-    const y = (-v.y * 0.5 + 0.5) * innerHeight;
+    const v = target.center(this.projected).project(camera);
+    let sx = v.z > 1 ? -v.x : v.x;
+    let sy = v.z > 1 ? -v.y : v.y;
+    if (v.z > 1 && Math.hypot(sx, sy) < 0.2) sy = -1;
+    const over = Math.max(Math.abs(sx) / 0.86, Math.abs(sy) / 0.74);
+    const offscreen = v.z > 1 || over > 1;
+    if (offscreen) {
+      sx /= over;
+      sy /= over;
+    }
+    this.seeker.classList.toggle('edge', offscreen);
+    const x = (sx * 0.5 + 0.5) * innerWidth;
+    const y = (-sy * 0.5 + 0.5) * innerHeight;
     const wander = (1 - k) * (1 - k);
     const jx = wander * (s.drift + Math.sin(s.t * 23) * 18);
     const jy = wander * (Math.cos(s.t * 19) * 14 - s.drift * 0.4);
