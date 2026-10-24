@@ -2811,10 +2811,10 @@ kbd {
 
 .touch-actions {
   position: absolute;
-  right: max(18px, env(safe-area-inset-right));
-  bottom: 18px;
+  right: max(10px, env(safe-area-inset-right));
+  bottom: 10px;
   display: grid;
-  grid-template-columns: auto auto;
+  grid-template-columns: auto auto auto;
   grid-template-rows: auto auto;
   gap: 10px 12px;
   align-items: end;
@@ -2843,15 +2843,17 @@ kbd {
 }
 
 .touch-item:not(.touch-front) {
-  grid-column: 1;
-  grid-row: 1;
-  width: 78px;
-  height: 78px;
+  grid-column: 3;
+  grid-row: 2;
+  width: 72px;
+  height: 72px;
 }
 
 .touch-front {
   grid-column: 2;
   grid-row: 1 / span 2;
+  align-self: start;
+  margin-bottom: 40px;
   width: 108px;
   height: 108px;
 }
