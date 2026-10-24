@@ -8,6 +8,8 @@ import * as THREE from 'three';
 import { createTrack } from './track.js';
 import { createWorld } from './world.js';
 import { createJungle } from './jungle.js';
+import { createAlps } from './alps.js';
+import { createVenice } from './venice.js';
 import { MAPS } from './maps.js';
 import { Recorder, Replay } from './replay.js';
 import { Hints } from './hints.js';
@@ -93,7 +95,8 @@ function prepareVenue(id) {
     const track = createTrack(MAPS[id]);
     const group = new THREE.Group();
     group.visible = false;
-    const world = id === 'jungle' ? await createJungle(group, track, fx) : createWorld(group, track);
+    const builders = { jungle: createJungle, alps: createAlps, venice: createVenice };
+    const world = builders[id] ? await builders[id](group, track, fx) : createWorld(group, track);
     scene.add(group);
     venues[id] = { track, world, group };
     return venues[id];
@@ -314,7 +317,7 @@ async function wipe(fn) {
   wiping = false;
 }
 
-const MAP_CHOICES = ['bay', 'jungle', 'random'];
+const MAP_CHOICES = ['bay', 'jungle', 'alps', 'venice', 'random'];
 function renderMaps() {
   $('map-cards').innerHTML = MAP_CHOICES.map((id, i) => {
     const art = id === 'random' ? 'map-art random' : 'map-art';

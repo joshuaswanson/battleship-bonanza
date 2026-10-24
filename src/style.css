@@ -536,9 +536,9 @@ kbd {
 
 .map-cards {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1.4rem;
-  width: min(1100px, 100%);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1.1rem;
+  width: min(1400px, 100%);
 }
 
 .map-card {
@@ -586,15 +586,14 @@ kbd {
 }
 
 .map-art.random {
-  background: linear-gradient(115deg, transparent 49.5%, var(--ink) 49.5%, var(--ink) 50.5%, transparent 50.5%), url('/maps/jungle.jpg') right / cover, #35d6e0;
-}
-
-.map-art.random::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: url('/maps/bay.jpg') left / cover;
-  clip-path: polygon(0 0, 55% 0, 45% 100%, 0 100%);
+  background:
+    linear-gradient(var(--ink), var(--ink)) center / 3px 100% no-repeat,
+    linear-gradient(var(--ink), var(--ink)) center / 100% 3px no-repeat,
+    url('/maps/bay.jpg') 0 0 / 50% 50% no-repeat,
+    url('/maps/jungle.jpg') 100% 0 / 50% 50% no-repeat,
+    url('/maps/alps.jpg') 0 100% / 50% 50% no-repeat,
+    url('/maps/venice.jpg') 100% 100% / 50% 50% no-repeat,
+    #35d6e0;
 }
 
 .map-art.random::after {
@@ -613,19 +612,20 @@ kbd {
 }
 
 .map-text {
-  padding: 0.9rem 1.1rem 1.1rem;
+  padding: 0.75rem 0.85rem 0.9rem;
 }
 
 .map-text h3 {
   margin: 0 0 0.3rem;
   font-family: var(--race);
   font-weight: 900;
-  font-size: 1.8rem;
+  font-size: 1.45rem;
   line-height: 1;
 }
 
 .map-text p {
   margin: 0;
+  font-size: 0.9rem;
   line-height: 1.35;
 }
 
@@ -634,6 +634,12 @@ kbd {
   min-width: 320px;
   padding-left: 2.2em;
   padding-right: 2.2em;
+}
+
+@media (max-width: 1100px) {
+  .map-cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 800px) {
@@ -2659,8 +2665,8 @@ kbd {
     font-size: 1.8rem;
   }
   .map-cards {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0.7rem;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.6rem;
   }
   .map-card {
     border-radius: 14px;
