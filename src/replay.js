@@ -91,7 +91,7 @@ export class Recorder {
     this.nodes = race.boats.flatMap((b) => boatNodes(b));
     this.mats = race.boats.flatMap((b) => boatMaterials(b));
     this.size = this.nodes.length * STRIDE + this.mats.length + race.boats.length * 7;
-    this.pools = [fx.puffs, fx.sparks, fx.casings].map((pool) => [pool, 'emit']);
+    this.pools = [fx.puffs, fx.sparks, fx.fire, fx.fireMid, fx.fireCore, fx.casings].map((pool) => [pool, 'emit']);
     this.pools.push([fx.rings, 'take'], [fx.beams, 'take'], [fx.shells, 'take'], [fx.lightning, 'add'], [fx.decals, 'stamp']);
     if (race.chopper) this.pools.push([race.chopper, 'chop']);
     for (const [pool, name] of this.pools) {

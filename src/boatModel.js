@@ -614,7 +614,15 @@ function buildFire(root) {
     const x = (k % 3 === 0 ? -1 : k % 3 === 1 ? 1 : 0) * across * (0.55 + 0.45 * ((k * 7) % 5) / 4);
     spots.push([x, 0.8 + ((k * 3) % 4) * 0.12, z, 0.75 + ((k * 5) % 7) / 12]);
   }
-  fire.userData.tongues = spots.map(([x, y, z, size], n) => {
+  for (const side of [-1, 1]) {
+    for (let k = 0; k < 9; k++) {
+      const z = -3.8 + (k / 8) * 7.4 + side * 0.3;
+      const w = halfWidth(z) + 0.15;
+      spots.push([side * w, -0.15 + ((k * 2) % 3) * 0.1, z, 0.6 + ((k * 3 + (side > 0 ? 2 : 0)) % 5) / 10, side]);
+    }
+  }
+  for (let k = 0; k < 4; k++) spots.push([(k % 2 ? -0.6 : 0.6), 0.1, -4.4, 0.7, 0, -1]);
+  fire.userData.tongues = spots.map(([x, y, z, size, side = 0, back = 0], n) => {
     const g = new THREE.Group();
     g.position.set(x, y, z);
     for (const [material, k, r] of [[outer, 1.25, 0.95], [mid, 0.95, 0.72], [core, 0.6, 0.48]]) {
@@ -631,6 +639,8 @@ function buildFire(root) {
     }
     g.userData.phase = n * 1.7;
     g.userData.size = size;
+    g.userData.side = side;
+    g.userData.back = back;
     fire.add(g);
     return g;
   });
@@ -647,7 +657,7 @@ export function stepFire(refs, burning, time) {
     const lick = 1 + 0.28 * Math.sin(time * 13 + p) + 0.14 * Math.sin(time * 29 + p * 2.3);
     const sway = 0.22 * Math.sin(time * 7 + p) + 0.1 * Math.sin(time * 17 + p);
     g.scale.set(1 + 0.12 * Math.sin(time * 11 + p * 3), lick, 1 + 0.12 * Math.cos(time * 12 + p));
-    g.rotation.set(-0.35 + sway * 0.4, 0, sway);
+    g.rotation.set(-0.35 + sway * 0.4 + g.userData.back * 0.6, 0, sway - g.userData.side * 0.75);
   }
 }
 
@@ -991,7 +1001,16 @@ const MODULES = {
       }
       part(rocket, 'cone', mats.dark, 0, -0.85, 0, 0.32, 0.4, 0.32, 0.03);
       part(rocket, 'cylinder', glowCore, 0, -1.04, 0, 0.24, 0.04, 0.24, 0);
-      const flame = new THREE.Mesh(geo.flame(), glow(0xffa62b, { transparent: true, opacity: 0.9 }));
+      const flame = new THREE.Group();
+      const add = (color, opacity, s) => {
+        const m = new THREE.Mesh(geo.flame(), new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending }));
+        m.scale.set(s, 1 * (0.6 + s * 0.4), s);
+        m.renderOrder = 6;
+        flame.add(m);
+      };
+      add(0xff3a0a, 0.7, 1.35);
+      add(0xff8a1c, 0.8, 1);
+      add(0xffe08a, 0.95, 0.55);
       flame.position.set(0, -1.05, 0);
       flame.visible = false;
       rocket.add(flame);

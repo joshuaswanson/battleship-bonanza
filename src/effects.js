@@ -428,6 +428,12 @@ export class Effects {
   constructor(scene, surface = waveHeight) {
     this.puffs = new ParticlePool(scene, toon(0xffffff, { emissive: 0x6f93ad }), 4200);
     this.sparks = new ParticlePool(scene, glow(0xffffff), 900);
+    this.fire = new ParticlePool(scene, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.92, depthWrite: false }), 2600);
+    this.fire.mesh.renderOrder = 6;
+    this.fireMid = new ParticlePool(scene, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95, depthWrite: false }), 1600);
+    this.fireMid.mesh.renderOrder = 7;
+    this.fireCore = new ParticlePool(scene, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 1, depthWrite: false }), 1200);
+    this.fireCore.mesh.renderOrder = 8;
     this.rings = new Transient(scene, new THREE.TorusGeometry(1, 0.12, 8, 48).rotateX(Math.PI / 2), 16, false);
     const beam = new THREE.CylinderGeometry(1, 1, 1, 10, 1, true).rotateX(Math.PI / 2).translate(0, 0, 0.5);
     this.beams = new Transient(scene, beam, 900, false);
@@ -451,6 +457,9 @@ export class Effects {
   update(dt) {
     this.puffs.update(dt);
     this.sparks.update(dt);
+    this.fire.update(dt);
+    this.fireMid.update(dt);
+    this.fireCore.update(dt);
     this.rings.update(dt);
     this.beams.update(dt);
     this.lightning.update(dt, this.camera);
@@ -562,7 +571,12 @@ export class Effects {
 
   flame(x, y, z, vx = 0, vy = -8, vz = 0) {
     const r = Math.random;
-    this.sparks.emit(x, y, z, vx + (r() - 0.5) * 2, vy + (r() - 0.5) * 2, vz + (r() - 0.5) * 2, 0.35 + r() * 0.3, 0.25, r() < 0.5 ? 0xffd23f : 0xff8a1f, 0, 2, 1);
+    const jx = vx + (r() - 0.5) * 2;
+    const jy = vy + (r() - 0.5) * 2;
+    const jz = vz + (r() - 0.5) * 2;
+    this.fire.emit(x, y, z, jx, jy, jz, 0.55 + r() * 0.3, 0.3, 0xff4a1a, 0, 2, 1);
+    this.fireMid.emit(x, y, z, jx, jy, jz, 0.35 + r() * 0.2, 0.24, 0xff9a2a, 0, 2, 1);
+    this.fireCore.emit(x, y, z, jx * 0.9, jy * 0.9, jz * 0.9, 0.2 + r() * 0.1, 0.16, 0xffe680, 0, 2, 1);
   }
 
   blaze(x, y, z, carry) {
@@ -616,14 +630,16 @@ export class Effects {
 
   flameSpray(origin, dir, carry) {
     const r = Math.random;
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 9; i++) {
       const speed = 22 + r() * 14;
       const spread = 0.22;
       const vx = dir.x * speed + (r() - 0.5) * speed * spread + carry.x * 0.8;
       const vz = dir.z * speed + (r() - 0.5) * speed * spread + carry.z * 0.8;
       const vy = (r() - 0.3) * 4;
-      const color = r() < 0.15 ? 0xffffff : r() < 0.55 ? 0xffd23f : r() < 0.85 ? 0xff8a1f : 0xff4a2a;
-      this.sparks.emit(origin.x, origin.y, origin.z, vx, vy, vz, 0.5 + r() * 0.6, 0.35 + r() * 0.15, color, -6, 1.5, 2);
+      const life = 0.35 + r() * 0.15;
+      this.fire.emit(origin.x, origin.y, origin.z, vx, vy, vz, 0.9 + r() * 0.8, life, r() < 0.5 ? 0xff4a1a : 0xe8361a, -7, 1.5, 2);
+      if (i % 2 === 0) this.fireMid.emit(origin.x, origin.y, origin.z, vx * 0.95, vy, vz * 0.95, 0.55 + r() * 0.4, life * 0.85, 0xff9a2a, -7, 1.5, 2);
+      this.fireCore.emit(origin.x, origin.y, origin.z, vx * 0.92, vy, vz * 0.92, 0.45 + r() * 0.25, life * 0.75, r() < 0.4 ? 0xfff6c8 : 0xffe066, -6, 1.5, 2);
     }
     if (r() < 0.5) {
       const t = 0.3 + r() * 0.2;
