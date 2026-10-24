@@ -12,7 +12,7 @@ Play it [here](https://joshuaswanson.github.io/battleship-bonanza/).
 - **Build tool:** [Vite](https://vite.dev)
 - **Language:** plain JavaScript (ES modules), HTML and CSS
 - **Shaders:** custom GLSL shaders for the water, fire, charring, tree cutting, laser burns and terrain textures
-- **3D models:** built in code from three.js geometry.
+- **3D models:** built in code from three.js geometry
 - **Rendering speed:** merged geometry (`BufferGeometryUtils`) and instanced meshes (`InstancedMesh`)
 - **Audio:** Web Audio API for sound effects, HTML audio for the music
 - **Fonts:** Fredoka and Saira Condensed from [Fontsource](https://fontsource.org)
