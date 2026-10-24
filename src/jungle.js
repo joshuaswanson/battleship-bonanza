@@ -469,6 +469,89 @@ function buildShell(track, from, to) {
   return new THREE.Mesh(geometry, toon(0x8b7d6e, { side: THREE.DoubleSide }));
 }
 
+let rockMap = null;
+function rockTexture() {
+  if (rockMap) return rockMap.clone();
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const g = c.getContext('2d');
+  const rand = mulberry32(99);
+  g.fillStyle = '#6b5c4c';
+  g.fillRect(0, 0, 256, 256);
+  for (let y = 0; y < 256; ) {
+    const h = 8 + rand() * 22;
+    const tone = 80 + rand() * 40;
+    g.fillStyle = `rgb(${tone + 14},${tone},${tone - 14})`;
+    g.beginPath();
+    g.moveTo(0, y);
+    for (let x = 0; x <= 256; x += 16) g.lineTo(x, y + Math.sin(x * 0.05 + y) * 3);
+    for (let x = 256; x >= 0; x -= 16) g.lineTo(x, y + h + Math.sin(x * 0.04 + y * 2) * 3);
+    g.fill();
+    g.strokeStyle = 'rgba(40,32,26,0.6)';
+    g.lineWidth = 1.5;
+    g.stroke();
+    y += h;
+  }
+  for (let k = 0; k < 40; k++) {
+    let x = rand() * 256;
+    let y = rand() * 256;
+    g.strokeStyle = `rgba(35,28,22,${0.4 + rand() * 0.4})`;
+    g.lineWidth = 1 + rand() * 1.5;
+    g.beginPath();
+    g.moveTo(x, y);
+    for (let n = 0; n < 4; n++) {
+      x += (rand() - 0.5) * 18;
+      y += 4 + rand() * 12;
+      g.lineTo(x, y);
+    }
+    g.stroke();
+  }
+  for (let k = 0; k < 60; k++) {
+    g.fillStyle = `rgba(${150 + rand() * 40},${140 + rand() * 30},${120 + rand() * 30},0.35)`;
+    g.fillRect(rand() * 256, rand() * 256, 2 + rand() * 6, 1 + rand() * 3);
+  }
+  for (let k = 0; k < 26; k++) {
+    const x = rand() * 256;
+    const y = rand() * 256;
+    const r = 6 + rand() * 18;
+    const moss = g.createRadialGradient(x, y, 0, x, y, r);
+    moss.addColorStop(0, 'rgba(80,140,58,0.9)');
+    moss.addColorStop(1, 'rgba(80,140,58,0)');
+    g.fillStyle = moss;
+    g.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+  rockMap = new THREE.CanvasTexture(c);
+  rockMap.colorSpace = THREE.SRGBColorSpace;
+  rockMap.wrapS = rockMap.wrapT = THREE.RepeatWrapping;
+  return rockMap.clone();
+}
+
+function cliffDetails(batch, track, k, levelAt, top, rand) {
+  const i = track.wrap(k);
+  const base = levelAt(k * track.spacing);
+  const hw = track.halfWidth + 14;
+  const at = (lat, y, out) => new THREE.Vector3(track.px[i] + track.nx[i] * lat - track.tx[i] * out, y, track.pz[i] + track.nz[i] * lat - track.tz[i] * out);
+  for (const ledgeY of [base + ARCH_TOP + 6, base + ARCH_TOP + 15, base + ARCH_TOP + 26, top - 6]) {
+    for (let lat = -hw + 2; lat < hw - 1; lat += 3 + rand() * 3) {
+      if (rand() < 0.3) continue;
+      const p = at(lat, ledgeY + (rand() - 0.5) * 2, 0.6);
+      const s = 1.2 + rand() * 1.6;
+      batch.add(CAVE_KEYS[Math.floor(rand() * 3)], STONES[Math.floor(rand() * STONES.length)], mat(p.x, p.y, p.z, s * 1.6, s * 0.55, s, rand() * 0.3, rand() * 6, rand() * 0.3));
+      if (rand() < 0.45) addFern(batch, p.x, p.y + s * 0.3, p.z, rand);
+      else if (rand() < 0.5) batch.add('moss', ROCK, mat(p.x, p.y + s * 0.35, p.z, s * 1.1, s * 0.25, s * 0.8));
+    }
+  }
+  for (let lat = -hw + 1; lat < hw; lat += 1.6 + rand() * 2) {
+    const p = at(lat, top - 1, 1);
+    vine(batch, p, 6 + rand() * 20, rand, new THREE.Vector3((rand() - 0.5) * 0.6, 0, -0.6 - rand() * 0.8).applyAxisAngle(new THREE.Vector3(0, 1, 0), 0));
+  }
+  for (let lat = -hw; lat < hw; lat += 4 + rand() * 4) {
+    const p = at(lat, top + 0.5, 1.5);
+    const s = 2 + rand() * 2.5;
+    batch.add(rand() < 0.5 ? 'leaf' : 'leafDark', ROCK, mat(p.x, p.y, p.z, s * 1.4, s * 0.8, s, rand(), rand() * 6, rand()));
+  }
+}
+
 function buildMouth(track, k, levelAt, top, color = 0x6e5d4e) {
   const hw = track.halfWidth + 14;
   const i = track.wrap(k);
@@ -487,7 +570,9 @@ function buildMouth(track, k, levelAt, top, color = 0x6e5d4e) {
   }
   shape.holes.push(hole);
   const geometry = new THREE.ShapeGeometry(shape);
-  const mesh = new THREE.Mesh(geometry, toon(color, { side: THREE.DoubleSide }));
+  const map = rockTexture();
+  map.repeat.set(1 / 26, 1 / 26);
+  const mesh = new THREE.Mesh(geometry, toon(0xffffff, { side: THREE.DoubleSide, map }));
   const basis = new THREE.Matrix4().makeBasis(
     new THREE.Vector3(track.nx[i], 0, track.nz[i]),
     new THREE.Vector3(0, 1, 0),
@@ -572,6 +657,7 @@ function glowSprite() {
 
 function buildTorches(batch, torches) {
   for (const t of torches) {
+    if (t.bare) continue;
     batch.add('torchWood', STICK, t.stick);
     batch.add('torchIron', CUP, t.cup);
   }
@@ -626,110 +712,105 @@ const WEDGE = new THREE.ConeGeometry(1, 1, 3);
 const FEATHER_TALL = new THREE.ConeGeometry(1, 1, 6).translate(0, 0.5, 0);
 const PLINTH = new THREE.CylinderGeometry(1, 1.1, 1, 10);
 
-function tiki(batch, x, y, z, yaw, rand, { tongue, crown }) {
+const TIKI_SCALE = 3;
+
+function tikiHead(batch, x, y, z, yaw, rand, { snarl, crown }) {
   const put = frame(batch, x, y, z, yaw, 0, 0, TIKI_SCALE);
   const V = (a, b, c) => new THREE.Vector3(a, b, c);
-  put('tikiStone', PLINTH, 0, 0.4, 0, 3.6, 1.8, 3.6);
+  put('tikiWood', HEAD, 0, -1.2, 0, 3.3, 10.4, 2.9);
+  for (const yy of [0.2, 8.4]) put('tikiDark', RING, 0, yy, 0.05, 3.2, 2.85, 1.1, Math.PI / 2, 0, 0);
+  for (let k = 0; k < 16; k++) {
+    const a = ((k - 7.5) / 7.5) * 1.15;
+    put(k % 2 ? 'tikiDark' : 'paintRed', WEDGE, Math.sin(a) * 3.08, 7.6, Math.cos(a) * 2.7, 0.35, 0.6, 0.16, 0, a, 0);
+  }
+  for (const sx of [-1, 1]) {
+    put('tikiDark', BOX, sx * 1.35, 6.45, 2.62, 2.9, 0.95, 1.2, 0, 0, sx * 0.38);
+    put('tikiLight', BOX, sx * 1.35, 6.85, 2.5, 2.9, 0.3, 1.1, 0, 0, sx * 0.38);
+    put('mouth', SOFT, sx * 1.3, 5.45, 2.55, 1.15, 0.72, 0.42, 0, 0, sx * 0.3);
+    put('tikiDark', RING, sx * 1.3, 5.45, 2.6, 1.2, 0.85, 0.7, 0, 0, sx * 0.3);
+    for (let d = 0; d < 3; d++) put('paintRed', BOX, sx * (0.85 + d * 0.38), 4.25 - d * 0.12, 2.86, 0.14, 1.1 + d * 0.15, 0.06, 0, 0, sx * 0.1);
+    put('tikiWood', SOFT, sx * 2.05, 4.25, 2.15, 0.95, 0.75, 0.75);
+    put('tikiWood', SOFT, sx * 3.2, 5, 0.2, 0.55, 1.9, 1.1);
+    put('tikiDark', RING, sx * 3.5, 5, 0.25, 0.55, 0.75, 0.5, 0, Math.PI / 2, 0);
+    put('tikiDark', RING, sx * 3.5, 5, 0.25, 0.28, 0.38, 0.5, 0, Math.PI / 2, 0);
+  }
+  put('tikiWood', BOX, 0, 5.4, 2.75, 0.75, 1.9, 0.9);
+  put('tikiWood', SOFT, 0, 4.15, 3.0, 1.45, 1.05, 0.95);
+  for (const sx of [-1, 1]) put('mouth', SOFT, sx * 0.55, 3.75, 3.6, 0.3, 0.2, 0.18);
+  const open = snarl ? 1.35 : 1.1;
+  put('tikiLight', RING, 0, 2.2, 2.6, 2.5, open, 1.3);
+  put('mouth', SOFT, 0, 2.2, 2.62, 2.25, open * 0.9, 0.5);
   for (let k = 0; k < 9; k++) {
-    const a = (k / 9) * Math.PI * 2 + rand() * 0.3;
-    const s = 0.8 + rand() * 0.9;
-    put(k % 2 ? 'caveRock' : 'caveRockDark', STONES[k % STONES.length], Math.cos(a) * 3.8, 0.3, Math.sin(a) * 3.8, s, s * 0.7, s, rand(), rand() * 6, rand());
+    const tx = -1.9 + k * 0.475;
+    const fang = k === 1 || k === 7;
+    const len = fang ? 1.25 : 0.45 + (k % 2) * 0.12;
+    const tz = 2.95 - Math.abs(tx) * 0.12;
+    put('tooth', CONE, tx, 2.2 + open * 0.72 - len / 2, tz, fang ? 0.26 : 0.19, len, fang ? 0.26 : 0.17, Math.PI, 0, 0);
+    if (k > 0 && k < 8) {
+      const low = k === 2 || k === 6 ? 0.85 : 0.4;
+      put('tooth', CONE, tx, 2.2 - open * 0.7 + low / 2, tz, k === 2 || k === 6 ? 0.22 : 0.17, low, 0.16);
+    }
   }
-  for (const sx of [-1, 1]) {
-    put('tikiWood', SOFT, sx * 1.15, 1.75, 0.7, 1.05, 0.55, 1.5);
-    for (let t = -1; t <= 1; t++) put('tikiDark', BOX, sx * 1.15 + t * 0.32, 1.75, 2.12, 0.08, 0.45, 0.25);
-    tikiLimb(put, 'tikiWood', V(sx * 1.15, 2, 0.2), V(sx * 1.25, 3.7, 0.3), 0.85);
+  put('tikiWood', SOFT, 0, 0.55, 2.3, 2.1, 0.75, 0.9);
+  for (const [cx, cy, len, rot] of [[-2.1, 7.2, 2.4, 0.5], [1.6, 2.9, 1.6, -0.9], [2.5, 6.4, 1.9, 0.2]]) {
+    put('mouth', BOX, cx, cy, 2.6, 0.08, len, 0.1, 0, 0, rot);
+    put('mouth', BOX, cx + Math.sin(rot) * len * 0.4, cy - Math.cos(rot) * len * 0.45, 2.6, 0.07, len * 0.5, 0.1, 0, 0, rot - 0.7);
   }
-  put('tikiWood', TRUNK_BODY, 0, 3.4, 0, 2.5, 6.8, 2.2);
-  for (const yy of [3.6, 10]) put('tikiDark', RING, 0, yy, 0, 2.18, 2.18, 1.2, Math.PI / 2, 0, 0);
-  for (let k = 0; k < 18; k++) {
-    const a = (k / 18) * Math.PI * 2;
-    put(k % 2 ? 'paintTeal' : 'paintRed', WEDGE, Math.sin(a) * 2.25, 4.25, Math.cos(a) * 2.0, 0.42, 0.7, 0.18, 0, a, 0);
+  for (let k = 0; k < 11; k++) {
+    const a = ((k - 5) / 5) * 1.3;
+    const len = 2.6 + Math.cos(a) * 2.2 + rand() * 0.8;
+    put(k % 2 ? crown[1] : 'tikiDark', FEATHER_TALL, Math.sin(a) * 2.4, 8.8, Math.cos(a) * 0.9 - 0.2, k % 2 ? 0.32 : 0.45, len, k % 2 ? 0.16 : 0.3, -0.12, 0, -a * 0.8);
   }
-  for (const a of [-0.9, -0.45, 0.45, 0.9, Math.PI - 0.3, Math.PI + 0.3]) put('tikiDark', BOX, Math.sin(a) * 2.45, 7.2, Math.cos(a) * 2.2, 0.12, 3.6, 0.12, 0, a, 0);
-  for (const sx of [-1, 1]) {
-    const shoulder = V(sx * 2.15, 9.2, 0.4);
-    const elbow = V(sx * 2.65, 6.9, 1.2);
-    const wrist = V(sx * 1.0, 6.3, 2.25);
-    tikiLimb(put, 'tikiWood', shoulder, elbow, 0.62);
-    tikiLimb(put, 'tikiWood', elbow, wrist, 0.55);
-    put('tikiWood', SOFT, sx * 0.75, 6.3, 2.4, 0.75, 0.6, 0.38);
-    for (let f = 0; f < 4; f++) put('tikiDark', BOX, sx * (0.45 + f * 0.2), 6.3, 2.75, 0.05, 0.85, 0.05, 0, 0, sx * 0.2);
-    put('tikiWood', SOFT, sx * 2.25, 9.4, 0.3, 0.9, 0.75, 0.9);
-  }
-  put('tikiDark', RING, 0, 5.15, 2.3, 0.22, 0.22, 0.3);
-  const colors = ['flowerPink', 'flowerYellow', 'flowerWhite', 'flowerRed'];
-  for (let k = 0; k < 22; k++) {
-    const a = (k / 22) * Math.PI * 2;
-    const droop = Math.max(0, Math.cos(a)) * 0.9;
-    put(colors[k % 4], SOFT, Math.sin(a) * 1.95, 10.4 - droop, Math.cos(a) * 1.85 + 0.15, 0.32, 0.3, 0.32);
-  }
-  put('tikiWood', HEAD, 0, 10.4, 0.15, 3.2, 6.6, 2.85);
-  put('tikiDark', BOX, 0, 15.1, 2.55, 5.6, 0.95, 1.1, -0.12);
-  for (const sx of [-1, 1]) put('tikiWood', BOX, sx * 1.4, 15.0, 2.6, 2.7, 0.8, 1.1, -0.1, 0, sx * 0.14);
-  for (const sx of [-1, 1]) {
-    put('tikiDark', RING, sx * 1.35, 13.95, 2.6, 0.95, 0.95, 0.9);
-    put('eyeWhite', SOFT, sx * 1.35, 13.95, 2.62, 0.78, 0.78, 0.32);
-    put('tikiDark', RING, sx * 1.35, 13.95, 2.84, 0.42, 0.42, 0.4);
-    put('tikiWood', SOFT, sx * 3.15, 13.4, 0.1, 0.45, 1.5, 0.95);
-    put('tikiDark', RING, sx * 3.38, 13.4, 0.15, 0.45, 0.6, 0.5, 0, Math.PI / 2, 0);
-    put('tikiDark', RING, sx * 2.1, 12.3, 2.35, 0.42, 0.42, 0.4, 0, sx * 0.5, 0);
-  }
-  put('tikiWood', SOFT, 0, 12.75, 2.95, 1.25, 0.95, 0.8);
-  for (const sx of [-1, 1]) put('tikiDark', SOFT, sx * 0.48, 12.4, 3.5, 0.24, 0.17, 0.15);
-  put('tikiLight', RING, 0, 11.05, 2.55, 2.1, 1.0, 1.1);
-  put('mouth', SOFT, 0, 11.05, 2.6, 1.85, 0.82, 0.35);
-  for (let k = 0; k < 7; k++) {
-    const tx = -1.5 + k * 0.5;
-    const tz = 2.75 - Math.abs(tx) * 0.12;
-    put('tooth', BOX, tx, 11.55, tz, 0.36, 0.42, 0.2);
-    if (k > 0 && k < 6) put('tooth', BOX, tx, 10.55, tz, 0.36, 0.4, 0.2);
-  }
-  if (tongue) put('tongue', SOFT, 0, 10.45, 3.15, 0.75, 0.3, 0.95, 0.5, 0, 0);
-  put(crown[0], RING, 0, 16.9, 0.1, 2.65, 2.5, 1.4, Math.PI / 2, 0, 0);
-  for (let k = 0; k < 13; k++) {
-    const a = ((k - 6) / 6) * 1.25;
-    const len = 3 + Math.cos(a) * 2.2 + rand() * 0.6;
-    put(crown[(k % (crown.length - 1)) + 1], FEATHER_TALL, Math.sin(a) * 1.9, 16.9, Math.cos(a) * 0.6 - 0.3, 0.42, len, 0.2, -0.15, 0, -a * 0.75);
-  }
-  for (let k = 0; k < 4; k++) put('moss', SOFT, (rand() - 0.5) * 3, 17.1 + rand() * 0.3, -1 + rand() * 1.5, 0.8 + rand() * 0.4, 0.3, 0.7);
-  return [V(-1.35, 13.95, 2.9), V(1.35, 13.95, 2.9)].map((v) => v.multiplyScalar(TIKI_SCALE).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw).add(new THREE.Vector3(x, y, z)));
+  put(crown[0], RING, 0, 8.85, 0.05, 2.9, 2.55, 1.6, Math.PI / 2, 0, 0);
+  for (let k = 0; k < 6; k++) put('moss', SOFT, (rand() - 0.5) * 5, 9 + rand() * 0.4, (rand() - 0.5) * 3, 0.9 + rand() * 0.6, 0.35, 0.8);
+  for (let k = 0; k < 5; k++) put('moss', SOFT, (rand() < 0.5 ? -1 : 1) * (2.6 + rand() * 0.5), 1 + rand() * 6, (rand() - 0.2) * 2, 0.5, 0.9 + rand(), 0.4);
+  const world = (v) => v.multiplyScalar(TIKI_SCALE).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw).add(new THREE.Vector3(x, y, z));
+  return { eyes: [world(V(-1.3, 5.45, 2.98)), world(V(1.3, 5.45, 2.98))], mouth: world(V(0, 1.75, 3.15)) };
 }
 
 function buildTikis(track, k, levelAt, batch, rand, ground) {
   const i = track.wrap(k);
   const eyes = new THREE.Group();
-  const eyeMat = glow(0xffb21f);
+  const eyeMat = glow(0xff3b1f);
+  const coreMat = glow(0xffd36b);
   const torches = [];
   const blobs = [];
   for (const side of [-1, 1]) {
-    const ahead = track.wrap(i - Math.round(13 / track.spacing));
-    const lat = track.hw[ahead] + 3.5;
+    const ahead = track.wrap(i - Math.round(14 / track.spacing));
+    const lat = track.hw[ahead] + 9.5;
     const p = track.point(ahead, side * lat);
     const level = levelAt(k * track.spacing);
-    const y = Math.max(level + 0.4, Math.min(level + 2.5, ground(p.x, p.z) - 0.4));
-    blobs.push({ x: p.x, z: p.z, rx: 4.6, rz: 4.6, rot: 0 });
-    const center = track.point(ahead - Math.round(25 / track.spacing), 0);
+    const y = level - 1;
+    blobs.push({ x: p.x, z: p.z, rx: 10, rz: 10, rot: 0 });
+    const center = track.point(ahead - Math.round(30 / track.spacing), 0);
     const yaw = Math.atan2(center.x - p.x, center.z - p.z);
-    const pupils = tiki(batch, p.x, y, p.z, yaw, rand, side < 0 ? { tongue: true, crown: ['paintRed', 'paintYellow', 'paintTeal', 'leafLight', 'paintRed'] } : { tongue: false, crown: ['paintTeal', 'paintRed', 'paintYellow', 'paintTeal', 'leafLight'] });
-    for (const at of pupils) {
-      const pupil = new THREE.Mesh(SOFT, eyeMat);
-      pupil.position.copy(at);
-      pupil.scale.set(0.42, 0.42, 0.25);
-      pupil.rotation.y = yaw;
-      eyes.add(pupil);
+    for (let n = 0; n < 14; n++) {
+      const a = (n / 14) * Math.PI * 2;
+      const r = 9.5 + rand() * 2.5;
+      const s = 1.6 + rand() * 2.2;
+      batch.add(n % 3 ? 'caveRock' : 'caveRockDark', STONES[n % STONES.length], mat(p.x + Math.cos(a) * r, y + 0.6, p.z + Math.sin(a) * r, s, s * 0.6, s, rand(), rand() * 6, rand()));
+      if (n % 3 === 0) addFern(batch, p.x + Math.cos(a) * r, y + s * 0.6, p.z + Math.sin(a) * r, rand);
     }
-    for (const off of [-5.5, 5.5]) {
-      const q = new THREE.Vector3(Math.cos(yaw) * off, 0, -Math.sin(yaw) * off).add(new THREE.Vector3(p.x, 0, p.z)).add(new THREE.Vector3(Math.sin(yaw) * 3, 0, Math.cos(yaw) * 3));
-      const base = new THREE.Vector3(q.x, y + 0.6, q.z);
-      for (let b = 0; b < 4; b++) batch.add('torchWood', BAMBOO, mat(base.x, base.y + 0.9 + b * 1.75, base.z, 0.24, 1.7, 0.24));
-      torches.push(torchAt(base.clone().add(new THREE.Vector3(0, 5.6, 0)), new THREE.Vector3(), 1.6));
+    const head = tikiHead(batch, p.x, y, p.z, yaw, rand, side < 0 ? { snarl: true, crown: ['paintRed', 'paintYellow'] } : { snarl: false, crown: ['paintTeal', 'paintRed'] });
+    for (const at of head.eyes) {
+      const ball = new THREE.Mesh(SOFT, eyeMat);
+      ball.position.copy(at);
+      ball.scale.set(0.75 * TIKI_SCALE, 0.45 * TIKI_SCALE, 0.12 * TIKI_SCALE);
+      ball.rotation.z = (at === head.eyes[0] ? 1 : -1) * 0.3;
+      ball.rotation.y = yaw;
+      const core = new THREE.Mesh(SOFT, coreMat);
+      core.position.copy(at).add(new THREE.Vector3(Math.sin(yaw) * 0.3, 0, Math.cos(yaw) * 0.3));
+      core.scale.set(0.28 * TIKI_SCALE, 0.22 * TIKI_SCALE, 0.08 * TIKI_SCALE);
+      core.rotation.y = yaw;
+      eyes.add(ball, core);
+    }
+    for (const dx of [-2.6, -0.9, 0.9, 2.6]) {
+      const tip = head.mouth.clone().add(new THREE.Vector3(Math.cos(yaw) * dx, 0, -Math.sin(yaw) * dx));
+      torches.push({ ...torchAt(tip, new THREE.Vector3(), 1.6), bare: true });
     }
   }
   return { eyes, torches, blobs };
 }
-
-const TIKI_SCALE = 1.45;
 
 const BAMBOO = new THREE.CylinderGeometry(1, 1.1, 1, 8);
 const BOX = new THREE.BoxGeometry(1, 1, 1);
@@ -752,6 +833,7 @@ function buildTunnel(track, ground) {
   caveDetails(batch, track, highFrom, kOut, high);
   const rand = mulberry32(4411);
   const face = buildTikis(track, kIn, low, batch, rand, ground);
+  cliffDetails(batch, track, kIn, low, highLevel(track, river.tunnelIn) + LID, rand);
   mouthRocks(batch, track, kIn, low, -1, rand);
   mouthRocks(batch, track, kOut, high, 1, rand);
   const torches = [...lowTorches, ...highOnly, ...face.torches];
