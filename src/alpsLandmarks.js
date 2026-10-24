@@ -450,29 +450,6 @@ export function lakeDock(batch, x, z, yaw, length, rand) {
     }
     put('timberDark', BOX, 0, deck - 0.58, k, W, 0.28, 0.28);
   }
-  for (let k = -L / 2 + 2.5; k <= L / 2 - 1; k += 6) {
-    for (const side of [-1, 1]) {
-      put('timberDark', CYL, side * (W / 2 - 0.3), deck + 0.4, k, 0.18, 0.7, 0.18);
-      put('timberDark', CYL, side * (W / 2 - 0.3), deck + 0.82, k, 0.24, 0.14, 0.24);
-      if (rand() < 0.5) put('rope', TORUS, side * (W / 2 - 0.3), deck + 0.42, k, 0.26, 0.26, 0.3, Math.PI / 2, 0, 0, 0.02);
-    }
-  }
-  const lamp = (lx, lz) => {
-    put('iron', CYL, lx, deck + 1.9, lz, 0.1, 3.8, 0.1);
-    put('iron', BOX, lx, deck + 3.9, lz, 0.5, 0.6, 0.5);
-    put('lampGlow', BOX, lx, deck + 3.9, lz, 0.38, 0.45, 0.38);
-    put('iron', CONE, lx, deck + 4.35, lz, 0.4, 0.3, 0.4);
-  };
-  lamp(-W / 2 + 0.3, L / 2 - 3);
-  lamp(W / 2 - 0.3, -L / 2 + 4);
-  crate(put, 1.1, deck + 0.1, -L / 2 + 1.6, 1.2, 0.3);
-  crate(put, 1.4, deck + 1.3, -L / 2 + 1.7, 0.9, 0.7);
-  crate(put, -1.2, deck + 0.1, -L / 2 + 2.4, 1, -0.2);
-}
-
-function crate(put, x, y, z, size, spin) {
-  put('crate', BOX, x, y + size / 2, z, size, size, size, 0, spin, 0);
-  for (const side of [-1, 1]) put('crateDark', BOX, x + Math.sin(spin) * side * (size / 2 + 0.02), y + size / 2, z + Math.cos(spin) * side * (size / 2 + 0.02), size * 1.02, size * 0.14, 0.06, 0, spin, 0);
 }
 
 export function coveredBridge(batch, track, idx, height) {
