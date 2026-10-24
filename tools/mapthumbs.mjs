@@ -21,14 +21,17 @@ const shots = {
     c.lookAt(t.px[k2], y + 13, t.pz[k2]);
   },
   alps: () => {
+    let castle = null;
+    window.__bb.scene.traverse((o) => {
+      if (o.userData.castle) castle = o.userData.castle;
+    });
     const t = window.__bb.race.track;
-    const k = Math.round(0.12 * t.N);
-    const k2 = Math.round(0.15 * t.N);
-    const a = t.point(k, t.hw[k] + 10);
-    const b = t.point(k2, -(t.hw[k2] + 80));
+    const p = t.project(castle.x, castle.z);
+    const k = p.idx - Math.round(30 / t.spacing);
+    const from = t.point(k, Math.sign(p.lateral) * t.hw[t.wrap(k)] * 0.2);
     const c = window.__bb.camera;
-    c.position.set(a.x, 10, a.z);
-    c.lookAt(b.x, 22, b.z);
+    c.position.set(from.x, 8, from.z);
+    c.lookAt(castle.x, 11, castle.z);
   },
   venice: () => {
     let r = 0;
