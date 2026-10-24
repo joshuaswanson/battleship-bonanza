@@ -74,7 +74,7 @@ export function createTrack(map) {
   const ahead = (from, s) => (((s - from) % length) + length) % length;
   let river = null;
   if (map.river) {
-    const [tunnelIn, seam, tunnelOut] = map.river.tunnel.map((f) => f * length);
+    const [tunnelIn, seam, tunnelOut] = map.river.tunnel.map((f) => Math.round((f * length) / spacing) * spacing);
     const drops = map.river.drops.map(([f, height]) => ({ s: f * length, height }));
     river = {
       slope: map.river.slope,

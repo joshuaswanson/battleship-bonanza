@@ -7,7 +7,7 @@ await page.evaluate(() => {
   const r = window.__bb.race;
   const t = r.track;
   const p = r.player;
-  const k = Math.round((t.river.tunnelIn - 40) / t.spacing) % t.N;
+  const k = Math.round((t.river.tunnelOut - 60) / t.spacing) % t.N;
   p.pos.set(t.px[k], 0, t.pz[k]);
   p.heading = t.heading(k);
   p.speed = 40;
@@ -26,7 +26,7 @@ for (let i = 0; i < 14; i++) {
   if (i % 3 === 0) await page.screenshot({ path: `tools/shots/river-${i}.png` });
 }
 const jump = samples.findIndex((s, i) => i > 0 && s.y - samples[i - 1].y > 30);
-check('boat is lifted inside the cave', jump > 0);
+check('boat is lifted at the cave exit waterfall', jump > 0);
 check('camera moves with the boat', jump > 0 && Math.abs(samples[jump].cam - samples[jump].y - (samples[jump - 1].cam - samples[jump - 1].y)) < 4);
 await page.evaluate(() => {
   const r = window.__bb.race;
