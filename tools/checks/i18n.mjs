@@ -2,9 +2,9 @@ import { check } from '../lib.mjs';
 
 globalThis.localStorage = { getItem: () => null, setItem() {} };
 globalThis.document = { documentElement: {} };
-const { ITEM_IDS } = await import('../src/items.js');
-const i18n = await import('../src/i18n.js');
-const source = (await import('node:fs')).readFileSync(new URL('../src/i18n.js', import.meta.url), 'utf8');
+const { ITEM_IDS } = await import('../../src/items.js');
+const i18n = await import('../../src/i18n.js');
+const source = (await import('node:fs')).readFileSync(new URL('../../src/i18n.js', import.meta.url), 'utf8');
 
 const block = (name, lang) => {
   const start = source.indexOf(`const ${name} = {`);
