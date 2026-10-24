@@ -234,7 +234,7 @@ function endReplay() {
   $('btn-replay').focus();
 }
 
-const screens = ['screen-title', 'screen-howto', 'screen-settings', 'screen-loadout', 'screen-maps', 'screen-pause', 'screen-results'];
+const screens = ['screen-title', 'screen-howto', 'screen-settings', 'screen-credits', 'screen-loadout', 'screen-maps', 'screen-pause', 'screen-results'];
 function showScreen(id) {
   for (const s of screens) $(s).classList.toggle('hidden', s !== id);
   loadout.active = false;
@@ -527,6 +527,14 @@ $('toggle-music').addEventListener('click', () => {
   sfx.unlock();
   sfx.setMusic(!sfx.musicOn);
   renderToggles();
+});
+$('btn-credits').addEventListener('click', () => {
+  showScreen('screen-credits');
+  $('btn-credits-close').focus();
+});
+$('btn-credits-close').addEventListener('click', () => {
+  showScreen('screen-title');
+  $('btn-credits').focus();
 });
 $('btn-settings-close').addEventListener('click', () => {
   showScreen('screen-title');
@@ -838,11 +846,15 @@ function frame(now) {
 }
 
 addEventListener('keydown', (e) => {
-  const overlay = !$('screen-howto').classList.contains('hidden') || !$('screen-settings').classList.contains('hidden');
+  const overlay = !$('screen-howto').classList.contains('hidden') || !$('screen-settings').classList.contains('hidden') || !$('screen-credits').classList.contains('hidden');
   if (e.code === 'Enter' && mode === 'title' && !overlay && !(document.activeElement instanceof HTMLButtonElement)) wipe(goLoadout);
   if (e.code === 'Escape' && !$('screen-howto').classList.contains('hidden')) {
     input.queued.delete('Escape');
     $('btn-howto-close').click();
+  }
+  if (e.code === 'Escape' && !$('screen-credits').classList.contains('hidden')) {
+    input.queued.delete('Escape');
+    $('btn-credits-close').click();
   }
   if (e.code === 'Escape' && !$('screen-settings').classList.contains('hidden')) {
     input.queued.delete('Escape');

@@ -3087,3 +3087,38 @@ kbd {
     transform: scale(1.06) rotate(-2deg);
   }
 }
+
+.credits-link {
+  position: absolute;
+  right: 18px;
+  bottom: 14px;
+  padding: 0.2rem 0.6rem;
+  font: 600 0.8rem var(--ui);
+  color: #ffffff;
+  background: rgba(14, 42, 71, 0.45);
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  opacity: 0.75;
+}
+
+.credits-link:hover,
+.credits-link:focus-visible {
+  opacity: 1;
+}
+
+.credit-list {
+  margin: 0.4rem 0 1rem;
+  padding-left: 1.1rem;
+  text-align: left;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.credit-list li + li {
+  margin-top: 0.55rem;
+}
+
+.credit-list a {
+  color: #2f6fb0;
+}
