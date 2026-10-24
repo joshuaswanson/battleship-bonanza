@@ -1069,8 +1069,8 @@ kbd {
   font-weight: 800;
   font-size: 1.3rem;
   line-height: 1.1;
-  color: #4b6889;
-  background: #cfe3ef;
+  color: #ffffff;
+  background: var(--ink);
   border: 4px solid var(--ink);
   border-bottom: none;
   border-radius: 16px 16px 0 0;
@@ -1079,8 +1079,7 @@ kbd {
 }
 
 .tab:hover {
-  color: var(--ink);
-  background: #e4f1f8;
+  background: #1d3f63;
 }
 
 .tab[aria-selected='true'] {
