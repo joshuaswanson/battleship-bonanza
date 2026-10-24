@@ -493,8 +493,53 @@ export function buildBoat(color, items) {
     m.emissive = new THREE.Color(0xff5a1f);
     m.emissiveIntensity = 0;
   }
+  refs.char = { value: 0 };
+  for (const m of [...refs.materials, ...heated]) charrable(m, refs.char);
   flattenStatic(root, refs);
   return refs;
+}
+
+export const charClock = { value: 0 };
+
+function charrable(material, char) {
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uChar = char;
+    shader.uniforms.uCharTime = charClock;
+    shader.vertexShader = 'varying vec3 vCharPos;\n' + shader.vertexShader.replace(
+      '#include <begin_vertex>',
+      `#include <begin_vertex>
+      vCharPos = (modelMatrix * vec4(transformed, 1.0)).xyz;`,
+    );
+    shader.fragmentShader = 'uniform float uChar;\nuniform float uCharTime;\nvarying vec3 vCharPos;\n' + shader.fragmentShader
+      .replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+        float charGlow = 0.0;
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.035, 0.03, 0.028), uChar * 0.97);`,
+      )
+      .replace(
+        '#include <emissivemap_fragment>',
+        `#include <emissivemap_fragment>
+        if (uChar > 0.001) {
+          vec3 q = vCharPos * 2.4;
+          float t = uCharTime;
+          float a = sin(q.x * 1.3 + sin(q.z * 1.7 + t * 0.6) * 1.8);
+          float b = sin(q.z * 1.6 + sin(q.y * 2.1 - t * 0.5) * 1.6);
+          float c = sin(q.y * 1.9 + q.x * 0.7 + t * 0.4);
+          float vein = 1.0 - smoothstep(0.0, 0.13, abs(a * b + c * 0.25));
+          float pulse = 0.6 + 0.4 * sin(t * 5.0 + q.x * 0.8 + q.z * 1.1);
+          float ember = vein * pulse;
+          charGlow = ember;
+          totalEmissiveRadiance += uChar * (vec3(1.0, 0.38, 0.06) * ember * 2.2 + vec3(0.16, 0.025, 0.0) * (0.3 + 0.3 * sin(t * 3.0 + q.y)));
+        }`,
+      )
+      .replace(
+        '#include <opaque_fragment>',
+        `outgoingLight = mix(outgoingLight, outgoingLight * 0.3, uChar * (1.0 - charGlow));
+        #include <opaque_fragment>`,
+      );
+  };
+  material.customProgramCacheKey = () => 'char';
 }
 
 function referenced(refs) {

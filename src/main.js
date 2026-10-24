@@ -24,7 +24,7 @@ import { Loadout, PAINTS } from './loadout.js';
 import { logoSvg, layoutLogoText } from './logo.js';
 import { TitleBoat } from './titleBoat.js';
 import { ITEMS, ITEM_IDS } from './items.js';
-import { arrange } from './boatModel.js';
+import { arrange, charClock } from './boatModel.js';
 
 const $ = (id) => document.getElementById(id);
 for (const el of document.querySelectorAll('[data-logo]')) {
@@ -742,6 +742,7 @@ function frame(now) {
 
   if (mode !== 'paused') {
     time += dt;
+    charClock.value = time;
     const playerInput = mode === 'race' || mode === 'results'
       ? { throttle: state.throttle, steer: state.steer, use0: pressed.has('item0'), use1: pressed.has('item1'), hold0: state.hold0, hold1: state.hold1 }
       : null;

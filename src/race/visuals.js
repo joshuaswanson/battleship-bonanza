@@ -53,6 +53,9 @@ export const methods = {
     body.scale.set(1 - sq * 0.6, 1 + sq, 1 - sq * 0.6);
     body.position.y = Math.sin(t * 3 + b.index) * 0.05;
 
+    const charTarget = b.burn && b.alive ? 1 : 0;
+    b.model.char.value += (charTarget - b.model.char.value) * (1 - Math.exp(-(charTarget ? 2.5 : 0.6) * dt));
+    if (b.model.char.value < 0.002) b.model.char.value = 0;
     if (b.flash > 0 || materials[0].emissiveIntensity > 0) {
       for (const m of materials) m.emissiveIntensity = b.flash * 0.7;
     }

@@ -394,7 +394,7 @@ export class Race {
       source.stats.top = Math.max(source.stats.top, source.stats.dealt);
     }
     if (source.isPlayer && source !== target) this.emit('dmg', { target, amount });
-    target.flash = 1;
+    if (kind !== 'fire') target.flash = 1;
     const light = kind === 'bullet' || kind === 'flame' || kind === 'fire';
     target.bump(light ? 1.5 : 5);
     if (!light && !target.air) this.fx.splash(target.pos.x, target.waterY, target.pos.z, 0.6);

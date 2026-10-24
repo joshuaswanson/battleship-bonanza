@@ -37,6 +37,7 @@ function boatMaterials(b) {
     { mat: m.materials, key: 'emissiveIntensity' },
     ...Object.values(m.heatMats).flat().map((mat) => ({ mat, key: 'emissiveIntensity' })),
     { mat: b.shadow.material, key: 'opacity' },
+    { mat: m.char, key: 'value' },
   ];
   if (m.sawShield) list.push({ mat: m.sawShield.material, key: 'opacity' });
   if (m.empHalo) list.push({ mat: m.empHalo.material, key: 'opacity' });
