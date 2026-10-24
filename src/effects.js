@@ -370,18 +370,41 @@ function decalTexture(kind) {
       g.arc(32 + Math.cos(a) * r, 32 + Math.sin(a) * r, 2 + Math.random() * 5, 0, Math.PI * 2);
       g.fill();
     }
-    if (kind === 'burn') {
-      const ember = g.createRadialGradient(32, 32, 0, 32, 32, 9);
-      ember.addColorStop(0, 'rgba(255,140,60,0.9)');
-      ember.addColorStop(1, 'rgba(255,90,30,0)');
-      g.fillStyle = ember;
-      g.fillRect(0, 0, 64, 64);
-    }
   }
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
+
+const EMBER_VERT = /* glsl */ `
+  attribute float aBorn;
+  uniform float uTime;
+  varying vec2 vUv;
+  varying float vAge;
+  varying float vSeed;
+  void main() {
+    vUv = uv;
+    vAge = uTime - aBorn;
+    vSeed = aBorn * 37.0;
+    gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+  }
+`;
+
+const EMBER_FRAG = /* glsl */ `
+  uniform float uTime;
+  varying vec2 vUv;
+  varying float vAge;
+  varying float vSeed;
+  void main() {
+    float r = length(vUv - 0.5) * 2.0;
+    float heat = 0.32 + 0.68 * exp(-max(vAge, 0.0) / 2.5);
+    heat *= 0.85 + 0.15 * sin(uTime * 7.0 + vSeed);
+    float core = exp(-r * r * 16.0);
+    float halo = exp(-r * r * 6.0) * (1.0 - smoothstep(0.75, 1.0, r));
+    vec3 color = vec3(1.0, 0.7, 0.3) * core * heat * heat * 0.9 + vec3(0.75, 0.1, 0.02) * halo * heat * 0.22;
+    gl_FragColor = vec4(color, 1.0);
+  }
+`;
 
 class Decals {
   constructor(scene, max = 500) {
@@ -397,6 +420,19 @@ class Decals {
       scene.add(mesh);
       this.kinds[kind] = { mesh, next: 0, used: 0 };
     }
+    this.time = { value: 0 };
+    this.born = new THREE.InstancedBufferAttribute(new Float32Array(max), 1);
+    this.born.setUsage(THREE.DynamicDrawUsage);
+    const embers = new THREE.InstancedMesh(
+      plane.clone().setAttribute('aBorn', this.born),
+      new THREE.ShaderMaterial({ vertexShader: EMBER_VERT, fragmentShader: EMBER_FRAG, uniforms: { uTime: this.time }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -5, polygonOffsetUnits: -5 }),
+      max,
+    );
+    embers.count = 0;
+    embers.frustumCulled = false;
+    embers.renderOrder = 3;
+    scene.add(embers);
+    this.embers = embers;
     this.m = new THREE.Matrix4();
     this.q = new THREE.Quaternion();
     this.spin = new THREE.Quaternion();
@@ -409,10 +445,17 @@ class Decals {
     this.q.setFromUnitVectors(this.z, normal).multiply(this.spin.setFromAxisAngle(this.z, spin));
     this.m.compose(pos, this.q, this.s.set(size, size, size));
     k.mesh.setMatrixAt(k.next, this.m);
+    if (kind === 'burn') {
+      this.embers.setMatrixAt(k.next, this.m);
+      this.born.setX(k.next, this.time.value);
+      this.born.needsUpdate = true;
+      this.embers.instanceMatrix.needsUpdate = true;
+    }
     k.next = (k.next + 1) % this.max;
     k.used = Math.min(this.max, k.used + 1);
     k.mesh.count = k.used;
     k.mesh.instanceMatrix.needsUpdate = true;
+    if (kind === 'burn') this.embers.count = k.used;
   }
 
   clear() {
@@ -421,6 +464,7 @@ class Decals {
       k.used = 0;
       k.mesh.count = 0;
     }
+    this.embers.count = 0;
   }
 }
 
@@ -466,6 +510,7 @@ export class Effects {
     this.beams.update(dt);
     this.lightning.update(dt, this.camera);
     this.clock += dt;
+    this.decals.time.value = this.clock;
     if (this.timers.length) {
       const due = this.timers.filter((t) => t.at <= this.clock);
       this.timers = this.timers.filter((t) => t.at > this.clock);
