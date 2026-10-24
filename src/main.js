@@ -322,7 +322,7 @@ function renderMaps() {
   $('map-cards').innerHTML = MAP_CHOICES.map((id, i) => {
     const art = id === 'random' ? 'map-art random' : 'map-art';
     const style = id === 'random' ? '' : ` style="background-image:url('${import.meta.env.BASE_URL}maps/${id}.jpg')"`;
-    return `<button class="map-card" role="radio" data-map="${id}" aria-checked="${setup.map === id}" style="--i:${i}">
+    return `<button class="map-card${id === 'random' ? ' surprise' : ''}" role="radio" data-map="${id}" aria-checked="${setup.map === id}" style="--i:${i}">
       <div class="${art}"${style}></div>
       <div class="map-text"><h3>${t(`map_${id}`)}</h3><p>${t(`mapBlurb_${id}`)}</p></div>
     </button>`;

@@ -536,9 +536,31 @@ kbd {
 
 .map-cards {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.8fr);
   gap: 1.1rem;
-  width: min(1400px, 100%);
+  width: min(1060px, 100%);
+}
+
+.map-card.surprise {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+}
+
+.map-card.surprise .map-art {
+  flex: 1;
+  aspect-ratio: auto;
+  min-height: 0;
+}
+
+.map-card:not(.surprise) .map-art {
+  aspect-ratio: auto;
+  height: clamp(36px, calc((100vh - 250px) / 2 - 50px), 200px);
+}
+
+@media (max-height: 420px) {
+  .map-text p {
+    display: none;
+  }
 }
 
 .map-card {
@@ -579,7 +601,7 @@ kbd {
 
 .map-art {
   position: relative;
-  aspect-ratio: 16 / 10;
+  aspect-ratio: 16 / 8.5;
   border-bottom: 4px solid var(--ink);
   background-size: cover;
   background-position: center;
@@ -636,15 +658,13 @@ kbd {
   padding-right: 2.2em;
 }
 
-@media (max-width: 1100px) {
-  .map-cards {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 800px) {
+@media (max-width: 800px) and (min-height: 561px) {
   .map-cards {
     grid-template-columns: 1fr;
+  }
+  .map-card.surprise {
+    grid-column: auto;
+    grid-row: auto;
   }
 }
 
@@ -2665,7 +2685,7 @@ kbd {
     font-size: 1.8rem;
   }
   .map-cards {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.8fr);
     gap: 0.6rem;
   }
   .map-card {
