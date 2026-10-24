@@ -569,7 +569,7 @@ $('btn-credits').addEventListener('click', () => {
   $('btn-credits-close').focus();
 });
 $('btn-credits-close').addEventListener('click', () => {
-  showScreen('screen-title');
+  showScreen('screen-settings');
   $('btn-credits').focus();
 });
 $('btn-settings-close').addEventListener('click', () => {
@@ -895,8 +895,7 @@ addEventListener('keydown', (e) => {
   if (e.code === 'Escape' && !$('screen-credits').classList.contains('hidden')) {
     input.queued.delete('Escape');
     $('btn-credits-close').click();
-  }
-  if (e.code === 'Escape' && !$('screen-settings').classList.contains('hidden')) {
+  } else if (e.code === 'Escape' && !$('screen-settings').classList.contains('hidden')) {
     input.queued.delete('Escape');
     $('btn-settings-close').click();
   }

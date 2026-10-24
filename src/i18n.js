@@ -767,5 +767,6 @@ export function comboName(items) {
 
 export function applyStatic(root = document) {
   for (const el of root.querySelectorAll('[data-i18n]')) el.textContent = t(el.dataset.i18n);
+  for (const el of root.querySelectorAll('[data-i18n-label]')) el.setAttribute('aria-label', t(el.dataset.i18nLabel));
   document.documentElement.lang = lang;
 }

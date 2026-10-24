@@ -490,9 +490,27 @@ kbd {
   pointer-events: auto;
 }
 
-.btn-bug {
+.settings-links {
+  display: flex;
+  justify-content: center;
+  gap: 0.6rem;
   margin-top: 1.1rem;
+}
+
+.btn-bug {
   text-decoration: none;
+}
+
+.btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5em 0.8em;
+}
+
+.btn-icon svg {
+  width: 1.5em;
+  height: 1.5em;
 }
 
 .maps {
@@ -3086,25 +3104,6 @@ kbd {
   50% {
     transform: scale(1.06) rotate(-2deg);
   }
-}
-
-.credits-link {
-  position: absolute;
-  right: 18px;
-  bottom: 14px;
-  padding: 0.2rem 0.6rem;
-  font: 600 0.8rem var(--ui);
-  color: #ffffff;
-  background: rgba(14, 42, 71, 0.45);
-  border: none;
-  border-radius: 999px;
-  cursor: pointer;
-  opacity: 0.75;
-}
-
-.credits-link:hover,
-.credits-link:focus-visible {
-  opacity: 1;
 }
 
 .credit-list {
