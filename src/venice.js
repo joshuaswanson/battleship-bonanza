@@ -37,10 +37,6 @@ const VENICE_COLORS = {
   gondola: 0x1c1c22,
   ferro: 0xd9dde3,
   cushion: 0xd0343a,
-  shirt: 0xffffff,
-  stripe: 0xe33b3b,
-  skin: 0xffd2b0,
-  hat: 0xf2d27a,
   wood: 0x8a5a33,
   woodDark: 0x5e3b22,
   rope: 0xf5f5f5,
@@ -372,8 +368,7 @@ export async function createVenice(group, track, fx) {
     if (bridges.some((b) => Math.hypot(b.x - track.px[i], b.z - track.pz[i]) < 14)) continue;
     const p = track.point(i, side * (track.hw[i] - 1.1));
     const yaw = track.heading(i);
-    const rower = rand() < 0.4;
-    gondola(batch, p.x, p.z, yaw, rand, { rower, covered: !rower && rand() < 0.35 });
+    gondola(batch, p.x, p.z, yaw, rand, { covered: rand() >= 0.4 && rand() < 0.35 });
     shores.push({ x: p.x, z: p.z, rx: 1, rz: 5, rot: yaw });
     if (f > 0.56 && f < 0.84 && rand() < 0.3) {
       const a = track.point(i, -(track.hw[i] + 1));

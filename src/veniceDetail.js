@@ -19,8 +19,6 @@ export const DETAIL_COLORS = {
   tarp: 0x2a4f8a,
   seat: 0xb3242c,
   forcola: 0x6b4426,
-  trousers: 0x20232b,
-  ribbon: 0xd0343a,
   pinnacle: 0xefe7d6,
   mosaic: 0xe6b93a,
   angel: 0xffd23f,
@@ -296,7 +294,7 @@ function gondolaHull() {
   return hullGeometry;
 }
 
-export function gondola(batch, x, z, yaw, rand, { rower = false, covered = false } = {}) {
+export function gondola(batch, x, z, yaw, rand, { covered = false } = {}) {
   const put = frame(batch, x, -0.15, z, yaw, 0, 0, 1);
   put('hull', gondolaHull(), 0, 0, 0, 1, 1, 1);
   put('woodDark', BOX, 0, 0.45, 0, 1.25, 0.08, 6.4);
@@ -314,19 +312,6 @@ export function gondola(batch, x, z, yaw, rand, { rower = false, covered = false
     put('hullTrim', BOX, 0, 1.58, 0.0, 1.05, 0.08, 0.2, -0.2);
     put('seat', BOX, 0, 0.7, 2.3, 0.7, 0.28, 0.6);
     put('forcola', BOX, 0.55, 1.0, -3.3, 0.14, 0.9, 0.22, 0, 0, -0.15);
-  }
-  if (rower) {
-    const gz = -4.2;
-    put('trousers', CYL, 0, 1.25, gz, 0.26, 1.2, 0.26);
-    put('shirt', CYL, 0, 2.25, gz, 0.33, 1.1, 0.3);
-    for (let k = 0; k < 4; k++) put('stripe', CYL, 0, 1.85 + k * 0.25, gz, 0.345, 0.09, 0.315);
-    put('skin', BALL, 0, 3.05, gz, 0.27, 0.3, 0.27);
-    put('hat', CYL, 0, 3.3, gz, 0.5, 0.06, 0.5);
-    put('hat', CYL, 0, 3.42, gz, 0.28, 0.22, 0.28);
-    put('ribbon', CYL, 0, 3.38, gz, 0.285, 0.08, 0.285);
-    put('shirt', BOX, 0.32, 2.35, gz + 0.3, 0.14, 0.14, 0.7, -0.6);
-    put('forcola', BOX, 0.7, 1.8, gz + 1.1, 0.08, 0.08, 4.6, 0.75);
-    put('forcola', BOX, 0.7, 0.2, gz + 3.0, 0.08, 0.5, 0.14, 0.75);
   }
 }
 
