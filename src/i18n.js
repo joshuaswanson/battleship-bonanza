@@ -131,7 +131,7 @@ const STRINGS = {
     stat_punch: 'Punch',
     stat_tricks: 'Tricks',
     paints: ['Coral', 'Sunflower', 'Mint', 'Sky', 'Lilac', 'Bubblegum'],
-    aiNames: ['Noodle', 'Dumpling', 'Pickle', 'Marshmallow', 'Waffles', 'Gumdrop', 'Pudding', 'Turnip', 'Meatball'],
+    aiNames: ['Reel Deal', 'Knot Today', 'Nauti Buoy', 'Dock Holiday', 'Pier Pressure', 'Seas the Day', 'Unsinkable II', 'Liquid Asset', 'Sir Splashalot', 'Aqua Holic'],
   },
   fr: {
     credit: 'par Joshua Swanson',
@@ -259,7 +259,7 @@ const STRINGS = {
     stat_punch: 'Puissance',
     stat_tricks: 'Astuces',
     paints: ['Corail', 'Tournesol', 'Menthe', 'Ciel', 'Lilas', 'Chewing-gum'],
-    aiNames: ['Nouille', 'Raviolo', 'Cornichon', 'Guimauve', 'Gaufrette', 'Bonbon', 'Flan', 'Navet', 'Boulette'],
+    aiNames: ['Mer Veilleuse', 'Coque en Stock', 'Bouée de Secours', 'Ancre Noire', "Vague à l'Âme", 'Pas de Panique', 'Le Rafiot', 'Mal de Mer', 'Capitaine Crabe', 'Insubmersible II'],
   },
   de: {
     credit: 'von Joshua Swanson',
@@ -387,7 +387,7 @@ const STRINGS = {
     stat_punch: 'Schlagkraft',
     stat_tricks: 'Tricks',
     paints: ['Koralle', 'Sonnenblume', 'Minze', 'Himmel', 'Flieder', 'Kaugummi'],
-    aiNames: ['Nudel', 'Knödel', 'Gurke', 'Mäusespeck', 'Waffel', 'Gummibär', 'Pudding', 'Rübe', 'Frikadelle'],
+    aiNames: ['Seebär', 'Leichtmatrose', 'Wellenreiter', 'Unsinkbar II', 'Flotte Lotte', 'Seemannsgarn', 'Ankerherz', 'Klabautermann', 'Kielschwein', 'Schaumkrone'],
   },
 };
 
