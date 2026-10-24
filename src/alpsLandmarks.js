@@ -250,7 +250,15 @@ export function castle(batch, group, x, z, yaw, rand, shoreGap) {
   const center = { x: 0, z: 0 };
   for (let i = 0; i < corners.length; i++) wall(put, corners[i], corners[(i + 1) % corners.length], 8, center);
   const towers = [[0, 3, 16], [2, 3.3, 19], [3, 2.6, 14], [4, 3, 15.5], [5, 2.7, 13]];
-  for (const [i, r, h] of towers) roundTower(put, corners[i].x, corners[i].z, r, h + rand() * 2, rand, flags);
+  const shapes = [{ kind: 'cyl', x: 0, z: 0, r: 17.5, top: 10 }];
+  for (const [i, r, h] of towers) {
+    const height = h + rand() * 2;
+    roundTower(put, corners[i].x, corners[i].z, r, height, rand, flags);
+    shapes.push({ kind: 'cone', x: corners[i].x, z: corners[i].z, r: r * 1.05, wall: height + 1.4, top: height + 1.4 + r * 3.2 });
+  }
+  shapes.push({ kind: 'box', x: 1, z: -5, w: 5.6, d: 5.6, top: 26 }, { kind: 'cone', x: 1, z: -5, r: 6.6, wall: 26, top: 37 });
+  shapes.push({ kind: 'box', x: 9.5, z: -1.5, w: 3.6, d: 7.4, top: 15 }, { kind: 'box', x: 1.5, z: 9.5, w: 7, d: 3.2, top: 13 });
+  shapes.push({ kind: 'box', x: -15.2, z: -2.5, w: 3.4, d: 3.4, top: 20 });
   hall(put, 9.5, -1.5, 6.5, 14, 12, 0, rand);
   hall(put, 1.5, 9.5, 5.5, 13, 10, Math.PI / 2, rand);
   const keepTop = keep(put, 1, -5, 9, 25, rand);
@@ -293,6 +301,7 @@ export function castle(batch, group, x, z, yaw, rand, shoreGap) {
     pennant.rotation.y = yaw + rand() * 0.6;
     group.add(pennant);
   }
+  return shapes;
 }
 
 function shutter(put, x, y, z, h, style, side) {

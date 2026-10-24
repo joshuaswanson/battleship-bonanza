@@ -189,7 +189,7 @@ export async function createAlps(group, track, fx) {
     const lat = edge ? Math.min(edge.lat - 18, track.hw[i] + 26) : track.hw[i] + 26;
     return { p: track.point(i, -villageSide * lat), yaw: track.heading(i), gap: edge ? edge.lat - lat - 16 : 6 };
   })();
-  castle(batch, group, castleAt.p.x, castleAt.p.z, castleAt.yaw, rand, castleAt.gap);
+  const castleShapes = castle(batch, group, castleAt.p.x, castleAt.p.z, castleAt.yaw, rand, castleAt.gap);
   group.userData.castle = { x: castleAt.p.x, z: castleAt.p.z };
   taken.push({ x: castleAt.p.x, z: castleAt.p.z, r: 26 });
 
@@ -373,8 +373,33 @@ export async function createAlps(group, track, fx) {
     shores,
     chopper,
     solid(p) {
-      if (Math.hypot(p.x - castleAt.p.x, p.z - castleAt.p.z) < 17 && p.y < 16) {
-        return new THREE.Vector3(p.x - castleAt.p.x, 0, p.z - castleAt.p.z).normalize();
+      const dx = p.x - castleAt.p.x;
+      const dz = p.z - castleAt.p.z;
+      if (dx * dx + dz * dz < 900 && p.y < 40) {
+        const c = Math.cos(castleAt.yaw);
+        const s = Math.sin(castleAt.yaw);
+        const lx = dx * c - dz * s;
+        const lz = dx * s + dz * c;
+        const out = (vx, vz) => new THREE.Vector3(vx * c + vz * s, 0, -vx * s + vz * c).normalize();
+        for (const sh of castleShapes) {
+          const ox = lx - sh.x;
+          const oz = lz - sh.z;
+          if (sh.kind === 'box') {
+            if (Math.abs(ox) < sh.w && Math.abs(oz) < sh.d && p.y < sh.top) {
+              if (sh.top - p.y < Math.min(sh.w - Math.abs(ox), sh.d - Math.abs(oz))) return new THREE.Vector3(0, 1, 0);
+              return sh.w - Math.abs(ox) < sh.d - Math.abs(oz) ? out(Math.sign(ox), 0) : out(0, Math.sign(oz));
+            }
+            continue;
+          }
+          const d = Math.hypot(ox, oz);
+          const reach = sh.kind === 'cyl' || p.y < sh.wall ? sh.r : sh.r * (1 - (p.y - sh.wall) / (sh.top - sh.wall));
+          if (p.y < sh.top && d < reach) {
+            if (sh.kind === 'cyl' && sh.top - p.y < sh.r - d) return new THREE.Vector3(0, 1, 0);
+            const side = out(ox, oz);
+            if (sh.kind === 'cone' && p.y >= sh.wall) return side.multiplyScalar(0.8).setY(0.6).normalize();
+            return side;
+          }
+        }
       }
       return groundHit(height, p);
     },
