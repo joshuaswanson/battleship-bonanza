@@ -536,30 +536,47 @@ kbd {
 
 .map-cards {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.8fr);
-  gap: 1.1rem;
-  width: min(1060px, 100%);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1rem;
+  width: min(820px, 100%);
 }
 
 .map-card.surprise {
-  grid-column: 3;
-  grid-row: 1 / span 2;
+  grid-column: 1 / span 2;
+  flex-direction: row;
+  align-items: center;
 }
 
 .map-card.surprise .map-art {
-  flex: 1;
+  flex: none;
+  width: 58px;
+  height: 100%;
+  min-height: 52px;
   aspect-ratio: auto;
-  min-height: 0;
+  border-bottom: none;
+  border-right: 4px solid var(--ink);
+}
+
+.map-card.surprise .map-text {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  padding: 0.55rem 0.9rem;
+}
+
+.map-card.surprise .map-text h3 {
+  margin: 0;
+  white-space: nowrap;
 }
 
 .map-card:not(.surprise) .map-art {
   aspect-ratio: auto;
-  height: clamp(36px, calc((100vh - 410px) / 2), 200px);
+  height: clamp(36px, calc((100vh - 480px) / 2), 210px);
 }
 
 @media (max-height: 560px) {
   .map-card:not(.surprise) .map-art {
-    height: clamp(36px, calc((100vh - 330px) / 2), 200px);
+    height: clamp(36px, calc((100vh - 390px) / 2), 200px);
   }
 }
 
@@ -614,16 +631,7 @@ kbd {
 }
 
 .map-art.random {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr 1fr;
-  gap: 3px;
-  background: var(--ink);
-}
-
-.map-art.random span {
-  background-size: cover;
-  background-position: center;
+  background: var(--sun);
 }
 
 .map-art.random::after {
@@ -634,11 +642,12 @@ kbd {
   place-items: center;
   font-family: var(--race);
   font-weight: 900;
-  font-size: 6rem;
+  font-size: 2.6rem;
+  line-height: 1;
   color: #ffffff;
-  -webkit-text-stroke: 4px var(--ink);
+  -webkit-text-stroke: 3px var(--ink);
   paint-order: stroke fill;
-  text-shadow: 0 6px 0 var(--ink);
+  text-shadow: 0 3px 0 var(--ink);
 }
 
 .map-text {
@@ -2693,7 +2702,7 @@ kbd {
     font-size: 1.8rem;
   }
   .map-cards {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.8fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 0.6rem;
   }
   .map-card {
@@ -2709,7 +2718,7 @@ kbd {
     font-size: 0.75rem;
   }
   .map-art.random::after {
-    font-size: 3rem;
+    font-size: 2rem;
   }
   #btn-go {
     min-width: 0;

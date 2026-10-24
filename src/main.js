@@ -326,9 +326,8 @@ function renderMaps() {
     const art = id === 'random' ? 'map-art random' : 'map-art';
     const tile = (map) => `background-image:url('${import.meta.env.BASE_URL}maps/${map}.jpg')`;
     const style = id === 'random' ? '' : ` style="${tile(id)}"`;
-    const tiles = id === 'random' ? MAP_CHOICES.filter((m) => m !== 'random').map((m) => `<span style="${tile(m)}"></span>`).join('') : '';
     return `<button class="map-card${id === 'random' ? ' surprise' : ''}" role="radio" data-map="${id}" aria-checked="${setup.map === id}" style="--i:${i}">
-      <div class="${art}"${style}>${tiles}</div>
+      <div class="${art}"${style}></div>
       <div class="map-text"><h3>${t(`map_${id}`)}</h3><p>${t(`mapBlurb_${id}`)}</p></div>
     </button>`;
   }).join('');
