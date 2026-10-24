@@ -18,6 +18,7 @@ Pass or fail tests. `node tools/checks/all.mjs` runs all of them and lists the f
 | `screens.mjs` | Menus, settings, slot rules and the course picker |
 | `settings.mjs` | Settings and credits panels at desktop and phone sizes |
 | `yardsizes.mjs [sizes]` | The shipyard layout at many window sizes |
+| `tabs.mjs` | The shipyard panel stays still while switching tabs |
 | `i18n.mjs` | Every language has all interface text, attachment text and combo names |
 | `hints.mjs` | First race hints |
 | `weapons.mjs` | Firing arcs, overheating, missile charges and hook cutting |
