@@ -10,12 +10,13 @@ await page.evaluate(() => {
 });
 await wait(2500);
 const views = [
-  [90, 25, 70, 0, 14, 0],
-  [55, 14, -10, 0, 18, 30],
-  [-40, 30, -110, 0, 10, -30],
-  [20, 45, 20, 0, 22, 15],
-];
-for (let i = 0; i < views.length; i++) {
+  [40, 12, 95, 0, 8, 60],
+  [-40, 14, 30, 0, 12, 10],
+  [40, 14, -10, 0, 12, -10],
+  [-35, 12, -100, 0, 8, -60],
+  [0, 90, 5, 0, 0, 4],
+  [22, 22, 0, 0, 16, 10],
+];for (let i = 0; i < views.length; i++) {
   await page.evaluate((v) => {
     let ship = null;
     window.__bb.scene.traverse((o) => {

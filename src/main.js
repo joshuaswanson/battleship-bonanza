@@ -805,6 +805,14 @@ function frame(now) {
     if (mode === 'race') hints.update(dt, race, state, pressed);
     fx.update(dt);
     current.world.update(time, dt, camera);
+    if (current.world.events?.length) {
+      for (const e of current.world.events.splice(0)) {
+        const near = Math.max(0, 1 - e.pos.distanceTo(camera.position) / 320);
+        if (near <= 0) continue;
+        if (mode === 'race' || mode === 'replay' || mode === 'results') sfx.play(e.type === 'boom' ? 'mineBoom' : 'splash', e.pos);
+        if (e.type === 'boom' && mode !== 'paused') shake = Math.max(shake, e.power * near * near);
+      }
+    }
     if (resultsTimer > 0) {
       resultsTimer -= dt;
       if (resultsTimer <= 0 && mode === 'race') showResults();

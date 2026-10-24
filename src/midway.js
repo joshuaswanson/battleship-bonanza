@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { createWater } from './water.js';
 import { toon, glow, outlineMaterial, mulberry32 } from './toon.js';
 import { Batcher, cullChunks, COLORS, createSky, createCloud, createArch, SUN_DIR } from './world.js';
@@ -235,9 +236,37 @@ function parachuteGeometry() {
   return g;
 }
 
+async function loadFighter(url) {
+  const gltf = await new GLTFLoader().loadAsync(url);
+  gltf.scene.updateMatrixWorld(true);
+  let mesh = null;
+  gltf.scene.traverse((o) => {
+    if (o.isMesh && !mesh) mesh = o;
+  });
+  const geometry = mesh.geometry.clone().applyMatrix4(mesh.matrixWorld);
+  geometry.computeBoundingBox();
+  const c = geometry.boundingBox.getCenter(new THREE.Vector3());
+  geometry.translate(-c.x, -c.y, -c.z).scale(1.35, 1.35, 1.35);
+  geometry.computeVertexNormals();
+  const map = mesh.material.map;
+  const green = toon(0xffffff, { map });
+  const blue = toon(0xffffff, { map });
+  blue.onBeforeCompile = (shader) => {
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <map_fragment>',
+      `#include <map_fragment>
+      vec3 hsvIn = diffuseColor.rgb;
+      float grey = dot(hsvIn, vec3(0.299, 0.587, 0.114));
+      vec3 tinted = hsvIn.g > hsvIn.r && hsvIn.g > hsvIn.b ? vec3(grey * 0.55, grey * 0.8, grey * 1.55) : hsvIn.r > hsvIn.b && hsvIn.g > hsvIn.b ? vec3(grey * 1.6, grey * 1.6, grey * 1.6) : hsvIn;
+      diffuseColor.rgb = tinted;`,
+    );
+  };
+  blue.customProgramCacheKey = () => 'fighter-blue';
+  return { geometry, green, blue, nose: geometry.boundingBox.max.z * 1.35 - c.z * 1.35 };
+}
+
 class Squadron {
-  constructor(group, geometry, prop, count, outline) {
-    const material = toon(0xffffff, { vertexColors: true });
+  constructor(group, geometry, prop, count, outline, material = toon(0xffffff, { vertexColors: true })) {
     this.mesh = new THREE.InstancedMesh(geometry, material, count);
     this.line = new THREE.InstancedMesh(geometry, outlineMaterial(outline), count);
     this.line.instanceMatrix = this.mesh.instanceMatrix;
@@ -391,14 +420,15 @@ export async function createMidway(group, track, fx) {
   const stacks = { stacks: [] };
   const battleships = [];
   group.userData.battleships = battleships;
+  const dyn = new THREE.Group();
+  group.add(dyn);
+  const turrets = [];
+  group.userData.turrets = turrets;
   const bigShip = (x, z, yaw, g) => {
-    const before = cannons.length;
-    const size = bigBattleship(batch, x, z, yaw, rand, g.local, cannons, stacks);
+    const before = turrets.length;
+    const size = bigBattleship(batch, dyn, x, z, yaw, rand, g.local, turrets, stacks);
+    for (const tu of turrets.slice(before)) tu.ship = battleships.length;
     battleships.push({ x, z, yaw });
-    for (const c of cannons.slice(before)) {
-      c.yaw = yaw + c.dir;
-      c.timer = 1 + Math.random() * 6;
-    }
     return size;
   };
   place(0.33, -1, 16, 172, 30, 0.12, bigShip);
@@ -413,7 +443,11 @@ export async function createMidway(group, track, fx) {
     const z = Math.sin(a) * d + 100;
     const yaw = rand() * Math.PI;
     const local = { local: [] };
-    if (k % 3 === 0) bigBattleship(batch, x, z, yaw, rand, local.local, [], stacks);
+    if (k % 3 === 0) {
+      const before = turrets.length;
+      bigBattleship(batch, dyn, x, z, yaw, rand, local.local, turrets, stacks);
+      for (const tu of turrets.slice(before)) tu.ship = 100 + k;
+    }
     else destroyer(batch, x, z, yaw, local, cannons);
     if (k % 2 === 0) fires.push(new THREE.Vector3(x, 8, z));
   }
@@ -454,8 +488,10 @@ export async function createMidway(group, track, fx) {
 
   const air = new THREE.Group();
   group.add(air);
-  const blue = new Squadron(air, planeGeometry('blue'), { geometry: propGeometry(1.5), offsets: [new THREE.Matrix4().makeTranslation(0, 0, 3.75)] }, 14, 0.06);
-  const green = new Squadron(air, planeGeometry('green'), { geometry: propGeometry(1.5), offsets: [new THREE.Matrix4().makeTranslation(0, 0, 3.75)] }, 14, 0.06);
+  const fighter = await loadFighter(`${import.meta.env.BASE_URL}models/fighter.glb`);
+  const propAt = [new THREE.Matrix4().makeTranslation(0, 0.3, 4.45)];
+  const blue = new Squadron(air, fighter.geometry, { geometry: propGeometry(1.5), offsets: propAt }, 14, 0.05, fighter.blue);
+  const green = new Squadron(air, fighter.geometry, { geometry: propGeometry(1.5), offsets: propAt }, 14, 0.05, fighter.green);
   const bombers = new Squadron(air, planeGeometry('bomber'), { geometry: propGeometry(1.9), offsets: [new THREE.Matrix4().makeTranslation(-5, -0.2, 4.3), new THREE.Matrix4().makeTranslation(5, -0.2, 4.3)] }, 6, 0.1);
   const chutes = new Squadron(air, parachuteGeometry(), null, 10, 0.06);
   const tracers = new Tracers(air);
@@ -511,6 +547,105 @@ export async function createMidway(group, track, fx) {
     if (free >= 0 && Math.random() < 0.55 && !p.bomber) chuteState[free] = { pos: pos.clone().add(new THREE.Vector3(0, -2, 0)), drift: new THREE.Vector3((Math.random() - 0.5) * 3, -4, (Math.random() - 0.5) * 3), sway: Math.random() * 6 };
     fx.fireCore.emit(pos.x, pos.y, pos.z, 0, 0, 0, 3, 0.3, 0xfff1b0, 0, 0, 1);
     fx.fire.emit(pos.x, pos.y, pos.z, 0, 0, 0, 5, 0.45, 0xff4a1a, 0, 0, 1);
+  };
+
+  for (const tu of turrets) {
+    tu.cool = 1 + Math.random() * 7;
+    tu.targetYaw = 0;
+    tu.targetPitch = tu.pitch;
+    tu.kick = 0;
+    tu.far = Math.hypot(tu.yawGroup.position.x, tu.yawGroup.position.z) > 480;
+  }
+  const flashes = [0, 1, 2, 3].map(() => {
+    const l = new THREE.PointLight(0xffb060, 0, 160, 1.6);
+    group.add(l);
+    return l;
+  });
+  let flashIndex = 0;
+  const shellMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(0.7, 10, 8), glow(0xffe6a0), 60);
+  shellMesh.frustumCulled = false;
+  shellMesh.count = 0;
+  group.add(shellMesh);
+  const shells = [];
+  const events = [];
+  const GRAVITY = 26;
+  const SHELL_SPEED = 125;
+  const muzzle = new THREE.Vector3();
+  const barrelDir = new THREE.Vector3();
+  const pickTarget = (tu) => {
+    const origin = tu.yawGroup.position;
+    let goal;
+    if (!tu.far && Math.random() < 0.45) {
+      const p = track.point(Math.floor(Math.random() * track.N), (Math.random() - 0.5) * 70);
+      goal = new THREE.Vector3(p.x, 0, p.z);
+    } else {
+      const a = tu.base + (Math.random() - 0.5) * 2.6;
+      const r = 150 + Math.random() * 400;
+      goal = new THREE.Vector3(origin.x + Math.sin(a) * r, 0, origin.z + Math.cos(a) * r);
+    }
+    const dx = goal.x - origin.x;
+    const dz = goal.z - origin.z;
+    let rel = Math.atan2(dx, dz) - tu.base;
+    rel = Math.atan2(Math.sin(rel), Math.cos(rel));
+    if (Math.abs(rel) > 2.3) return pickTarget(tu);
+    const range = Math.min(Math.hypot(dx, dz), (SHELL_SPEED * SHELL_SPEED) / GRAVITY * 0.98);
+    tu.targetYaw = rel;
+    tu.targetPitch = Math.min(0.75, Math.max(0.08, 0.5 * Math.asin((range * GRAVITY) / (SHELL_SPEED * SHELL_SPEED))));
+  };
+  turrets.forEach(pickTarget);
+
+  const fireTurret = (tu) => {
+    tu.yawGroup.updateMatrixWorld(true);
+    barrelDir.set(0, 0, 1).transformDirection(tu.recoil.matrixWorld);
+    const s = tu.size;
+    for (const m of tu.muzzles) {
+      muzzle.copy(m).applyMatrix4(tu.recoil.matrixWorld);
+      const d = barrelDir;
+      for (let k = 0; k < 3; k++) {
+        const ahead = 3 + k * 4;
+        const at = muzzle.clone().addScaledVector(d, ahead);
+        fx.fire.emit(at.x, at.y, at.z, d.x * 10, d.y * 10, d.z * 10, (10 - k * 2) * s, 0.42, 0xff4a1a, 0, 3, 2);
+        fx.fireMid.emit(at.x, at.y, at.z, d.x * 12, d.y * 12, d.z * 12, (7.5 - k * 1.5) * s, 0.34, 0xff9a2a, 0, 3, 2);
+        fx.fireCore.emit(at.x, at.y, at.z, d.x * 14, d.y * 14, d.z * 14, (5 - k) * s, 0.26, 0xfff6d0, 0, 3, 2);
+      }
+      for (let k = 0; k < 18; k++) {
+        const sp = 20 + Math.random() * 45;
+        fx.fire.emit(muzzle.x, muzzle.y, muzzle.z, d.x * sp + (Math.random() - 0.5) * 18, d.y * sp + (Math.random() - 0.5) * 18, d.z * sp + (Math.random() - 0.5) * 18, 1.6 + Math.random() * 2.2, 0.35, 0xff6a1a, 0, 2.5, 2);
+      }
+      for (let k = 0; k < 22; k++) {
+        const sp = 4 + Math.random() * 34;
+        fx.puffs.emit(muzzle.x + d.x * 6, muzzle.y + d.y * 6, muzzle.z + d.z * 6, d.x * sp + (Math.random() - 0.5) * 10, d.y * sp + (Math.random() - 0.3) * 6, d.z * sp + (Math.random() - 0.5) * 10, 5 + Math.random() * 5, 4 + Math.random() * 2, Math.random() < 0.5 ? 0xe2dacb : 0xb3ab9c, -0.5, 0.7, 0);
+      }
+      const v = d.clone().multiplyScalar(SHELL_SPEED);
+      if (shells.length < 60) shells.push({ pos: muzzle.clone(), vel: v.add(new THREE.Vector3((Math.random() - 0.5) * 4, 0, (Math.random() - 0.5) * 4)) });
+    }
+    const flat = new THREE.Vector3(barrelDir.x, 0, barrelDir.z).normalize();
+    const blast = tu.yawGroup.position.clone().addScaledVector(flat, 18 * s);
+    if (Math.abs(blast.x) < 2000) {
+      fx.ring(blast.x, 0.4, blast.z, 0xffffff, 6, 70, 1.1, 1);
+      fx.ring(blast.x, 0.5, blast.z, 0xfff1b0, 3, 38, 0.6, 0.9);
+      for (let k = 0; k < 44; k++) {
+        const a = Math.random() * Math.PI * 2;
+        const sp = 10 + Math.random() * 18;
+        fx.puffs.emit(blast.x, 0.5, blast.z, Math.cos(a) * sp + flat.x * 10, 2 + Math.random() * 5, Math.sin(a) * sp + flat.z * 10, 1 + Math.random() * 1.2, 0.9, 0xffffff, 12, 1, 1);
+      }
+    }
+    tu.kick = 1;
+    const light = flashes[flashIndex++ % flashes.length];
+    light.position.copy(muzzle).addScaledVector(barrelDir, 6);
+    light.intensity = 900;
+    events.push({ type: 'boom', pos: muzzle.clone(), power: 2.6 });
+  };
+
+  const splashShell = (p) => {
+    fx.splash(p.x, 0.4, p.z, 2.6);
+    fx.ring(p.x, 0.4, p.z, 0xffffff, 3, 30, 1.2, 0.8);
+    for (let k = 0; k < 40; k++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = Math.random() * 2.5;
+      fx.puffs.emit(p.x + Math.cos(a) * r, 0.5, p.z + Math.sin(a) * r, Math.cos(a) * 2.5, 22 + Math.random() * 30, Math.sin(a) * 2.5, 1.4 + Math.random() * 1.8, 1.6 + Math.random() * 0.8, Math.random() < 0.3 ? 0xd8f4ff : 0xffffff, 22, 0.3, 1);
+    }
+    events.push({ type: 'splash', pos: p.clone(), power: 1.2 });
   };
 
   let nextKill = 2;
@@ -621,6 +756,46 @@ export async function createMidway(group, track, fx) {
         for (let k = 0; k < 4; k++) fx.soot.emit(b.x + (Math.random() - 0.5) * 3, b.y + (Math.random() - 0.5) * 3, b.z + (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2, 2.6 + Math.random() * 1.8, 3 + Math.random() * 1.5, k % 2 ? 0x1f2024 : 0x3a3c41, 0, 0.6, 0);
       }
     }
+    for (const tu of turrets) {
+      tu.cool -= dt;
+      if (tu.retarget > 0) {
+        tu.retarget -= dt;
+        if (tu.retarget <= 0) pickTarget(tu);
+      }
+      const dy = tu.targetYaw - tu.yaw;
+      const dp = tu.targetPitch - tu.pitch;
+      tu.yaw += Math.sign(dy) * Math.min(Math.abs(dy), 0.32 * dt);
+      tu.pitch += Math.sign(dp) * Math.min(Math.abs(dp), 0.28 * dt);
+      tu.yawGroup.rotation.y = tu.base + tu.yaw;
+      tu.pitchGroup.rotation.x = -tu.pitch;
+      tu.kick = Math.max(0, tu.kick - dt * 1.1);
+      tu.recoil.position.z = -2.4 * tu.kick * tu.kick;
+      if (tu.cool <= 0 && Math.abs(dy) < 0.01 && Math.abs(dp) < 0.01) {
+        fireTurret(tu);
+        tu.cool = 6 + Math.random() * 8;
+        tu.retarget = 1.5;
+        if (Math.random() < 0.4) {
+          for (const mate of turrets) {
+            if (mate !== tu && mate.ship === tu.ship && mate.cool < 4 && Math.abs(mate.targetYaw - mate.yaw) < 0.05) mate.cool = 0.12 + Math.random() * 0.25;
+          }
+        }
+      }
+    }
+    for (const l of flashes) l.intensity *= Math.exp(-14 * dt);
+    let ns = 0;
+    for (let i = shells.length - 1; i >= 0; i--) {
+      const sh = shells[i];
+      sh.vel.y -= GRAVITY * dt;
+      sh.pos.addScaledVector(sh.vel, dt);
+      if (Math.random() < dt * 25) fx.puffs.emit(sh.pos.x, sh.pos.y, sh.pos.z, 0, 0.5, 0, 0.5, 0.6, 0xd9d1c3, 0, 1, 1);
+      if (sh.pos.y <= 0.3) {
+        splashShell(sh.pos);
+        shells.splice(i, 1);
+      }
+    }
+    for (const sh of shells) shellMesh.setMatrixAt(ns++, m.makeTranslation(sh.pos.x, sh.pos.y, sh.pos.z));
+    shellMesh.count = ns;
+    shellMesh.instanceMatrix.needsUpdate = true;
     for (const c of cannons) {
       c.timer -= dt;
       if (c.timer > 0) continue;
@@ -647,6 +822,7 @@ export async function createMidway(group, track, fx) {
     water,
     sun,
     shores,
+    events,
     solid(p) {
       return ellipseHit(shores, p, 45);
     },

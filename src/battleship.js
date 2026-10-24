@@ -1,5 +1,7 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { frame } from './alpine.js';
+import { toon, outlineMaterial } from './toon.js';
 
 const BOX = new THREE.BoxGeometry(1, 1, 1);
 const CYL = new THREE.CylinderGeometry(1, 1, 1, 16);
@@ -47,7 +49,8 @@ function loftHull(L, B, depth, rand) {
     }
   }
   const stern = sections[0];
-  for (let k = 0; k < ring; k++) positions.push(stern[0].x * 0, stern[0].y, stern[0].z, ...stern[k + 1].toArray(), ...stern[k].toArray());
+  const mid = stern.reduce((acc, v) => acc.add(v), new THREE.Vector3()).divideScalar(stern.length);
+  for (let k = 0; k < ring; k++) positions.push(...mid.toArray(), ...stern[k].toArray(), ...stern[k + 1].toArray());
   const deck = [];
   for (let r = 0; r <= rows; r++) deck.push([sections[r][0], sections[r][ring]]);
   const deckPositions = [];
@@ -59,38 +62,81 @@ function loftHull(L, B, depth, rand) {
   const hull = new THREE.BufferGeometry();
   hull.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   hull.computeVertexNormals();
+  const colors = [];
+  const grey = new THREE.Color(0x4d5763);
+  const band = new THREE.Color(0x2a2d33);
+  const red = new THREE.Color(0x8a2b26);
+  for (let i = 0; i < positions.length; i += 3) {
+    const y = positions[i + 1];
+    const c = y < -0.4 ? red : y < 1.1 ? band : grey;
+    colors.push(c.r, c.g, c.b);
+  }
+  hull.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   const deckGeometry = new THREE.BufferGeometry();
   deckGeometry.setAttribute('position', new THREE.Float32BufferAttribute(deckPositions.map((v, i) => (i % 3 === 1 ? v + 0.02 : v)), 3));
   deckGeometry.computeVertexNormals();
   return { hull, deck: deckGeometry, width, sheer };
 }
 
-function mainTurret(put, x, y, z, ry, s, elevation, cannons, at) {
+const KIT_COLORS = { steel: 0x5a636e, steelDark: 0x3a4048, steelLight: 0x9aa4ae, gun: 0x3a4048, window: 0x1e242c };
+
+function kit() {
+  const parts = [];
+  const put = (key, geometry, x, y, z, sx = 1, sy = 1, sz = 1, rx = 0, ry = 0, rz = 0) => {
+    const m = new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), new THREE.Vector3(sx, sy, sz));
+    const g = (geometry.index ? geometry.toNonIndexed() : geometry.clone()).applyMatrix4(m);
+    if (g.hasAttribute('uv')) g.deleteAttribute('uv');
+    if (!g.hasAttribute('normal')) g.computeVertexNormals();
+    const c = new THREE.Color(KIT_COLORS[key]);
+    const rgb = new Float32Array(g.attributes.position.count * 3);
+    for (let k = 0; k < g.attributes.position.count; k++) rgb.set([c.r, c.g, c.b], k * 3);
+    g.setAttribute('color', new THREE.BufferAttribute(rgb, 3));
+    parts.push(g);
+  };
+  const build = () => {
+    const geometry = mergeGeometries(parts);
+    const mesh = new THREE.Mesh(geometry, KIT_MATERIAL());
+    mesh.add(new THREE.Mesh(geometry, outlineMaterial(0.07)));
+    return mesh;
+  };
+  return { put, build };
+}
+let kitMaterial = null;
+const KIT_MATERIAL = () => (kitMaterial ??= toon(0xffffff, { vertexColors: true }));
+
+const TURRET_SHAPE = new THREE.Shape([new THREE.Vector2(-3, -3.4), new THREE.Vector2(3, -3.4), new THREE.Vector2(3.2, 1.6), new THREE.Vector2(2.2, 3.6), new THREE.Vector2(-2.2, 3.6), new THREE.Vector2(-3.2, 1.6)]);
+const TURRET_BODY = new THREE.ExtrudeGeometry(TURRET_SHAPE, { depth: 2.4, bevelEnabled: false }).rotateX(-Math.PI / 2);
+
+function mainTurret(put, dyn, x, y, z, ry, s, elevation, turrets, at, shipYaw) {
   put('steelDark', CYL, x, y + 0.5 * s, z, 3.4 * s, 1 * s, 3.4 * s);
-  const fx = Math.sin(ry);
-  const fz = Math.cos(ry);
-  const shape = new THREE.Shape([new THREE.Vector2(-3, -3.4), new THREE.Vector2(3, -3.4), new THREE.Vector2(3.2, 1.6), new THREE.Vector2(2.2, 3.6), new THREE.Vector2(-2.2, 3.6), new THREE.Vector2(-3.2, 1.6)]);
-  const body = new THREE.ExtrudeGeometry(shape, { depth: 2.4, bevelEnabled: false }).rotateX(-Math.PI / 2);
-  put('steel', body, x, y + 1 * s, z, s, s, s, 0, ry, 0);
-  put('steelLight', BOX, x - fx * 0.6 * s, y + 3.45 * s, z - fz * 0.6 * s, 5.6 * s, 0.12 * s, 5.4 * s, 0, ry, 0);
-  for (const side of [-1, 1]) {
-    put('steelDark', CYL, x + Math.cos(ry) * side * 2.9 * s - fx * 1.6 * s, y + 3.1 * s, z - Math.sin(ry) * side * 2.9 * s - fz * 1.6 * s, 0.5 * s, 1.6 * s, 0.5 * s, 0, 0, Math.PI / 2 * side);
-  }
-  put('window', BOX, x + fx * 3.62 * s, y + 2.6 * s, z + fz * 3.62 * s, 4 * s, 0.25 * s, 0.1, 0, ry, 0);
+  const body = kit();
+  body.put('steel', TURRET_BODY, 0, 1, 0);
+  body.put('steelLight', BOX, 0, 3.45, -0.6, 5.6, 0.12, 5.4);
+  for (const side of [-1, 1]) body.put('steelDark', CYL, side * 2.9, 3.1, -1.6, 0.5, 1.6, 0.5, 0, 0, (Math.PI / 2) * side);
+  body.put('window', BOX, 0, 2.6, 3.62, 4, 0.25, 0.1);
+  for (const k of [-1.4, 0, 1.4]) body.put('steelDark', BOX, k, 2, 3.5, 0.9, 1.3, 0.6);
+  const yawGroup = body.build();
+  const p = at(x, z);
+  yawGroup.position.set(p.x, y, p.z);
+  yawGroup.scale.setScalar(s);
+  const base = shipYaw + ry;
+  yawGroup.rotation.y = base;
+  const pitchGroup = new THREE.Group();
+  pitchGroup.position.set(0, 2, 3);
+  yawGroup.add(pitchGroup);
+  const barrels = kit();
+  const muzzles = [];
   for (const k of [-1.4, 0, 1.4]) {
-    const bx = x + Math.cos(ry) * k * s;
-    const bz = z - Math.sin(ry) * k * s;
-    const len = 11 * s;
-    const ex = Math.cos(elevation);
-    const ey = Math.sin(elevation);
-    const cx = bx + fx * (3 * s + (len / 2) * ex);
-    const cz = bz + fz * (3 * s + (len / 2) * ex);
-    const cy = y + 2 * s + (len / 2) * ey;
-    put('gun', CYL, cx, cy, cz, 0.36 * s, len, 0.36 * s, Math.PI / 2 - elevation, ry, 0);
-    put('steelDark', CYL, bx + fx * 3.3 * s, y + 2 * s + 0.3 * ey * s, bz + fz * 3.3 * s, 0.75 * s, 1.4 * s, 0.75 * s, Math.PI / 2 - elevation, ry, 0);
-    put('gun', CYL, bx + fx * (3 * s + len * ex), y + 2 * s + len * ey, bz + fz * (3 * s + len * ex), 0.46 * s, 0.6 * s, 0.46 * s, Math.PI / 2 - elevation, ry, 0);
+    barrels.put('steelDark', CYL, k, 0, 0.3, 0.75, 1.4, 0.75, Math.PI / 2, 0, 0);
+    barrels.put('gun', CYL, k, 0, 5.8, 0.36, 11, 0.36, Math.PI / 2, 0, 0);
+    barrels.put('gun', CYL, k, 0, 11.2, 0.46, 0.6, 0.46, Math.PI / 2, 0, 0);
+    muzzles.push(new THREE.Vector3(k, 0, 11.6));
   }
-  cannons.push({ at: at(x + fx * 14 * s, z + fz * 14 * s), y: y + 2 * s + 11 * s * Math.sin(elevation), dir: ry, elevation });
+  const recoil = barrels.build();
+  pitchGroup.add(recoil);
+  pitchGroup.rotation.x = -elevation;
+  dyn.add(yawGroup);
+  turrets.push({ yawGroup, pitchGroup, recoil, base, yaw: 0, pitch: elevation, muzzles, size: s });
 }
 
 function secondary(put, x, y, z, ry, s) {
@@ -139,7 +185,7 @@ function launch(put, x, y, z, ry, s) {
   for (const k of [-0.4, 0.4]) put('steelDark', BOX, x + Math.cos(ry) * k * s, y + 1.2 * s, z - Math.sin(ry) * k * s, 0.15, 0.3 * s, 6 * s, 0, ry, 0);
 }
 
-export function bigBattleship(batch, x, z, yaw, rand, guns, cannons, fires) {
+export function bigBattleship(batch, dyn, x, z, yaw, rand, guns, turrets, fires) {
   const L = 172;
   const B = 30;
   const D = 7;
@@ -150,18 +196,11 @@ export function bigBattleship(batch, x, z, yaw, rand, guns, cannons, fires) {
   batch.add('hullDark', hull, place);
   batch.add('deck', deck, place);
   const deckY = (lz) => sheer(lz / L + 0.5);
-  for (let u = 0.03; u < 0.97; u += 0.012) {
-    const lz = (u - 0.5) * L;
-    const w = width(u);
-    if (w < 1) continue;
-    for (const side of [-1, 1]) put('boot', BOX, side * (w - 0.02), 0.3, lz, 0.2, 0.9, L * 0.0125);
-  }
   for (let u = 0.08; u < 0.92; u += 0.025) {
     const lz = (u - 0.5) * L;
     const w = width(u);
     for (const side of [-1, 1]) {
-      put('window', CYL, side * (w + 0.02), deckY(lz) - 2.4, lz, 0.28, 0.1, 0.28, 0, 0, Math.PI / 2);
-      if (Math.round(u * 80) % 3 === 0) put('hull', BOX, side * (w + 0.03), deckY(lz) - 1.2, lz, 0.05, deckY(lz) + 1.5, 0.12);
+      put('window', CYL, side * (w + 0.06), deckY(lz) - 1.6, lz, 0.28, 0.14, 0.28, 0, 0, Math.PI / 2);
     }
   }
   for (let u = 0.04; u < 0.96; u += 0.022) {
@@ -187,12 +226,12 @@ export function bigBattleship(batch, x, z, yaw, rand, guns, cannons, fires) {
   put('steelLight', CYL, 0, deckY(-L / 2 + 2) + 2.5, -L / 2 + 2, 0.08, 5, 0.08);
 
   const yA = deckY(52);
-  mainTurret(put, 0, yA, 52, 0, 1.15, 0.32, cannons, at);
-  mainTurret(put, 0, yA + 3.8, 36, 0, 1.15, 0.42, cannons, at);
+  mainTurret(put, dyn, 0, yA, 52, 0, 1.15, 0.32, turrets, at, yaw);
+  mainTurret(put, dyn, 0, yA + 3.8, 36, 0, 1.15, 0.42, turrets, at, yaw);
   put('steelDark', CYL, 0, yA + 1.9, 36, 4.2, 3.8, 4.2);
-  mainTurret(put, 0, deckY(-40) + 3.8, -40, Math.PI, 1.15, 0.38, cannons, at);
+  mainTurret(put, dyn, 0, deckY(-40) + 3.8, -40, Math.PI, 1.15, 0.38, turrets, at, yaw);
   put('steelDark', CYL, 0, deckY(-40) + 1.9, -40, 4.2, 3.8, 4.2);
-  mainTurret(put, 0, deckY(-56), -56, Math.PI, 1.15, 0.3, cannons, at);
+  mainTurret(put, dyn, 0, deckY(-56), -56, Math.PI, 1.15, 0.3, turrets, at, yaw);
 
   const y0 = deckY(5);
   put('hull', BOX, 0, y0 + 2.5, 2, 16, 5, 50);
@@ -218,8 +257,10 @@ export function bigBattleship(batch, x, z, yaw, rand, guns, cannons, fires) {
   for (const side of [-1, 1]) {
     put('steelDark', BOX, side * 5.6, y0 + 22.4, 17, 4.4, 0.6, 0.6);
     put('steelDark', CYL, side * 7.8, y0 + 22.4, 17, 0.55, 0.9, 0.55, 0, 0, Math.PI / 2);
-    put('steelLight', DISH, side * 4.2, y0 + 19.2, 21.6, 0.7, 0.5, 0.7, Math.PI / 2, 0, 0);
-    put('lampGlass', CYL, side * 4.2, y0 + 19.2, 21.92, 0.55, 0.05, 0.55, Math.PI / 2, 0, 0);
+    const lightY = y0 + 9.9 + 4 + 0.25 + 4 + 0.25;
+    put('steelDark', CYL, side * 3, lightY + 0.4, 19.6, 0.12, 0.8, 0.12);
+    put('steelLight', DISH, side * 3, lightY + 1.1, 19.9, 0.55, 0.5, 0.55, Math.PI / 2, 0, 0);
+    put('lampGlass', CYL, side * 3, lightY + 1.1, 20.18, 0.42, 0.05, 0.42, Math.PI / 2, 0, 0);
   }
   put('steel', OCT, 0, ty + 1.2, 17, 2.2, 2.4, 2.2);
   put('steelDark', BOX, 0, ty + 2.8, 17, 9, 0.8, 1.2);
@@ -243,10 +284,9 @@ export function bigBattleship(batch, x, z, yaw, rand, guns, cannons, fires) {
   put('steelDark', CYL, 0, y0 + 14, -22, 0.3, 14, 0.3);
   put('steelDark', BOX, 0, y0 + 19, -22, 6, 0.25, 0.25);
   for (const side of [-1, 1]) {
-    put('steelDark', CYL, side * 3.4, y0 + 10, -24, 0.25, 8, 0.25, 0, 0, side * 0.5);
     put('boatWhite', BALL, side * 6.3, y0 + 6.3, -6, 1.1, 0.8, 3.2);
     put('boot', BOX, side * 6.3, y0 + 6.5, -6, 2, 0.15, 6);
-    for (const lz of [-28, -24]) aa(put, side * 6, y0 + 9.7 - 4.2, lz, guns);
+    for (const lz of [-29, -24.5]) aa(put, side * 5.2, deckY(lz), lz, guns);
   }
   const catY = deckY(-68);
   launch(put, 0, catY, -66, Math.PI, 1);
