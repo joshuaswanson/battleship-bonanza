@@ -903,39 +903,45 @@ kbd {
 
 .yard {
   position: relative;
-  pointer-events: none;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(400px, 460px);
-  grid-template-rows: minmax(0, 1fr);
-  gap: 1.25rem;
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas: 'head head' 'left right';
+  gap: 0.9rem 1.4rem;
   padding: 1rem 1.5rem 1.25rem;
 }
 
-.stage-col {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.yard-head,
-.boat-card,
-.tray-col {
-  pointer-events: auto;
-}
-
 .yard-head {
+  grid-area: head;
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 1.25rem;
+  justify-content: center;
+  min-height: 3rem;
 }
 
-.mini-logo {
-  width: 230px;
-  flex: none;
+.yard-head #btn-back {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
-.mini-logo .logo {
-  filter: none;
+.yard-left,
+.yard-right {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  min-width: 0;
+  min-height: 0;
+}
+
+.yard-left {
+  grid-area: left;
+}
+
+.yard-right {
+  grid-area: right;
 }
 
 .btn-small {
@@ -944,16 +950,23 @@ kbd {
 }
 
 .stage {
+  position: relative;
   flex: 1;
-  min-height: 300px;
-  pointer-events: none;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  padding-bottom: 0.9rem;
+  min-height: 200px;
+  overflow: hidden;
+  background: #35d6e0;
+  border: 4px solid var(--ink);
+  border-radius: 24px;
+  box-shadow: 0 6px 0 var(--ink);
 }
 
 .try-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 0.7rem;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  pointer-events: none;
   margin: 0;
   padding: 0.35rem 0.9rem;
   font-weight: 600;
@@ -982,23 +995,88 @@ kbd {
   cursor: grabbing;
 }
 
-.boat-card {
-  padding: 0.9rem 1.1rem 1rem;
+.identity,
+.stats-card {
+  padding: 0.8rem 1rem 0.9rem;
   background: var(--foam);
   border: 4px solid var(--ink);
   border-radius: 24px;
   box-shadow: 0 6px 0 var(--ink);
 }
 
+.identity {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.stats-card {
+  padding: 0.7rem 1rem 0.85rem;
+}
+
+.card-label {
+  margin: 0 0 0.45rem;
+  font-family: var(--race);
+  font-weight: 800;
+  font-size: 1.3rem;
+  line-height: 1.1;
+}
+
+.stats-card .pips i {
+  max-width: none;
+}
+
+.tray .slots {
+  margin-top: auto;
+  padding-top: 0.4rem;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.tab {
+  flex: 1;
+  padding: 0.45rem 0.6rem;
+  font-family: var(--race);
+  font-weight: 800;
+  font-size: 1.35rem;
+  line-height: 1.1;
+  color: var(--ink);
+  background: #ffffff;
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+  box-shadow: 0 4px 0 var(--ink);
+  cursor: pointer;
+  transition: transform 90ms ease, box-shadow 90ms ease, background-color 120ms ease;
+}
+
+.tab:hover {
+  background: var(--foam);
+}
+
+.tab[aria-selected='true'] {
+  color: #ffffff;
+  background: var(--ink);
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 var(--ink);
+}
+
+.tab:focus-visible {
+  outline: 3px solid var(--sun);
+  outline-offset: 2px;
+}
+
 .combo {
-  margin: 0 0 0.75rem;
+  margin: 0;
   font-family: var(--race);
   font-weight: 900;
   font-size: clamp(2rem, 3.4vw, 2.9rem);
   line-height: 1;
   color: var(--sun);
+  text-align: center;
   transform: skewX(-10deg);
-  transform-origin: left;
   -webkit-text-stroke: 3px var(--ink);
   paint-order: stroke fill;
   text-shadow: 0 4px 0 var(--ink);
@@ -1013,13 +1091,6 @@ kbd {
     transform: skewX(-10deg) scale(0.6) translateX(-30px);
     opacity: 0;
   }
-}
-
-.boat-card-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.8rem 1.4rem;
-  align-items: start;
 }
 
 .slots {
@@ -1238,6 +1309,9 @@ kbd {
 
 .tray {
   scrollbar-width: none;
+}
+
+.tray.scrolls {
   padding-right: 34px;
 }
 
@@ -1290,21 +1364,6 @@ kbd {
   display: flex;
   flex-direction: column;
   gap: 2.2rem;
-}
-
-.group-label {
-  display: inline-block;
-  margin: 0 0 0.6rem;
-  padding: 0.1rem 0.9rem 0.15rem;
-  font-family: var(--race);
-  font-weight: 800;
-  font-size: 1.6rem;
-  line-height: 1.1;
-  color: #ffffff;
-  background: var(--ink);
-  border: 3px solid var(--ink);
-  border-radius: 8px;
-  transform: skewX(-10deg);
 }
 
 .tiles {
@@ -1481,12 +1540,17 @@ kbd {
 .tray-col {
   display: flex;
   flex-direction: column;
-  gap: 0.9rem;
+  flex: 1;
   min-height: 0;
 }
 
 .tray-col .tray {
   flex: 1;
+}
+
+#btn-start {
+  align-self: center;
+  width: min(100%, 440px);
 }
 
 .btn-launch {
@@ -2690,37 +2754,42 @@ kbd {
   }
 
   .yard {
-    grid-template-columns: minmax(0, 1fr) minmax(280px, 400px);
-    gap: 0.6rem;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    gap: 0.45rem 0.6rem;
     padding: 0.5rem 0.6rem 0.6rem;
   }
-  .mini-logo {
-    display: none;
+  .yard-head {
+    min-height: 2rem;
+  }
+  .yard-left,
+  .yard-right {
+    gap: 0.45rem;
   }
   .stage {
     min-height: 0;
-    padding-bottom: 0.4rem;
+    border-radius: 16px;
   }
   .try-hint {
     font-size: 0.75rem;
     padding: 0.2rem 0.6rem;
   }
-  .boat-card {
-    padding: 0.5rem 0.6rem 0.55rem;
+  .identity {
+    padding: 0.4rem 0.6rem 0.5rem;
     border-radius: 16px;
   }
+  .identity .field:has(#boat-name),
+  .identity .field > span,
+  .stats-card {
+    display: none;
+  }
   .combo {
-    margin-bottom: 0.4rem;
     font-size: 1.3rem;
     -webkit-text-stroke: 2px var(--ink);
   }
-  .boat-card-grid {
-    grid-template-columns: 1fr;
-    gap: 0.4rem;
-  }
-  .boat-card .stats,
-  .boat-card .field:has(#boat-name) {
-    display: none;
+  .tab {
+    font-size: 0.95rem;
+    padding: 0.25rem 0.4rem;
+    border-radius: 10px;
   }
   .slot-chip {
     height: 62px;
@@ -2744,12 +2813,6 @@ kbd {
     width: 26px;
     height: 26px;
   }
-  .tray-col {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    min-height: 0;
-  }
   .tray {
     flex: 1;
     padding: 0.5rem;
@@ -2757,10 +2820,6 @@ kbd {
   }
   .item-groups {
     gap: 0.8rem;
-  }
-  .group-label {
-    font-size: 1rem;
-    margin-bottom: 0.35rem;
   }
   .tiles {
     gap: 0.4rem;

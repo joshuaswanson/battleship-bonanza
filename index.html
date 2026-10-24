@@ -103,37 +103,41 @@
       </section>
 
       <section id="screen-loadout" class="screen hidden">
-        <canvas id="preview"></canvas>
         <div class="item-detail" id="item-detail" role="tooltip"></div>
         <div class="yard">
-          <div class="stage-col">
-            <header class="yard-head">
-              <button id="btn-back" class="btn btn-small" data-i18n="back">Back</button>
-            </header>
+          <header class="yard-head">
+            <button id="btn-back" class="btn btn-small" data-i18n="back">Back</button>
+            <h2 class="combo" id="combo-name">The Plain Dinghy</h2>
+          </header>
+          <div class="yard-left">
             <div class="stage" id="stage">
+              <canvas id="preview"></canvas>
               <p class="try-hint touch-hide"><span data-i18n="tryPress">Press</span> <kbd>O</kbd> <span data-i18n="tryOr">or</span> <kbd>P</kbd> <span data-i18n="tryRest">to take your attachments for a spin</span></p>
             </div>
-            <div class="boat-card">
-              <h2 class="combo" id="combo-name">The Plain Dinghy</h2>
-              <div class="boat-card-grid">
-                <div class="slots" id="slots"></div>
-                <div class="stats" id="stats"></div>
-                <label class="field">
-                  <span data-i18n="boatName">Boat name</span>
-                  <input id="boat-name" maxlength="16" autocomplete="off" spellcheck="false" />
-                </label>
-                <div class="field">
-                  <span data-i18n="paint">Paint</span>
-                  <div class="swatches" id="swatches"></div>
-                </div>
+            <div class="identity">
+              <label class="field">
+                <span data-i18n="boatName">Boat name</span>
+                <input id="boat-name" maxlength="16" autocomplete="off" spellcheck="false" />
+              </label>
+              <div class="field">
+                <span data-i18n="paint">Paint</span>
+                <div class="swatches" id="swatches"></div>
               </div>
             </div>
+            <div class="stats-card">
+              <h3 class="card-label" data-i18n="stats">Stats</h3>
+              <div class="stats" id="stats"></div>
+            </div>
           </div>
-          <div class="tray-col">
-            <aside class="tray">
-              <div class="item-groups" id="item-groups"></div>
-            </aside>
-            <div class="tray-scroll" id="tray-scroll" hidden><div class="tray-thumb"></div></div>
+          <div class="yard-right">
+            <div class="tray-col">
+              <aside class="tray">
+                <div class="tabs" id="tabs" role="tablist"></div>
+                <div class="item-groups" id="item-groups"></div>
+                <div class="slots" id="slots"></div>
+              </aside>
+              <div class="tray-scroll" id="tray-scroll" hidden><div class="tray-thumb"></div></div>
+            </div>
             <button id="btn-start" class="btn btn-big btn-launch">Start race</button>
           </div>
         </div>

@@ -86,9 +86,28 @@ export class Loadout {
   }
 
   buildTray() {
+    this.tab ??= GROUPS[0].id;
+    $('tabs').innerHTML = GROUPS.map(
+      (g) => `<button class="tab" role="tab" id="tab-${g.id}" data-group="${g.id}" aria-controls="group-${g.id}">${t(`group_${g.id}`)}</button>`,
+    ).join('');
+    for (const tab of document.querySelectorAll('.tab')) {
+      tab.addEventListener('click', () => {
+        if (this.tab === tab.dataset.group) return;
+        this.tab = tab.dataset.group;
+        this.sfx.play('pick');
+        this.showTab();
+      });
+      tab.addEventListener('keydown', (e) => {
+        const step = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+        if (!step) return;
+        const tabs = [...document.querySelectorAll('.tab')];
+        const next = tabs[(tabs.indexOf(tab) + step + tabs.length) % tabs.length];
+        next.focus();
+        next.click();
+      });
+    }
     $('item-groups').innerHTML = GROUPS.map(
-      (g) => `<section class="group">
-        <h3 class="group-label">${t(`group_${g.id}`)}</h3>
+      (g) => `<section class="group" id="group-${g.id}" role="tabpanel" aria-labelledby="tab-${g.id}" data-group="${g.id}">
         <div class="tiles">
           ${ITEM_IDS.filter((id) => ITEMS[id].group === g.id)
             .map(
@@ -103,6 +122,7 @@ export class Loadout {
       </section>`,
     ).join('');
     this.tiles = [...document.querySelectorAll('.tile[data-id]')];
+    this.showTab();
     for (const tile of this.tiles) {
       const id = tile.dataset.id;
       tile.addEventListener('click', () => this.toggle(id, tile));
@@ -118,6 +138,13 @@ export class Loadout {
       });
       tile.addEventListener('blur', () => this.hideDetail());
     }
+  }
+
+  showTab() {
+    for (const tab of document.querySelectorAll('.tab')) tab.setAttribute('aria-selected', String(tab.dataset.group === this.tab));
+    for (const group of document.querySelectorAll('.group')) group.hidden = group.dataset.group !== this.tab;
+    this.hideDetail();
+    this.placeScrollbar?.();
   }
 
   buildIdentity() {
@@ -294,6 +321,7 @@ export class Loadout {
       bar.style.bottom = 'auto';
       const overflow = tray.scrollHeight - tray.clientHeight;
       bar.hidden = overflow < 2;
+      tray.classList.toggle('scrolls', !bar.hidden);
       if (bar.hidden) return;
       const track = bar.clientHeight;
       const size = Math.max(34, (track * tray.clientHeight) / tray.scrollHeight);
@@ -376,29 +404,22 @@ export class Loadout {
     canvas.addEventListener('pointerup', () => (dragging = null));
     canvas.addEventListener('pointercancel', () => (dragging = null));
 
-    const stage = $('stage');
     const frame = () => {
-      const { clientWidth: w, clientHeight: h } = canvas;
+      const { width: w, height: h } = canvas.getBoundingClientRect();
       if (!w || !h) return;
       this.renderer.setSize(w, h, false);
       this.camera.aspect = w / h;
-      const canvasBox = canvas.getBoundingClientRect();
-      const stageBox = stage.getBoundingClientRect();
       const tan = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
-      const byWidth = 12.5 / (0.85 * (stageBox.width / w) * 2 * tan * this.camera.aspect);
-      const byHeight = 6.5 / (0.95 * (stageBox.height / h) * 2 * tan);
+      const byWidth = 12.5 / (0.85 * 2 * tan * this.camera.aspect);
+      const byHeight = 6.5 / (0.95 * 2 * tan);
       const dist = Math.max(12, Math.max(byWidth, byHeight)) * 1.2;
       this.camera.position.set(12, 8.8, 14.8).setLength(dist);
       this.camera.lookAt(0, 0.9, 0);
-      const shiftX = canvasBox.left + w / 2 - (stageBox.left + stageBox.width / 2);
-      const shiftY = canvasBox.top + h / 2 - (stageBox.top + stageBox.height / 2);
-      this.camera.setViewOffset(w, h, shiftX, shiftY, w, h);
       this.camera.updateProjectionMatrix();
       if (this.boat) this.render(0);
     };
-    const observer = new ResizeObserver(frame);
-    observer.observe(canvas);
-    observer.observe(stage);
+    new ResizeObserver(frame).observe(canvas);
+    addEventListener('resize', frame);
   }
 
   rebuildBoat() {
