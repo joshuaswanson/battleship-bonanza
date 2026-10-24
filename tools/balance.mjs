@@ -4,6 +4,7 @@ import fs from 'node:fs';
 const races = Number(process.argv[2] ?? 40);
 const out = process.argv[3] ?? 'tools/balance-results.json';
 const url = process.argv[4] ?? 'http://localhost:5288/';
+const MAPS = (process.argv[5] ?? 'bay,jungle,alps,venice,midway').split(',');
 const browser = await puppeteer.launch({
   executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: 'new',
@@ -20,7 +21,7 @@ for (let n = 0; n < races; n++) {
     window.__bb.steps = 10;
     window.__bb.map = map;
     return window.__bb.simRace();
-  }, n % 2 ? 'jungle' : 'bay');
+  }, MAPS[n % MAPS.length]);
   const t0 = Date.now();
   let done = false;
   while (!done && Date.now() - t0 < 90000) {
