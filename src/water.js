@@ -27,9 +27,16 @@ const VERT = /* glsl */ `
   varying vec3 vWorld;
   varying float vHeight;
   varying vec3 vNormalW;
+  #ifdef USE_SHADE
+    attribute vec3 aShade;
+    varying vec3 vShade;
+  #endif
   #include <common>
   #include <fog_pars_vertex>
   void main() {
+    #ifdef USE_SHADE
+      vShade = aShade;
+    #endif
     vec4 world = modelMatrix * vec4(position, 1.0);
     float a = world.x * 0.06 + uTime * 1.3;
     float b = world.z * 0.08 - uTime * 1.1;
@@ -57,6 +64,9 @@ const FRAG = /* glsl */ `
   varying vec3 vWorld;
   varying float vHeight;
   varying vec3 vNormalW;
+  #ifdef USE_SHADE
+    varying vec3 vShade;
+  #endif
   #include <common>
   #include <fog_pars_fragment>
   void main() {
@@ -73,6 +83,9 @@ const FRAG = /* glsl */ `
     color = mix(color, uFoam, smoothstep(0.8, 0.86, ripple) * 0.45);
     color = mix(color, uFoam, smoothstep(0.9, 0.96, h) * 0.7);
 
+    #ifdef USE_SHADE
+      color *= vShade;
+    #endif
     gl_FragColor = vec4(color, 1.0);
     #include <colorspace_fragment>
     #include <fog_fragment>
@@ -96,6 +109,7 @@ export function createWater({ size = 1800, segments = 240, geometry = null, flat
     ]),
     vertexShader: VERT,
     fragmentShader: FRAG,
+    defines: geometry.hasAttribute('aShade') ? { USE_SHADE: '' } : {},
     fog: true,
   });
   const mesh = new THREE.Mesh(geometry, material);

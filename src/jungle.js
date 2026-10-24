@@ -20,9 +20,18 @@ const JUNGLE_COLORS = {
   leafLime: 0x8ccf45,
   leafTeal: 0x1b8a5e,
   monstera: 0x1f7f45,
-  caveRock: 0x7a6a5a,
-  caveRockDark: 0x5b4d41,
-  caveRockLight: 0x958270,
+  caveRock: 0x6a5c4f,
+  caveRockDark: 0x4e4238,
+  caveRockLight: 0x84735f,
+  tiki: 0x9c8b70,
+  tikiDark: 0x3b3029,
+  tooth: 0xf4ead0,
+  lip: 0xd0563b,
+  paintTeal: 0x2fb5a3,
+  paintYellow: 0xffc93c,
+  paintRed: 0xe0503a,
+  torchWood: 0x7a4a26,
+  torchIron: 0x2f3338,
   fern: 0x4cbf5a,
   vine: 0x3f7a2c,
   banana: 0x62d04c,
@@ -212,7 +221,7 @@ async function buildTerrain(surface, track, tick) {
   return new THREE.Mesh(geometry, toon(0xffffff, { vertexColors: true }));
 }
 
-function ribbon(track, from, to, levelAt, positions) {
+function ribbon(track, from, to, levelAt, positions, shades, shadeAt = () => [1, 1, 1]) {
   const hw = track.halfWidth + 8;
   const lanes = 10;
   const at = (k, lane) => {
@@ -231,10 +240,23 @@ function ribbon(track, from, to, levelAt, positions) {
       const [bx, bz] = at(k, lane + 1);
       const [cx, cz] = at(k + 1, lane);
       const [dx, dz] = at(k + 1, lane + 1);
-      positions.push(ax, y0, az, cx, y1, cz, bx, y0, bz);
-      positions.push(bx, y0, bz, cx, y1, cz, dx, y1, dz);
+      const quad = [[ax, y0, az, k], [cx, y1, cz, k + 1], [bx, y0, bz, k], [bx, y0, bz, k], [cx, y1, cz, k + 1], [dx, y1, dz, k + 1]];
+      for (const [x, y, z, kk] of quad) {
+        positions.push(x, y, z);
+        shades.push(...shadeAt(x, y, z, kk));
+      }
     }
   }
+}
+
+function caveWaterShade(torches, ends) {
+  const p = new THREE.Vector3();
+  return (x, y, z, k) => {
+    const day = Math.max(0, 1 - Math.min(...ends.map((e) => Math.abs(k - e))) / 14);
+    const lit = Math.min(1, torchLight(p.set(x, y, z), torches));
+    const dark = 0.36 + 0.64 * day;
+    return [dark + 0.75 * lit, dark + 0.45 * lit, dark + 0.12 * lit];
+  };
 }
 
 const lowLevel = (track) => (s) => track.level(s, track.pastSeam(s) ? 1 : 0);
@@ -246,11 +268,14 @@ function buildRiver(track) {
   const kOut = Math.round(river.tunnelOut / spacing);
   const kSeam = Math.round(river.seam / spacing);
   const positions = [];
-  ribbon(track, kOut, kIn + N, (s) => track.level(s), positions);
-  ribbon(track, kIn, kOut, lowLevel(track), positions);
-  ribbon(track, kSeam - GHOST, kOut, copyLevel(track), positions);
+  const shades = [];
+  const ends = [kIn, kOut];
+  ribbon(track, kOut, kIn + N, (s) => track.level(s), positions, shades);
+  ribbon(track, kIn, kOut, lowLevel(track), positions, shades, caveWaterShade(caveTorches(track, kIn, kOut, lowLevel(track)), ends));
+  ribbon(track, kSeam - GHOST, kOut, copyLevel(track), positions, shades, caveWaterShade(caveTorches(track, kIn, kOut, copyLevel(track)), ends));
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('aShade', new THREE.Float32BufferAttribute(shades, 3));
   return createWater({ geometry, flat: true, amp: RIVER_AMP, deep: 0x1c8f86, shallow: 0x4fd6b4 });
 }
 
@@ -293,7 +318,7 @@ function tubePoint(track, k, j, levelAt, extra = 0) {
   return new THREE.Vector3(track.px[i] + track.nx[i] * lat, levelAt(k * track.spacing) + up, track.pz[i] + track.nz[i] * lat);
 }
 
-function buildTube(track, from, to, levelAt, ends) {
+function buildTube(track, from, to, levelAt, ends, torches) {
   const positions = [];
   const colors = [];
   const tones = [new THREE.Color(0x6e5d4e), new THREE.Color(0x85725f), new THREE.Color(0x7a6655)];
@@ -318,9 +343,12 @@ function buildTube(track, from, to, levelAt, ends) {
     const nearMouth = Math.min(...ends.map((e) => Math.abs(k - e)));
     if (nearMouth < 16 && hash(k * 1.3, j * 0.7) < 0.55 * (1 - nearMouth / 16)) c.lerp(moss, 0.8);
     if (cy > 9) c.multiplyScalar(0.82);
+    const daylight = Math.max(0, 1 - nearMouth / 14);
     for (const p of [a, b, d]) {
       positions.push(p.x, p.y, p.z);
-      colors.push(c.r, c.g, c.b);
+      const lit = Math.min(1, torchLight(p, torches));
+      const shade = 0.34 + 0.66 * daylight + 0.85 * lit;
+      colors.push(c.r * shade + 0.2 * lit, c.g * shade + 0.09 * lit, c.b * shade);
     }
   };
   for (let r = 0; r < grid.length - 1; r++) {
@@ -426,7 +454,7 @@ function buildShell(track, from, to) {
   return new THREE.Mesh(geometry, toon(0x8b7d6e, { side: THREE.DoubleSide }));
 }
 
-function buildMouth(track, k, levelAt, top) {
+function buildMouth(track, k, levelAt, top, color = 0x6e5d4e) {
   const hw = track.halfWidth + 14;
   const i = track.wrap(k);
   const base = levelAt(k * track.spacing);
@@ -444,7 +472,7 @@ function buildMouth(track, k, levelAt, top) {
   }
   shape.holes.push(hole);
   const geometry = new THREE.ShapeGeometry(shape);
-  const mesh = new THREE.Mesh(geometry, toon(0x6e5d4e, { side: THREE.DoubleSide }));
+  const mesh = new THREE.Mesh(geometry, toon(color, { side: THREE.DoubleSide }));
   const basis = new THREE.Matrix4().makeBasis(
     new THREE.Vector3(track.nx[i], 0, track.nz[i]),
     new THREE.Vector3(0, 1, 0),
@@ -488,6 +516,166 @@ function buildCrystals(track, from, to, levelAt) {
 
 const CRYSTAL = new THREE.OctahedronGeometry(1, 0);
 
+const TORCH_EVERY = 10;
+const TORCH_REACH = 20;
+const FLAME = new THREE.ConeGeometry(0.55, 1.7, 7).translate(0, 0.75, 0);
+const FLAME_CORE = new THREE.ConeGeometry(0.3, 1.1, 6).translate(0, 0.5, 0);
+const STICK = new THREE.CylinderGeometry(0.16, 0.22, 2.4, 6);
+const CUP = new THREE.CylinderGeometry(0.62, 0.36, 0.7, 8);
+
+function torchLight(p, torches) {
+  let light = 0;
+  for (const t of torches) {
+    const d = p.distanceTo(t.tip);
+    if (d < TORCH_REACH) light += (1 - d / TORCH_REACH) ** 2;
+  }
+  return light;
+}
+
+function caveTorches(track, from, to, levelAt) {
+  const torches = [];
+  for (let k = from + 6; k < to - 3; k++) {
+    if ((k - from - 6) % TORCH_EVERY !== 0) continue;
+    const side = Math.floor((k - from) / TORCH_EVERY) % 2;
+    const wall = tubePoint(track, k, side ? CAVE_STEPS - 5 : 5, levelAt, -0.4);
+    const i = track.wrap(k);
+    const inward = new THREE.Vector3(track.px[i] - wall.x, 0, track.pz[i] - wall.z).normalize();
+    torches.push(torchAt(wall, inward, 1.3));
+  }
+  return torches;
+}
+
+function torchAt(wall, inward, size) {
+  const dir = inward.clone().multiplyScalar(0.8).add(new THREE.Vector3(0, 1, 0)).normalize();
+  const tilt = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+  const mid = wall.clone().addScaledVector(dir, 1.2 * size);
+  const cup = wall.clone().addScaledVector(dir, 2.5 * size);
+  const tip = cup.clone().add(new THREE.Vector3(0, 0.3 * size, 0));
+  const one = new THREE.Vector3(size, size, size);
+  return {
+    tip,
+    size,
+    stick: new THREE.Matrix4().compose(mid, tilt, one),
+    cup: new THREE.Matrix4().compose(cup, tilt, one),
+  };
+}
+
+let glowTexture;
+function glowSprite() {
+  if (!glowTexture) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const g = c.getContext('2d');
+    const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grad.addColorStop(0, 'rgba(255,220,150,1)');
+    grad.addColorStop(0.35, 'rgba(255,150,60,0.45)');
+    grad.addColorStop(1, 'rgba(255,120,40,0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 64, 64);
+    glowTexture = new THREE.CanvasTexture(c);
+  }
+  return glowTexture;
+}
+
+function buildTorches(batch, torches) {
+  for (const t of torches) {
+    batch.add('torchWood', STICK, t.stick);
+    batch.add('torchIron', CUP, t.cup);
+  }
+  const outer = new THREE.InstancedMesh(FLAME, glow(0xff7a1a), torches.length);
+  const inner = new THREE.InstancedMesh(FLAME_CORE, glow(0xffe36b), torches.length);
+  const glowPoints = new THREE.BufferGeometry().setFromPoints(torches.map((t) => t.tip.clone().add(new THREE.Vector3(0, 0.8 * t.size, 0))));
+  const halo = new THREE.Points(
+    glowPoints,
+    new THREE.PointsMaterial({ map: glowSprite(), size: 14, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
+  );
+  const group = new THREE.Group();
+  group.add(outer, inner, halo);
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const sc = new THREE.Vector3();
+  group.userData.update = (time) => {
+    torches.forEach((t, n) => {
+      const flick = 1 + 0.22 * Math.sin(time * 13 + n * 1.7) + 0.12 * Math.sin(time * 23 + n * 3.1);
+      const w = t.size * (1 + 0.08 * Math.sin(time * 17 + n));
+      q.setFromAxisAngle(new THREE.Vector3(0, 0, 1), 0.12 * Math.sin(time * 7 + n * 2.3));
+      outer.setMatrixAt(n, m.compose(t.tip, q, sc.set(w, t.size * flick, w)));
+      inner.setMatrixAt(n, m.compose(t.tip, q, sc.set(w, t.size * (0.85 + 0.3 * (flick - 1) + 0.1), w)));
+    });
+    outer.instanceMatrix.needsUpdate = true;
+    inner.instanceMatrix.needsUpdate = true;
+  };
+  group.userData.update(0);
+  return group;
+}
+
+const PYRAMID = new THREE.ConeGeometry(1, 1, 4).rotateY(Math.PI / 4);
+const BALL = new THREE.SphereGeometry(1, 16, 12);
+const BLOCK = new THREE.BoxGeometry(1, 1, 1);
+const FEATHER = new THREE.ConeGeometry(1, 1, 5).translate(0, 0.5, 0);
+
+function buildFace(track, k, levelAt, batch, rand) {
+  const i = track.wrap(k);
+  const base = levelAt(k * track.spacing);
+  const n = new THREE.Vector3(track.nx[i], 0, track.nz[i]);
+  const t = new THREE.Vector3(track.tx[i], 0, track.tz[i]);
+  const frame = new THREE.Matrix4().makeBasis(n, new THREE.Vector3(0, 1, 0), t);
+  if (frame.determinant() < 0) frame.makeBasis(n.negate(), new THREE.Vector3(0, 1, 0), t);
+  frame.setPosition(track.px[i], base, track.pz[i]);
+  const at = (lat, up, along) => new THREE.Vector3(lat, up, along).applyMatrix4(frame);
+  const put = (key, geometry, lat, up, along, sx, sy, sz, rx = 0, ry = 0, rz = 0) => batch.add(key, geometry, frame.clone().multiply(mat(lat, up, along, sx, sy, sz, rx, ry, rz)));
+
+  const rim = [];
+  for (let j = 0; j <= CAVE_STEPS; j++) {
+    const { lat, up } = profile(k, j, 1.2);
+    rim.push(at(lat, up, -1.2));
+  }
+  batch.add('lip', new THREE.TubeGeometry(new THREE.CatmullRomCurve3(rim), 60, 1.9, 8));
+  for (let j = 8; j <= CAVE_STEPS - 8; j += 2) {
+    const { lat, up } = profile(k, j, -0.4);
+    const len = 2.6 + (j % 4 === 0 ? 1.6 : 0) + rand() * 0.8;
+    put('tooth', DRIP, lat, up - len / 2 + 0.4, -1.4, 1.05, len, 1.05);
+  }
+  for (const side of [-1, 1]) {
+    const { lat } = profile(k, side < 0 ? CAVE_STEPS - 3 : 3);
+    put('tooth', CONE, lat - side * 2.5, 1.5, -2, 1.5, 7, 1.5, 0, 0, side * 0.12);
+
+    put('tikiDark', BALL, side * 12.5, 33, -0.6, 7.2, 6.2, 2.4);
+    put('tooth', BALL, side * 12.5, 32.6, -1.8, 5.2, 4.6, 2.2);
+    put('tikiDark', BLOCK, side * 12.5, 40.5, -2.4, 14, 3.2, 4, 0, 0, side * 0.26);
+    put('paintTeal', BLOCK, side * 13, 25, -0.9, 6, 1.4, 1.2, 0, 0, -side * 0.35);
+    put('paintTeal', BLOCK, side * 13, 22.5, -0.9, 5, 1.4, 1.2, 0, 0, -side * 0.35);
+    put('tikiDark', BALL, side * 2.4, 18.4, -4.3, 1.3, 1, 1);
+  }
+  put('tiki', PYRAMID, 0, 23, -1.8, 5.5, 11, 4.2);
+  for (let lat = -30, c = 0; lat <= 30; lat += 6, c++) {
+    put(['paintRed', 'paintYellow', 'paintTeal'][c % 3], BLOCK, lat, 47.5, -1.6, 5.6, 4.2, 3.2);
+  }
+  for (let f = -6; f <= 6; f++) {
+    const lat = f * 4.6;
+    const h = 9 + 4 * Math.cos((f / 6) * 1.3) + rand() * 2;
+    put(['paintYellow', 'paintRed', 'paintTeal', 'leafLight'][(f + 12) % 4], FEATHER, lat, 49.5, -0.4, 2.2, h, 1.2, 0, 0, -f * 0.09);
+  }
+  for (let v = 0; v < 9; v++) {
+    const lat = (rand() - 0.5) * 60;
+    vine(batch, at(lat, 45 + rand() * 4, -3.2), 6 + rand() * 14, rand, new THREE.Vector3(0, 0, 0));
+  }
+
+  const eyes = new THREE.Group();
+  const eyeMat = glow(0xffb21f);
+  for (const side of [-1, 1]) {
+    const pupil = new THREE.Mesh(BALL, eyeMat);
+    pupil.position.copy(at(side * 12, 31.4, -3.7));
+    pupil.scale.set(2.3, 2.3, 2.3);
+    eyes.add(pupil);
+  }
+  const torches = [-1, 1].map((side) => {
+    const { lat } = profile(k, side < 0 ? CAVE_STEPS - 6 : 6, 3);
+    return torchAt(at(lat + side * 2, 7, -2.5), n.clone().multiplyScalar(-side).setY(0).normalize().add(t.clone().multiplyScalar(-0.6)).normalize(), 1.7);
+  });
+  return { eyes, torches };
+}
+
 function buildTunnel(track) {
   const { river, spacing } = track;
   const kIn = Math.round(river.tunnelIn / spacing);
@@ -496,21 +684,28 @@ function buildTunnel(track) {
   const low = lowLevel(track);
   const high = copyLevel(track);
   const group = new THREE.Group();
-  group.add(buildTube(track, kIn, kOut, low, [kIn, kOut]));
-  group.add(buildTube(track, kSeam - GHOST, kOut, high, [kIn, kOut]));
+  const lowTorches = caveTorches(track, kIn, kOut, low);
+  const highFrom = kSeam - GHOST;
+  const highOnly = caveTorches(track, kIn, kOut, high).filter((_, n) => kIn + 6 + n * TORCH_EVERY >= highFrom);
+  group.add(buildTube(track, kIn, kOut, low, [kIn, kOut], lowTorches));
+  group.add(buildTube(track, highFrom, kOut, high, [kIn, kOut], highOnly));
   const batch = new Batcher();
   caveDetails(batch, track, kIn, kOut, low);
-  caveDetails(batch, track, kSeam - GHOST, kOut, high);
+  caveDetails(batch, track, highFrom, kOut, high);
   const rand = mulberry32(4411);
-  mouthRocks(batch, track, kIn, low, -1, rand);
+  const face = buildFace(track, kIn, low, batch, rand);
   mouthRocks(batch, track, kOut, high, 1, rand);
+  const torches = [...lowTorches, ...highOnly, ...face.torches];
+  const flames = buildTorches(batch, torches);
+  group.add(flames, face.eyes);
+  group.userData.torches = flames;
   const details = new THREE.Group();
   group.userData.chunks = batch.build(details, 0.08, JUNGLE_COLORS);
   group.add(details);
   group.add(buildCrystals(track, kIn, kOut, low));
   group.add(buildCrystals(track, kSeam - GHOST, kOut, high));
   group.add(buildShell(track, kIn, kOut));
-  group.add(buildMouth(track, kIn, low, highLevel(track, river.tunnelIn) + LID));
+  group.add(buildMouth(track, kIn, low, highLevel(track, river.tunnelIn) + LID, JUNGLE_COLORS.tiki));
   group.add(buildMouth(track, kOut, high, highLevel(track, river.tunnelOut) + LID));
   group.add(buildCap(track, kOut, low, 0xdff7ec, 3));
   group.add(buildCap(track, kSeam - GHOST, high, 0x15110d));
@@ -982,6 +1177,7 @@ export async function createJungle(group, track, fx) {
       water.update(t);
       cullChunks(chunks, camera, fog.far);
       cullChunks(tunnel.userData.chunks, camera, fog.far);
+      tunnel.userData.torches.userData.update(t);
       for (const f of falls) f.material.uniforms.uTime.value = t;
       sky.position.copy(camera.position);
       for (const cloud of clouds) {
