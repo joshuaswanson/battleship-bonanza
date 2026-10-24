@@ -103,7 +103,7 @@ export function destroyer(batch, dyn, x, z, yaw, rand, guns, turrets, stacks) {
   return { L, B, top: 24 };
 }
 
-export function carrier(batch, x, z, yaw, rand, fires, guns, burning, parked) {
+export function carrier(batch, x, z, yaw, rand, fires, guns, burning, parked, stacks) {
   const L = 212;
   const B = 27;
   const { put, at, place } = shipFrame(batch, x, z, yaw);
@@ -155,32 +155,72 @@ export function carrier(batch, x, z, yaw, rand, fires, guns, burning, parked) {
   put('deckLine', BOX, 0, dy + 0.02, -DL / 2 + 10, 10, 0.03, 0.6);
 
   const ix = W / 2 - 4.5;
-  put('hullLight', BOX, ix, dy + 5, 14, 6.4, 10, 30);
-  put('hullLight', BOX, ix + 4, deckY - 3, 14, 6, 6, 26);
-  put('steelDark', BOX, ix + 4, deckY - 6, 14, 6, 0.4, 26);
-  for (let k = 2; k <= 28; k += 3.2) for (const yy of [dy + 3, dy + 7]) put('window', BOX, ix - 3.22, yy, k, 0.08, 0.8, 1.5);
-  put('hull', BOX, ix, dy + 12, 10, 5.4, 4, 14);
-  put('window', BOX, ix, dy + 12.6, 17.02, 4.6, 1, 0.08);
-  for (const side of [-1, 1]) put('window', BOX, ix + side * 2.72, dy + 12.6, 10, 0.08, 1, 12);
-  put('hullLight', BOX, ix, dy + 14.25, 10, 7.4, 0.3, 15.4);
-  rails(put, [[ix - 3.6, 17.6], [ix + 3.6, 17.6]], dy + 14.3);
-  for (const side of [-1, 1]) put('hull', BOX, ix + side * 4.4, dy + 12.6, 15.5, 3.4, 0.6, 2.6);
-  put('hull', BOX, ix, dy + 16.2, 9, 4.4, 3.6, 8);
-  put('window', BOX, ix, dy + 16.6, 13.02, 3.6, 0.8, 0.08);
-  put('funnel', BOX, ix + 0.6, dy + 15, 24, 5.4, 18, 8, -0.14, 0, 0.05);
-  put('funnelTop', BOX, ix + 0.9, dy + 24, 25.2, 5.5, 1, 8.1, -0.14, 0, 0.05);
-  for (let k = -2; k <= 2; k++) put('steelDark', BOX, ix + 0.9 + k * 1, dy + 24.6, 25.3, 0.12, 0.1, 7.6, -0.14, 0, 0);
+  const sponson = (lx, ly, lz, w, d) => {
+    put('steelDark', BOX, lx, ly, lz, w, 0.45, d);
+    for (const s of [-1, 1]) put('steelDark', BOX, lx + s * (w / 2 - 0.3), ly - 1.2, lz, 0.3, 2, 0.3, 0, 0, -s * 0.5);
+  };
+  put('hullLight', BOX, ix, dy + 4, 15, 5.4, 8, 32);
+  put('hullLight', BOX, ix + 3.6, deckY - 2.4, 15, 4, 8, 24);
+  put('steelDark', BOX, ix + 3.6, deckY - 6.5, 15, 4.2, 0.4, 24.4);
+  for (let k = 1; k <= 29; k += 2.8) {
+    put('window', BOX, ix - 2.72, dy + 2.4, k, 0.08, 0.9, 1.3);
+    put('window', BOX, ix - 2.72, dy + 5.6, k, 0.08, 0.9, 1.3);
+  }
+  put('hullLight', BOX, ix, dy + 8.2, 15, 6, 0.4, 33);
+  put('hull', BOX, ix, dy + 10.2, 12, 5, 3.6, 18);
+  for (let k = 4; k <= 20; k += 2.2) put('window', BOX, ix - 2.52, dy + 10.6, k, 0.08, 0.8, 1.2);
+  put('hullLight', BOX, ix, dy + 12.2, 12, 6.6, 0.35, 19);
+  rails(put, [[ix - 3.3, 2.5], [ix - 3.3, 21.5], [ix + 3.3, 21.5]], dy + 12.4);
+  put('hull', BOX, ix, dy + 14.3, 10, 4.4, 3.8, 10);
+  put('window', BOX, ix, dy + 14.9, 15.02, 3.8, 1.1, 0.08);
+  put('window', BOX, ix - 2.22, dy + 14.9, 10, 0.08, 1.1, 9);
+  put('hullLight', BOX, ix, dy + 16.35, 10, 6, 0.3, 11.4);
+  for (const side of [-1, 1]) {
+    put('hull', BOX, ix - 0.4 + side * 3.3, dy + 14.6, 14.6, 2.2, 0.35, 2.2);
+    put('steelDark', BOX, ix - 0.4 + side * 3.3, dy + 13.6, 14.6, 0.2, 2, 0.2);
+  }
+  rails(put, [[ix - 3, 4.4], [ix - 3, 15.6], [ix + 3, 15.6]], dy + 16.5);
+  put('steel', CYL, ix, dy + 17.5, 8, 1.1, 2, 1.1);
+  put('steelDark', BOX, ix, dy + 18.8, 8, 5.2, 0.6, 0.8);
+  for (const side of [-1, 1]) put('steelDark', CYL, ix + side * 2.7, dy + 18.8, 8, 0.45, 0.7, 0.45, 0, 0, Math.PI / 2);
+  sponson(ix - 3.6, dy + 8.6, 24, 3, 4);
+  aa(put, ix - 3.6, dy + 8.8, 24, guns.local);
+  sponson(ix - 3.6, dy + 8.6, 4, 3, 4);
+  aa(put, ix - 3.6, dy + 8.8, 4, guns.local);
+  const fz = 22;
+  put('hullLight', BOX, ix + 0.8, dy + 10.5, fz, 5.4, 4, 9);
+  put('funnel', BOX, ix + 1.2, dy + 17, fz + 1.5, 4.4, 11, 7, -0.16, 0, 0.06);
+  put('funnelTop', BOX, ix + 1.55, dy + 22.6, fz + 2.5, 4.5, 0.9, 7.1, -0.16, 0, 0.06);
+  for (let k = -1.5; k <= 1.5; k += 1) put('steelDark', BOX, ix + 1.6 + k, dy + 23.1, fz + 2.6, 0.12, 0.1, 6.6, -0.16, 0, 0);
+  for (const side of [-1, 1]) put('steelLight', BOX, ix + 1.2 + side * 2.25, dy + 17, fz + 1.5, 0.12, 11, 0.25, -0.16, 0, 0.06);
+  stacks?.stacks?.push(at(ix + 1.6, fz + 3).setY(dy + 23.4));
   const mx = ix;
-  const mz = 6;
-  put('steelDark', CYL, mx, dy + 25, mz, 0.3, 18, 0.3);
-  for (const side of [-1, 1]) put('steelDark', CYL, mx + side * 1.6, dy + 21, mz + 1.4, 0.18, 10, 0.18, -0.12, 0, side * 0.16);
-  put('steelDark', BOX, mx, dy + 27, mz, 9, 0.3, 0.3);
-  put('steelDark', BOX, mx, dy + 30, mz, 5.5, 0.25, 0.25);
-  put('steelLight', BOX, mx, dy + 32.6, mz, 4.6, 2.2, 0.2);
-  for (let k = -2; k <= 2; k++) put('steelDark', BOX, mx + k, dy + 32.6, mz, 0.08, 2.2, 0.26);
-  put('steelLight', DISH, mx, dy + 22.5, mz + 3.6, 1.4, 0.9, 1.4, Math.PI / 2.3, 0, 0);
-  put('flagRed', BOX, mx, dy + 34.7, mz, 0.08, 1.4, 2.4);
-
+  const mz = 11;
+  const mastBase = dy + 16.5;
+  put('steelDark', CYL, mx, mastBase + 9, mz, 0.32, 18, 0.32);
+  for (const side of [-1, 1]) put('steelDark', CYL, mx + side * 1.8, mastBase + 4.5, mz + 1, 0.2, 9.6, 0.2, -0.1, 0, side * 0.2);
+  put('steelDark', BOX, mx, mastBase + 7.5, mz, 8, 0.3, 0.3);
+  put('steelDark', BOX, mx, mastBase + 12, mz, 5, 0.25, 0.25);
+  put('steelLight', BOX, mx, mastBase + 15, mz, 4.6, 2.4, 0.2);
+  for (let k = -2; k <= 2; k++) put('steelDark', BOX, mx + k, mastBase + 15, mz, 0.08, 2.4, 0.26);
+  put('steelLight', DISH, mx, mastBase + 4, mz + 2.4, 1.3, 0.9, 1.3, Math.PI / 2.3, 0, 0);
+  put('flagRed', BOX, mx, mastBase + 17.4, mz, 0.08, 1.4, 2.4);
+  for (const side of [-1, 1]) {
+    put('steelLight', CYL, mx + side * 1.4, mastBase + 1, mz + 1.6, 0.5, 0.6, 0.5, Math.PI / 2, 0, 0);
+    put('lampGlass', CYL, mx + side * 1.4, mastBase + 1, mz + 1.92, 0.4, 0.05, 0.4, Math.PI / 2, 0, 0);
+  }
+  for (const [lz, side] of [[-102, -1], [-102, 1], [104, -1], [104, 1]]) {
+    put('steelDark', CYL, side * (W / 2 - 2), dy + 0.3, lz, 0.5, 0.6, 0.5);
+    put('steelDark', BOX, side * (W / 2 - 2), dy + 1.3, lz, 0.25, 2, 0.25);
+  }
+  for (let k = 0; k < 4; k++) {
+    put('steelLight', BOX, -12 + k * 2.4, dy + 0.5, 52, 1.6, 1, 2.6);
+    put('steelDark', CYL, -12 + k * 2.4 + 0.5, dy + 0.2, 53.6, 0.25, 0.4, 0.25, 0, 0, Math.PI / 2);
+  }
+  for (const [x0, z0] of [[12, -40], [12, -34], [-15, 10]]) {
+    put('steelDark', BOX, x0, dy + 0.5, z0, 2.2, 1, 3.2);
+    put('steelLight', BOX, x0, dy + 1.1, z0 - 0.4, 1.8, 0.4, 1.6);
+  }
   for (const side of [-1, 1]) {
     for (const lz of [-94, -76, -40, 40, 76, 92]) {
       if (side > 0 && lz > -2 && lz < 34) continue;
@@ -198,11 +238,14 @@ export function carrier(batch, x, z, yaw, rand, fires, guns, burning, parked) {
     }
   }
 
-  const slots = burning ? 7 : 14;
+  const slots = burning ? 9 : 18;
   for (let n = 0; n < slots; n++) {
     const row = Math.floor(n / 3);
     const col = n % 3;
-    parked.push({ lx: -10 + col * 9.5, y: dy, lz: -98 + row * 11, yaw: yaw + Math.PI + (rand() - 0.5) * 0.12, scorched: burning && n % 3 === 1 });
+    parked.push({ lx: -11 + col * 9.6 + (row % 2) * 2, y: dy, lz: -100 + row * 10.5, yaw: yaw + Math.PI + (rand() - 0.5) * 0.1, scorched: burning && n % 3 === 1 });
+  }
+  if (!burning) {
+    for (const [lx, lz] of [[-6, 70], [6, 74]]) parked.push({ lx, y: dy, lz, yaw: yaw + (rand() - 0.5) * 0.1, scorched: false });
   }
   if (burning) {
     for (const [fx, fz, size] of [[-6, 40, 12], [8, -10, 10], [-10, -58, 9], [4, 82, 7], [ix, 14, 6]]) {
@@ -211,7 +254,7 @@ export function carrier(batch, x, z, yaw, rand, fires, guns, burning, parked) {
       fires.push(new THREE.Vector3(fx, dy + 0.4, fz));
     }
     put('window', BOX, 0, dy + 0.06, 60, 12, 0.05, 12);
-    put('scorch', BOX, ix, dy + 8, 14, 6.5, 6, 8);
+    put('scorch', BOX, ix - 2.75, dy + 4, 18, 0.1, 5, 8);
   }
   return { L, B: W, top: 46 };
 }

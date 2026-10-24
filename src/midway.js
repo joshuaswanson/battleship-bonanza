@@ -311,10 +311,13 @@ export async function createMidway(group, track, fx) {
     shipCount++;
   };
   const toWorld = (x, z, yaw, v) => v.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw).add(new THREE.Vector3(x, 0, z));
+  const carriers = [];
+  group.userData.carriers = carriers;
   const flatTop = (x, z, yaw, g, burning) => {
     const local = [];
     const spots = [];
-    const size = newCarrier(batch, x, z, yaw, rand, local, g, burning, spots);
+    const size = newCarrier(batch, x, z, yaw, rand, local, g, burning, spots, stacks);
+    carriers.push({ x, z, yaw, burning });
     for (const f of local) fires.push(toWorld(x, z, yaw, f));
     for (const p of spots) {
       const w = toWorld(x, z, yaw, new THREE.Vector3(p.lx, 0, p.lz));
