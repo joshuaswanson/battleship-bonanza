@@ -31,7 +31,7 @@ export const methods = {
       if (b.isPlayer) this.lastLaserDir = dir;
       const reach = LASER_REACH * Math.hypot(1, drop);
       const wall = this.marchSurface(origin, dir, reach);
-      const trunk = this.chopper?.march(origin, dir, wall ? wall.t : reach);
+      const trunk = this.chopper?.march(origin, dir, wall ? wall.t + 3 : reach);
       let hit = this.raycastBoats(origin, dir, trunk ? trunk.t : wall ? wall.t : reach, b);
       if (trunk && !hit) {
         const { tree, point } = trunk;

@@ -113,7 +113,7 @@ export class Chopper {
         const list = this.grid.get(`${cx + dx},${cz + dz}`);
         if (!list) continue;
         for (const t of list) {
-          if (t.cut || p.y < t.base || p.y > t.base + t.height * 0.55) continue;
+          if (t.cut || p.y < t.base - 2.5 || p.y > t.base + t.height * 0.55) continue;
           if (Math.hypot(p.x - t.x, p.z - t.z) < t.radius) return t;
         }
       }
