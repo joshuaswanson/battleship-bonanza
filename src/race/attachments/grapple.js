@@ -122,7 +122,7 @@ export const methods = {
             h.time = 3;
             this.sfx.play('hookCatch', h.target.pos);
             this.sfx.play('winch', o.pos);
-            if (o.isPlayer) this.emit('feed', { text: tr('youHooked', { name: h.target.name }), player: true });
+            if (o.isPlayer) this.emit('feed', { text: tr('youHooked', { name: h.target.name }), item: 'grapple', player: true });
           }
         } else {
           h.pos.addScaledVector(h.dir, HOOK_SPEED * dt);

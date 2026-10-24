@@ -430,7 +430,7 @@ export class Race {
       this.fx.explosion(c.x, c.y, c.z, 0.8);
       this.sfx.play('pop', b.pos);
     }
-    this.emit('feed', { text: tr(`feed_${kind}`, { a: source.name, b: b.name }), player: b.isPlayer || source.isPlayer });
+    this.emit('feed', { kind, item: KIND_ITEM[kind], killer: source, victim: b, player: b.isPlayer || source.isPlayer });
     if (b.isPlayer) this.emit('ko', { source: source.name });
   }
 

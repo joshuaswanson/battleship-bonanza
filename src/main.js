@@ -387,7 +387,7 @@ function showResults() {
 function renderResults() {
   const p = race.player;
   $('results-title').textContent = p.finished ? t('youFinished', { place: ordinal(p.finishOrder), n: p.finishOrder }) : t('raceOver');
-  $('standings').innerHTML = `<li class="st-head"><span></span><span></span><span></span><span></span><span class="st-mini">${t('colDmg')} <i>·</i> ${t('colKo')} <i>·</i> ${t('colSunk')}</span></li>` + race.order
+  $('standings').innerHTML = `<li class="st-head"><span></span><span></span><span></span><span></span><span class="st-mini"><span>${t('colDmg')}</span><span>${t('colKo')}</span><span>${t('colSunk')}</span></span></li>` + race.order
     .map((b) => {
       const time = b.finished ? formatTime(b.finishTime) : t('lapN', { n: b.lap });
       const items = b.items.map(itemInSentence).join(` ${t('and')} `);
@@ -396,7 +396,7 @@ function renderResults() {
         <span class="st-dot" style="--paint:#${b.color.toString(16).padStart(6, '0')}"></span>
         <span class="st-name">${b.name}<small>${items}</small></span>
         <span class="st-time">${time}</span>
-        <span class="st-mini" title="${t('statDealt')} / ${t('statKills')} / ${t('statSunk')}">${Math.round(b.stats.dealt)} <i>·</i> ${b.stats.kills} <i>·</i> ${b.stats.sunk}</span>
+        <span class="st-mini" title="${t('statDealt')} / ${t('statKills')} / ${t('statSunk')}"><span>${Math.round(b.stats.dealt)}</span><span>${b.stats.kills}</span><span>${b.stats.sunk}</span></span>
       </li>`;
     })
     .join('');

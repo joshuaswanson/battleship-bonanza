@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { ITEMS } from './items.js';
+import { ITEMS, iconSvg } from './items.js';
 import { t, ordinal, itemName } from './i18n.js';
 import { MAX_HP } from './race.js';
 import { COUNT_LAND } from './audio.js';
@@ -108,7 +108,7 @@ export class Hud {
     this.slots = [];
     for (const el of this.slotsEl.querySelectorAll('.ability[data-slot]')) this.slots[Number(el.dataset.slot)] = el;
     this.barsEl.innerHTML = race.boats
-      .map((b) => `<div class="boat-bar"><div class="boat-bar-track"><div class="boat-bar-fill"></div></div></div>`)
+      .map((b) => `<div class="boat-bar"><span class="boat-bar-name">${b.name}</span><div class="boat-bar-track"><div class="boat-bar-fill"></div></div></div>`)
       .join('');
     this.bars = [...this.barsEl.children].map((el) => {
       el.style.display = 'none';
@@ -140,14 +140,21 @@ export class Hud {
     this.center.className = `hud-center pop ${kind}`;
   }
 
-  addFeed(text, highlight) {
+  addFeed(e) {
+    const tag = (b) => `<b class="feed-name" style="--paint:#${b.color.toString(16).padStart(6, '0')}">${b.name}</b>`;
     const li = document.createElement('li');
-    li.textContent = text;
-    if (highlight) li.classList.add('mine');
+    const icon = e.item ? `<span class="feed-icon">${iconSvg(e.item)}</span>` : '';
+    if (e.text) {
+      li.innerHTML = icon + '<span class="feed-text"></span>';
+      li.lastChild.textContent = e.text;
+    } else {
+      li.innerHTML = `${icon}<span class="feed-text">${t(`feed_${e.kind}`, { a: tag(e.killer), b: tag(e.victim) })}</span><span class="feed-stamp">${t('sunk')}</span>`;
+    }
+    if (e.player) li.classList.add('mine');
     this.feed.prepend(li);
     while (this.feed.children.length > 4) this.feed.lastChild.remove();
-    setTimeout(() => li.classList.add('fade'), 3500);
-    setTimeout(() => li.remove(), 4200);
+    setTimeout(() => li.classList.add('fade'), 4000);
+    setTimeout(() => li.remove(), 4700);
   }
 
   setWarning(text, time = 1.6) {
@@ -198,7 +205,7 @@ export class Hud {
         this.pop(t('youFinished', { place: ordinal(e.place), n: e.place }), 'go');
         break;
       case 'feed':
-        this.addFeed(e.text, e.player);
+        this.addFeed(e);
         break;
       case 'hurt':
         this.hurtFlash();
@@ -366,7 +373,7 @@ export class Hud {
         bar.shown = visible;
       }
       if (!visible) return;
-      const scale = Math.min(1.15, Math.max(0.45, 26 / dist));
+      const scale = Math.min(1.15, Math.max(0.6, 26 / dist));
       const x = (v.x * 0.5 + 0.5) * innerWidth;
       const y = (-v.y * 0.5 + 0.5) * innerHeight;
       bar.el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -100%) scale(${scale})`;

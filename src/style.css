@@ -1492,22 +1492,134 @@ kbd {
 }
 
 .hud-feed li {
-  padding: 0.3rem 0.75rem;
-  font-weight: 500;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.6rem 0.35rem 0.4rem;
+  font-weight: 600;
   font-size: 0.95rem;
   color: var(--ink);
-  background: rgba(244, 251, 255, 0.92);
-  border: 2px solid var(--ink);
+  background: rgba(244, 251, 255, 0.95);
+  border: 2.5px solid var(--ink);
+  border-radius: 12px;
+  box-shadow: 0 4px 0 var(--ink);
+  transform-origin: 100% 50%;
+  animation: feed-in 520ms cubic-bezier(0.2, 1.6, 0.4, 1) both;
+  transition: opacity 600ms ease, transform 600ms ease;
+}
+
+.hud-feed li::after {
+  content: '';
+  position: absolute;
+  inset: 0;
   border-radius: 10px;
-  transition: opacity 600ms ease;
+  background: #ffffff;
+  pointer-events: none;
+  animation: feed-flash 420ms ease-out both;
 }
 
 .hud-feed li.mine {
+  font-size: 1.08rem;
   background: var(--sun);
+  animation-name: feed-in-big;
 }
 
 .hud-feed li.fade {
   opacity: 0;
+  transform: translateX(40px);
+}
+
+.feed-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 9px;
+  background: var(--ink);
+  color: #ffffff;
+  animation: feed-icon 600ms cubic-bezier(0.2, 1.8, 0.4, 1) 120ms both;
+}
+
+.feed-icon .icon {
+  width: 20px;
+  height: 20px;
+}
+
+.feed-name {
+  padding: 0 0.35rem;
+  border: 2px solid var(--ink);
+  border-radius: 7px;
+  background: var(--paint);
+  font-weight: 800;
+}
+
+.feed-stamp {
+  font-family: var(--race);
+  font-weight: 900;
+  font-size: 1.2rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #ff4141;
+  -webkit-text-stroke: 4px var(--ink);
+  paint-order: stroke fill;
+  transform: rotate(-8deg);
+  animation: feed-stamp 500ms cubic-bezier(0.2, 1.8, 0.4, 1) 200ms both;
+}
+
+@keyframes feed-in {
+  0% {
+    opacity: 0;
+    transform: translateX(120%) scale(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes feed-in-big {
+  0% {
+    opacity: 0;
+    transform: translateX(120%) scale(0.8) rotate(4deg);
+  }
+  60% {
+    transform: scale(1.12) rotate(-2deg);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes feed-flash {
+  0% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes feed-icon {
+  0% {
+    transform: scale(0) rotate(-90deg);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+@keyframes feed-stamp {
+  0% {
+    opacity: 0;
+    transform: scale(2.6) rotate(-20deg);
+  }
+  100% {
+    opacity: 1;
+    transform: rotate(-8deg);
+  }
 }
 
 .hud-center {
@@ -1838,10 +1950,22 @@ kbd {
   top: 0;
   left: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   transform-origin: 50% 100%;
   will-change: transform;
+}
+
+.boat-bar-name {
+  font-family: var(--race);
+  font-weight: 900;
+  font-size: 1.3rem;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  color: #ffffff;
+  -webkit-text-stroke: 4px var(--ink);
+  paint-order: stroke fill;
 }
 
 .boat-bar-track {
@@ -2326,8 +2450,9 @@ kbd {
 }
 
 .st-mini {
-  min-width: 4.6rem;
-  text-align: right;
+  display: grid;
+  grid-template-columns: repeat(3, 3.8rem);
+  text-align: center;
   font-variant-numeric: tabular-nums;
   font-size: 0.85rem;
   color: #4b6889;
@@ -2343,11 +2468,6 @@ kbd {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-}
-
-.st-mini i {
-  font-style: normal;
-  opacity: 0.5;
 }
 
 .race-stats {

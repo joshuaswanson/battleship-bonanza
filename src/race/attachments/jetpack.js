@@ -35,8 +35,8 @@ export const methods = {
       }
       const attacker = threat.kind === 'missile' ? threat.m.owner : threat.h.owner;
       const missile = threat.kind === 'missile';
-      if (b.isPlayer) this.emit('feed', { text: tr(missile ? 'youDodgedMissile' : 'youDodgedHook', { name: attacker.name }), player: true });
-      else if (attacker.isPlayer) this.emit('feed', { text: tr(missile ? 'theyDodgedMissile' : 'theyDodgedHook', { name: b.name }), player: true });
+      if (b.isPlayer) this.emit('feed', { text: tr(missile ? 'youDodgedMissile' : 'youDodgedHook', { name: attacker.name }), item: 'jetpack', player: true });
+      else if (attacker.isPlayer) this.emit('feed', { text: tr(missile ? 'theyDodgedMissile' : 'theyDodgedHook', { name: b.name }), item: 'jetpack', player: true });
     }
     const c = b.center();
     this.fx.ring(c.x, c.y, c.z, 0xffffff, 2, 9, 0.45);
