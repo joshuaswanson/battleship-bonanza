@@ -42,10 +42,23 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(66, 1, 0.5, 3000);
 
+function fitYard() {
+  const yard = document.querySelector('.yard');
+  const w = innerWidth;
+  const h = innerHeight;
+  const compact = h <= 560 && w > h;
+  const fit = compact ? Math.min(w / 900, h / 430) : Math.min(w / 1180, h / 780);
+  const zoom = compact ? Math.min(1.4, Math.max(0.7, fit)) : Math.min(1.8, Math.max(0.5, fit));
+  yard.style.zoom = zoom;
+  yard.style.width = `${w / zoom}px`;
+  yard.style.height = `${h / zoom}px`;
+}
+
 function resize() {
   renderer.setSize(innerWidth, innerHeight, false);
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
+  fitYard();
 }
 addEventListener('resize', resize);
 resize();
