@@ -1658,18 +1658,6 @@ kbd {
   font-weight: 800;
 }
 
-.feed-stamp {
-  font-family: var(--race);
-  font-weight: 900;
-  font-size: 1.2rem;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  color: #ff4141;
-  -webkit-text-stroke: 4px var(--ink);
-  paint-order: stroke fill;
-  transform: rotate(-8deg);
-  animation: feed-stamp 500ms cubic-bezier(0.2, 1.8, 0.4, 1) 200ms both;
-}
 
 @keyframes feed-in {
   0% {
@@ -1714,16 +1702,6 @@ kbd {
   }
 }
 
-@keyframes feed-stamp {
-  0% {
-    opacity: 0;
-    transform: scale(2.6) rotate(-20deg);
-  }
-  100% {
-    opacity: 1;
-    transform: rotate(-8deg);
-  }
-}
 
 .hud-center {
   position: absolute;
@@ -2542,6 +2520,46 @@ kbd {
   font-size: 0.8rem;
   color: #4b6889;
 }
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.2rem;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.08rem 0.5rem 0.08rem 0.3rem;
+  font-style: normal;
+  font-weight: 700;
+  font-size: 0.72rem;
+  color: var(--ink);
+  background: #ffffff;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  box-shadow: 0 2px 0 var(--ink);
+  white-space: nowrap;
+}
+
+.badge svg {
+  width: 15px;
+  height: 15px;
+  fill: currentColor;
+  stroke: var(--ink);
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+}
+
+.badge-winner { background: #ffd23f; }
+.badge-damage { background: #ff8a7a; }
+.badge-sinks { background: #ffb36b; }
+.badge-tank { background: #8fd3f4; }
+.badge-fishFood { background: #b8e986; }
+.badge-air { background: #d6b8ff; }
+.badge-sinks svg, .badge-fishFood svg { fill: none; }
 
 .st-time {
   font-variant-numeric: tabular-nums;

@@ -169,6 +169,7 @@ export class TrackFeatures {
           f.used.set(b, race.time + 2);
           const power = Math.min(1.4, speed / fast(40));
           b.air = { t: 0, dur: 0.9 + power * 0.5, peak: 4 + power * 4, jet: false };
+          b.stats.jumps++;
           b.boost = Math.max(b.boost, 1.2);
           b.speed += fast(6);
           this.fx.splash(b.pos.x, b.waterY, b.pos.z, 0.8);

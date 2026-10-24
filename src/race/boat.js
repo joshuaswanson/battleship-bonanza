@@ -41,7 +41,7 @@ export class Boat {
     this.lastFired = -Infinity;
     this.regenerating = false;
     this.disabled = 0;
-    this.stats = { dealt: 0, taken: 0, sunk: 0, kills: 0, top: 0, byItem: {} };
+    this.stats = { dealt: 0, taken: 0, sunk: 0, kills: 0, top: 0, jumps: 0, byItem: {} };
     this.shadow = new THREE.Mesh(SHADOW_GEOMETRY, shadowMaterial());
     this.shadow.renderOrder = 1;
     scene.add(this.shadow);
