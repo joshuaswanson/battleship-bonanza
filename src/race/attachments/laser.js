@@ -30,7 +30,24 @@ export const methods = {
       const origin = pointLaserGun(b.model, dir, new THREE.Vector3());
       if (b.isPlayer) this.lastLaserDir = dir;
       const reach = LASER_REACH * Math.hypot(1, drop);
-      const hit = this.raycastBoats(origin, dir, reach, b);
+      const wall = this.marchSurface(origin, dir, reach);
+      let hit = this.raycastBoats(origin, dir, wall ? wall.t : reach, b);
+      if (wall && !hit) {
+        const end = wall.point;
+        this.fx.beam(origin, end, 0xff2a2a, 0.5, 0.05, 1);
+        const gap = b.lastBurn ? b.lastBurn.distanceTo(end) : Infinity;
+        if (gap > 0.3) {
+          const steps = gap < 5 ? Math.ceil(gap / 0.3) : 1;
+          for (let k = 1; k <= steps; k++) {
+            const at = steps > 1 ? b.lastBurn.clone().lerp(end, k / steps) : end;
+            this.fx.impact('burn', at, wall.normal, 0.8 + Math.random() * 0.3);
+          }
+          b.lastBurn = end.clone();
+        }
+        if (Math.random() < 0.5) this.fx.sparkBurst(end.x, end.y, end.z, 0xffb070, 3);
+        if (Math.random() < 0.25) this.fx.smoke(end.x + wall.normal.x * 0.4, end.y + 0.3, end.z + wall.normal.z * 0.4);
+        continue;
+      }
       const shielded = hit && hit.boat.model.sawYaw && this.inArc(hit.boat, hit.boat.items.indexOf('saw'), origin.x, origin.z);
       const end = shielded ? this.shieldAgainst(hit.boat, b) : origin.clone().addScaledVector(dir, hit ? hit.t : reach);
       this.fx.beam(origin, end, 0xff2a2a, 0.5, 0.05, 1);

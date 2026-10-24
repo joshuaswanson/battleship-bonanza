@@ -23,7 +23,18 @@ export const methods = {
         m.dir.y = approach(m.dir.y, -0.04, dt);
         m.dir.normalize();
       }
+      const before = m.pos.clone();
       m.pos.addScaledVector(m.dir, m.speed * dt);
+      const wall = m.fizzle > 0 ? null : this.surfaceHit(before, m.pos);
+      if (wall) {
+        m.pos.copy(wall.point);
+        this.fx.impact('crater', wall.point, wall.normal, 3.2 + Math.random() * 1.2);
+        for (let i = 0; i < 10; i++) {
+          const v = wall.normal.clone().multiplyScalar(6 + Math.random() * 6).add(new THREE.Vector3((Math.random() - 0.5) * 8, Math.random() * 6, (Math.random() - 0.5) * 8));
+          this.fx.puffs.emit(wall.point.x, wall.point.y, wall.point.z, v.x, v.y, v.z, 0.25 + Math.random() * 0.25, 0.9, 0x8f877b, 18, 0.5, 1);
+        }
+        return this.explodeMissile(m, null, 0.9);
+      }
       this.fx.smoke(m.pos.x - m.dir.x, m.pos.y - m.dir.y, m.pos.z - m.dir.z);
       m.mesh.position.copy(m.pos);
       m.mesh.lookAt(c.copy(m.pos).add(m.dir));

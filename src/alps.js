@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { createWater } from './water.js';
 import { toon, mulberry32 } from './toon.js';
 import { Batcher, cullChunks, slicer, COLORS, mat, ROCK, createSky, createCloud, createArch, SUN_DIR } from './world.js';
-import { courseSurface, buildHeightfield, courseBuoys, swissFlag, flagClock, smooth, noise } from './terrain.js';
+import { courseSurface, buildHeightfield, courseBuoys, swissFlag, flagClock, groundHit, smooth, noise } from './terrain.js';
 import { FLORA_COLORS, tree, sapling, boulder, cow, loadCowKit } from './alpine.js';
 import { LANDMARK_COLORS, castle, coveredBridge, waterTower, buildSteamer, chalet } from './alpsLandmarks.js';
 
@@ -349,6 +349,12 @@ export async function createAlps(group, track, fx) {
     sun,
     surface,
     shores,
+    solid(p) {
+      if (Math.hypot(p.x - castleAt.p.x, p.z - castleAt.p.z) < 17 && p.y < 16) {
+        return new THREE.Vector3(p.x - castleAt.p.x, 0, p.z - castleAt.p.z).normalize();
+      }
+      return groundHit(height, p);
+    },
     update(t, dt, camera) {
       water.update(t);
       cullChunks(chunks, camera, fog.far);

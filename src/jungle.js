@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { createWater } from './water.js';
 import { toon, glow, mulberry32 } from './toon.js';
+import { groundHit } from './terrain.js';
 import { Batcher, cullChunks, slicer, COLORS, mat, CONE, ROCK, addPalm, createSky, createCloud, createArch, SUN_DIR } from './world.js';
 
 const CELL = 3;
@@ -112,6 +113,7 @@ export async function riverSurface(track, tick) {
       const along = (x - px[i]) * tx[i] + (z - pz[i]) * tz[i];
       const s = i * spacing + along;
       out.s = s;
+      out.idx = i;
       out.level = track.level(s);
       out.amp = track.inTunnel(s) ? 0.2 : RIVER_AMP;
       out.dist = Math.hypot(x - px[i], z - pz[i]);
@@ -1153,6 +1155,16 @@ export async function createJungle(group, track, fx) {
     sun,
     surface,
     shores: [],
+    solid(p) {
+      const { s, dist, idx, level } = surface.sample(p.x, p.z);
+      if (track.inTunnel(s)) {
+        if (dist < track.halfWidth + 6 && p.y < level + ARCH_TOP - 4) return null;
+        const i = track.wrap(idx);
+        const side = (p.x - track.px[i]) * track.nx[i] + (p.z - track.pz[i]) * track.nz[i] > 0 ? 1 : -1;
+        return p.y >= level + ARCH_TOP - 4 ? new THREE.Vector3(0, -1, 0) : new THREE.Vector3(-track.nx[i] * side, 0, -track.nz[i] * side);
+      }
+      return groundHit((x, z) => terrainHeight(surface, track, x, z), p);
+    },
     update(t, dt, camera) {
       water.update(t);
       cullChunks(chunks, camera, fog.far);

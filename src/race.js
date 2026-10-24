@@ -31,8 +31,9 @@ const MODULES = [machinegun, missiles, mines, grapple, emp, jetpack, laser, flam
 export class Race {
   actions = Object.assign({}, ...MODULES.map((m) => m.actions ?? {}));
 
-  constructor({ scene, track, fx, sfx, defs, shores = [], attract = false, laps = LAPS }) {
+  constructor({ scene, track, fx, sfx, defs, shores = [], solid = null, attract = false, laps = LAPS }) {
     this.shores = shores;
+    this.solid = solid;
     this.scene = scene;
     this.track = track;
     this.fx = fx;
@@ -410,6 +411,34 @@ export class Race {
     if (target.isPlayer) this.emit('hurt', { amount, kind, source: source.name });
     if (target.hp <= 0) this.knockOut(target, source, kind);
     return true;
+  }
+
+  surfaceHit(from, to) {
+    if (!this.solid) return null;
+    const normal = this.solid(to);
+    if (!normal) return null;
+    const a = from.clone();
+    const b = to.clone();
+    const mid = new THREE.Vector3();
+    for (let i = 0; i < 6; i++) {
+      mid.addVectors(a, b).multiplyScalar(0.5);
+      if (this.solid(mid)) b.copy(mid);
+      else a.copy(mid);
+    }
+    return { point: a, normal: this.solid(b) ?? normal };
+  }
+
+  marchSurface(origin, dir, reach, step = 1.2) {
+    if (!this.solid) return null;
+    const prev = origin.clone();
+    const p = new THREE.Vector3();
+    for (let t = step; t <= reach; t += step) {
+      p.copy(origin).addScaledVector(dir, t);
+      const hit = this.surfaceHit(prev, p);
+      if (hit) return { ...hit, t: hit.point.distanceTo(origin) };
+      prev.copy(p);
+    }
+    return null;
   }
 
   knockOut(b, source, kind) {

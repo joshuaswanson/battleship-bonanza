@@ -89,7 +89,7 @@ export class Recorder {
     this.mats = race.boats.flatMap((b) => boatMaterials(b));
     this.size = this.nodes.length * STRIDE + this.mats.length + race.boats.length * 7;
     this.pools = [fx.puffs, fx.sparks, fx.casings].map((pool) => [pool, 'emit']);
-    this.pools.push([fx.rings, 'take'], [fx.beams, 'take'], [fx.shells, 'take'], [fx.lightning, 'add']);
+    this.pools.push([fx.rings, 'take'], [fx.beams, 'take'], [fx.shells, 'take'], [fx.lightning, 'add'], [fx.decals, 'stamp']);
     for (const [pool, name] of this.pools) {
       const original = pool[name].bind(pool);
       pool[name] = (...args) => {
@@ -168,6 +168,7 @@ export class Replay {
     this.frame = 0;
     this.event = 0;
     while (this.event < recorder.events.length && recorder.events[this.event].t < this.time) this.event++;
+    recorder.fx.decals.clear();
     this.shown = new Set();
     this.ropes = new Map();
     this.race.bulletMesh.count = 0;

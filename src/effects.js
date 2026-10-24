@@ -329,6 +329,101 @@ class Lightning {
   }
 }
 
+function decalTexture(kind) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  if (kind === 'hole') {
+    const rim = g.createRadialGradient(32, 32, 4, 32, 32, 22);
+    rim.addColorStop(0, 'rgba(20,18,16,1)');
+    rim.addColorStop(0.35, 'rgba(45,40,36,0.95)');
+    rim.addColorStop(0.6, 'rgba(70,64,58,0.55)');
+    rim.addColorStop(1, 'rgba(70,64,58,0)');
+    g.fillStyle = rim;
+    g.fillRect(0, 0, 64, 64);
+    g.strokeStyle = 'rgba(30,26,22,0.8)';
+    g.lineWidth = 1.5;
+    for (let k = 0; k < 6; k++) {
+      const a = (k / 6) * Math.PI * 2 + k;
+      g.beginPath();
+      g.moveTo(32 + Math.cos(a) * 7, 32 + Math.sin(a) * 7);
+      g.lineTo(32 + Math.cos(a + 0.3) * 15, 32 + Math.sin(a + 0.3) * 15);
+      g.lineTo(32 + Math.cos(a) * (19 + (k % 3) * 3), 32 + Math.sin(a) * (19 + (k % 3) * 3));
+      g.stroke();
+    }
+    g.fillStyle = 'rgba(8,8,8,1)';
+    g.beginPath();
+    g.arc(32, 32, 5, 0, Math.PI * 2);
+    g.fill();
+  } else {
+    const soot = g.createRadialGradient(32, 32, 2, 32, 32, 31);
+    soot.addColorStop(0, kind === 'burn' ? 'rgba(40,10,4,0.95)' : 'rgba(12,10,9,0.95)');
+    soot.addColorStop(0.45, 'rgba(20,16,14,0.7)');
+    soot.addColorStop(1, 'rgba(20,16,14,0)');
+    g.fillStyle = soot;
+    g.fillRect(0, 0, 64, 64);
+    for (let k = 0; k < 14; k++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = 10 + Math.random() * 16;
+      g.fillStyle = 'rgba(15,12,10,0.45)';
+      g.beginPath();
+      g.arc(32 + Math.cos(a) * r, 32 + Math.sin(a) * r, 2 + Math.random() * 5, 0, Math.PI * 2);
+      g.fill();
+    }
+    if (kind === 'burn') {
+      const ember = g.createRadialGradient(32, 32, 0, 32, 32, 9);
+      ember.addColorStop(0, 'rgba(255,140,60,0.9)');
+      ember.addColorStop(1, 'rgba(255,90,30,0)');
+      g.fillStyle = ember;
+      g.fillRect(0, 0, 64, 64);
+    }
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+class Decals {
+  constructor(scene, max = 500) {
+    this.max = max;
+    this.kinds = {};
+    const plane = new THREE.PlaneGeometry(1, 1);
+    for (const kind of ['hole', 'burn', 'crater']) {
+      const material = new THREE.MeshBasicMaterial({ map: decalTexture(kind), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+      const mesh = new THREE.InstancedMesh(plane, material, max);
+      mesh.count = 0;
+      mesh.frustumCulled = false;
+      mesh.renderOrder = 2;
+      scene.add(mesh);
+      this.kinds[kind] = { mesh, next: 0, used: 0 };
+    }
+    this.m = new THREE.Matrix4();
+    this.q = new THREE.Quaternion();
+    this.spin = new THREE.Quaternion();
+    this.z = new THREE.Vector3(0, 0, 1);
+    this.s = new THREE.Vector3();
+  }
+
+  stamp(kind, pos, normal, size, spin = 0) {
+    const k = this.kinds[kind];
+    this.q.setFromUnitVectors(this.z, normal).multiply(this.spin.setFromAxisAngle(this.z, spin));
+    this.m.compose(pos, this.q, this.s.set(size, size, size));
+    k.mesh.setMatrixAt(k.next, this.m);
+    k.next = (k.next + 1) % this.max;
+    k.used = Math.min(this.max, k.used + 1);
+    k.mesh.count = k.used;
+    k.mesh.instanceMatrix.needsUpdate = true;
+  }
+
+  clear() {
+    for (const k of Object.values(this.kinds)) {
+      k.next = 0;
+      k.used = 0;
+      k.mesh.count = 0;
+    }
+  }
+}
+
 export class Effects {
   constructor(scene, surface = waveHeight) {
     this.puffs = new ParticlePool(scene, toon(0xffffff, { emissive: 0x6f93ad }), 4200);
@@ -342,6 +437,7 @@ export class Effects {
     this.clock = 0;
     this.shells = new Transient(scene, new THREE.SphereGeometry(1, 32, 20), 6, true);
     this.casings = new CasingPool(scene, 240);
+    this.decals = new Decals(scene);
     this.casings.surface = surface;
   }
 
@@ -515,6 +611,11 @@ export class Effects {
       const t = 0.3 + r() * 0.2;
       this.puffs.emit(origin.x + dir.x * 10, origin.y + 0.5, origin.z + dir.z * 10, dir.x * 6, 2 + r() * 2, dir.z * 6, 0.9 + r() * 0.6, 0.7 + t, r() < 0.5 ? 0x6b6f78 : 0x8c9099, -2, 1, 0);
     }
+  }
+
+  impact(kind, pos, normal, size) {
+    const p = pos.clone().addScaledVector(normal, 0.04);
+    this.decals.stamp(kind, p, normal, size, Math.random() * Math.PI * 2);
   }
 
   scorch(x, y, z) {

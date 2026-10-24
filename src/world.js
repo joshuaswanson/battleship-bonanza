@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { createWater, waveHeight } from './water.js';
+import { ellipseHit } from './terrain.js';
 import { toon, outlineMaterial, mulberry32 } from './toon.js';
 
 const SKY_TOP = 0x3fa9f5;
@@ -1108,6 +1109,10 @@ export function createWorld(scene, track) {
     sun,
     islands,
     shores,
+    solid(p) {
+      if (p.z > mainlandEdge(p.x) && p.y < 70) return new THREE.Vector3(0, 0, -1);
+      return ellipseHit(shores, p);
+    },
     stacks,
     update(t, dt, camera) {
       water.update(t);

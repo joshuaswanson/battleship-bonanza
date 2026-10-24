@@ -187,6 +187,7 @@ function newRace(attract, map = pickMap(attract)) {
   replay = null;
   $('replay-ui').classList.add('hidden');
   race?.dispose();
+  fx.decals.clear();
   useVenue(map);
   race = new Race({ scene, track: current.track, fx, sfx: attract ? SILENT : sfx, shores: current.world.shores, solid: current.world.solid, defs: makeDefs(attract ? null : setup), attract });
   if (!attract) recorder = new Recorder(race, fx);

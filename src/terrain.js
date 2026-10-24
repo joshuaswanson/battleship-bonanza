@@ -207,3 +207,29 @@ export function swissFlag(batch, group, x, y, z, yaw, size = 1) {
 const POLE = new THREE.CylinderGeometry(0.12, 0.12, 1, 8);
 const KNOB = new THREE.SphereGeometry(1, 10, 8);
 const BOX = new THREE.BoxGeometry(1, 1, 1);
+
+export function ellipseHit(blobs, p, top = 120) {
+  if (p.y > top) return null;
+  for (const b of blobs) {
+    const dx = p.x - b.x;
+    const dz = p.z - b.z;
+    if (Math.abs(dx) > b.rx + b.rz || Math.abs(dz) > b.rx + b.rz) continue;
+    const c = Math.cos(b.rot);
+    const s = Math.sin(b.rot);
+    const lx = dx * c - dz * s;
+    const lz = dx * s + dz * c;
+    if ((lx / b.rx) ** 2 + (lz / b.rz) ** 2 >= 1) continue;
+    const gx = lx / (b.rx * b.rx);
+    const gz = lz / (b.rz * b.rz);
+    return new THREE.Vector3(gx * c + gz * s, 0, -gx * s + gz * c).normalize();
+  }
+  return null;
+}
+
+export function groundHit(height, p) {
+  if (p.y >= height(p.x, p.z)) return null;
+  const e = 0.8;
+  const gx = (height(p.x + e, p.z) - height(p.x - e, p.z)) / (2 * e);
+  const gz = (height(p.x, p.z + e) - height(p.x, p.z - e)) / (2 * e);
+  return new THREE.Vector3(-gx, 1, -gz).normalize();
+}
