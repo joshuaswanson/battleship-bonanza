@@ -930,11 +930,11 @@ function addLighthouse(batch, x, z, baseY) {
   batch.add('stripeRed', SPHERE, mat(x, top + 5, z, 0.5, 0.5, 0.5));
 }
 
-export function createSky() {
+export function createSky({ top = SKY_TOP, horizon = SKY_HORIZON } = {}) {
   const material = new THREE.ShaderMaterial({
     uniforms: {
-      uTop: { value: new THREE.Color(SKY_TOP) },
-      uHorizon: { value: new THREE.Color(SKY_HORIZON) },
+      uTop: { value: new THREE.Color(top) },
+      uHorizon: { value: new THREE.Color(horizon) },
       uSunDir: { value: SUN_DIR.clone() },
     },
     vertexShader: /* glsl */ `
@@ -967,14 +967,14 @@ export function createSky() {
   return mesh;
 }
 
-export function createCloud(rand) {
+export function createCloud(rand, color = null) {
   const parts = [];
   const puffs = 4 + Math.floor(rand() * 4);
   for (let i = 0; i < puffs; i++) {
     const s = 9 + rand() * 9;
     parts.push(LOW_SPHERE.clone().applyMatrix4(mat((i - puffs / 2) * 9 + rand() * 4, rand() * 5, rand() * 10 - 5, s * 1.2, s * 0.8, s)));
   }
-  return new THREE.Mesh(mergeGeometries(parts), toon(0xffffff, { emissive: 0x9bd9ff, emissiveIntensity: 0.25 }));
+  return new THREE.Mesh(mergeGeometries(parts), color ? toon(color) : toon(0xffffff, { emissive: 0x9bd9ff, emissiveIntensity: 0.25 }));
 }
 
 function createMarkerBuoy(kind) {

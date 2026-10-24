@@ -428,6 +428,7 @@ export class Effects {
   constructor(scene, surface = waveHeight) {
     this.puffs = new ParticlePool(scene, toon(0xffffff, { emissive: 0x6f93ad }), 4200);
     this.sparks = new ParticlePool(scene, glow(0xffffff), 900);
+    this.soot = new ParticlePool(scene, toon(0xffffff), 1800);
     this.fire = new ParticlePool(scene, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.92, depthWrite: false }), 2600);
     this.fire.mesh.renderOrder = 6;
     this.fireMid = new ParticlePool(scene, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95, depthWrite: false }), 1600);
@@ -457,6 +458,7 @@ export class Effects {
   update(dt) {
     this.puffs.update(dt);
     this.sparks.update(dt);
+    this.soot.update(dt);
     this.fire.update(dt);
     this.fireMid.update(dt);
     this.fireCore.update(dt);
@@ -591,9 +593,14 @@ export class Effects {
     this.sparks.emit(x, y, z, carry.x + (r() - 0.5) * 3, 4 + r() * 5, carry.z + (r() - 0.5) * 3, 0.1 + r() * 0.12, 0.6 + r() * 0.6, color, -2, 1.2, 1);
   }
 
+  column(x, y, z, drift, size = 1) {
+    const r = Math.random;
+    this.soot.emit(x + (r() - 0.5) * 3 * size, y, z + (r() - 0.5) * 3 * size, drift.x + (r() - 0.5), 5 + r() * 3, drift.z + (r() - 0.5), (2.5 + r() * 2) * size, 5 + r() * 3, r() < 0.5 ? 0x1f2024 : 0x34363b, -1.2, 0.15, 0);
+  }
+
   blackSmoke(x, y, z, carry) {
     const r = Math.random;
-    this.puffs.emit(x, y, z, carry.x * 0.9 + (r() - 0.5) * 1.5, 3 + r() * 2, carry.z * 0.9 + (r() - 0.5) * 1.5, 0.8 + r() * 0.6, 1 + r() * 0.4, r() < 0.5 ? 0x3d3f46 : 0x5c5f68, -2, 0.3, 0);
+    this.soot.emit(x, y, z, carry.x * 0.9 + (r() - 0.5) * 1.5, 3 + r() * 2, carry.z * 0.9 + (r() - 0.5) * 1.5, 0.8 + r() * 0.6, 1 + r() * 0.4, r() < 0.5 ? 0x2a2b30 : 0x45474e, -2, 0.3, 0);
   }
 
   bubbles(x, y, z) {
