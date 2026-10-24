@@ -1057,6 +1057,7 @@ kbd {
   z-index: 1;
   display: flex;
   align-items: flex-end;
+  height: calc(2.55rem + 8px);
   gap: 0.35rem;
   padding: 0 1.1rem;
   margin-bottom: -4px;
@@ -1064,7 +1065,7 @@ kbd {
 
 .tab {
   flex: 1;
-  padding: 0.5rem 0.6rem 0.45rem;
+  padding: 0.4rem 0.6rem 0.45rem;
   font-family: var(--race);
   font-weight: 800;
   font-size: 1.3rem;
@@ -1074,7 +1075,7 @@ kbd {
   border: 4px solid var(--ink);
   border-radius: 16px 16px 0 0;
   cursor: pointer;
-  transition: background-color 120ms ease, color 120ms ease;
+  transition: background-color 120ms ease, color 120ms ease, padding 120ms ease;
 }
 
 .tab:hover {
@@ -1082,6 +1083,7 @@ kbd {
 }
 
 .tab[aria-selected='true'] {
+  padding-top: 0.6rem;
   padding-bottom: calc(0.45rem + 4px);
   border-bottom: none;
   color: var(--ink);
@@ -2821,16 +2823,18 @@ kbd {
     font-size: 1.05rem;
   }
   .tabs {
+    height: calc(1.7rem + 6px);
     padding: 0 0.6rem;
     margin-bottom: -3px;
   }
   .tab {
     font-size: 0.95rem;
-    padding: 0.28rem 0.4rem 0.25rem;
+    padding: 0.2rem 0.4rem 0.25rem;
     border-width: 3px;
     border-radius: 10px 10px 0 0;
   }
   .tab[aria-selected='true'] {
+    padding-top: 0.32rem;
     padding-bottom: calc(0.25rem + 3px);
   }
   .slot-chip {
