@@ -10,6 +10,7 @@ import { createWorld } from './world.js';
 import { createJungle } from './jungle.js';
 import { createAlps } from './alps.js';
 import { createVenice } from './venice.js';
+import { createMidway } from './midway.js';
 import { MAPS } from './maps.js';
 import { Recorder, Replay } from './replay.js';
 import { Hints } from './hints.js';
@@ -109,7 +110,7 @@ function prepareVenue(id) {
     const track = createTrack(MAPS[id]);
     const group = new THREE.Group();
     group.visible = false;
-    const builders = { jungle: createJungle, alps: createAlps, venice: createVenice };
+    const builders = { jungle: createJungle, alps: createAlps, venice: createVenice, midway: createMidway };
     const world = builders[id] ? await builders[id](group, track, fx) : createWorld(group, track);
     scene.add(group);
     venues[id] = { track, world, group };
@@ -333,7 +334,7 @@ async function wipe(fn) {
   wiping = false;
 }
 
-const MAP_CHOICES = ['bay', 'jungle', 'alps', 'venice', 'random'];
+const MAP_CHOICES = ['bay', 'jungle', 'alps', 'venice', 'midway', 'random'];
 const die = (pips, cls) => `<svg class="die ${cls}" viewBox="0 0 40 40"><rect x="3" y="3" width="34" height="34" rx="9" fill="#fff" stroke="#0E2A47" stroke-width="3.5"/>${pips.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="3.6" fill="#0E2A47"/>`).join('')}</svg>`;
 const DICE = die([[12, 12], [20, 20], [28, 28]], 'die-a') + die([[12, 12], [28, 12], [12, 28], [28, 28], [20, 20]], 'die-b');
 function renderMaps() {

@@ -44,6 +44,15 @@ const shots = {
     c.position.set(t.px[k], 5, t.pz[k]);
     c.lookAt(t.px[r], 9, t.pz[r]);
   },
+  midway: () => {
+    let c = null;
+    window.__bb.scene.traverse((o) => {
+      if (o.userData.burningCarrier) c = o.userData.burningCarrier;
+    });
+    const cam = window.__bb.camera;
+    cam.position.set(c.x + Math.cos(c.yaw) * 70 + Math.sin(c.yaw) * 60, 14, c.z - Math.sin(c.yaw) * 70 + Math.cos(c.yaw) * 60);
+    cam.lookAt(c.x, 24, c.z);
+  },
 };
 const only = process.argv[2]?.split(',');
 for (const [map, aim] of Object.entries(shots)) {
@@ -51,7 +60,7 @@ for (const [map, aim] of Object.entries(shots)) {
   const { browser, page } = await launch({ width: 960, height: 600 });
   await startRace(page, { map });
   await waitForGo(page);
-  await wait(1500);
+  await wait(map === 'midway' ? 4000 : 1500);
   await page.evaluate(() => {
     document.getElementById('ui').style.display = 'none';
     document.getElementById('hud').style.display = 'none';
