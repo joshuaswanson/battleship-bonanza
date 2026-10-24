@@ -24,6 +24,8 @@ Pass or fail tests. `node tools/checks/all.mjs` runs all of them and lists the f
 | `seeker.mjs` | Missile tracking and lock on markers |
 | `laseraim.mjs` | The laser beam leaves the barrel |
 | `burns.mjs [map]` | Laser burn marks while hot and after cooling |
+| `collider.mjs [map]` | The collision index matches three.js raycasts against the drawn scenery |
+| `laserwalls.mjs [map] [spots] [tag]` | Sweeps the laser across buildings around the course and checks that every burn sits on a surface |
 | `bulletsplash.mjs` | Machine gun bullets splash into the water |
 | `chop.mjs [map]` | The laser fells trees |
 | `river.mjs` | The jungle cave lift and the waterfall jump |

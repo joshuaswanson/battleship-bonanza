@@ -31,9 +31,10 @@ const MODULES = [machinegun, missiles, mines, grapple, emp, jetpack, laser, flam
 export class Race {
   actions = Object.assign({}, ...MODULES.map((m) => m.actions ?? {}));
 
-  constructor({ scene, track, fx, sfx, defs, shores = [], solid = null, chopper = null, attract = false, laps = LAPS }) {
+  constructor({ scene, track, fx, sfx, defs, shores = [], solid = null, raycast = null, chopper = null, attract = false, laps = LAPS }) {
     this.shores = shores;
     this.solid = solid;
+    this.raycast = raycast;
     this.chopper = chopper;
     this.scene = scene;
     this.track = track;
@@ -415,6 +416,11 @@ export class Race {
   }
 
   surfaceHit(from, to) {
+    if (this.raycast) {
+      const dir = to.clone().sub(from);
+      const length = dir.length();
+      return length > 0 ? this.raycast(from, dir.divideScalar(length), length) : null;
+    }
     if (!this.solid) return null;
     const normal = this.solid(to);
     if (!normal) return null;
@@ -429,7 +435,34 @@ export class Race {
     return { point: a, normal: this.solid(b) ?? normal };
   }
 
+  stampDecal(kind, point, normal, size) {
+    if (this.raycast) {
+      const u = new THREE.Vector3(normal.z, 0, -normal.x);
+      if (u.lengthSq() < 1e-6) u.set(1, 0, 0);
+      u.normalize();
+      const v = new THREE.Vector3().crossVectors(normal, u);
+      const back = normal.clone().negate();
+      const from = new THREE.Vector3();
+      const fits = (r) => {
+        for (let k = 0; k < 6; k++) {
+          const a = (k / 6) * Math.PI * 2;
+          from.copy(point).addScaledVector(u, Math.cos(a) * r).addScaledVector(v, Math.sin(a) * r).addScaledVector(normal, 0.35);
+          const hit = this.raycast(from, back, 0.7);
+          if (!hit || hit.normal.dot(normal) < 0.8) return false;
+        }
+        return true;
+      };
+      let tries = 0;
+      while (!fits(size * 0.42)) {
+        if (tries++ === 4) return;
+        size *= 0.68;
+      }
+    }
+    this.fx.impact(kind, point, normal, size);
+  }
+
   marchSurface(origin, dir, reach, step = 1.2) {
+    if (this.raycast) return this.raycast(origin, dir, reach);
     if (!this.solid) return null;
     const prev = origin.clone();
     const p = new THREE.Vector3();

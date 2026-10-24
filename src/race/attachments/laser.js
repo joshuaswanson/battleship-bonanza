@@ -50,8 +50,20 @@ export const methods = {
         if (gap > 0.3) {
           const steps = gap < 5 ? Math.ceil(gap / 0.3) : 1;
           for (let k = 1; k <= steps; k++) {
-            const at = steps > 1 ? b.lastBurn.clone().lerp(end, k / steps) : end;
-            this.fx.impact('burn', at, wall.normal, 0.8 + Math.random() * 0.3);
+            let at = end;
+            let normal = wall.normal;
+            let extent = wall.extent;
+            if (k < steps) {
+              at = b.lastBurn.clone().lerp(end, k / steps);
+              if (this.raycast) {
+                const toward = at.clone().sub(origin);
+                const length = toward.length();
+                const between = this.raycast(origin, toward.divideScalar(length), length + 1.5);
+                if (!between || between.t < length - 1.5) continue;
+                ({ point: at, normal, extent } = between);
+              }
+            }
+            this.stampDecal('burn', at, normal, Math.min(0.8 + Math.random() * 0.3, (extent ?? Infinity) * 0.75));
           }
           b.lastBurn = end.clone();
         }

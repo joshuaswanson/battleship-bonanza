@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { Collider } from './collider.js';
 import { createWater } from './water.js';
 import { toon, glow, mulberry32 } from './toon.js';
 import { Batcher, cullChunks, slicer, COLORS, mat, createSky, createCloud, createArch, SUN_DIR } from './world.js';
@@ -188,42 +189,6 @@ function canalWalls(track, landAt) {
   return new THREE.Mesh(geometry, toon(0xffffff, { vertexColors: true, side: THREE.DoubleSide }));
 }
 
-function blockGrid() {
-  const cell = 24;
-  const cells = new Map();
-  const key = (cx, cz) => `${cx},${cz}`;
-  return {
-    add(x, z, yaw, w, d, h) {
-      const block = { x, z, c: Math.cos(yaw), s: Math.sin(yaw), w: w / 2, d: d / 2, top: WALL_TOP + h };
-      const r = Math.hypot(w, d) / 2;
-      for (let cx = Math.floor((x - r) / cell); cx <= Math.floor((x + r) / cell); cx++) {
-        for (let cz = Math.floor((z - r) / cell); cz <= Math.floor((z + r) / cell); cz++) {
-          const k = key(cx, cz);
-          if (!cells.has(k)) cells.set(k, []);
-          cells.get(k).push(block);
-        }
-      }
-    },
-    hit(p) {
-      const list = cells.get(key(Math.floor(p.x / cell), Math.floor(p.z / cell)));
-      if (!list) return null;
-      for (const b of list) {
-        const dx = p.x - b.x;
-        const dz = p.z - b.z;
-        const lx = dx * b.c - dz * b.s;
-        const lz = dx * b.s + dz * b.c;
-        if (Math.abs(lx) >= b.w || Math.abs(lz) >= b.d || p.y >= b.top) continue;
-        const px = b.w - Math.abs(lx);
-        const pz = b.d - Math.abs(lz);
-        if (b.top - p.y < Math.min(px, pz)) return new THREE.Vector3(0, 1, 0);
-        if (px < pz) return new THREE.Vector3(b.c * Math.sign(lx), 0, -b.s * Math.sign(lx));
-        return new THREE.Vector3(b.s * Math.sign(lz), 0, b.c * Math.sign(lz));
-      }
-      return null;
-    },
-  };
-}
-
 export async function createVenice(group, track, fx) {
   const tick = slicer();
   const fog = new THREE.Fog(0xe6f0f2, 420, 950);
@@ -265,7 +230,6 @@ export async function createVenice(group, track, fx) {
   const taken = [];
   const free = (x, z, r) => !taken.some((o) => Math.hypot(o.x - x, o.z - z) < o.r + r);
   const shores = [];
-  const blocks = blockGrid();
 
   const landSide = landAt(0, 1) ? 1 : -1;
   const landmarkSpots = landmarks(batch, group, track, 0, landSide);
@@ -324,7 +288,6 @@ export async function createVenice(group, track, fx) {
       if (!corner) continue;
       building(batch, windows, c.x, c.z, yaw, w, d, h, rand, { canal: true, onWater: front < hw + 1, color: FACADES[Math.floor(rand() * FACADES.length)] });
       taken.push({ x: c.x, z: c.z, r: Math.min(w, d) / 2 });
-      blocks.add(c.x, c.z, yaw, w, d, h);
       if (rand() < 0.3) {
         const pp = track.point(mid, side * (hw - 0.4));
         const color = ['poleBlue', 'poleRed'][Math.floor(rand() * 2)];
@@ -356,7 +319,6 @@ export async function createVenice(group, track, fx) {
       const yaw = track.heading(s.idx);
       building(batch, windows, x, z, yaw, w, d, 10 + rand() * 14, rand, { color: FACADES[Math.floor(rand() * FACADES.length)] });
       taken.push({ x, z, r: Math.max(w, d) * 0.45 });
-      blocks.add(x, z, yaw, w, d, 24);
     }
   }
 
@@ -421,26 +383,17 @@ export async function createVenice(group, track, fx) {
     group.add(cloud);
   }
 
+  const collider = new Collider();
+  await collider.addObject(group, new Set([sky, water.mesh, buoys, ...clouds]), tick);
+
   return {
     fog,
     water,
     sun,
     surface,
     shores,
-    solid(p) {
-      const hit = blocks.hit(p);
-      if (hit) return hit;
-      for (const o of landmarkSpots) if (Math.hypot(p.x - o.x, p.z - o.z) < o.r * 0.7 && p.y < 20) return new THREE.Vector3(p.x - o.x, 0, p.z - o.z).normalize();
-      if (p.y < WALL_TOP && dry(p.x, p.z)) {
-        const s = surface.sample(p.x, p.z);
-        if (s.edge > 0) {
-          const i = s.idx;
-          const side = (p.x - track.px[i]) * track.nx[i] + (p.z - track.pz[i]) * track.nz[i] > 0 ? 1 : -1;
-          return new THREE.Vector3(-track.nx[i] * side, 0, -track.nz[i] * side);
-        }
-      }
-      return null;
-    },
+    collider,
+    raycast: (origin, dir, far) => collider.raycast(origin, dir, dir.y < 0 ? Math.min(far, (origin.y + 0.3) / -dir.y) : far),
     update(t, dt, camera) {
       water.update(t);
       cullChunks(chunks, camera, fog.far);

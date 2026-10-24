@@ -50,6 +50,7 @@ function mossyRock() {
 
 const INSTANCE_MIN = 12;
 function releaseArray() {
+  if (import.meta.env.DEV && window.__bb?.keepArrays) return;
   this.array = null;
 }
 

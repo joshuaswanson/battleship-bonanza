@@ -117,6 +117,19 @@ function scaleWorld(group, world, scale) {
     const p = new THREE.Vector3();
     world.solid = (q) => solid(p.set(q.x / scale, q.y / scale, q.z / scale));
   }
+  if (world.raycast) {
+    const raycast = world.raycast;
+    const o = new THREE.Vector3();
+    world.raycast = (origin, dir, far) => {
+      const hit = raycast(o.copy(origin).divideScalar(scale), dir, far / scale);
+      if (hit) {
+        hit.point.multiplyScalar(scale);
+        hit.t *= scale;
+        hit.extent *= scale;
+      }
+      return hit;
+    };
+  }
   if (world.surface) {
     const sample = world.surface.sample.bind(world.surface);
     world.surface = { ...world.surface, sample: (x, z) => sample(x / scale, z / scale) };
@@ -239,7 +252,7 @@ function newRace(attract, map = pickMap(attract)) {
   fx.decals.clear();
   useVenue(map);
   current.world.chopper?.reset();
-  race = new Race({ scene, track: current.track, fx, sfx: attract ? SILENT : sfx, shores: current.world.shores, solid: current.world.solid, chopper: current.world.chopper ?? null, defs: makeDefs(attract ? null : setup), attract });
+  race = new Race({ scene, track: current.track, fx, sfx: attract ? SILENT : sfx, shores: current.world.shores, solid: current.world.solid, raycast: current.world.raycast ?? null, chopper: current.world.chopper ?? null, defs: makeDefs(attract ? null : setup), attract });
   if (!attract) recorder = new Recorder(race, fx);
   cam.snap = true;
 }
@@ -605,6 +618,9 @@ if (import.meta.env.DEV) {
     get world() {
       return current.world;
     },
+    get venueGroup() {
+      return current.group;
+    },
     map: null,
     loadout,
     async simRace() {
@@ -613,7 +629,7 @@ if (import.meta.env.DEV) {
       race?.dispose();
       const defs = PAINTS.map((paint, i) => ({ name: `Boat ${i + 1}`, color: paint.value, items: arrange(shuffle(ITEM_IDS).slice(0, 2)) }));
       useVenue(map);
-      race = new Race({ scene, track: current.track, fx, sfx, shores: current.world.shores, solid: current.world.solid, chopper: current.world.chopper ?? null, defs, attract: false });
+      race = new Race({ scene, track: current.track, fx, sfx, shores: current.world.shores, solid: current.world.solid, raycast: current.world.raycast ?? null, chopper: current.world.chopper ?? null, defs, attract: false });
       mode = 'sim';
       hud.show(false);
       showScreen(null);

@@ -18,9 +18,13 @@ export const methods = {
         const angle = m.dir.angleTo(desired);
         const maxTurn = 2.5 * dt;
         m.dir.lerp(desired, angle > maxTurn ? maxTurn / angle : 1).normalize();
-        if (this.solid) {
-          const probe = c.copy(m.pos).addScaledVector(m.dir, 10);
-          const blocked = this.solid(probe) || this.solid(probe.addScaledVector(m.dir, 8));
+        if (this.solid || this.raycast) {
+          let blocked;
+          if (this.raycast) blocked = this.raycast(m.pos, m.dir, 18);
+          else {
+            const probe = c.copy(m.pos).addScaledVector(m.dir, 10);
+            blocked = this.solid(probe) || this.solid(probe.addScaledVector(m.dir, 8));
+          }
           if (blocked) {
             m.dir.y = Math.max(m.dir.y, 0.75);
             m.dir.normalize();
@@ -36,7 +40,7 @@ export const methods = {
       const wall = m.fizzle > 0 || m.target ? null : this.surfaceHit(before, m.pos);
       if (wall) {
         m.pos.copy(wall.point);
-        this.fx.impact('crater', wall.point, wall.normal, 3.2 + Math.random() * 1.2);
+        this.stampDecal('crater', wall.point, wall.normal, 3.2 + Math.random() * 1.2);
         for (let i = 0; i < 10; i++) {
           const v = wall.normal.clone().multiplyScalar(6 + Math.random() * 6).add(new THREE.Vector3((Math.random() - 0.5) * 8, Math.random() * 6, (Math.random() - 0.5) * 8));
           this.fx.puffs.emit(wall.point.x, wall.point.y, wall.point.z, v.x, v.y, v.z, 0.25 + Math.random() * 0.25, 0.9, 0x8f877b, 18, 0.5, 1);

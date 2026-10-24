@@ -78,7 +78,7 @@ export const methods = {
       const wall = this.surfaceHit(bullet.prev, bullet.pos);
       if (wall) {
         const { point, normal } = wall;
-        this.fx.impact('hole', point, normal, 0.45 + Math.random() * 0.35);
+        this.stampDecal('hole', point, normal, 0.45 + Math.random() * 0.35);
         this.fx.sparkBurst(point.x, point.y, point.z, 0xfff1b0, 4);
         this.fx.puffs.emit(point.x, point.y, point.z, normal.x * 2, 1 + normal.y * 2, normal.z * 2, 0.35, 0.5, 0xcfc6b8, -0.5, 2, 0);
         return false;
