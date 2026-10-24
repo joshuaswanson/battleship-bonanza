@@ -7,10 +7,6 @@ import './style.css';
 import * as THREE from 'three';
 import { createTrack } from './track.js';
 import { createWorld } from './world.js';
-import { createJungle } from './jungle.js';
-import { createAlps } from './alps.js';
-import { createVenice } from './venice.js';
-import { createMidway } from './midway.js';
 import { MAPS } from './maps.js';
 import { Recorder, Replay } from './replay.js';
 import { Hints } from './hints.js';
@@ -131,15 +127,21 @@ function scaleWorld(group, world, scale) {
   };
 }
 
+const BUILDERS = {
+  jungle: () => import('./jungle.js').then((m) => m.createJungle),
+  alps: () => import('./alps.js').then((m) => m.createAlps),
+  venice: () => import('./venice.js').then((m) => m.createVenice),
+  midway: () => import('./midway.js').then((m) => m.createMidway),
+};
+
 function prepareVenue(id) {
   if (venues[id]) return Promise.resolve(venues[id]);
   building[id] ??= (async () => {
     const scale = MAPS[id].scale ?? 1;
     const group = new THREE.Group();
     group.visible = false;
-    const builders = { jungle: createJungle, alps: createAlps, venice: createVenice, midway: createMidway };
     const built = createTrack(MAPS[id]);
-    const world = builders[id] ? await builders[id](group, built, fx) : createWorld(group, built);
+    const world = BUILDERS[id] ? await (await BUILDERS[id]())(group, built, fx) : createWorld(group, built);
     const track = scale === 1 ? built : createTrack(MAPS[id], scale);
     if (scale !== 1) scaleWorld(group, world, scale);
     scene.add(group);
