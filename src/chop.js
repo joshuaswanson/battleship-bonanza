@@ -161,7 +161,7 @@ export class Chopper {
     }
     this.group.add(holder);
     const flat = new THREE.Vector3(dir.x, 0, dir.z).normalize();
-    this.falling.push({ holder, clip, pivot, axis: new THREE.Vector3(flat.z, 0, -flat.x), angle: 0, speed: 0.25, rest: Math.PI / 2 - 0.08, landed: false, height: tree.height });
+    this.falling.push({ holder, clip, pivot, axis: new THREE.Vector3(flat.z, 0, -flat.x), angle: 0.06, speed: 1.3, rest: Math.PI / 2 - 0.08, landed: false, height: tree.height });
     while (this.falling.length > 40) {
       const old = this.falling.shift();
       this.group.remove(old.holder);
@@ -172,7 +172,7 @@ export class Chopper {
     const up = new THREE.Vector3();
     for (const f of this.falling) {
       if (!f.landed || Math.abs(f.speed) > 0.02) {
-        f.speed += (2.2 * Math.sin(f.angle) + 0.35) * dt * (f.landed ? 0 : 1);
+        f.speed += (5 * Math.sin(f.angle) + 1.6) * dt * (f.landed ? 0 : 1);
         f.angle += f.speed * dt;
         if (f.angle >= f.rest) {
           f.angle = f.rest;
