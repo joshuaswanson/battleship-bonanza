@@ -132,9 +132,8 @@ export class Chopper {
     return null;
   }
 
-  partMaterial(key, clip) {
-    const material = toon(this.colors[key] ?? 0xffffff, { clippingPlanes: [clip], side: THREE.DoubleSide });
-    return material;
+  partMaterial(key, clip, painted) {
+    return toon(painted ? 0xffffff : this.colors[key] ?? 0xffffff, { clippingPlanes: [clip], side: THREE.DoubleSide, vertexColors: painted });
   }
 
   chop(id, cutY, dir) {
@@ -152,8 +151,10 @@ export class Chopper {
     for (const part of tree.parts) {
       const box = part.geometry.boundingBox.clone().applyMatrix4(part.matrix);
       if (box.max.y <= cutY) continue;
-      if (!materials.has(part.key)) materials.set(part.key, this.partMaterial(part.key, clip));
-      const mesh = new THREE.Mesh(part.geometry, materials.get(part.key));
+      const painted = part.geometry.hasAttribute('color');
+      const id = `${part.key}|${painted}`;
+      if (!materials.has(id)) materials.set(id, this.partMaterial(part.key, clip, painted));
+      const mesh = new THREE.Mesh(part.geometry, materials.get(id));
       mesh.matrixAutoUpdate = false;
       mesh.matrix.multiplyMatrices(inverse, part.matrix);
       holder.add(mesh);
