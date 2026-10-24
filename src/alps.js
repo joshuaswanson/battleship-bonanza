@@ -425,7 +425,7 @@ export async function createAlps(group, track, fx) {
         }
       });
       if (route) {
-        const u = ((t * 5) / routeLength) % 1;
+        const u = ((((t * 5) / routeLength) % 1) + 1) % 1;
         const p = route.getPointAt(u);
         const d = route.getTangentAt(u);
         const ship = steamer.group;
