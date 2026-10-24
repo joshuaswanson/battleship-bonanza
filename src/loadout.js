@@ -1,17 +1,18 @@
 import * as THREE from 'three';
 import { GROUPS, ITEMS, ITEM_IDS, STATS, statsFor } from './items.js';
 import { t, itemName, itemBlurb, comboName } from './i18n.js';
+import { buildYard } from './yardProps.js';
 import { buildBoat, buildItemModel, slotLock, laserWobble, aimLaserGun, buildMine, buildMissile, buildHook, aimTurret, spendMissile, reloadMissile, updateMissileTips, missileDirection, stepGun, stepLaser, stepFlame, stepSaw, flameDirection, newHeat, gunDirection, flashGun, laserDirection, pointLaserGun, launchMine, reloadMine, updateMineHolder } from './boatModel.js';
 import { createWater, seaWaves as waveHeight } from './water.js';
 import { Effects } from './effects.js';
-import { SUN_DIR } from './world.js';
+import { SUN_DIR, createSky } from './world.js';
 import { toon, outlined } from './toon.js';
 
 export const PAINTS = [{ value: 0xff5a5f }, { value: 0xffb400 }, { value: 0x3ddc97 }, { value: 0x4d9de0 }, { value: 0xb57edc }, { value: 0xff8fc7 }];
 
 const $ = (id) => document.getElementById(id);
 const hex = (n) => `#${n.toString(16).padStart(6, '0')}`;
-const POOL_RADIUS = 19;
+const POOL_RADIUS = 13;
 
 function renderThumbnails() {
   const size = 220;
@@ -293,17 +294,12 @@ export class Loadout {
 
     this.water = createWater({ geometry: new THREE.RingGeometry(0.01, POOL_RADIUS + 0.4, 72, 24) });
     this.scene.add(this.water.mesh);
-    const red = toon(0xff4141);
-    const white = toon(0xffffff);
-    const arcs = 16;
-    const arc = new THREE.TorusGeometry(POOL_RADIUS + 0.6, 1.05, 14, 10, (Math.PI * 2) / arcs);
-    this.floatRing = new THREE.Group();
-    for (let i = 0; i < arcs; i++) {
-      const mesh = outlined(arc, i % 2 ? white : red, 0.06);
-      mesh.rotation.set(-Math.PI / 2, 0, (i / arcs) * Math.PI * 2);
-      this.floatRing.add(mesh);
-    }
-    this.scene.add(this.floatRing);
+    this.yard = buildYard(this.scene, POOL_RADIUS);
+    this.sea = createWater({ geometry: new THREE.RingGeometry(POOL_RADIUS + 14, 260, 72, 8) });
+    this.scene.add(this.sea.mesh);
+    this.sky = createSky();
+    this.sky.scale.setScalar(0.2);
+    this.scene.add(this.sky);
     this.fx = new Effects(this.scene, waveHeight);
     this.fx.camera = this.camera;
 
@@ -347,8 +343,8 @@ export class Loadout {
       const tan = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
       const byWidth = 12.5 / (0.85 * (stageBox.width / w) * 2 * tan * this.camera.aspect);
       const byHeight = 6.5 / (0.95 * (stageBox.height / h) * 2 * tan);
-      const dist = Math.max(12, Math.max(byWidth, byHeight));
-      this.camera.position.set(12, 7.6, 14.8).setLength(dist);
+      const dist = Math.max(12, Math.max(byWidth, byHeight)) * 1.2;
+      this.camera.position.set(12, 8.8, 14.8).setLength(dist);
       this.camera.lookAt(0, 0.9, 0);
       const shiftX = canvasBox.left + w / 2 - (stageBox.left + stageBox.width / 2);
       const shiftY = canvasBox.top + h / 2 - (stageBox.top + stageBox.height / 2);
@@ -729,7 +725,7 @@ export class Loadout {
     if (b.minigun) this.stepGun(dt);
     if (b.laserMount) this.stepLaser(dt);
     if (b.flameMount) this.stepFlame(dt);
-    for (const sp of spinners) sp.mesh.rotation[sp.axis] += sp.speed * dt;
+    for (const sp of spinners) if (!sp.propeller) sp.mesh.rotation[sp.axis] += sp.speed * dt;
     if (b.empOrb) this.fx.empIdle(b, dt, 1, this.time);
     flag.rotation.y = Math.sin(this.time * 9) * 0.25;
 
@@ -779,7 +775,9 @@ export class Loadout {
     });
 
     this.water.update(this.time);
-    this.floatRing.position.y = Math.sin(this.time * 1.4) * 0.12;
+    this.sea.update(this.time);
+    this.sky.position.copy(this.camera.position);
+    this.yard.update(this.time);
     this.fx.update(dt);
     this.renderer.render(this.scene, this.camera);
   }

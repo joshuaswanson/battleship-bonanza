@@ -431,7 +431,7 @@ export function buildBoat(color, items) {
   part(flag, 'cone', mats.paint, 0, 0, -0.45, 0.04, 0.9, 0.3, 0.02).rotation.x = -Math.PI / 2;
 
   const refs = { root, body, flag, towRings, saw: null, flames: [], spinners: [], materials: [], parts: {}, hookMarkers: [], heatMats: {}, swivels: [], busy: {}, missileTips: [], sags: [], modules: {} };
-  refs.spinners.push({ mesh: propeller, axis: 'z', speed: 30 });
+  refs.spinners.push({ mesh: propeller, axis: 'z', speed: 30, propeller: true });
 
   if (camoMat) {
     mats.paint = camoMat;
