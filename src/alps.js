@@ -3,13 +3,11 @@ import { createWater } from './water.js';
 import { toon, mulberry32 } from './toon.js';
 import { Batcher, cullChunks, slicer, COLORS, mat, ROCK, createSky, createCloud, createArch, SUN_DIR } from './world.js';
 import { courseSurface, buildHeightfield, courseBuoys, swissFlag, smooth, noise } from './terrain.js';
+import { FLORA_COLORS, tree, shrub, boulder, flowers, cow } from './alpine.js';
 
 const ALPS_COLORS = {
   ...COLORS,
-  pine: 0x2f7d4a,
-  pineDark: 0x22663d,
-  pineLight: 0x46a05a,
-  trunk: 0x6b4428,
+  ...FLORA_COLORS,
   plaster: 0xf6f0e2,
   wood: 0xa8683a,
   woodDark: 0x6e4224,
@@ -23,9 +21,6 @@ const ALPS_COLORS = {
   stoneDark: 0xa9a196,
   copper: 0x62b3a0,
   clock: 0xffffff,
-  cow: 0xffffff,
-  cowSpot: 0x2b2b2b,
-  cowNose: 0xf2a7a0,
   horn: 0xf3e6c4,
   bell: 0xffd23f,
   flagPole: 0xeeeeee,
@@ -35,8 +30,6 @@ const ALPS_COLORS = {
 };
 
 const BOX = new THREE.BoxGeometry(1, 1, 1);
-const PINE = new THREE.ConeGeometry(1, 1, 8);
-const STEM = new THREE.CylinderGeometry(0.5, 0.6, 1, 6);
 const CYL = new THREE.CylinderGeometry(1, 1, 1, 12);
 const OCT = new THREE.CylinderGeometry(1, 1, 1, 8);
 const SPIRE = new THREE.ConeGeometry(1, 1, 4).rotateY(Math.PI / 4);
@@ -58,16 +51,6 @@ function placer(batch) {
     const s = Math.sin(yaw);
     batch.add(key, geometry, mat(origin.x + lx * c + lz * s, origin.y + y, origin.z - lx * s + lz * c, sx, sy, sz, rx, yaw + extraYaw, rz));
   };
-}
-
-function pine(batch, x, y, z, size, rand) {
-  const h = size * (0.85 + rand() * 0.3);
-  batch.add('trunk', STEM, mat(x, y + h * 0.12, z, h * 0.12, h * 0.3, h * 0.12));
-  const tones = ['pine', 'pineDark', 'pineLight'];
-  for (let k = 0; k < 3; k++) {
-    const r = h * (0.36 - k * 0.08);
-    batch.add(tones[(k + Math.floor(rand() * 3)) % 3], PINE, mat(x, y + h * (0.38 + k * 0.22), z, r, h * 0.42, r, 0, rand() * 3, 0));
-  }
 }
 
 function chalet(batch, x, y, z, yaw, rand) {
@@ -129,20 +112,6 @@ function castle(batch, x, z, yaw, rand) {
   }
   for (const lx of [-4, 0]) put('window', BOX, o, yaw, lx, 15, 3.6, 1, 2, 0.2);
   swissFlag(batch, x, 26, z, yaw, 1.2);
-}
-
-function cow(batch, x, y, z, yaw, rand) {
-  const put = placer(batch);
-  const o = new THREE.Vector3(x, y, z);
-  put('cow', BOX, o, yaw, 0, 1.9, 0, 2, 1.5, 3.4);
-  for (const [lx, ly, lz] of [[1.02, 2, 0.4], [-1.02, 1.8, -0.7], [0.3, 2.66, -0.6]]) put('cowSpot', BOX, o, yaw, lx, ly, lz, 0.1 + (lx === 0.3 ? 1 : 0), 0.8, 1.1);
-  put('cow', BOX, o, yaw, 0, 2.5, 2.2, 1.2, 1.2, 1.3);
-  put('cowNose', BOX, o, yaw, 0, 2.2, 2.95, 1.0, 0.6, 0.3);
-  put('horn', BOX, o, yaw, 0.55, 3.25, 2.2, 0.25, 0.5, 0.25);
-  put('horn', BOX, o, yaw, -0.55, 3.25, 2.2, 0.25, 0.5, 0.25);
-  put('bell', BALL, o, yaw, 0, 1.6, 2.4, 0.35, 0.35, 0.35);
-  for (const [lx, lz] of [[0.65, 1.2], [-0.65, 1.2], [0.65, -1.2], [-0.65, -1.2]]) put('cow', BOX, o, yaw, lx, 0.6, lz, 0.45, 1.3, 0.45);
-  if (rand() < 0.3) put('cowSpot', BOX, o, yaw, 0, 2, -1.75, 0.18, 0.18, 0.8);
 }
 
 function coveredBridge(batch, track, idx) {
@@ -253,6 +222,7 @@ export async function createAlps(group, track, fx) {
 
   const rand = mulberry32(4207);
   const batch = new Batcher();
+  const petals = new Batcher();
   const slope = (x, z) => {
     const e = 2;
     const gx = (height(x + e, z) - height(x - e, z)) / (2 * e);
@@ -332,35 +302,104 @@ export async function createAlps(group, track, fx) {
   const bridgeAt = track.point(Math.round(0.62 * N));
   taken.push({ x: bridgeAt.x, z: bridgeAt.z, r: track.hw[Math.round(0.62 * N)] + 16 });
 
-  for (let tries = 0, cows = 0; cows < 18 && tries < 3000; tries++) {
+  const meadow = (x, z) => {
+    const y = height(x, z);
+    return y > 2 && y < 40 && shoreOf(x, z) > 7 && slope(x, z) > 0.88;
+  };
+  const herdSpots = [];
+  group.userData.herds = herdSpots;
+  for (let tries = 0, herds = 0; herds < 9 && tries < 4000; tries++) {
     const idx = Math.floor(rand() * N);
-    if (lakeAt(idx) > 0.2) continue;
     const sign = rand() < 0.5 ? -1 : 1;
-    const p = track.point(idx, sign * (track.hw[track.wrap(idx)] + 10 + rand() * 30));
-    const y = height(p.x, p.z);
-    if (y < 2 || y > 25 || slope(p.x, p.z) < 0.9 || !free(p.x, p.z, 4)) continue;
-    cow(batch, p.x, y, p.z, rand() * Math.PI * 2, rand);
-    taken.push({ x: p.x, z: p.z, r: 4 });
-    cows++;
+    const c = track.point(idx, sign * (track.hw[track.wrap(idx)] + 16 + rand() * 40));
+    if (!meadow(c.x, c.z) || !free(c.x, c.z, 14)) continue;
+    const facing = rand() * Math.PI * 2;
+    const size = 2 + Math.floor(rand() * 5);
+    const herd = [];
+    const roomFor = (x, z, r) => meadow(x, z) && herd.every((o) => Math.hypot(o.x - x, o.z - z) > o.r + r);
+    for (let k = 0, tries2 = 0; k < size && tries2 < 40; tries2++) {
+      const a = rand() * Math.PI * 2;
+      const d = 3 + rand() * 11;
+      const x = c.x + Math.cos(a) * d;
+      const z = c.z + Math.sin(a) * d;
+      if (!roomFor(x, z, 2.6)) continue;
+      cow(batch, x, height(x, z), z, facing + (rand() - 0.5) * 1.6, rand);
+      herd.push({ x, z, r: 2.6 });
+      k++;
+      if (rand() < 0.3) {
+        const b = rand() * Math.PI * 2;
+        const cx = x + Math.cos(b) * 4.5;
+        const cz = z + Math.sin(b) * 4.5;
+        if (roomFor(cx, cz, 1.6)) {
+          cow(batch, cx, height(cx, cz), cz, facing + (rand() - 0.5) * 2, rand, { calf: true });
+          herd.push({ x: cx, z: cz, r: 1.6 });
+        }
+      }
+    }
+    taken.push({ x: c.x, z: c.z, r: 14 });
+    herdSpots.push({ x: c.x, y: height(c.x, c.z), z: c.z });
+    herds++;
+  }
+
+  for (let tries = 0, patches = 0; patches < 160 && tries < 3000; tries++) {
+    const idx = Math.floor(rand() * N);
+    const sign = rand() < 0.5 ? -1 : 1;
+    const p = track.point(idx, sign * (track.hw[track.wrap(idx)] + 8 + rand() * 60));
+    if (!meadow(p.x, p.z)) continue;
+    flowers(petals, p.x, height(p.x, p.z), p.z, rand, height);
+    patches++;
+  }
+
+  for (let tries = 0, rocks = 0; rocks < 140 && tries < 4000; tries++) {
+    const x = minX + rand() * (maxX - minX);
+    const z = minZ + rand() * (maxZ - minZ);
+    const shore = shoreOf(x, z);
+    if (shore < -1 || shore > 160) continue;
+    const y = height(x, z);
+    if (y < -0.5 || y > 110 || !free(x, z, 3)) continue;
+    boulder(batch, x, y, z, rand, shore < 4 ? 1 + rand() * 1.5 : 1.2 + rand() * 2.8);
+    rocks++;
   }
 
   let trees = 0;
-  for (let tries = 0; tries < 26000 && trees < 2600; tries++) {
-    if (tries % 400 === 0) await tick();
-    const x = minX + rand() * (maxX - minX);
-    const z = minZ + rand() * (maxZ - minZ);
-    const forest = noise(x * 2.1 + 90, z * 2.1 - 40);
-    if (forest < 0.42) continue;
-    const shore = shoreOf(x, z);
-    if (shore < 5) continue;
-    const y = height(x, z);
-    if (y < 2 || y > 95 || slope(x, z) < 0.72 || !free(x, z, 3)) continue;
-    pine(batch, x, y - 0.3, z, 6 + rand() * 7 + (y > 40 ? 3 : 0), rand);
-    trees++;
+  for (let tries = 0, groves = 0; groves < 420 && tries < 9000; tries++) {
+    if (tries % 200 === 0) await tick();
+    const cx = minX + rand() * (maxX - minX);
+    const cz = minZ + rand() * (maxZ - minZ);
+    if (noise(cx * 2.1 + 90, cz * 2.1 - 40) < 0.4 || shoreOf(cx, cz) < 6) continue;
+    const cy = height(cx, cz);
+    if (cy < 2 || cy > 100) continue;
+    groves++;
+    const count = 3 + Math.floor(rand() * 14);
+    const spread = 6 + rand() * 18;
+    for (let k = 0; k < count; k++) {
+      const a = rand() * Math.PI * 2;
+      const d = spread * Math.sqrt(rand());
+      const x = cx + Math.cos(a) * d;
+      const z = cz + Math.sin(a) * d;
+      if (shoreOf(x, z) < 5) continue;
+      const y = height(x, z);
+      if (y < 2 || y > 102 || slope(x, z) < 0.7 || !free(x, z, 3)) continue;
+      const edge = d / spread;
+      tree(batch, x, y, z, y, rand, (1.15 - edge * 0.45) * (y > 85 ? 0.7 : 1));
+      trees++;
+      if (rand() < 0.12) shrub(batch, x + (rand() - 0.5) * 6, y, z + (rand() - 0.5) * 6, rand);
+    }
+  }
+  for (let tries = 0, singles = 0; singles < 260 && tries < 6000; tries++) {
+    const idx = Math.floor(rand() * N);
+    const sign = rand() < 0.5 ? -1 : 1;
+    const p = track.point(idx, sign * (track.hw[track.wrap(idx)] + 6 + rand() * 50));
+    const y = height(p.x, p.z);
+    if (y < 1.5 || y > 60 || shoreOf(p.x, p.z) < 5 || !free(p.x, p.z, 4)) continue;
+    if (rand() < 0.35) shrub(batch, p.x, y, p.z, rand);
+    else tree(batch, p.x, y, p.z, y, rand, 0.7 + rand() * 0.6);
+    singles++;
   }
 
   const scenery = new THREE.Group();
   const chunks = await batch.buildAsync(scenery, 0.1, ALPS_COLORS, undefined, tick);
+  const blooms = await petals.buildAsync(scenery, 0, ALPS_COLORS, undefined, tick);
   group.add(scenery);
 
   const buoys = courseBuoys(track, (idx) => lakeAt(idx) > 0.4);
@@ -396,6 +435,7 @@ export async function createAlps(group, track, fx) {
     update(t, dt, camera) {
       water.update(t);
       cullChunks(chunks, camera, fog.far);
+      cullChunks(blooms, camera, 260);
       sky.position.copy(camera.position);
       buoys.userData.update(t);
       for (const cloud of clouds) {
