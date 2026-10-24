@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GROUPS, ITEMS, ITEM_IDS, STATS, statsFor } from './items.js';
 import { t, itemName, itemBlurb, comboName } from './i18n.js';
-import { buildBoat, buildItemModel, slotLock, laserWobble, aimLaserGun, buildMine, buildMissile, buildHook, aimTurret, spendMissile, reloadMissile, updateMissileTips, missileDirection, stepGun, stepLaser, stepFlame, stepSaw, flameDirection, newHeat, gunDirection, laserDirection, pointLaserGun, launchMine, reloadMine, updateMineHolder } from './boatModel.js';
+import { buildBoat, buildItemModel, slotLock, laserWobble, aimLaserGun, buildMine, buildMissile, buildHook, aimTurret, spendMissile, reloadMissile, updateMissileTips, missileDirection, stepGun, stepLaser, stepFlame, stepSaw, flameDirection, newHeat, gunDirection, flashGun, laserDirection, pointLaserGun, launchMine, reloadMine, updateMineHolder } from './boatModel.js';
 import { createWater, seaWaves as waveHeight } from './water.js';
 import { Effects } from './effects.js';
 import { SUN_DIR } from './world.js';
@@ -27,7 +27,14 @@ function renderThumbnails() {
   for (const id of ITEM_IDS) {
     const model = buildItemModel(id, 0xff5a5f);
     scene.add(model);
-    const sphere = new THREE.Box3().setFromObject(model).getBoundingSphere(new THREE.Sphere());
+    model.updateMatrixWorld(true);
+    const box = new THREE.Box3();
+    model.traverseVisible((o) => {
+      if (!o.isMesh) return;
+      o.geometry.computeBoundingBox();
+      box.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld));
+    });
+    const sphere = box.getBoundingSphere(new THREE.Sphere());
     const dist = (sphere.radius / Math.sin(THREE.MathUtils.degToRad(15))) * 0.82;
     camera.position.copy(sphere.center).addScaledVector(new THREE.Vector3(1, 0.7, 1.25).normalize(), dist);
     camera.lookAt(sphere.center);
@@ -562,6 +569,7 @@ export class Loadout {
       dir.y += (Math.random() - 0.4) * 0.1;
       dir.z += (Math.random() - 0.5) * 0.34;
       this.fx.beam(o, o.clone().addScaledVector(dir.normalize(), 28), 0xffe066, 0.12, 0.1, 2);
+      flashGun(b);
       const port = b.gunSwivel.localToWorld(new THREE.Vector3(-0.55, 0.7, 0.1));
       const side = new THREE.Vector3(-1, 0, 0).applyQuaternion(b.gunSwivel.getWorldQuaternion(new THREE.Quaternion()));
       this.fx.casing(port, side, new THREE.Vector3());
