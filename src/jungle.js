@@ -155,6 +155,15 @@ function isHole(surface, track, x, z) {
   return track.inTunnel(s) && dist < track.halfWidth + 10;
 }
 
+const tikiHollows = [];
+
+function tikiSpots(track) {
+  const k = Math.round(track.river.tunnelIn / track.spacing);
+  const i = track.wrap(k);
+  const ahead = track.wrap(i - Math.round(14 / track.spacing));
+  return [-1, 1].map((side) => track.point(ahead, side * (track.hw[ahead] + 9.5)));
+}
+
 function terrainHeight(surface, track, x, z) {
   const { level, dist, s } = surface.sample(x, z);
   const hw = track.halfWidth;
@@ -164,8 +173,13 @@ function terrainHeight(surface, track, x, z) {
   const normal = level - 4 + bank * 8.5 + hills + mountains;
   const mask = tunnelMask(track, s);
   if (mask <= 0) return normal;
-  const ridge = highLevel(track, s) + LID + 4 + 14 * noise(x * 2.3, z * 2.3) * smooth(hw + 10, hw + 40, dist);
-  const weight = mask * smooth(hw + 6, hw + 11, dist);
+  const ledges = 2.2 * Math.round(Math.sin(x * 0.09 + z * 0.07) * 1.5 + noise(x * 4, z * 4) * 2) + 3 * noise(x * 6.1, z * 6.1);
+  const ridge = highLevel(track, s) + LID + 4 + 14 * noise(x * 2.3, z * 2.3) * smooth(hw + 10, hw + 40, dist) + ledges * smooth(hw + 8, hw + 20, dist);
+  let weight = mask * smooth(hw + 6, hw + 11, dist);
+  for (const h of tikiHollows) {
+    const d = Math.hypot(x - h.x, z - h.z);
+    weight *= smooth(h.r * 0.75, h.r * 1.5, d);
+  }
   return normal + (Math.max(normal, ridge) - normal) * weight;
 }
 
@@ -215,7 +229,12 @@ async function buildTerrain(surface, track, tick) {
     const steep = 1 - Math.abs(n.y);
     const lush = noise(a.x * 3, a.z * 3) > 0.55 ? grassDark : grass;
     for (const v of [a, b, c3]) {
-      if (steep > 0.45) tint.copy(steep > 0.7 ? rockDark : rock);
+      if (steep > 0.45) {
+        const band = Math.sin(v.y * 0.9 + noise(v.x * 3, v.z * 3) * 4) * 0.5 + 0.5;
+        tint.copy(rock).lerp(rockDark, band * (steep > 0.7 ? 0.9 : 0.5));
+        if (noise(v.x * 5 + 40, v.z * 5) > 0.68 && steep < 0.8) tint.lerp(grassDark, 0.75);
+        tint.multiplyScalar(0.9 + 0.15 * noise(v.x * 9, v.z * 9));
+      }
       else tint.copy(mud).lerp(lush, smooth(lvl + 0.4, lvl + 2.4, v.y)).lerp(floor, shade[cIdx] * 0.8);
       positions.push(v.x, v.y, v.z);
       colors.push(tint.r, tint.g, tint.b);
@@ -553,6 +572,33 @@ function cliffDetails(batch, track, k, levelAt, top, rand) {
   }
 }
 
+function slopeDetails(batch, track, k, ground, rand) {
+  const hw = track.halfWidth;
+  for (let n = 0; n < 260; n++) {
+    const along = -(rand() * 60);
+    const idx = track.wrap(k + Math.round(along / track.spacing));
+    const side = rand() < 0.5 ? -1 : 1;
+    const lat = hw + 8 + rand() * 34;
+    const p = track.point(idx, side * lat);
+    if (tikiHollows.some((h) => Math.hypot(p.x - h.x, p.z - h.z) < h.r * 1.1)) continue;
+    const y = ground(p.x, p.z);
+    const e = 1.5;
+    const slope = Math.hypot(ground(p.x + e, p.z) - ground(p.x - e, p.z), ground(p.x, p.z + e) - ground(p.x, p.z - e)) / (2 * e);
+    const roll = rand();
+    if (slope > 0.9 && roll < 0.55) {
+      const sz = 1.2 + rand() * 2.6;
+      batch.add(CAVE_KEYS[Math.floor(rand() * 3)], STONES[Math.floor(rand() * STONES.length)], mat(p.x, y - sz * 0.25, p.z, sz * 1.5, sz * 0.7, sz, rand() * 0.4, rand() * 6, rand() * 0.4));
+      if (rand() < 0.4) batch.add('moss', ROCK, mat(p.x, y + sz * 0.2, p.z, sz * 1.1, sz * 0.22, sz * 0.8, 0, rand() * 6, 0));
+    } else if (roll < 0.75) {
+      addFern(batch, p.x, y - 0.2, p.z, rand);
+    } else if (roll < 0.88 && slope > 0.6) {
+      vine(batch, new THREE.Vector3(p.x, y + 0.5, p.z), 3 + rand() * 7, rand, new THREE.Vector3((rand() - 0.5) * 0.6, 0, (rand() - 0.5) * 0.6));
+    } else {
+      batch.add(rand() < 0.5 ? 'leaf' : 'leafDark', ROCK, mat(p.x, y + 0.4, p.z, 1.6 + rand() * 1.6, 1 + rand(), 1.6 + rand() * 1.6, rand(), rand() * 6, rand()));
+    }
+  }
+}
+
 function buildMouth(track, k, levelAt, top, color = 0x6e5d4e) {
   const hw = track.halfWidth + 14;
   const i = track.wrap(k);
@@ -835,6 +881,7 @@ function buildTunnel(track, ground) {
   const rand = mulberry32(4411);
   const face = buildTikis(track, kIn, low, batch, rand, ground);
   cliffDetails(batch, track, kIn, low, highLevel(track, river.tunnelIn) + LID, rand);
+  slopeDetails(batch, track, kIn, ground, rand);
   mouthRocks(batch, track, kIn, low, -1, rand);
   mouthRocks(batch, track, kOut, high, 1, rand);
   const torches = [...lowTorches, ...highOnly, ...face.torches];
@@ -1194,6 +1241,8 @@ export async function createJungle(group, track, fx) {
   group.add(sun);
 
   const surface = await riverSurface(track, tick);
+  tikiHollows.length = 0;
+  for (const p of tikiSpots(track)) tikiHollows.push({ x: p.x, z: p.z, r: 16 });
   group.add(await buildTerrain(surface, track, tick));
   await tick();
   const water = buildRiver(track);
