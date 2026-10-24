@@ -168,7 +168,8 @@ export class Replay {
     this.scene = scene;
     this.sfx = sfx;
     this.time = recorder.start ?? recorder.frames[0]?.t ?? 0;
-    this.end = recorder.frames.at(-1)?.t ?? this.time;
+    this.songAt = (recorder.start ?? this.time) + 1;
+    this.end = Math.min(recorder.frames.at(-1)?.t ?? this.time, this.songAt + sfx.musicLength('race') + 1);
     this.frame = 0;
     this.event = 0;
     while (this.event < recorder.events.length && recorder.events[this.event].t < this.time) this.event++;
@@ -187,6 +188,10 @@ export class Replay {
   step(dt) {
     const { frames, events, nodes, mats } = this.rec;
     this.time = Math.min(this.end, this.time + dt);
+    if (this.songAt !== null && this.time >= this.songAt) {
+      this.sfx.playMusic('race', { at: this.time - this.songAt, loop: false });
+      this.songAt = null;
+    }
     while (this.frame < frames.length - 2 && frames[this.frame + 1].t <= this.time) this.frame++;
     const a = frames[this.frame];
     const b = frames[Math.min(frames.length - 1, this.frame + 1)];

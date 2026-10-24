@@ -10,11 +10,14 @@ import { createWorld } from './world.js';
 import { MAPS } from './maps.js';
 import { Recorder, Replay } from './replay.js';
 import { Hints } from './hints.js';
-import { setSurface, waveHeight } from './water.js';
+import { Director } from './director.js';
+import { renderResults } from './results.js';
+import { createWipe } from './wipe.js';
+import { setSurface } from './water.js';
 import { Effects } from './effects.js';
 import { Sfx } from './audio.js';
 import { Input } from './input.js';
-import { Race, BASE_SPEED, COUNTDOWN } from './race.js';
+import { Race, BASE_SPEED } from './race.js';
 import { Hud, formatTime } from './hud.js';
 import { LANGUAGES, t, ordinal, itemInSentence, itemName, getLang, setLang, applyStatic } from './i18n.js';
 import { Loadout, PAINTS } from './loadout.js';
@@ -222,12 +225,10 @@ let mode = 'title';
 let race = null;
 let resultsTimer = 0;
 let time = 0;
-let shake = 0;
 const HURT_SHAKE = { bullet: 0.25, laser: 0.3, reflect: 0.3, saw: 0.5, flame: 0, fire: 0 };
 
 let recorder = null;
 let replay = null;
-let replaySongAt = null;
 
 function newRace(attract, map = pickMap(attract)) {
   recorder?.detach();
@@ -248,8 +249,6 @@ function startReplay() {
   if (!recorder?.frames.length) return;
   recorder.detach();
   replay = new Replay(recorder, scene, sfx);
-  replaySongAt = (recorder.start ?? replay.time) + 1;
-  replay.end = Math.min(replay.end, replaySongAt + sfx.musicLength('race') + 1);
   sfx.playMusic(null);
   race.wakes.trails.clear();
   mode = 'replay';
@@ -261,14 +260,13 @@ function startReplay() {
 }
 
 function endReplay() {
-  replaySongAt = null;
   sfx.playMusic('race');
   for (const b of race.boats) b.air = null;
   race.frozen = true;
   mode = 'results';
   $('replay-ui').classList.add('hidden');
   showScreen('screen-results');
-  renderResults();
+  renderResults(race);
   $('btn-replay').focus();
 }
 
@@ -297,80 +295,7 @@ function goLoadout() {
   loadout.active = true;
 }
 
-let wiping = false;
-const wipeCanvas = $('wipe');
-const wipeCtx = wipeCanvas.getContext('2d');
-const easeIn = (u) => u * u * u;
-const easeOut = (u) => 1 - (1 - u) ** 3;
-
-function drawIris(radius, spin) {
-  const scale = Math.min(devicePixelRatio, 1.5);
-  const w = Math.round(innerWidth * scale);
-  const h = Math.round(innerHeight * scale);
-  if (wipeCanvas.width !== w || wipeCanvas.height !== h) {
-    wipeCanvas.width = w;
-    wipeCanvas.height = h;
-  }
-  const ctx = wipeCtx;
-  const cx = w / 2;
-  const cy = h / 2;
-  const r = radius * Math.hypot(w, h) * 0.5;
-  const band = Math.max(10 * scale, r * 0.26);
-  ctx.clearRect(0, 0, w, h);
-  ctx.fillStyle = '#0e2a47';
-  ctx.beginPath();
-  ctx.rect(0, 0, w, h);
-  ctx.arc(cx, cy, r + band, 0, Math.PI * 2, true);
-  ctx.fill('evenodd');
-  if (r <= 0.5) return;
-  const segments = 8;
-  for (let k = 0; k < segments; k++) {
-    const a0 = spin + (k / segments) * Math.PI * 2;
-    const a1 = spin + ((k + 1) / segments) * Math.PI * 2;
-    ctx.fillStyle = k % 2 ? '#ffffff' : '#ff4141';
-    ctx.beginPath();
-    ctx.arc(cx, cy, r + band, a0, a1);
-    ctx.arc(cx, cy, r, a1, a0, true);
-    ctx.closePath();
-    ctx.fill();
-  }
-  ctx.strokeStyle = '#0e2a47';
-  ctx.lineWidth = Math.max(3 * scale, band * 0.1);
-  for (const rr of [r, r + band]) {
-    ctx.beginPath();
-    ctx.arc(cx, cy, rr, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-}
-
-function animateIris(from, to, ms, ease, spinFrom, spinTo) {
-  return new Promise((done) => {
-    const start = performance.now();
-    const step = (now) => {
-      const u = Math.min(1, Math.max(0, (now - start) / ms));
-      const k = ease(u);
-      drawIris(from + (to - from) * k, spinFrom + (spinTo - spinFrom) * k);
-      if (u < 1) requestAnimationFrame(step);
-      else done();
-    };
-    requestAnimationFrame(step);
-  });
-}
-
-async function wipe(fn) {
-  if (wiping) return;
-  wiping = true;
-  sfx.unlock();
-  sfx.play('whoosh');
-  wipeCanvas.classList.add('on');
-  await animateIris(1.05, 0, 420, easeIn, 0, -3.5);
-  await fn();
-  await new Promise((r) => setTimeout(r, 120));
-  sfx.play('splash');
-  await animateIris(0, 1.05, 520, easeOut, -3.5, -7);
-  wipeCanvas.classList.remove('on');
-  wiping = false;
-}
+const wipe = createWipe($('wipe'), sfx);
 
 const MAP_CHOICES = ['bay', 'jungle', 'alps', 'venice', 'midway', 'random'];
 const die = (pips, cls) => `<svg class="die ${cls}" viewBox="0 0 40 40"><rect x="3" y="3" width="34" height="34" rx="9" fill="#fff" stroke="#0E2A47" stroke-width="3.5"/>${pips.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="3.6" fill="#0E2A47"/>`).join('')}</svg>`;
@@ -441,66 +366,8 @@ function pause(on) {
 function showResults() {
   mode = 'results';
   showScreen('screen-results');
-  renderResults();
+  renderResults(race);
   $('btn-continue').focus();
-}
-
-const BADGE_KEYS = { winner: 'badgeWinner', damage: 'badgeDamage', sinks: 'badgeSinks', tank: 'badgeTank', fishFood: 'badgeFishFood', air: 'badgeAir' };
-const badgeSvg = (body) => `<svg viewBox="0 0 24 24" aria-hidden="true">${body}</svg>`;
-const BADGE_ICONS = {
-  winner: badgeSvg('<path d="M4 8 L8 12 L12 5 L16 12 L20 8 L18 18 H6 Z"/>'),
-  damage: badgeSvg('<path d="M13 2 L5 14 H11 L10 22 L19 9 H13 Z"/>'),
-  sinks: badgeSvg('<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/><path d="M12 1 V5 M12 19 V23 M1 12 H5 M19 12 H23"/>'),
-  tank: badgeSvg('<path d="M12 2 L20 5 V11 C20 16 16.5 20 12 22 C7.5 20 4 16 4 11 V5 Z"/>'),
-  fishFood: badgeSvg('<path d="M3 12 C7 6 14 6 18 12 C14 18 7 18 3 12 Z"/><path d="M18 12 L22 8 V16 Z"/><circle cx="8" cy="11" r="1.2"/>'),
-  air: badgeSvg('<path d="M2 14 L10 12 L13 4 L15 4 L14 11 L21 9 L22 11 L14 14 L15 20 L13 20 L10 15 L3 16 Z"/>'),
-};
-
-function awardBadges(boats) {
-  const out = new Map(boats.map((b) => [b, []]));
-  const top = (key, value, ok = (v) => v > 0, low = false) => {
-    let best = null;
-    for (const b of boats) {
-      const v = value(b);
-      if (!ok(v)) continue;
-      if (!best || (low ? v < value(best) : v > value(best))) best = b;
-    }
-    if (best) out.get(best).push(key);
-  };
-  const winner = boats.find((b) => b.finishOrder === 1);
-  if (winner) out.get(winner).push('winner');
-  top('damage', (b) => b.stats.dealt);
-  top('sinks', (b) => b.stats.kills);
-  top('tank', (b) => b.stats.taken, (v) => v >= 0, true);
-  top('fishFood', (b) => b.stats.sunk);
-  top('air', (b) => b.stats.jumps);
-  return out;
-}
-
-function renderResults() {
-  const p = race.player;
-  const badges = awardBadges(race.boats);
-  $('results-title').textContent = p.finished ? t('youFinished', { place: ordinal(p.finishOrder), n: p.finishOrder }) : t('raceOver');
-  $('standings').innerHTML = `<li class="st-head"><span></span><span></span><span></span><span></span><span class="st-mini"><span>${t('colDmg')}</span><span>${t('colKo')}</span><span>${t('colSunk')}</span></span></li>` + race.order
-    .map((b) => {
-      const time = b.finished ? formatTime(b.finishTime) : t('lapN', { n: b.lap });
-      const items = (badges.get(b) ?? []).map((k) => `<em class="badge badge-${k}">${BADGE_ICONS[k]}${t(BADGE_KEYS[k])}</em>`).join('');
-      return `<li class="${b.isPlayer ? 'me' : ''}">
-        <span class="st-place">${ordinal(b.place)}</span>
-        <span class="st-dot" style="--paint:#${b.color.toString(16).padStart(6, '0')}"></span>
-        <span class="st-name">${b.name}<span class="badges">${items}</span></span>
-        <span class="st-time">${time}</span>
-        <span class="st-mini" title="${t('statDealt')} / ${t('statKills')} / ${t('statSunk')}"><span>${Math.round(b.stats.dealt)}</span><span>${b.stats.kills}</span><span>${b.stats.sunk}</span></span>
-      </li>`;
-    })
-    .join('');
-  const me = p.stats;
-  const cards = [
-    [t('statDealt'), Math.round(me.dealt)],
-    [t('statKills'), me.kills],
-    [t('statSunk'), me.sunk],
-  ];
-  $('race-stats').innerHTML = cards.map(([label, value]) => `<div class="stat-card"><span>${label}</span><b>${value}</b></div>`).join('');
 }
 
 const loadout = new Loadout({ setup, sfx, onChange: saveSetup });
@@ -593,112 +460,7 @@ function unlockAudio() {
 addEventListener('pointerdown', unlockAudio, { once: true });
 addEventListener('keydown', unlockAudio, { once: true });
 
-const cam = {
-  pos: new THREE.Vector3(0, 30, -40),
-  look: new THREE.Vector3(),
-  heading: 0,
-  snap: true,
-  focus: 0,
-  focusTime: 0,
-  orbit: 0,
-};
-
-const lerpAngle = (a, b, k) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * k;
-
-const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-const RIVER_SHOTS = ['chase', 'lead', 'bank', 'chase', 'lead'];
-
-function riverShot(dt, k) {
-  const t = race.track;
-  cam.focusTime -= dt;
-  const b = race.boats[cam.focus] ?? race.player;
-  const hit = t.project(b.pos.x, b.pos.z, cam.focusTime > 0 ? cam.idx ?? -1 : -1);
-  cam.idx = hit.idx;
-  const big = t.river.drops.find((d) => d.height > 8);
-  const toFalls = t.ahead(hit.s, big.s);
-  if (cam.focusTime <= 0 || (cam.shot !== 'falls' && toFalls < 45 && toFalls > 25)) {
-    cam.focus = Math.random() < 0.6 ? race.boats.indexOf(race.player) : Math.floor(Math.random() * race.boats.length);
-    const focus = race.boats[cam.focus];
-    const at = t.project(focus.pos.x, focus.pos.z);
-    cam.idx = at.idx;
-    const nearFalls = t.ahead(at.s, big.s) < 45;
-    cam.shot = nearFalls ? 'falls' : RIVER_SHOTS[Math.floor(Math.random() * RIVER_SHOTS.length)];
-    cam.focusTime = nearFalls ? 3.5 : 5 + Math.random() * 3;
-    cam.side = Math.random() < 0.5 ? -1 : 1;
-    cam.anchor = null;
-    cam.snap = true;
-  }
-  const f = race.boats[cam.focus];
-  const level = f.waterY;
-  const hw = t.halfWidth;
-  let desired;
-  const nearExit = t.ahead(hit.s, t.river.tunnelOut) < 40 || t.ahead(t.river.tunnelOut, hit.s) < 15;
-  if (cam.shot === 'chase' && nearExit) cam.shot = 'lead';
-  if (cam.shot === 'chase' || cam.shot === 'lead') {
-    const ahead = cam.shot === 'chase' ? -14 : 16;
-    const p = t.point(cam.idx + Math.round(ahead / t.spacing), clamp(t.project(f.pos.x, f.pos.z, cam.idx).lateral * 0.6 + cam.side * 4, -hw + 4, hw - 4));
-    desired = new THREE.Vector3(p.x, level + (cam.shot === 'chase' ? 6 : 5), p.z);
-  } else if (cam.shot === 'bank') {
-    if (!cam.anchor) {
-      const p = t.point(cam.idx + Math.round(45 / t.spacing), cam.side * (hw - 3));
-      cam.anchor = new THREE.Vector3(p.x, waveHeight(p.x, p.z, 0) + 3, p.z);
-    }
-    desired = cam.anchor.clone();
-  } else {
-    if (!cam.anchor) {
-      const p = t.point(Math.round(big.s / t.spacing) + Math.round(34 / t.spacing), cam.side * 8);
-      cam.anchor = new THREE.Vector3(p.x, waveHeight(p.x, p.z, 0) + 5, p.z);
-    }
-    desired = cam.anchor.clone();
-  }
-  cam.pos.lerp(desired, k(cam.shot === 'chase' || cam.shot === 'lead' ? 6 : 20));
-  cam.look.lerp(new THREE.Vector3(f.pos.x, f.pos.y + 1, f.pos.z), k(8));
-}
-
-const CANAL_SHOTS = ['chase', 'lead', 'bank', 'high', 'chase', 'lead'];
-
-function canalShot(dt, k) {
-  const t = race.track;
-  cam.focusTime -= dt;
-  const b = race.boats[cam.focus] ?? race.player;
-  const hit = t.project(b.pos.x, b.pos.z, cam.focusTime > 0 ? cam.idx ?? -1 : -1);
-  cam.idx = hit.idx;
-  if (cam.focusTime <= 0) {
-    cam.focus = Math.random() < 0.6 ? race.boats.indexOf(race.player) : Math.floor(Math.random() * race.boats.length);
-    const focus = race.boats[cam.focus];
-    cam.idx = t.project(focus.pos.x, focus.pos.z).idx;
-    cam.shot = CANAL_SHOTS[Math.floor(Math.random() * CANAL_SHOTS.length)];
-    cam.focusTime = 4 + Math.random() * 3;
-    cam.side = Math.random() < 0.5 ? -1 : 1;
-    cam.anchor = null;
-    cam.snap = true;
-  }
-  const f = race.boats[cam.focus];
-  const level = f.waterY;
-  const room = (idx) => Math.max(2, t.widthAt(idx) - 4);
-  let desired;
-  if (cam.shot === 'chase' || cam.shot === 'lead' || cam.shot === 'high') {
-    const ahead = cam.shot === 'lead' ? 14 : cam.shot === 'high' ? -18 : -12;
-    const idx = cam.idx + Math.round(ahead / t.spacing);
-    const lateral = t.project(f.pos.x, f.pos.z, cam.idx).lateral * 0.7 + cam.side * 2.5;
-    const p = t.point(idx, clamp(lateral, -room(idx), room(idx)));
-    desired = new THREE.Vector3(p.x, level + (cam.shot === 'high' ? 15 : cam.shot === 'chase' ? 5.5 : 4.5), p.z);
-  } else {
-    if (!cam.anchor) {
-      const idx = cam.idx + Math.round(36 / t.spacing);
-      const p = t.point(idx, cam.side * room(idx));
-      cam.anchor = new THREE.Vector3(p.x, waveHeight(p.x, p.z, 0) + 2.5, p.z);
-    }
-    desired = cam.anchor.clone();
-    if (t.ahead(hit.s, t.project(desired.x, desired.z).s) > t.length / 2) cam.focusTime = Math.min(cam.focusTime, 0.6);
-  }
-  for (const o of race.boats) {
-    const gap = Math.hypot(o.pos.x - desired.x, o.pos.z - desired.z);
-    if (gap < 7) desired.y = Math.max(desired.y, o.pos.y + 4 + (7 - gap) * 0.9);
-  }
-  cam.pos.lerp(desired, k(cam.shot === 'bank' ? 20 : 6));
-  cam.look.lerp(new THREE.Vector3(f.pos.x, f.pos.y + 1, f.pos.z), k(8));
-}
+const cam = new Director(camera);
 
 function updateSawSound() {
   let level = 0;
@@ -725,92 +487,14 @@ function updateSawSound() {
   sfx.setFlame(flame);
 }
 
-function updateCamera(dt) {
-  if (import.meta.env.DEV && window.__bb?.freeCam) return;
-  const k = (rate) => (cam.snap ? 1 : 1 - Math.exp(-rate * dt));
-  let fov = 66;
-
-  if (mode === 'replay' && race.track.river) {
-    const b = race.boats[cam.focus];
-    if (b && cam.lastY !== undefined && Math.abs(b.waterY - cam.lastY) > 30) {
-      const dy = b.waterY - cam.lastY;
-      cam.pos.y += dy;
-      cam.look.y += dy;
-      if (cam.anchor) cam.anchor.y += dy;
-    }
-    riverShot(dt, k);
-    cam.lastY = race.boats[cam.focus].waterY;
-  } else if (mode === 'replay' && race.track.banked) {
-    canalShot(dt, k);
-  } else if (race.attract || !race.player || mode === 'replay') {
-    cam.focusTime -= dt;
-    if (cam.focusTime <= 0) {
-      const pickPlayer = mode === 'replay' && Math.random() < 0.6;
-      cam.focus = pickPlayer ? race.boats.indexOf(race.player) : Math.floor(Math.random() * race.boats.length);
-      cam.focusTime = 7;
-      cam.orbit = Math.random() * Math.PI * 2;
-      cam.snap = true;
-    }
-    const b = race.boats[cam.focus];
-    if (cam.lastY !== undefined && Math.abs(b.waterY - cam.lastY) > 30) {
-      cam.pos.y += b.waterY - cam.lastY;
-      cam.look.y += b.waterY - cam.lastY;
-    }
-    cam.lastY = b.waterY;
-    cam.orbit += dt * 0.18;
-    const desired = new THREE.Vector3(b.pos.x + Math.cos(cam.orbit) * 34, b.waterY + 12, b.pos.z + Math.sin(cam.orbit) * 30);
-    cam.pos.lerp(desired, k(3));
-    cam.look.lerp(new THREE.Vector3(b.pos.x, b.pos.y + 1, b.pos.z), k(6));
-  } else {
-    const b = race.player;
-    cam.heading = cam.snap ? b.heading : lerpAngle(cam.heading, b.heading, k(4.5));
-    const fx = Math.sin(cam.heading);
-    const fz = Math.cos(cam.heading);
-    const speedFrac = Math.max(0, Math.min(1.4, b.speed / BASE_SPEED));
-    const back = 11 + speedFrac * 2;
-    const chase = new THREE.Vector3(b.pos.x - fx * back, b.waterY + 6 + b.yOffset * (b.air?.fall ? 0.95 : 0.6), b.pos.z - fz * back);
-    let desired = chase;
-    if (race.state === 'countdown') {
-      const u = Math.min(1, Math.max(0, (COUNTDOWN - race.countdown) / (COUNTDOWN - 1)));
-      const e = u * u * (3 - 2 * u);
-      const a = 0.25 * Math.PI + e * 0.75 * Math.PI;
-      const radius = 15 + e * (back - 15);
-      desired = new THREE.Vector3(
-        b.pos.x + (fx * Math.cos(a) + fz * Math.sin(a)) * radius,
-        b.waterY + 4 + e * 3,
-        b.pos.z + (fz * Math.cos(a) - fx * Math.sin(a)) * radius,
-      );
-    }
-    cam.pos.lerp(desired, k(race.state === 'countdown' ? 20 : 12));
-    cam.look.lerp(new THREE.Vector3(b.pos.x + fx * 9, b.pos.y + 2, b.pos.z + fz * 9), k(10));
-    fov = 60 + speedFrac * 10;
-  }
-  cam.snap = false;
-
-  camera.position.copy(cam.pos);
-  if (shake > 0) {
-    camera.position.x += (Math.random() - 0.5) * shake;
-    camera.position.y += (Math.random() - 0.5) * shake;
-    shake = Math.max(0, shake - dt * 4);
-  }
-  camera.lookAt(cam.look);
-  if (Math.abs(camera.fov - fov) > 0.05) {
-    camera.fov += (fov - camera.fov) * (1 - Math.exp(-3 * dt));
-    camera.updateProjectionMatrix();
-  }
-}
-
 function handleEvents() {
   for (const e of race.events) {
     if (race.attract) continue;
     hud.handle(e);
-    if (e.type === 'hurt') shake = Math.max(shake, HURT_SHAKE[e.kind] ?? 1.2);
-    if (e.type === 'ko') shake = 1.6;
-    if (e.type === 'lockShake') shake = Math.max(shake, e.amount);
-    if (e.type === 'warp') {
-      cam.pos.y += e.dy;
-      cam.look.y += e.dy;
-    }
+    if (e.type === 'hurt') cam.bump(HURT_SHAKE[e.kind] ?? 1.2);
+    if (e.type === 'ko') cam.shake = 1.6;
+    if (e.type === 'lockShake') cam.bump(e.amount);
+    if (e.type === 'warp') cam.lift(e.dy);
     if (e.type === 'finish') resultsTimer = 3.5;
     if (e.type === 'go') sfx.playMusic('race');
   }
@@ -839,10 +523,6 @@ function frame(now) {
     const steps = import.meta.env.DEV ? (window.__bb?.steps ?? 1) : 1;
     if (mode === 'replay') {
       for (let i = 0; i < steps; i++) replay.step(dt);
-      if (replaySongAt !== null && replay.time >= replaySongAt) {
-        sfx.playMusic('race', { at: replay.time - replaySongAt, loop: false });
-        replaySongAt = null;
-      }
       if (replay.done) endReplay();
     } else if (!race.frozen) {
       for (let i = 0; i < steps; i++) {
@@ -860,17 +540,17 @@ function frame(now) {
         const near = Math.max(0, 1 - e.pos.distanceTo(camera.position) / 320);
         if (near <= 0) continue;
         if (mode === 'race' || mode === 'replay' || mode === 'results') sfx.play(e.type === 'boom' ? 'mineBoom' : 'splash', e.pos);
-        if (e.type === 'boom' && mode !== 'paused') shake = Math.max(shake, e.power * near * near);
+        if (e.type === 'boom' && mode !== 'paused') cam.bump(e.power * near * near);
       }
     }
     if (resultsTimer > 0) {
       resultsTimer -= dt;
       if (resultsTimer <= 0 && mode === 'race') showResults();
     }
-    if (mode === 'results' && Math.floor(time * 2) !== Math.floor((time - dt) * 2)) renderResults();
+    if (mode === 'results' && Math.floor(time * 2) !== Math.floor((time - dt) * 2)) renderResults(race);
   }
 
-  updateCamera(dt);
+  if (!(import.meta.env.DEV && window.__bb?.freeCam)) cam.update(dt, race, mode === 'replay');
   if (race.player && !race.attract && mode !== 'replay') {
     hud.update(race, camera, mode === 'paused' ? 0 : dt);
     sfx.listener = race.player.pos;
