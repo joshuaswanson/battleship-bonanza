@@ -188,7 +188,7 @@ function newRace(attract, map = pickMap(attract)) {
   $('replay-ui').classList.add('hidden');
   race?.dispose();
   useVenue(map);
-  race = new Race({ scene, track: current.track, fx, sfx: attract ? SILENT : sfx, shores: current.world.shores, defs: makeDefs(attract ? null : setup), attract });
+  race = new Race({ scene, track: current.track, fx, sfx: attract ? SILENT : sfx, shores: current.world.shores, solid: current.world.solid, defs: makeDefs(attract ? null : setup), attract });
   if (!attract) recorder = new Recorder(race, fx);
   cam.snap = true;
 }
@@ -561,6 +561,51 @@ function riverShot(dt, k) {
   cam.look.lerp(new THREE.Vector3(f.pos.x, f.pos.y + 1, f.pos.z), k(8));
 }
 
+const CANAL_SHOTS = ['chase', 'lead', 'bank', 'high', 'chase', 'lead'];
+
+function canalShot(dt, k) {
+  const t = race.track;
+  cam.focusTime -= dt;
+  const b = race.boats[cam.focus] ?? race.player;
+  const hit = t.project(b.pos.x, b.pos.z, cam.focusTime > 0 ? cam.idx ?? -1 : -1);
+  cam.idx = hit.idx;
+  if (cam.focusTime <= 0) {
+    cam.focus = Math.random() < 0.6 ? race.boats.indexOf(race.player) : Math.floor(Math.random() * race.boats.length);
+    const focus = race.boats[cam.focus];
+    cam.idx = t.project(focus.pos.x, focus.pos.z).idx;
+    cam.shot = CANAL_SHOTS[Math.floor(Math.random() * CANAL_SHOTS.length)];
+    cam.focusTime = 4 + Math.random() * 3;
+    cam.side = Math.random() < 0.5 ? -1 : 1;
+    cam.anchor = null;
+    cam.snap = true;
+  }
+  const f = race.boats[cam.focus];
+  const level = f.waterY;
+  const room = (idx) => Math.max(2, t.widthAt(idx) - 4);
+  let desired;
+  if (cam.shot === 'chase' || cam.shot === 'lead' || cam.shot === 'high') {
+    const ahead = cam.shot === 'lead' ? 14 : cam.shot === 'high' ? -18 : -12;
+    const idx = cam.idx + Math.round(ahead / t.spacing);
+    const lateral = t.project(f.pos.x, f.pos.z, cam.idx).lateral * 0.7 + cam.side * 2.5;
+    const p = t.point(idx, clamp(lateral, -room(idx), room(idx)));
+    desired = new THREE.Vector3(p.x, level + (cam.shot === 'high' ? 15 : cam.shot === 'chase' ? 5.5 : 4.5), p.z);
+  } else {
+    if (!cam.anchor) {
+      const idx = cam.idx + Math.round(36 / t.spacing);
+      const p = t.point(idx, cam.side * room(idx));
+      cam.anchor = new THREE.Vector3(p.x, waveHeight(p.x, p.z, 0) + 2.5, p.z);
+    }
+    desired = cam.anchor.clone();
+    if (t.ahead(hit.s, t.project(desired.x, desired.z).s) > t.length / 2) cam.focusTime = Math.min(cam.focusTime, 0.6);
+  }
+  for (const o of race.boats) {
+    const gap = Math.hypot(o.pos.x - desired.x, o.pos.z - desired.z);
+    if (gap < 7) desired.y = Math.max(desired.y, o.pos.y + 4 + (7 - gap) * 0.9);
+  }
+  cam.pos.lerp(desired, k(cam.shot === 'bank' ? 20 : 6));
+  cam.look.lerp(new THREE.Vector3(f.pos.x, f.pos.y + 1, f.pos.z), k(8));
+}
+
 function updateSawSound() {
   let level = 0;
   let grinding = 0;
@@ -601,6 +646,8 @@ function updateCamera(dt) {
     }
     riverShot(dt, k);
     cam.lastY = race.boats[cam.focus].waterY;
+  } else if (mode === 'replay' && race.track.banked) {
+    canalShot(dt, k);
   } else if (race.attract || !race.player || mode === 'replay') {
     cam.focusTime -= dt;
     if (cam.focusTime <= 0) {
@@ -773,7 +820,7 @@ if (import.meta.env.DEV) {
       race?.dispose();
       const defs = PAINTS.map((paint, i) => ({ name: `Boat ${i + 1}`, color: paint.value, items: arrange(shuffle(ITEM_IDS).slice(0, 2)) }));
       useVenue(map);
-      race = new Race({ scene, track: current.track, fx, sfx, shores: current.world.shores, defs, attract: false });
+      race = new Race({ scene, track: current.track, fx, sfx, shores: current.world.shores, solid: current.world.solid, defs, attract: false });
       mode = 'sim';
       hud.show(false);
       showScreen(null);

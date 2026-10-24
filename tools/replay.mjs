@@ -8,9 +8,9 @@ await waitForResults(page);
 await page.click('#btn-replay');
 await wait(1500);
 check('replay is playing', await page.evaluate(() => !document.getElementById('replay-ui').classList.contains('hidden')));
-for (let i = 0; i < 3; i++) {
+for (let i = 0; i < 6; i++) {
   await page.screenshot({ path: `tools/shots/replay-${map}-${i}.png` });
-  await wait(3000);
+  await wait(2500);
 }
 const rate = await fps(page);
 check('replay frame rate', rate >= 55, `${rate} fps`);
