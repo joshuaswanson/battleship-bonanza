@@ -18,6 +18,14 @@ export const methods = {
         const angle = m.dir.angleTo(desired);
         const maxTurn = 2.5 * dt;
         m.dir.lerp(desired, angle > maxTurn ? maxTurn / angle : 1).normalize();
+        if (this.solid) {
+          const probe = c.copy(m.pos).addScaledVector(m.dir, 10);
+          const blocked = this.solid(probe) || this.solid(probe.addScaledVector(m.dir, 8));
+          if (blocked) {
+            m.dir.y = Math.max(m.dir.y, 0.75);
+            m.dir.normalize();
+          }
+        }
       } else {
         m.target = null;
         m.dir.y = approach(m.dir.y, -0.04, dt);
@@ -25,7 +33,7 @@ export const methods = {
       }
       const before = m.pos.clone();
       m.pos.addScaledVector(m.dir, m.speed * dt);
-      const wall = m.fizzle > 0 ? null : this.surfaceHit(before, m.pos);
+      const wall = m.fizzle > 0 || m.target ? null : this.surfaceHit(before, m.pos);
       if (wall) {
         m.pos.copy(wall.point);
         this.fx.impact('crater', wall.point, wall.normal, 3.2 + Math.random() * 1.2);
