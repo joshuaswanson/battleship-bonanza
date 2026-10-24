@@ -3,11 +3,11 @@ import { launch, startRace, waitForGo, wait } from './lib.mjs';
 const shots = {
   bay: () => {
     const t = window.__bb.race.track;
-    const k = Math.round(t.N * 0.93);
-    const k2 = Math.round(t.N * 0.02);
+    const k = Math.round(0.2 * t.N) - 30;
+    const k2 = Math.round(0.2 * t.N) + 10;
     const c = window.__bb.camera;
-    c.position.set(t.px[k] + t.nx[k] * 45, 26, t.pz[k] + t.nz[k] * 45);
-    c.lookAt(t.px[k2], 0, t.pz[k2]);
+    c.position.set(t.px[k] + t.nx[k] * 4, 6, t.pz[k] + t.nz[k] * 4);
+    c.lookAt(t.px[k2], 13, t.pz[k2]);
   },
   jungle: () => {
     const t = window.__bb.race.track;
