@@ -334,13 +334,15 @@ async function wipe(fn) {
 }
 
 const MAP_CHOICES = ['bay', 'jungle', 'alps', 'venice', 'random'];
+const die = (pips, cls) => `<svg class="die ${cls}" viewBox="0 0 40 40"><rect x="3" y="3" width="34" height="34" rx="9" fill="#fff" stroke="#0E2A47" stroke-width="3.5"/>${pips.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="3.6" fill="#0E2A47"/>`).join('')}</svg>`;
+const DICE = die([[12, 12], [20, 20], [28, 28]], 'die-a') + die([[12, 12], [28, 12], [12, 28], [28, 28], [20, 20]], 'die-b');
 function renderMaps() {
   $('map-cards').innerHTML = MAP_CHOICES.map((id, i) => {
     const art = id === 'random' ? 'map-art random' : 'map-art';
     const tile = (map) => `background-image:url('${import.meta.env.BASE_URL}maps/${map}.jpg')`;
     const style = id === 'random' ? '' : ` style="${tile(id)}"`;
     return `<button class="map-card${id === 'random' ? ' surprise' : ''}" role="radio" data-map="${id}" aria-checked="${setup.map === id}" style="--i:${i}">
-      <div class="${art}"${style}></div>
+      <div class="${art}"${style}>${id === 'random' ? DICE : ''}</div>
       <div class="map-text"><h3>${t(`map_${id}`)}</h3><p>${t(`mapBlurb_${id}`)}</p></div>
     </button>`;
   }).join('');

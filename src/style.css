@@ -543,30 +543,62 @@ kbd {
 
 .map-card.surprise {
   grid-column: 1 / span 2;
+  justify-self: center;
   flex-direction: row;
   align-items: center;
+  gap: 0.2rem;
+  padding: 0.35rem 1.4rem 0.35rem 0.5rem;
+  border-radius: 999px;
 }
 
 .map-card.surprise .map-art {
+  position: relative;
   flex: none;
-  width: 58px;
-  height: 100%;
-  min-height: 52px;
+  width: 74px;
+  height: 46px;
   aspect-ratio: auto;
-  border-bottom: none;
-  border-right: 4px solid var(--ink);
+  border: none;
+  background: none;
 }
 
 .map-card.surprise .map-text {
   display: flex;
   align-items: baseline;
   gap: 0.7rem;
-  padding: 0.55rem 0.9rem;
+  padding: 0;
 }
 
 .map-card.surprise .map-text h3 {
   margin: 0;
   white-space: nowrap;
+}
+
+.die {
+  position: absolute;
+  width: 36px;
+  height: 36px;
+  filter: drop-shadow(0 3px 0 #0e2a47);
+  transition: transform 260ms cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+
+.die-a {
+  left: 4px;
+  top: 6px;
+  transform: rotate(-14deg);
+}
+
+.die-b {
+  left: 32px;
+  top: 2px;
+  transform: rotate(12deg);
+}
+
+.map-card.surprise:hover .die-a {
+  transform: rotate(-200deg) translateY(-4px);
+}
+
+.map-card.surprise:hover .die-b {
+  transform: rotate(190deg) translateY(-6px);
 }
 
 .map-card:not(.surprise) .map-art {
@@ -628,26 +660,6 @@ kbd {
   border-bottom: 4px solid var(--ink);
   background-size: cover;
   background-position: center;
-}
-
-.map-art.random {
-  background: var(--sun);
-}
-
-.map-art.random::after {
-  content: '?';
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  font-family: var(--race);
-  font-weight: 900;
-  font-size: 2.6rem;
-  line-height: 1;
-  color: #ffffff;
-  -webkit-text-stroke: 3px var(--ink);
-  paint-order: stroke fill;
-  text-shadow: 0 3px 0 var(--ink);
 }
 
 .map-text {
@@ -2704,9 +2716,6 @@ kbd {
   }
   .map-text p {
     font-size: 0.75rem;
-  }
-  .map-art.random::after {
-    font-size: 2rem;
   }
   #btn-go {
     min-width: 0;
