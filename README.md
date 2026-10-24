@@ -15,6 +15,5 @@ Play it [here](https://joshuaswanson.github.io/battleship-bonanza/).
 - **3D models:** built in code from three.js geometry
 - **Rendering speed:** merged geometry (`BufferGeometryUtils`) and instanced meshes (`InstancedMesh`)
 - **Audio:** Web Audio API for sound effects, HTML audio for the music
-- **Fonts:** Fredoka and Saira Condensed from [Fontsource](https://fontsource.org)
 - **Testing:** [Puppeteer](https://pptr.dev) driving headless Chrome, run by GitHub Actions before each deploy
 - **Hosting:** GitHub Pages
