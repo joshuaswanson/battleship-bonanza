@@ -4,7 +4,7 @@ import { toon, mulberry32 } from './toon.js';
 import { Batcher, cullChunks, slicer, COLORS, mat, ROCK, createSky, createCloud, createArch, SUN_DIR } from './world.js';
 import { courseSurface, buildHeightfield, courseBuoys, swissFlag, flagClock, smooth, noise } from './terrain.js';
 import { FLORA_COLORS, tree, sapling, boulder, cow, loadCowKit } from './alpine.js';
-import { LANDMARK_COLORS, castle, coveredBridge, waterTower, buildSteamer } from './alpsLandmarks.js';
+import { LANDMARK_COLORS, castle, coveredBridge, waterTower, buildSteamer, chalet } from './alpsLandmarks.js';
 
 const ALPS_COLORS = {
   ...COLORS,
@@ -55,28 +55,6 @@ function placer(batch) {
   };
 }
 
-function chalet(batch, x, y, z, yaw, rand) {
-  const put = placer(batch);
-  const o = new THREE.Vector3(x, y, z);
-  const w = 7 + rand() * 3;
-  const d = 6 + rand() * 2.5;
-  put('stoneDark', BOX, o, yaw, 0, -1.2, 0, w + 0.4, 3, d + 0.4);
-  put('plaster', BOX, o, yaw, 0, 1.8, 0, w, 3.6, d);
-  put('wood', BOX, o, yaw, 0, 5.2, 0, w, 3.2, d);
-  put(rand() < 0.6 ? 'roof' : 'roofRed', ROOF, o, yaw, 0, 6.8, 0, w / 2 + 1.1, 3.4, d + 1.6);
-  put('woodDark', BOX, o, yaw, 0, 3.9, d / 2 + 0.7, w + 0.6, 0.3, 1.4);
-  put('woodDark', BOX, o, yaw, 0, 4.6, d / 2 + 1.35, w + 0.6, 1, 0.15);
-  put('flower', BOX, o, yaw, 0, 5.3, d / 2 + 1.4, w * 0.9, 0.5, 0.5);
-  put('flowerLeaf', BOX, o, yaw, 0, 5.05, d / 2 + 1.42, w * 0.92, 0.25, 0.55);
-  for (const lx of [-w / 4, w / 4]) {
-    for (const fy of [1.9, 5.4]) {
-      put('window', BOX, o, yaw, lx, fy, d / 2 + 0.05, 1.3, 1.3, 0.2);
-      put('shutter', BOX, o, yaw, lx - 1.05, fy, d / 2 + 0.08, 0.5, 1.4, 0.15);
-      put('shutter', BOX, o, yaw, lx + 1.05, fy, d / 2 + 0.08, 0.5, 1.4, 0.15);
-    }
-  }
-}
-
 function church(batch, x, y, z, yaw) {
   const put = placer(batch);
   const o = new THREE.Vector3(x, y, z);
@@ -90,20 +68,6 @@ function church(batch, x, y, z, yaw) {
   put('clock', CYL, o, yaw, 0, 18.5, 6.65, 1.5, 0.15, 1.5, Math.PI / 2);
   put('window', BOX, o, yaw, 0, 18.5, 6.75, 0.15, 1.2, 0.12, 0, 0.5);
   for (const lz of [-11, -6, -1]) for (const side of [-1, 1]) put('window', BOX, o, yaw, side * 4.55, 5, lz, 0.2, 3.2, 1.4);
-}
-
-function buildJet() {
-  const group = new THREE.Group();
-  const material = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 });
-  const column = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 1.4, 1, 10, 1, true), material);
-  column.scale.set(1, 70, 1);
-  column.position.y = 35;
-  group.add(column);
-  const plume = new THREE.Mesh(BALL, material);
-  plume.scale.set(3, 5, 3);
-  plume.position.y = 70;
-  group.add(plume);
-  return group;
 }
 
 export async function createAlps(group, track, fx) {
@@ -160,6 +124,7 @@ export async function createAlps(group, track, fx) {
   };
   const { minX, maxX, minZ, maxZ } = surface.bounds;
   const taken = [];
+  const shores = [];
   const free = (x, z, r) => !taken.some((o) => Math.hypot(o.x - x, o.z - z) < o.r + r);
 
   const shoreline = (idx, sign) => {
@@ -198,6 +163,7 @@ export async function createAlps(group, track, fx) {
       const pierLen = edge.lat - track.hw[i] + 4;
       const start = track.point(i, villageSide * (track.hw[i] + 5 + pierLen / 2));
       put('wood', BOX, new THREE.Vector3(start.x, 0, start.z), yaw, 0, 1.2, 0, 4, 0.5, pierLen);
+      shores.push({ x: start.x, z: start.z, rx: 2, rz: pierLen / 2, rot: yaw });
       for (let k = -pierLen / 2; k <= pierLen / 2; k += 4) for (const lx of [-1.8, 1.8]) put('woodDark', BOX, new THREE.Vector3(start.x, 0, start.z), yaw, lx, -0.5, k, 0.4, 3.5, 0.4);
       const flagAt = track.point(i, villageSide * (track.hw[i] + 6));
       swissFlag(batch, group, flagAt.x, 1.4, flagAt.z, yaw, 1);
@@ -215,18 +181,6 @@ export async function createAlps(group, track, fx) {
   group.userData.castle = { x: castleAt.p.x, z: castleAt.p.z };
   taken.push({ x: castleAt.p.x, z: castleAt.p.z, r: 26 });
 
-  const jet = buildJet();
-  const jetAt = (() => {
-    const idx = Math.round(0.14 * N);
-    const i = track.wrap(idx);
-    for (const lat of [26, 20, 14]) {
-      const p = track.point(i, villageSide * (track.hw[i] + lat));
-      if (height(p.x, p.z) < -2) return p;
-    }
-    return track.point(i, villageSide * (track.hw[i] + 12));
-  })();
-  jet.position.set(jetAt.x, 0, jetAt.z);
-  group.add(jet);
 
   {
     const idx = Math.round(0.62 * N);
@@ -341,6 +295,21 @@ export async function createAlps(group, track, fx) {
   group.add(buoys);
   group.add(createArch(track, track.hw[0]));
 
+  const reachOut = [new Float32Array(N), new Float32Array(N)];
+  for (let i = 0; i < N; i++) {
+    for (const [k, sign] of [[0, -1], [1, 1]]) {
+      let lat = track.hw[i];
+      while (lat < track.hw[i] + 50) {
+        const p = track.point(i, sign * lat);
+        if (height(p.x, p.z) > -1.5) break;
+        lat += 1;
+      }
+      reachOut[k][i] = Math.max(track.hw[i] - 2.5, Math.min(track.hw[i] + 45, lat - 4));
+    }
+  }
+  track.reach = reachOut;
+  shores.push({ x: castleAt.p.x, z: castleAt.p.z, rx: 19, rz: 19, rot: 0 });
+
   const steamer = buildSteamer();
   group.add(steamer.group);
   steamer.group.userData.steamer = true;
@@ -360,6 +329,8 @@ export async function createAlps(group, track, fx) {
   const route = wet(laneA) && wet(laneB) ? new THREE.CatmullRomCurve3([...laneA, ...laneB], true, 'centripetal') : null;
   const routeLength = route ? route.getLength() : 1;
   let smoke = 0;
+  const hull = { x: 0, z: -9999, rx: 4.8, rz: 14.5, rot: 0 };
+  shores.push(hull);
 
   const clouds = [];
   for (let i = 0; i < 14; i++) {
@@ -377,7 +348,7 @@ export async function createAlps(group, track, fx) {
     water,
     sun,
     surface,
-    shores: [],
+    shores,
     update(t, dt, camera) {
       water.update(t);
       cullChunks(chunks, camera, fog.far);
@@ -395,6 +366,9 @@ export async function createAlps(group, track, fx) {
         const ship = steamer.group;
         ship.position.set(p.x, Math.sin(t * 1.1) * 0.12 - 0.2, p.z);
         ship.rotation.set(Math.sin(t * 0.9) * 0.015, Math.atan2(d.x, d.z), Math.sin(t * 1.3) * 0.02);
+        hull.x = p.x;
+        hull.z = p.z;
+        hull.rot = ship.rotation.y;
         for (const wheel of steamer.wheels) wheel.rotation.x = t * 2.2;
         ship.updateMatrixWorld();
         smoke -= dt;
@@ -408,9 +382,6 @@ export async function createAlps(group, track, fx) {
           fx.splash(wheel.x, 0.2, wheel.z, 0.35);
         }
       }
-      jet.scale.y = 1 + 0.04 * Math.sin(t * 9);
-      if (Math.random() < dt * 14) fx.droplet(jetAt.x + (Math.random() - 0.5) * 2, 66 + Math.random() * 6, jetAt.z + (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 6, -2, (Math.random() - 0.5) * 6, 0.6);
-      if (Math.random() < dt * 6) fx.mist(jetAt.x, 0.5, jetAt.z);
     },
   };
 }

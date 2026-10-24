@@ -44,6 +44,18 @@ export const LANDMARK_COLORS = {
   rock0: 0x8a857e,
   rock1: 0x9d978e,
   rock2: 0xb1aca3,
+  chaletPlaster: 0xf7f2e6,
+  chaletWood: 0x9b5f32,
+  chaletWoodRed: 0x8a4a2a,
+  chaletWoodGold: 0xb07440,
+  logLine: 0x4a2c18,
+  slate: 0x5c6168,
+  shutterGreen: 0x3f8f5a,
+  shutterRed: 0xc0392b,
+  shutterWhite: 0xf7f2e6,
+  firewood: 0xb07a48,
+  firewoodEnd: 0xe0b77e,
+  inscription: 0xfaf3e0,
 };
 
 const BOX = new THREE.BoxGeometry(1, 1, 1);
@@ -281,6 +293,120 @@ export function castle(batch, group, x, z, yaw, rand, shoreGap) {
     pennant.rotation.y = yaw + rand() * 0.6;
     group.add(pennant);
   }
+}
+
+function shutter(put, x, y, z, h, style, side) {
+  if (style === 'chevron') {
+    for (let k = 0; k < 4; k++) put(k % 2 ? 'shutterWhite' : 'shutterRed', BOX, x, y - h / 2 + (k + 0.5) * (h / 4), z, 0.55, h / 4, 0.12, 0, 0, side * 0.0);
+  } else {
+    put(style, BOX, x, y, z, 0.55, h, 0.12);
+    for (const dy of [-h / 3, 0, h / 3]) put('logLine', BOX, x, y + dy, z + 0.07, 0.5, 0.05, 0.02);
+  }
+}
+
+function chaletWindow(put, x, y, z, ry, style, rand, flowers) {
+  const fx = Math.sin(ry);
+  const fz = Math.cos(ry);
+  const at = (u, v, out) => [x + fz * u + fx * out, y + v, z - fx * u + fz * out];
+  put('chaletPlaster', BOX, ...at(0, 0, 0.02), 1.5, 1.6, 0.16, 0, ry);
+  put('glass', BOX, ...at(0, 0, 0.06), 1.15, 1.25, 0.16, 0, ry);
+  put('chaletPlaster', BOX, ...at(0, 0, 0.12), 0.08, 1.25, 0.06, 0, ry);
+  put('chaletPlaster', BOX, ...at(0, 0.15, 0.12), 1.15, 0.08, 0.06, 0, ry);
+  const s = (u) => {
+    const p = at(u, 0, 0.1);
+    shutter((key, g, px, py, pz, sx, sy, sz) => put(key, g, px, py, pz, sx, sy, sz, 0, ry), p[0], p[1], p[2], 1.5, style, 1);
+  };
+  s(-1.05);
+  s(1.05);
+  if (flowers) {
+    put('timberDark', BOX, ...at(0, -0.95, 0.35), 1.5, 0.35, 0.45, 0, ry);
+    for (let k = 0; k < 5; k++) {
+      put(rand() < 0.7 ? 'geranium' : 'geraniumPink', BALL, ...at(-0.6 + k * 0.3, -0.68 + rand() * 0.08, 0.4 + rand() * 0.1), 0.17, 0.15, 0.17);
+      put('geraniumLeaf', BALL, ...at(-0.55 + k * 0.3, -0.85, 0.58), 0.18, 0.12, 0.14);
+    }
+  }
+}
+
+export function chalet(batch, x, y, z, yaw, rand) {
+  const put = frame(batch, x, y, z, yaw, 0, 0, 1);
+  const w = 8 + rand() * 4;
+  const d = 7 + rand() * 3;
+  const floors = rand() < 0.35 ? 2 : 1;
+  const ground = 3.2;
+  const level = 2.8;
+  const top = ground + floors * level;
+  const wood = pick(['chaletWood', 'chaletWoodRed', 'chaletWoodGold'], rand);
+  const roofKey = pick(['shingleDark', 'shingle', 'slate', 'tileDark'], rand);
+  const style = pick(['shutterGreen', 'shutterRed', 'chevron', 'shutterGreen'], rand);
+  const overhang = 1.8 + rand() * 0.8;
+  const run = w / 2 + overhang;
+  const rise = w * (0.22 + rand() * 0.08);
+  const pitch = Math.atan2(rise, w / 2);
+  const slope = run / Math.cos(pitch);
+
+  put('stoneDark', BOX, 0, -3.2, 0, w + 0.5, 6.6, d + 0.5);
+  put('chaletPlaster', BOX, 0, ground / 2, 0, w, ground, d);
+  for (const [cx, cz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+    for (let yy = 0.4; yy < ground; yy += 0.7) put('stone', BOX, cx * (w / 2 - 0.3), yy, cz * (d / 2 - 0.3), 0.7, 0.55, 0.7);
+  }
+  put(wood, BOX, 0, ground + (floors * level) / 2, 0, w, floors * level, d);
+  for (let yy = ground + 0.45; yy < top; yy += 0.45) {
+    put('logLine', BOX, 0, yy, d / 2 + 0.01, w, 0.06, 0.04);
+    put('logLine', BOX, 0, yy, -d / 2 - 0.01, w, 0.06, 0.04);
+    put('logLine', BOX, w / 2 + 0.01, yy, 0, 0.04, 0.06, d);
+    put('logLine', BOX, -w / 2 - 0.01, yy, 0, 0.04, 0.06, d);
+    for (const [cx, cz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      const along = Math.round((yy - ground) / 0.45) % 2 === 0;
+      put(wood, BOX, cx * (w / 2 + (along ? 0.25 : 0)), yy - 0.2, cz * (d / 2 + (along ? 0 : 0.25)), along ? 0.6 : 0.4, 0.38, along ? 0.4 : 0.6);
+    }
+  }
+  const gable = new THREE.Shape([new THREE.Vector2(-w / 2, 0), new THREE.Vector2(w / 2, 0), new THREE.Vector2(0, rise)]);
+  const gableGeometry = new THREE.ExtrudeGeometry(gable, { depth: d, bevelEnabled: false }).translate(0, 0, -d / 2);
+  put(wood, gableGeometry, 0, top, 0, 1, 1, 1);
+  for (let yy = top + 0.45; yy < top + rise - 0.3; yy += 0.45) {
+    const half = (w / 2) * (1 - (yy - top) / rise);
+    for (const zz of [d / 2 + 0.01, -d / 2 - 0.01]) put('logLine', BOX, 0, yy, zz, half * 2, 0.06, 0.04);
+  }
+  for (const side of [-1, 1]) {
+    put(roofKey, BOX, side * (run / 2 - overhang / 2 + 0.05) * 1, top + rise / 2 - (overhang * Math.tan(pitch)) / 2 + 0.25, 0, slope, 0.35, d + overhang * 2, 0, 0, -side * pitch);
+    put('timberDark', BOX, side * (run / 2 - overhang / 2), top + rise / 2 - (overhang * Math.tan(pitch)) / 2 + 0.05, d / 2 + overhang + 0.05, slope, 0.45, 0.18, 0, 0, -side * pitch);
+    put('timberDark', BOX, side * (run / 2 - overhang / 2), top + rise / 2 - (overhang * Math.tan(pitch)) / 2 + 0.05, -d / 2 - overhang - 0.05, slope, 0.45, 0.18, 0, 0, -side * pitch);
+    for (let zz = -d / 2 - overhang + 0.6; zz <= d / 2 + overhang - 0.5; zz += 1.1) {
+      put('timberDark', BOX, side * (w / 2 + overhang * 0.55), top - overhang * Math.tan(pitch) * 0.55 + 0.05, zz, overhang * 1.1, 0.2, 0.22, 0, 0, -side * pitch);
+    }
+  }
+  for (const lx of [-w / 4, 0, w / 4]) put('timberDark', BOX, lx, top + rise * (1 - Math.abs(lx) / (w / 2)) - 0.35, 0, 0.35, 0.35, d + overhang * 2 + 0.3);
+  put('inscription', BOX, 0, top - 0.25, d / 2 + 0.05, w * 0.7, 0.45, 0.06);
+  for (let k = 0; k < 6; k++) put('logLine', BOX, -w * 0.3 + k * w * 0.12, top - 0.25, d / 2 + 0.09, w * 0.08, 0.06, 0.02);
+
+  for (const lx of [-w / 4, w / 4]) chaletWindow(put, lx, 1.8, d / 2 + 0.02, 0, style, rand, rand() < 0.5);
+  put('chaletWood', BOX, w / 2 - 1.4, 1.2, d / 2 + 0.06, 1.2, 2.3, 0.15);
+  put('timberDark', BOX, w / 2 - 1.4, 2.5, d / 2 + 0.5, 1.8, 0.15, 1);
+  for (let f = 0; f < floors; f++) {
+    const fy = ground + level * f + 1.4;
+    const cols = w > 10 ? 3 : 2;
+    for (let c = 0; c < cols; c++) chaletWindow(put, (c - (cols - 1) / 2) * (w / cols), fy, d / 2 + 0.02, 0, style, rand, false);
+    for (const side of [-1, 1]) chaletWindow(put, side * (w / 2 + 0.02), fy, 0, side * Math.PI / 2, style, rand, rand() < 0.4);
+  }
+  const by = ground + 0.1;
+  put('timberDark', BOX, 0, by, d / 2 + 0.75, w + 0.8, 0.25, 1.5);
+  for (let u = -w / 2 - 0.3; u <= w / 2 + 0.31; u += 0.32) put(wood, BOX, u, by + 0.6, d / 2 + 1.45, 0.22, 1, 0.08);
+  put('timberDark', BOX, 0, by + 1.15, d / 2 + 1.45, w + 0.9, 0.14, 0.2);
+  put('timberDark', BOX, 0, by + 1.05, d / 2 + 1.75, w + 0.6, 0.35, 0.45);
+  for (let u = -w / 2; u <= w / 2; u += 0.32) {
+    put(rand() < 0.75 ? 'geranium' : 'geraniumPink', BALL, u + (rand() - 0.5) * 0.15, by + 1.35 + rand() * 0.1, d / 2 + 1.75 + (rand() - 0.5) * 0.15, 0.18, 0.16, 0.18);
+    put('geraniumLeaf', BALL, u, by + 1.05, d / 2 + 1.95, 0.2, 0.22, 0.12);
+  }
+  for (const side of [-1, 1]) put('timberDark', BOX, side * (w / 2 + 0.2), ground / 2, d / 2 + 1.35, 0.25, ground, 0.25);
+  const fireSide = rand() < 0.5 ? -1 : 1;
+  for (let row = 0; row < 4; row++) {
+    for (let k = 0; k < 7; k++) {
+      put('firewood', CYL, fireSide * (w / 2 + 0.45), 0.25 + row * 0.42, -d / 2 + 1 + k * 0.42 + (row % 2) * 0.2, 0.2, 0.8, 0.2, 0, 0, Math.PI / 2);
+      put('firewoodEnd', CYL, fireSide * (w / 2 + 0.86), 0.25 + row * 0.42, -d / 2 + 1 + k * 0.42 + (row % 2) * 0.2, 0.17, 0.02, 0.17, 0, 0, Math.PI / 2);
+    }
+  }
+  put('stone', BOX, -w / 4, top + rise * 0.55, -d / 4, 0.9, 2.6, 0.9);
+  put('slate', BOX, -w / 4, top + rise * 0.55 + 1.45, -d / 4, 1.3, 0.2, 1.3);
 }
 
 export function coveredBridge(batch, track, idx, height) {
