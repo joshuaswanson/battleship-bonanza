@@ -211,6 +211,7 @@ export class Batcher {
         const line = new THREE.InstancedMesh(source, outlineMaterial(outline), list.length);
         line.instanceMatrix = mesh.instanceMatrix;
         line.boundingSphere = mesh.boundingSphere;
+        line.userData.outline = true;
         parent.add(line);
       }
     }
@@ -222,11 +223,11 @@ export class Batcher {
       for (const attribute of [...Object.values(geometry.attributes), geometry.index]) attribute.onUpload(releaseArray);
       if (kind === 'chop') {
         parent.add(new THREE.Mesh(geometry, this.chopper.material()));
-        if (outline) parent.add(new THREE.Mesh(geometry, this.chopper.outline(outline)));
+        if (outline) parent.add(outlineMesh(geometry, this.chopper.outline(outline)));
         continue;
       }
       parent.add(new THREE.Mesh(geometry, kind === 'mossy' ? mossyRock() : VERTEX_TOON()));
-      if (outline && kind !== 'plain') parent.add(new THREE.Mesh(geometry, outlineMaterial(outline)));
+      if (outline && kind !== 'plain') parent.add(outlineMesh(geometry, outlineMaterial(outline)));
     }
   }
 }
@@ -248,14 +249,25 @@ export function slicer(budget = 6) {
   };
 }
 
+function outlineMesh(geometry, material) {
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.userData.outline = true;
+  return mesh;
+}
+
+const OUTLINE_FAR = 250;
+
 export function cullChunks(chunks, camera, far) {
   const { x, z } = camera.position;
   for (const c of chunks) {
     if (c.group.matrixWorldAutoUpdate) {
       c.group.updateWorldMatrix(true, true);
       c.group.matrixWorldAutoUpdate = false;
+      c.lines = c.group.children.filter((o) => o.userData.outline);
     }
-    c.group.visible = Math.hypot(c.x - x, c.z - z) - c.radius < far;
+    const gap = Math.hypot(c.x - x, c.z - z) - c.radius;
+    c.group.visible = gap < far;
+    for (const line of c.lines) line.visible = gap < OUTLINE_FAR;
   }
 }
 
