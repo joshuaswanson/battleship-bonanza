@@ -169,6 +169,18 @@ function prepareVenue(id) {
   return building[id];
 }
 
+function disposeVenue(id) {
+  const { group } = venues[id];
+  delete venues[id];
+  delete building[id];
+  scene.remove(group);
+  group.traverse((o) => {
+    if (o.isInstancedMesh) o.dispose();
+    o.geometry?.dispose();
+    for (const material of [o.material ?? []].flat()) for (const value of Object.values(material)) if (value?.isTexture) value.dispose();
+  });
+}
+
 {
   const track = createTrack(MAPS.bay);
   const group = new THREE.Group();
@@ -358,6 +370,7 @@ async function startRace() {
   const map = pickMap(false);
   await prepareVenue(map);
   newRace(false, map);
+  for (const id of Object.keys(venues)) if (id !== 'bay' && id !== map) disposeVenue(id);
   mode = 'race';
   resultsTimer = 0;
   hud.setup(race);
