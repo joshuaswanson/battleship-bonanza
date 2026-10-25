@@ -151,9 +151,7 @@ export function secondary(put, x, y, z, ry, s) {
 export function aa(put, x, y, z, guns) {
   put('steelDark', CYL, x, y + 0.4, z, 1.3, 0.8, 1.3);
   put('steelLight', CYL, x, y + 0.85, z, 1.45, 0.12, 1.45);
-  put('steel', BOX, x, y + 1.2, z, 0.9, 0.8, 1.1);
-  for (const k of [-0.32, 0.32]) put('gun', CYL, x + k, y + 2.2, z + 0.4, 0.09, 2.4, 0.09, -0.5, 0, 0);
-  guns.push(new THREE.Vector3(x, y + 3.2, z + 0.9));
+  guns.push(new THREE.Vector3(x, y + 1.3, z));
 }
 
 export function rails(put, points, y) {

@@ -284,6 +284,7 @@ export async function createMidway(group, track, fx) {
       const size = build(p.x, p.z, yaw, local);
       for (const g of local.local) {
         const w = g.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw).add(new THREE.Vector3(p.x, 0, p.z));
+        w.s = g.s ?? 1;
         guns.push(w);
       }
       ships.push({ x: p.x, z: p.z, L: size.L });
@@ -327,7 +328,10 @@ export async function createMidway(group, track, fx) {
     const before = turrets.length;
     const gunsBefore = g.local.length;
     const size = bigBattleship(batch, dyn, x, z, yaw, rand, g.local, turrets, stacks, BATTLESHIP_SCALE);
-    for (const gun of g.local.slice(gunsBefore)) gun.multiplyScalar(BATTLESHIP_SCALE);
+    for (const gun of g.local.slice(gunsBefore)) {
+      gun.multiplyScalar(BATTLESHIP_SCALE);
+      gun.s = BATTLESHIP_SCALE;
+    }
     tagTurrets(before);
     battleships.push({ x, z, yaw });
     return size;
@@ -446,6 +450,52 @@ export async function createMidway(group, track, fx) {
   const green = new Squadron(air, fighter.geometry, { geometry: propGeometry(1.5), offsets: propAt }, 14, 0.05, fighter.green);
   const bombers = new Squadron(air, planeGeometry('bomber'), { geometry: propGeometry(1.9), offsets: [new THREE.Matrix4().makeTranslation(-5, -0.2, 4.3), new THREE.Matrix4().makeTranslation(5, -0.2, 4.3)] }, 6, 0.1);
   const tracers = new Tracers(air);
+  const aaCount = Math.max(1, guns.length);
+  const housing = new THREE.BoxGeometry(0.9, 0.8, 1.1);
+  const barrels = mergeGeometries([-0.32, 0.32].map((k) => new THREE.CylinderGeometry(0.09, 0.09, 2.4, 6).rotateX(Math.PI / 2).translate(k, 0, 1.25)));
+  const aaParts = [
+    { mesh: new THREE.InstancedMesh(housing, toon(NAVY.steel), aaCount), line: new THREE.InstancedMesh(housing, outlineMaterial(0.05), aaCount), barrel: false },
+    { mesh: new THREE.InstancedMesh(barrels, toon(NAVY.gun), aaCount), line: new THREE.InstancedMesh(barrels, outlineMaterial(0.04), aaCount), barrel: true },
+  ];
+  for (const part of aaParts) {
+    part.line.instanceMatrix = part.mesh.instanceMatrix;
+    for (const m of [part.mesh, part.line]) {
+      m.frustumCulled = false;
+      m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      group.add(m);
+    }
+  }
+  const nearestShip = (g) => {
+    let best = ships[0] ?? { x: 0, z: 0 };
+    for (const ship of ships) if (Math.hypot(ship.x - g.x, ship.z - g.z) < Math.hypot(best.x - g.x, best.z - g.z)) best = ship;
+    return [best.x, 0, best.z];
+  };
+  const aaState = guns.map((g) => {
+    const out = new THREE.Vector3(g.x, 0, g.z).sub(new THREE.Vector3(...nearestShip(g))).normalize();
+    const yaw = Math.atan2(out.x, out.z);
+    return { yaw, pitch: 0.55, wantYaw: yaw, wantPitch: 0.55, s: g.s ?? 1 };
+  });
+  const aaM = new THREE.Matrix4();
+  const aaQ = new THREE.Quaternion();
+  const aaE = new THREE.Euler(0, 0, 0, 'YXZ');
+  const aaScale = new THREE.Vector3();
+  const aaPos = new THREE.Vector3();
+  const placeAA = (k) => {
+    const g = guns[k];
+    const st = aaState[k];
+    aaScale.setScalar(st.s);
+    aaQ.setFromEuler(aaE.set(0, st.yaw, 0));
+    aaParts[0].mesh.setMatrixAt(k, aaM.compose(g, aaQ, aaScale));
+    aaQ.setFromEuler(aaE.set(-st.pitch, st.yaw, 0));
+    aaParts[1].mesh.setMatrixAt(k, aaM.compose(aaPos.set(g.x, g.y + 0.25 * st.s, g.z), aaQ, aaScale));
+  };
+  const aaMuzzle = (k, out) => {
+    const st = aaState[k];
+    aaQ.setFromEuler(aaE.set(-st.pitch, st.yaw, 0));
+    return out.set(0, 0, 2.5 * st.s).applyQuaternion(aaQ).add(guns[k]).add(aaPos.set(0, 0.25 * st.s, 0));
+  };
+  guns.forEach((_, k) => placeAA(k));
+  for (const part of aaParts) part.mesh.instanceMatrix.needsUpdate = true;
   const flashDir = new THREE.Vector3();
   tracers.onFlash = (pos, vel) => {
     const d = flashDir.copy(vel).normalize();
@@ -696,14 +746,38 @@ export async function createMidway(group, track, fx) {
     aa -= dt;
     if (aa <= 0 && guns.length) {
       aa = 0.012;
-      const gun = guns[Math.floor(Math.random() * guns.length)];
+      const k = Math.floor(Math.random() * guns.length);
       const targets = planes.filter((p) => p.now && !p.fall && !p.respawn);
       const target = targets[Math.floor(Math.random() * targets.length)];
       if (target) {
         const aim = target.now.clone().add(new THREE.Vector3((Math.random() - 0.5) * 30, (Math.random() - 0.3) * 20, (Math.random() - 0.5) * 30));
-        tracers.fire(gun, aim, 150, 0.03, 6, 0.06, true);
+        const st = aaState[k];
+        const d = aim.clone().sub(guns[k]);
+        st.wantYaw = Math.atan2(d.x, d.z);
+        st.wantPitch = Math.min(1.35, Math.max(0.05, Math.atan2(d.y, Math.hypot(d.x, d.z))));
+        st.fireAt = { aim, wait: 0.18 };
       }
     }
+    let aaMoved = false;
+    aaState.forEach((st, k) => {
+      const dy = Math.atan2(Math.sin(st.wantYaw - st.yaw), Math.cos(st.wantYaw - st.yaw));
+      const dp = st.wantPitch - st.pitch;
+      if (Math.abs(dy) > 0.002 || Math.abs(dp) > 0.002) {
+        const ease = 1 - Math.exp(-14 * dt);
+        st.yaw += dy * ease;
+        st.pitch += dp * ease;
+        placeAA(k);
+        aaMoved = true;
+      }
+      if (st.fireAt) {
+        st.fireAt.wait -= dt;
+        if (st.fireAt.wait <= 0) {
+          tracers.fire(aaMuzzle(k, new THREE.Vector3()), st.fireAt.aim, 150, 0.03, 6, 0.06, true);
+          st.fireAt = null;
+        }
+      }
+    });
+    if (aaMoved) for (const part of aaParts) part.mesh.instanceMatrix.needsUpdate = true;
     flak -= dt;
     if (flak <= 0) {
       flak = 0.12 + Math.random() * 0.2;
