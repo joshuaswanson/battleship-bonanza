@@ -316,6 +316,7 @@ function goTitle() {
 }
 
 function goLoadout() {
+  loadout.showThumbs();
   sfx.unlock();
   sfx.playMusic('menu');
   if (!race?.attract) newRace(true);
@@ -679,4 +680,5 @@ if (import.meta.env.DEV) {
 goTitle();
 requestAnimationFrame(frame);
 requestAnimationFrame(() => document.body.classList.remove('booting'));
+setTimeout(() => loadout.showThumbs(), 600);
 setTimeout(() => prepareVenue('jungle'), 1500);

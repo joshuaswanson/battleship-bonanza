@@ -54,7 +54,6 @@ export class Loadout {
     this.sfx = sfx;
     this.onChange = onChange;
     this.active = false;
-    this.thumbs = renderThumbnails();
     this.prevStats = statsFor(setup.items.filter(Boolean));
 
     this.buildTray();
@@ -83,6 +82,15 @@ export class Loadout {
     this.buildTray();
     this.buildIdentity();
     this.refresh();
+    this.showThumbs();
+  }
+
+  get thumbs() {
+    return (this.renderedThumbs ??= renderThumbnails());
+  }
+
+  showThumbs() {
+    for (const img of document.querySelectorAll('img[data-thumb]')) if (!img.getAttribute('src')) img.src = this.thumbs[img.dataset.thumb];
   }
 
   buildTray() {
@@ -112,7 +120,7 @@ export class Loadout {
           ${ITEM_IDS.filter((id) => ITEMS[id].group === g.id)
             .map(
               (id) => `<button class="tile" data-id="${id}" aria-pressed="false">
-                <img src="${this.thumbs[id]}" alt="" draggable="false" />
+                <img data-thumb="${id}" alt="" draggable="false" />
                 <span class="tile-name">${itemName(id)}</span>
                 <span class="tile-key"></span>
               </button>`,
@@ -229,7 +237,8 @@ export class Loadout {
     const el = $('item-detail');
     const lock = slotLock(id);
     const note = lock === undefined ? '' : `<em class="slot-lock">${t(lock === 0 ? 'frontOnly' : 'backOnly')}</em>`;
-    el.innerHTML = `<img src="${this.thumbs[id]}" alt="" /><div><h3>${itemName(id)}</h3><p>${itemBlurb(id)}</p>${note}</div>`;
+    el.innerHTML = `<img data-thumb="${id}" alt="" /><div><h3>${itemName(id)}</h3><p>${itemBlurb(id)}</p>${note}</div>`;
+    this.showThumbs();
     el.classList.add('on');
     this.placeDetail(y);
   }
@@ -272,7 +281,7 @@ export class Loadout {
         const key = i === 0 ? 'O' : 'P';
         const where = `<small class="slot-where">${t(i === 0 ? 'frontSlot' : 'backSlot')}</small>`;
         return id
-          ? `<button class="slot-chip" data-remove="${id}"><kbd>${key}</kbd>${where}<img src="${this.thumbs[id]}" alt="" /><span>${itemName(id)}</span></button>`
+          ? `<button class="slot-chip" data-remove="${id}"><kbd>${key}</kbd>${where}<img data-thumb="${id}" alt="" /><span>${itemName(id)}</span></button>`
           : `<div class="slot-chip empty"><kbd>${key}</kbd>${where}<span>${t('emptySlot')}</span></div>`;
       })
       .join('') + (this.canSwap() ? `<button class="slot-swap" aria-label="${t('swapSlots')}" title="${t('swapSlots')}"><svg viewBox="0 0 24 24"><path d="M4 8h13l-3-3M20 16H7l3 3" /></svg></button>` : '');
@@ -304,6 +313,7 @@ export class Loadout {
     }).join('');
     this.prevStats = stats;
 
+    if (this.renderedThumbs) this.showThumbs();
     this.rebuildBoat();
     this.onChange();
   }
