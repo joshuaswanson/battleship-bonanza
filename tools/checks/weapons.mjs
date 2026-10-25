@@ -56,7 +56,7 @@ misses('back machine gun ignores a boat ahead', await holdAt(['spikes', 'machine
 hits('back laser hits a boat behind', await holdAt(['grapple', 'laser'], 'KeyP', -25, 6));
 hits('front flamethrower aims at a boat 45° off', await holdAt(['flamethrower', 'camo'], 'KeyO', 7, 7));
 hits('back flamethrower hits a boat behind', await holdAt(['armor', 'flamethrower'], 'KeyP', -10, 3));
-hits('front saw cuts a boat alongside', await holdAt(['saw', 'camo'], 'KeyO', 1.5, 5.2));
+hits('front saw cuts a boat alongside', await holdAt(['saw', 'camo'], 'KeyO', 2.4, 5.2));
 misses('back saw ignores a boat ahead', await holdAt(['camo', 'saw'], 'KeyP', 3.5, 5.2));
 misses('spikes block the saw', await holdAt(['saw', 'camo'], 'KeyO', 1.5, 5.2, ['spikes', 'jetpack']));
 
