@@ -520,7 +520,7 @@ kbd {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1.6rem;
+  gap: 1.1rem;
   padding: 1.5rem;
   background: rgba(14, 42, 71, 0.35);
 }
@@ -561,10 +561,6 @@ kbd {
 
 .map-card:not(.surprise) {
   grid-column: span 2;
-}
-
-.map-card:nth-child(4) {
-  grid-column: 2 / span 2;
 }
 
 .map-card.surprise {
@@ -718,7 +714,6 @@ kbd {
     grid-template-columns: 1fr;
   }
   .map-card:not(.surprise),
-  .map-card:nth-child(4),
   .map-card.surprise {
     grid-column: auto;
     grid-row: auto;

@@ -44,6 +44,17 @@ const shots = {
     c.position.set(t.px[k], 5, t.pz[k]);
     c.lookAt(t.px[r], 9, t.pz[r]);
   },
+  canyon: () => {
+    const t = window.__bb.race.track;
+    const d = [...t.river.drops].sort((a, b) => b.height - a.height)[0];
+    const s = d.s + 80;
+    const k = Math.round(s / t.spacing) % t.N;
+    const k2 = Math.round(d.s / t.spacing) % t.N;
+    const y = t.level(s);
+    const c = window.__bb.camera;
+    c.position.set(t.px[k] + t.nx[k] * 7, y + 7, t.pz[k] + t.nz[k] * 7);
+    c.lookAt(t.px[k2], y + 17, t.pz[k2]);
+  },
   midway: () => {
     let c = null;
     window.__bb.scene.traverse((o) => {

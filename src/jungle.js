@@ -72,11 +72,13 @@ function noise(x, z) {
 
 export async function riverSurface(track, tick) {
   let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-  for (let i = 0; i < track.N; i++) {
-    minX = Math.min(minX, track.px[i]);
-    maxX = Math.max(maxX, track.px[i]);
-    minZ = Math.min(minZ, track.pz[i]);
-    maxZ = Math.max(maxZ, track.pz[i]);
+  for (const seg of track.segments) {
+    for (let i = seg.start; i <= seg.end; i++) {
+      minX = Math.min(minX, track.px[i]);
+      maxX = Math.max(maxX, track.px[i]);
+      minZ = Math.min(minZ, track.pz[i]);
+      maxZ = Math.max(maxZ, track.pz[i]);
+    }
   }
   minX -= MARGIN;
   minZ -= MARGIN;
@@ -84,9 +86,10 @@ export async function riverSurface(track, tick) {
   maxZ += MARGIN;
   const cols = Math.ceil((maxX - minX) / CELL) + 1;
   const rows = Math.ceil((maxZ - minZ) / CELL) + 1;
-  const nearest = new Int16Array(cols * rows);
-  const { N, px, pz, tx, tz, wrap, spacing } = track;
+  const nearest = new Int32Array(cols * rows);
+  const { px, pz, tx, tz, wrap, sAt, sScale } = track;
   const step = 4;
+  const segOf = (i) => track.segments.find((seg) => i >= seg.start && i <= seg.end);
   for (let r = 0; r < rows; r++) {
     await tick();
     const z = minZ + r * CELL;
@@ -94,15 +97,18 @@ export async function riverSurface(track, tick) {
       const x = minX + c * CELL;
       let best = 0;
       let bestD = Infinity;
-      for (let i = 0; i < N; i += step) {
-        const d = (x - px[i]) ** 2 + (z - pz[i]) ** 2;
-        if (d < bestD) {
-          bestD = d;
-          best = i;
+      for (const seg of track.segments) {
+        for (let i = seg.start; i <= seg.end; i += step) {
+          const d = (x - px[i]) ** 2 + (z - pz[i]) ** 2;
+          if (d < bestD) {
+            bestD = d;
+            best = i;
+          }
         }
       }
+      const seg = segOf(best);
       for (let k = best - step; k <= best + step; k++) {
-        const i = wrap(k);
+        const i = seg.ring ? wrap(k) : Math.min(seg.end, Math.max(seg.start, k));
         const d = (x - px[i]) ** 2 + (z - pz[i]) ** 2;
         if (d < bestD) {
           bestD = d;
@@ -121,28 +127,29 @@ export async function riverSurface(track, tick) {
       const r = Math.min(rows - 1, Math.max(0, Math.round((z - minZ) / CELL)));
       const i = nearest[r * cols + c];
       const along = (x - px[i]) * tx[i] + (z - pz[i]) * tz[i];
-      const s = i * spacing + along;
+      const s = sAt[i] + along * sScale[i];
       out.s = s;
       out.idx = i;
       out.level = track.level(s);
       out.amp = track.inTunnel(s) ? 0.2 : RIVER_AMP;
       out.dist = Math.hypot(x - px[i], z - pz[i]);
+      out.edge = out.dist - track.hw[i];
       return out;
     },
   };
 }
 
-const ARCH_TOP = 16;
-const ARCH_FLOOR = -5;
-const LID = 18;
+export const ARCH_TOP = 16;
+export const ARCH_FLOOR = -5;
+export const LID = 18;
 
-function highLevel(track, s) {
+export function highLevel(track, s) {
   let d = track.ahead(track.river.seam, s);
   if (d > track.length / 2) d -= track.length;
   return track.river.top - track.river.slope * d;
 }
 
-function tunnelMask(track, s) {
+export function tunnelMask(track, s) {
   if (track.inTunnel(s)) return 1;
   const r = track.river;
   const toEntrance = track.ahead(s, r.tunnelIn);
@@ -150,7 +157,7 @@ function tunnelMask(track, s) {
   return Math.max(0, 1 - smooth(0, 60, toEntrance), 1 - smooth(0, 60, fromExit));
 }
 
-function isHole(surface, track, x, z) {
+export function isHole(surface, track, x, z) {
   const { s, dist } = surface.sample(x, z);
   return track.inTunnel(s) && dist < track.halfWidth + 10;
 }
@@ -255,7 +262,7 @@ async function buildTerrain(surface, track, tick) {
   return new THREE.Mesh(geometry, toon(0xffffff, { vertexColors: true }));
 }
 
-function ribbon(track, from, to, levelAt, positions, shades, shadeAt = () => [1, 1, 1]) {
+export function ribbon(track, from, to, levelAt, positions, shades, shadeAt = () => [1, 1, 1]) {
   const hw = track.halfWidth + 8;
   const lanes = 10;
   const at = (k, lane) => {
@@ -283,7 +290,36 @@ function ribbon(track, from, to, levelAt, positions, shades, shadeAt = () => [1,
   }
 }
 
-function caveWaterShade(torches, ends) {
+function routeRibbon(track, route, positions, shades) {
+  const chain = [route.from];
+  for (let i = route.first; i <= route.last; i++) chain.push(i);
+  chain.push(route.to);
+  const lanes = 8;
+  const at = (i, lane) => {
+    const hw = track.hw[i] + 8;
+    const lat = -hw + (2 * hw * lane) / lanes;
+    return [track.px[i] + track.nx[i] * lat, track.pz[i] + track.nz[i] * lat];
+  };
+  for (let k = 0; k < chain.length - 1; k++) {
+    const i = chain[k];
+    const j = chain[k + 1];
+    const y0 = track.level(track.sAt[i]);
+    const y1 = track.level(track.sAt[j]);
+    if (Math.abs(y1 - y0) > 1.5) continue;
+    for (let lane = 0; lane < lanes; lane++) {
+      const [ax, az] = at(i, lane);
+      const [bx, bz] = at(i, lane + 1);
+      const [cx, cz] = at(j, lane);
+      const [dx, dz] = at(j, lane + 1);
+      for (const [x, y, z] of [[ax, y0, az], [cx, y1, cz], [bx, y0, bz], [bx, y0, bz], [cx, y1, cz], [dx, y1, dz]]) {
+        positions.push(x, y, z);
+        shades.push(1, 1, 1);
+      }
+    }
+  }
+}
+
+export function caveWaterShade(torches, ends) {
   const p = new THREE.Vector3();
   return (x, y, z, k) => {
     const day = Math.max(0, 1 - Math.min(...ends.map((e) => Math.abs(k - e))) / 14);
@@ -293,10 +329,10 @@ function caveWaterShade(torches, ends) {
   };
 }
 
-const lowLevel = (track) => (s) => track.level(s, track.pastSeam(s) ? 1 : 0);
-const copyLevel = (track) => (s) => highLevel(track, s);
+export const lowLevel = (track) => (s) => track.level(s, track.pastSeam(s) ? 1 : 0);
+export const copyLevel = (track) => (s) => highLevel(track, s);
 
-function buildRiver(track) {
+export function buildRiver(track, { deep = 0x1c8f86, shallow = 0x4fd6b4 } = {}) {
   const { river, spacing, N } = track;
   const kIn = Math.round(river.tunnelIn / spacing);
   const kOut = Math.round(river.tunnelOut / spacing);
@@ -307,17 +343,18 @@ function buildRiver(track) {
   ribbon(track, kOut, kIn + N, (s) => track.level(s), positions, shades);
   ribbon(track, kIn, kOut, lowLevel(track), positions, shades, caveWaterShade(caveTorches(track, kIn, kOut, lowLevel(track)), ends));
   ribbon(track, kSeam - GHOST, kOut, copyLevel(track), positions, shades, caveWaterShade(caveTorches(track, kIn, kOut, copyLevel(track)), ends));
+  for (const r of track.routes) routeRibbon(track, r, positions, shades);
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   geometry.setAttribute('aShade', new THREE.Float32BufferAttribute(shades, 3));
-  return createWater({ geometry, flat: true, amp: RIVER_AMP, deep: 0x1c8f86, shallow: 0x4fd6b4 });
+  return createWater({ geometry, flat: true, amp: RIVER_AMP, deep, shallow });
 }
 
-const GHOST = 45;
+export const GHOST = 45;
 
-const CAVE_STEPS = 30;
+export const CAVE_STEPS = 30;
 
-function hash(a, b) {
+export function hash(a, b) {
   const v = Math.sin(a * 127.1 + b * 311.7) * 43758.5453;
   return v - Math.floor(v);
 }
@@ -344,21 +381,21 @@ function profile(k, j, extra = 0) {
   return { lat: Math.cos(theta) * w + (d * nx) / n, up: ARCH_FLOOR + h * Math.sin(theta) + (d * ny) / n };
 }
 
-const CAVE_HALF = 29;
+export const CAVE_HALF = 29;
 
-function tubePoint(track, k, j, levelAt, extra = 0) {
+export function tubePoint(track, k, j, levelAt, extra = 0) {
   const i = track.wrap(k);
   const { lat, up } = profile(k, j, extra);
   return new THREE.Vector3(track.px[i] + track.nx[i] * lat, levelAt(k * track.spacing) + up, track.pz[i] + track.nz[i] * lat);
 }
 
-function buildTube(track, from, to, levelAt, ends, torches) {
+export function buildTube(track, from, to, levelAt, ends, torches, palette = {}) {
   const positions = [];
   const colors = [];
-  const tones = [new THREE.Color(0x6e5d4e), new THREE.Color(0x85725f), new THREE.Color(0x7a6655)];
-  const crack = new THREE.Color(0x3e342c);
-  const wet = new THREE.Color(0x3d4038);
-  const moss = new THREE.Color(0x4f8a3a);
+  const tones = (palette.tones ?? [0x6e5d4e, 0x85725f, 0x7a6655]).map((c) => new THREE.Color(c));
+  const crack = new THREE.Color(palette.crack ?? 0x3e342c);
+  const wet = new THREE.Color(palette.wet ?? 0x3d4038);
+  const moss = new THREE.Color(palette.moss ?? 0x4f8a3a);
   const c = new THREE.Color();
   const grid = [];
   for (let k = from; k <= to + 1; k++) {
@@ -412,7 +449,7 @@ const CAVE_KEYS = ['caveRock', 'caveRockDark', 'caveRockLight'];
 const INNER_KEYS = ['caveIn', 'caveInDark', 'caveInLight'];
 const DRIP = new THREE.ConeGeometry(1, 1, 6).rotateX(Math.PI);
 
-function caveDetails(batch, track, from, to, levelAt) {
+export function caveDetails(batch, track, from, to, levelAt) {
   for (let k = from; k < to; k++) {
     if (hash(k, 91) < 0.4) {
       const j = Math.round(CAVE_STEPS * (0.28 + hash(k, 17) * 0.44));
@@ -457,7 +494,7 @@ function mouthRocks(batch, track, k, levelAt, toward, rand) {
   }
 }
 
-function buildShell(track, from, to) {
+export function buildShell(track, from, to) {
   const positions = [];
   const hw = track.halfWidth + 10;
   const corner = (k, lat, y) => {
@@ -599,7 +636,7 @@ function slopeDetails(batch, track, k, ground, rand) {
   }
 }
 
-function buildMouth(track, k, levelAt, top, color = 0x6e5d4e) {
+export function buildMouth(track, k, levelAt, top, tint = 0xffffff, texture = null) {
   const hw = track.halfWidth + 14;
   const i = track.wrap(k);
   const base = levelAt(k * track.spacing);
@@ -617,9 +654,9 @@ function buildMouth(track, k, levelAt, top, color = 0x6e5d4e) {
   }
   shape.holes.push(hole);
   const geometry = new THREE.ShapeGeometry(shape);
-  const map = rockTexture();
+  const map = texture ?? rockTexture();
   map.repeat.set(1 / 26, 1 / 26);
-  const mesh = new THREE.Mesh(geometry, toon(0xffffff, { side: THREE.DoubleSide, map }));
+  const mesh = new THREE.Mesh(geometry, toon(tint, { side: THREE.DoubleSide, map }));
   const basis = new THREE.Matrix4().makeBasis(
     new THREE.Vector3(track.nx[i], 0, track.nz[i]),
     new THREE.Vector3(0, 1, 0),
@@ -630,7 +667,7 @@ function buildMouth(track, k, levelAt, top, color = 0x6e5d4e) {
   return mesh;
 }
 
-function buildCap(track, k, levelAt, color, along = 0) {
+export function buildCap(track, k, levelAt, color, along = 0) {
   const i = track.wrap(k + along);
   const w = track.halfWidth + 8;
   const geometry = new THREE.PlaneGeometry(w * 2, ARCH_TOP - ARCH_FLOOR + 2);
@@ -641,14 +678,14 @@ function buildCap(track, k, levelAt, color, along = 0) {
 }
 
 
-const TORCH_EVERY = 10;
+export const TORCH_EVERY = 10;
 const TORCH_REACH = 15;
 const FLAME = new THREE.ConeGeometry(0.55, 1.7, 7).translate(0, 0.75, 0);
 const FLAME_CORE = new THREE.ConeGeometry(0.3, 1.1, 6).translate(0, 0.5, 0);
 const STICK = new THREE.CylinderGeometry(0.16, 0.22, 2.4, 6);
 const CUP = new THREE.CylinderGeometry(0.62, 0.36, 0.7, 8);
 
-function torchLight(p, torches) {
+export function torchLight(p, torches) {
   let light = 0;
   for (const t of torches) {
     const d = p.distanceTo(t.tip);
@@ -657,7 +694,7 @@ function torchLight(p, torches) {
   return light;
 }
 
-function caveTorches(track, from, to, levelAt) {
+export function caveTorches(track, from, to, levelAt) {
   const torches = [];
   for (let k = from + 6; k < to - 3; k++) {
     if ((k - from - 6) % TORCH_EVERY !== 0) continue;
@@ -670,7 +707,7 @@ function caveTorches(track, from, to, levelAt) {
   return torches;
 }
 
-function torchAt(wall, inward, size) {
+export function torchAt(wall, inward, size) {
   const dir = inward.clone().multiplyScalar(0.8).add(new THREE.Vector3(0, 1, 0)).normalize();
   const tilt = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
   const mid = wall.clone().addScaledVector(dir, 1.2 * size);
@@ -702,7 +739,7 @@ function glowSprite() {
   return glowTexture;
 }
 
-function buildTorches(batch, torches) {
+export function buildTorches(batch, torches) {
   for (const t of torches) {
     if (t.bare) continue;
     batch.add('torchWood', STICK, t.stick);
@@ -931,7 +968,7 @@ const FALL_FRAG = /* glsl */ `
   }
 `;
 
-function fallMaterial(alpha = 1) {
+export function fallMaterial(alpha = 1) {
   return new THREE.ShaderMaterial({
     uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uTime: { value: 0 }, uAlpha: { value: alpha } }]),
     vertexShader: FALL_VERT,
@@ -943,7 +980,7 @@ function fallMaterial(alpha = 1) {
   });
 }
 
-function buildCurtain(track, k, levelAt) {
+export function buildCurtain(track, k, levelAt) {
   const i = track.wrap(k);
   const base = levelAt(k * track.spacing);
   const hw = CAVE_HALF + 6;
@@ -979,7 +1016,7 @@ function buildCurtain(track, k, levelAt) {
   return { mesh, material, base: { x: track.px[i] + track.tx[i] * 2.5, y: base, z: track.pz[i] + track.tz[i] * 2.5, nx: track.nx[i], nz: track.nz[i], hw: CAVE_HALF } };
 }
 
-function buildFalls(track, drop) {
+export function buildFalls(track, drop) {
   const s = drop.s;
   const i = Math.floor(s / track.spacing);
   const px = track.px[i], pz = track.pz[i], tx = track.tx[i], tz = track.tz[i], nx = track.nx[i], nz = track.nz[i];
