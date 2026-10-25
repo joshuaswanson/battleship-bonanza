@@ -39,18 +39,34 @@ function chevronTexture() {
   return texture;
 }
 
-function buildPad(texture) {
+let parts = null;
+function shared() {
+  parts ??= {
+    padBase: new RoundedBoxGeometry(PAD_W, 0.5, PAD_L, 3, 0.22),
+    arrows: new THREE.PlaneGeometry(PAD_W - 1, PAD_L - 1).rotateX(-Math.PI / 2).rotateY(Math.PI),
+    rail: new RoundedBoxGeometry(0.45, 0.6, PAD_L, 2, 0.18),
+    ramp: rampGeometry(),
+    bar: new RoundedBoxGeometry(RAMP_W - 0.6, 0.12, 0.5, 2, 0.05),
+    float: new THREE.CapsuleGeometry(0.55, RAMP_L - 1, 6, 12).rotateX(Math.PI / 2),
+    lip: new RoundedBoxGeometry(RAMP_W + 0.2, 0.35, 0.4, 2, 0.12),
+    navy: toon(0x1b4f7a),
+    yellow: toon(0xffd23f),
+    orange: toon(0xff8a1f),
+    white: toon(0xffffff),
+    red: toon(0xff4141),
+  };
+  return parts;
+}
+
+function buildPad(arrowMaterial) {
+  const p = shared();
   const group = new THREE.Group();
-  const base = new RoundedBoxGeometry(PAD_W, 0.5, PAD_L, 3, 0.22);
-  group.add(outlined(base, toon(0x1b4f7a), 0.05));
-  const arrows = new THREE.Mesh(
-    new THREE.PlaneGeometry(PAD_W - 1, PAD_L - 1).rotateX(-Math.PI / 2).rotateY(Math.PI),
-    new THREE.MeshBasicMaterial({ map: texture, transparent: true }),
-  );
+  group.add(outlined(p.padBase, p.navy, 0.05));
+  const arrows = new THREE.Mesh(p.arrows, arrowMaterial);
   arrows.position.y = 0.27;
   group.add(arrows);
   for (const side of [-1, 1]) {
-    const rail = outlined(new RoundedBoxGeometry(0.45, 0.6, PAD_L, 2, 0.18), toon(0xffd23f), 0.04);
+    const rail = outlined(p.rail, p.yellow, 0.04);
     rail.position.set(side * (PAD_W / 2 - 0.1), 0.1, 0);
     group.add(rail);
   }
@@ -77,24 +93,24 @@ function rampGeometry() {
 }
 
 function buildRamp() {
+  const p = shared();
   const group = new THREE.Group();
-  group.add(outlined(rampGeometry(), toon(0xff8a1f), 0.06));
-  const stripe = toon(0xffffff);
+  group.add(outlined(p.ramp, p.orange, 0.06));
   for (let i = 0; i < 4; i++) {
     const t = (i + 0.6) / 4.6;
     const z = -RAMP_L / 2 + t * RAMP_L;
     const y = RAMP_H * Math.pow(t, 1.6) + 0.18;
-    const bar = outlined(new RoundedBoxGeometry(RAMP_W - 0.6, 0.12, 0.5, 2, 0.05), stripe, 0.03);
+    const bar = outlined(p.bar, p.white, 0.03);
     bar.position.set(0, y, z);
     bar.rotation.x = -Math.atan(RAMP_H * 1.6 * Math.pow(t, 0.6) / RAMP_L);
     group.add(bar);
   }
   for (const side of [-1, 1]) {
-    const float = outlined(new THREE.CapsuleGeometry(0.55, RAMP_L - 1, 6, 12).rotateX(Math.PI / 2), toon(0xffffff), 0.05);
+    const float = outlined(p.float, p.white, 0.05);
     float.position.set(side * (RAMP_W / 2 + 0.3), 0.1, 0);
     group.add(float);
   }
-  const lip = outlined(new RoundedBoxGeometry(RAMP_W + 0.2, 0.35, 0.4, 2, 0.12), toon(0xff4141), 0.04);
+  const lip = outlined(p.lip, p.red, 0.04);
   lip.position.set(0, RAMP_H + 0.05, RAMP_L / 2 - 0.1);
   group.add(lip);
   return group;
@@ -107,6 +123,7 @@ export class TrackFeatures {
     this.fx = fx;
     this.sfx = sfx;
     this.texture = chevronTexture();
+    this.arrows = new THREE.MeshBasicMaterial({ map: this.texture, transparent: true });
     const place = ([fraction, lateral, routeId], mesh, kind) => {
       const route = track.routes[routeId];
       const idx = route ? route.first + Math.min(route.count - 1, Math.round(fraction * route.count)) : track.wrap(Math.round(fraction * track.N));
@@ -117,7 +134,7 @@ export class TrackFeatures {
       scene.add(mesh);
       return { kind, idx, lateral, x: p.x, z: p.z, heading, mesh, used: new Map() };
     };
-    this.pads = track.map.pads.map((spot) => place(spot, buildPad(this.texture), 'pad'));
+    this.pads = track.map.pads.map((spot) => place(spot, buildPad(this.arrows), 'pad'));
     this.ramps = track.map.ramps.map((spot) => place(spot, buildRamp(), 'ramp'));
     this.all = [...this.pads, ...this.ramps];
   }
@@ -184,5 +201,6 @@ export class TrackFeatures {
   dispose() {
     for (const f of this.all) this.scene.remove(f.mesh);
     this.texture.dispose();
+    this.arrows.dispose();
   }
 }
