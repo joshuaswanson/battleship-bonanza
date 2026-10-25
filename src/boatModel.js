@@ -622,15 +622,30 @@ function buildFire(root) {
     }
   }
   for (let k = 0; k < 4; k++) spots.push([(k % 2 ? -0.6 : 0.6), 0.1, -4.4, 0.7, 0, -1]);
+  const layers = [[outer, 1.25, 0.95], [mid, 0.95, 0.72], [core, 0.6, 0.48]].map(([material, k, r]) => {
+    const mesh = new THREE.InstancedMesh(tongue, material, spots.length);
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    mesh.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 1.5, 0), 8);
+    mesh.renderOrder = 6;
+    fire.add(mesh);
+    return { mesh, k, r };
+  });
+  const flame = new THREE.Matrix4();
+  const stretch = new THREE.Matrix4();
+  fire.updateMatrixWorld = function (force) {
+    THREE.Group.prototype.updateMatrixWorld.call(this, force);
+    if (!this.visible) return;
+    for (const { mesh, k, r } of layers) {
+      this.userData.tongues.forEach((g, n) => {
+        const size = g.userData.size;
+        mesh.setMatrixAt(n, flame.multiplyMatrices(g.matrix, stretch.makeScale(r * size, k * size, r * size)));
+      });
+      mesh.instanceMatrix.needsUpdate = true;
+    }
+  };
   fire.userData.tongues = spots.map(([x, y, z, size, side = 0, back = 0], n) => {
     const g = new THREE.Group();
     g.position.set(x, y, z);
-    for (const [material, k, r] of [[outer, 1.25, 0.95], [mid, 0.95, 0.72], [core, 0.6, 0.48]]) {
-      const m = new THREE.Mesh(tongue, material);
-      m.scale.set(r * size, k * size, r * size);
-      m.renderOrder = 6;
-      g.add(m);
-    }
     if (n % 3 === 0) {
       const halo = new THREE.Sprite(FIRE_GLOW());
       halo.position.y = 1.2 * size;
