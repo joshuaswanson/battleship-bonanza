@@ -73,7 +73,11 @@ const NOISE = /* glsl */ `
 
   vec3 rockDetail(vec3 c, vec3 p, vec3 n, float px) {
     float wx = abs(n.x) / (abs(n.x) + abs(n.z) + 1e-4);
-    float shade = mix(rockFace(p.xy, px), rockFace(vec2(p.z, p.y) + 57.0, px), smoothstep(0.35, 0.65, wx));
+    float side = smoothstep(0.35, 0.65, wx);
+    float shade;
+    if (side <= 0.0) shade = rockFace(p.xy, px);
+    else if (side >= 1.0) shade = rockFace(vec2(p.z, p.y) + 57.0, px);
+    else shade = mix(rockFace(p.xy, px), rockFace(vec2(p.z, p.y) + 57.0, px), side);
     float layer = floor((p.y + gFbm(p.xz * 0.012) * 30.0) / 14.0);
     shade *= 0.95 + 0.1 * gHash(vec2(layer, 3.7));
     shade *= 1.0 + (gNoise(p.xz * 0.6 + p.y * 0.4) - 0.5) * 0.1 * gFade(px, 0.6);
@@ -99,8 +103,9 @@ export function alpineGround(material) {
           float grass = smoothstep(0.04, 0.16, c.g - max(c.r, c.b));
           float snow = smoothstep(0.62, 0.85, lum);
           float rock = (1.0 - grass) * (1.0 - snow) * smoothstep(2.0, 6.0, vGround.y);
-          vec3 tinted = mix(c, grassDetail(c, vGround.xz, px), grass);
-          tinted = mix(tinted, rockDetail(c, vGround, normalize(vGroundN), px), rock);
+          vec3 tinted = c;
+          if (grass > 0.0) tinted = mix(c, grassDetail(c, vGround.xz, px), grass);
+          if (rock > 0.0) tinted = mix(tinted, rockDetail(c, vGround, normalize(vGroundN), px), rock);
           tinted *= 1.0 - snow * 0.06 * gFbm(vGround.xz * 0.05);
           diffuseColor.rgb = tinted;
         }`,
@@ -136,9 +141,9 @@ const CANYON = /* glsl */ `
     float wx = abs(n.x) / (abs(n.x) + abs(n.z) + 1e-4);
     vec2 uvA = vec2(p.x, p.y);
     vec2 uvB = vec2(p.z, p.y);
-    vec4 slabA = gCell(uvA * vec2(0.14, 0.05));
-    vec4 slabB = gCell(uvB * vec2(0.14, 0.05) + 31.0);
-    vec4 slab = wx > 0.5 ? slabB : slabA;
+    vec4 slab;
+    if (wx > 0.5) slab = gCell(uvB * vec2(0.14, 0.05) + 31.0);
+    else slab = gCell(uvA * vec2(0.14, 0.05));
     float seam = 1.0 - smoothstep(0.02, 0.1, slab.y - slab.x);
     color *= (0.9 + 0.18 * slab.z) * (1.0 - 0.14 * clamp(slab.w * 1.6, -1.0, 1.0));
     color *= 1.0 - seam * 0.3 * gFade(px, 0.14);
@@ -179,12 +184,16 @@ export function canyonGround(material) {
           vec3 c = diffuseColor.rgb;
           float px = length(fwidth(vGround.xz));
           vec3 n = normalize(vGroundN);
-          vec3 rock = canyonRock(vGround, n, px);
-          vec3 top = canyonTop(rock, vGround.xz, px);
-          vec3 sand = canyonSand(c, vGround.xz, px);
-          float steep = 1.0 - smoothstep(0.55, 0.8, n.y);
-          vec3 ground = mix(top, rock, steep);
-          diffuseColor.rgb = mix(sand, ground, smoothstep(0.2, 0.8, vKind));
+          float kind = smoothstep(0.2, 0.8, vKind);
+          vec3 ground = vec3(0.0);
+          vec3 sand = vec3(0.0);
+          if (kind > 0.0) {
+            vec3 rock = canyonRock(vGround, n, px);
+            float steep = 1.0 - smoothstep(0.55, 0.8, n.y);
+            ground = steep < 1.0 ? mix(canyonTop(rock, vGround.xz, px), rock, steep) : rock;
+          }
+          if (kind < 1.0) sand = canyonSand(c, vGround.xz, px);
+          diffuseColor.rgb = mix(sand, ground, kind);
         }`,
       );
   };
