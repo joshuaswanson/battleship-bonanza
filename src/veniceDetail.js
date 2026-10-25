@@ -26,7 +26,7 @@ export const DETAIL_COLORS = {
 };
 
 function shapeGeometry(shape) {
-  return new THREE.ExtrudeGeometry(shape, { depth: 1, bevelEnabled: false, curveSegments: 10 }).translate(0, 0, -0.5);
+  return new THREE.ExtrudeGeometry(shape, { depth: 1, bevelEnabled: false, curveSegments: 6 }).translate(0, 0, -0.5);
 }
 const gothicShape = new THREE.Shape();
 gothicShape.moveTo(-0.5, 0);
@@ -48,6 +48,7 @@ const CYL = new THREE.CylinderGeometry(1, 1, 1, 12);
 const HEX = new THREE.CylinderGeometry(1, 1, 1, 6);
 const CONE = new THREE.ConeGeometry(1, 1, 12);
 const BALL = new THREE.SphereGeometry(1, 12, 9);
+const BUD = new THREE.SphereGeometry(1, 6, 4);
 const HIP = new THREE.ConeGeometry(Math.SQRT2 / 2, 1, 4).rotateY(Math.PI / 4).translate(0, 0.5, 0);
 const FUNNEL = new THREE.CylinderGeometry(1, 0.35, 1, 10);
 const BELL = new THREE.LatheGeometry([0.15, 0.5, 0.75, 0.9, 1].map((r, k) => new THREE.Vector2(r, k * 0.25)), 10);
@@ -122,7 +123,7 @@ export function building(batch, windows, x, z, yaw, w, d, h, rand, { canal = fal
         }
         if (rand() < 0.18) {
           win('flowerBox', BOX, lx, y - 0.25, fz + face * 0.3, 1.3, 0.35, 0.45, 0, ry);
-          for (let k = 0; k < 4; k++) win(rand() < 0.7 ? 'flower' : 'leafy', BALL, lx - 0.45 + k * 0.3, y + 0.02 + rand() * 0.08, fz + face * 0.32, 0.17, 0.15, 0.17);
+          for (let k = 0; k < 4; k++) win(rand() < 0.7 ? 'flower' : 'leafy', BUD, lx - 0.45 + k * 0.3, y + 0.02 + rand() * 0.08, fz + face * 0.32, 0.17, 0.15, 0.17);
         }
       }
     }
@@ -149,7 +150,7 @@ export function building(batch, windows, x, z, yaw, w, d, h, rand, { canal = fal
         }
         if (rand() < 0.14) {
           win('flowerBox', BOX, sx + side * 0.3, y - 0.25, lz, 0.45, 0.35, 1.2);
-          for (let k = 0; k < 4; k++) win(rand() < 0.7 ? 'flower' : 'leafy', BALL, sx + side * 0.32, y + 0.02 + rand() * 0.08, lz - 0.45 + k * 0.3, 0.15, 0.15, 0.17);
+          for (let k = 0; k < 4; k++) win(rand() < 0.7 ? 'flower' : 'leafy', BUD, sx + side * 0.32, y + 0.02 + rand() * 0.08, lz - 0.45 + k * 0.3, 0.15, 0.15, 0.17);
         }
       }
     }
