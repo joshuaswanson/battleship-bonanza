@@ -4,6 +4,24 @@ import { t, ordinal, itemName } from './i18n.js';
 import { MAX_HP } from './race.js';
 import { COUNT_LAND } from './audio.js';
 
+const written = new WeakMap();
+function changed(el, key, value) {
+  let last = written.get(el);
+  if (!last) written.set(el, (last = {}));
+  if (last[key] === value) return false;
+  last[key] = value;
+  return true;
+}
+const setText = (el, text) => changed(el, 'text', text) && (el.textContent = text);
+const setWidth = (el, fraction) => {
+  const width = `${(fraction * 100).toFixed(1)}%`;
+  if (changed(el, 'width', width)) el.style.width = width;
+};
+const setLevel = (el, fraction) => {
+  const level = fraction > 0.6 ? 'high' : fraction > 0.3 ? 'mid' : 'low';
+  if (changed(el, 'level', level)) el.dataset.level = level;
+};
+
 
 export function formatTime(seconds) {
   const m = Math.floor(seconds / 60);
@@ -84,7 +102,7 @@ export class Hud {
     this.dmgEl.innerHTML = '';
     this.popups = [];
     this.center.textContent = '';
-    this.warn.textContent = '';
+    setText(this.warn, '');
     this.of.textContent = t('of', { n: race.boats.length });
     this.slotsEl.innerHTML = `<div class="ability hull-row">
           <i class="hull-dot"></i>
@@ -160,7 +178,7 @@ export class Hud {
   }
 
   setWarning(text, time = 1.6) {
-    this.warn.textContent = text;
+    setText(this.warn, text);
     this.warnTime = time;
   }
 
@@ -231,8 +249,8 @@ export class Hud {
       this.place.classList.add('bump');
       this.lastPlace = p.place;
     }
-    this.lap.textContent = p.finished ? t('finished') : t('lapOf', { n: p.lap, total: race.laps });
-    this.time.textContent = formatTime(p.finished ? p.finishTime : race.clock);
+    setText(this.lap, p.finished ? t('finished') : t('lapOf', { n: p.lap, total: race.laps }));
+    setText(this.time, formatTime(p.finished ? p.finishTime : race.clock));
 
     p.items.forEach((id, i) => {
       const item = ITEMS[id];
@@ -246,7 +264,7 @@ export class Hud {
       }
       if (item.hold) {
         const { heat, overheated } = p.heat[id];
-        this.slotFills[i].style.width = `${(1 - heat) * 100}%`;
+        setWidth(this.slotFills[i], 1 - heat);
         slot.classList.toggle('overheated', overheated);
         slot.classList.toggle('hot', !overheated && heat > 0.6);
         const text = overheated ? t('overheated') : heat > 0.6 ? t('hot') : t('hold');
@@ -257,7 +275,7 @@ export class Hud {
         const { left, refill } = p.charges[i];
         this.segFills[i].forEach((fill, k) => {
           const amount = k < left ? 1 : k === left ? refill : 0;
-          fill.style.width = `${amount * 100}%`;
+          setWidth(fill, amount);
           fill.parentElement.classList.toggle('full', amount >= 1);
         });
         slot.classList.toggle('ready', left > 0);
@@ -267,7 +285,7 @@ export class Hud {
       }
       const cd = p.cooldowns[i];
       const ready = cd <= 0;
-      this.slotFills[i].style.width = `${(1 - cd / item.cooldown) * 100}%`;
+      setWidth(this.slotFills[i], 1 - cd / item.cooldown);
       slot.classList.toggle('ready', ready);
       const state = ready ? t('ready') : `${cd.toFixed(1)}s`;
       const label = this.slotLabels[i];
@@ -282,7 +300,7 @@ export class Hud {
       if (item.hold) fill = 1 - p.heat[id].heat;
       else if (item.charges) fill = (p.charges[i].left + p.charges[i].refill) / item.charges;
       else fill = 1 - p.cooldowns[i] / item.cooldown;
-      button.style.setProperty('--fill', fill.toFixed(3));
+      if (changed(button, 'fill', fill.toFixed(3))) button.style.setProperty('--fill', fill.toFixed(3));
       button.classList.toggle('ready', item.hold ? !p.heat[id].overheated : item.charges ? p.charges[i].left > 0 : p.cooldowns[i] <= 0);
       button.classList.toggle('off', p.disabled > 0 && item.group === 'weapons');
     });
@@ -302,15 +320,15 @@ export class Hud {
       const angle = Math.atan2(dx, dz) - camHeading;
       this.returnArrow.style.transform = `rotate(${-angle}rad)`;
     }
-    if (p.wrongWay > 1 && !lost) this.warn.textContent = t('wrongWay');
-    else if (this.warnTime <= 0) this.warn.textContent = '';
+    if (p.wrongWay > 1 && !lost) setText(this.warn, t('wrongWay'));
+    else if (this.warnTime <= 0) setText(this.warn, '');
 
     this.updateBars(race, camera);
     this.updateDamage(camera, dt);
     this.placeAbilities(p, camera);
     const hull = Math.max(0, p.hp) / MAX_HP;
-    this.hullFill.style.width = `${hull * 100}%`;
-    this.hullFill.dataset.level = hull > 0.6 ? 'high' : hull > 0.3 ? 'mid' : 'low';
+    setWidth(this.hullFill, hull);
+    setLevel(this.hullFill, hull);
     this.hullFill.parentElement.parentElement.parentElement.classList.toggle('regen', p.regenerating);
     const pluses = p.regenerating ? '+'.repeat(p.regenRate < 8 ? 1 : p.regenRate < 16 ? 2 : 3) + ' ' : '';
     const hullText = `${pluses}${Math.ceil(hull * 100)}%`;
@@ -380,8 +398,8 @@ export class Hud {
       const y = (-v.y * 0.5 + 0.5) * innerHeight;
       bar.el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -100%) scale(${scale})`;
       const hp = Math.max(0, b.hp) / MAX_HP;
-      bar.fill.style.width = `${hp * 100}%`;
-      bar.fill.dataset.level = hp > 0.6 ? 'high' : hp > 0.3 ? 'mid' : 'low';
+      setWidth(bar.fill, hp);
+      setLevel(bar.fill, hp);
     });
   }
 
