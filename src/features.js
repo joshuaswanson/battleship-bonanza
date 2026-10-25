@@ -107,8 +107,9 @@ export class TrackFeatures {
     this.fx = fx;
     this.sfx = sfx;
     this.texture = chevronTexture();
-    const place = ([fraction, lateral], mesh, kind) => {
-      const idx = track.wrap(Math.round(fraction * track.N));
+    const place = ([fraction, lateral, routeId], mesh, kind) => {
+      const route = track.routes[routeId];
+      const idx = route ? route.first + Math.min(route.count - 1, Math.round(fraction * route.count)) : track.wrap(Math.round(fraction * track.N));
       const p = track.point(idx, lateral);
       const heading = track.heading(idx);
       mesh.position.set(p.x, 0, p.z);
@@ -121,17 +122,17 @@ export class TrackFeatures {
     this.all = [...this.pads, ...this.ramps];
   }
 
-  nearestAhead(boat, range) {
-    let best = null;
-    let bestGap = Infinity;
-    for (const f of this.all) {
-      const gap = this.track.wrap(f.idx - boat.trackIdx) * this.track.spacing;
-      if (gap > 8 && gap < range && gap < bestGap) {
-        best = f;
-        bestGap = gap;
-      }
+  nearestAhead(boat, range, choose = null) {
+    const t = this.track;
+    const byIdx = (this.byIdx ??= new Map(this.all.map((f) => [f.idx, f])));
+    let i = boat.trackIdx;
+    const steps = Math.round(range / t.spacing);
+    for (let k = 1; k <= steps; k++) {
+      i = t.step(i, 1, choose);
+      const f = byIdx.get(i);
+      if (f && k * t.spacing > 8) return f;
     }
-    return best;
+    return null;
   }
 
   local(f, boat) {

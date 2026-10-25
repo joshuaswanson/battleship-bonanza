@@ -30,6 +30,7 @@ Pass or fail tests. `node tools/checks/all.mjs` runs all of them and lists the f
 | `bulletsplash.mjs` | Machine gun bullets splash into the water |
 | `chop.mjs [map]` | The laser fells trees |
 | `river.mjs` | The jungle cave lift and the waterfall jump |
+| `routes.mjs [maps]` | Boats take both routes at each fork, everyone finishes, and race progress never jumps |
 | `planes.mjs` | Midway plane speeds and frame rate |
 | `shiphits.mjs` | Midway shells and crashing planes explode on the ships. Set `QUICK=1` to skip the 30 second count |
 | `sound.mjs` | Engine, weapon, gadget and music sounds |
@@ -41,6 +42,7 @@ Screenshots for looking at scenery and screens. Most take a tag argument that go
 | Script | What it shows |
 | --- | --- |
 | `bay.mjs`, `jungle.mjs`, `alps.mjs`, `midway.mjs` | Fixed camera views of each course and its landmarks |
+| `routes.mjs [map] [tag]` | Views of each alternate route: the fork, an aerial, inside the route and where it rejoins |
 | `title.mjs`, `mapscreen.mjs [sizes]`, `shipyard.mjs [a,b] [out]` | The title, course picker and shipyard |
 | `mobile.mjs [device] [tag]` | Every screen on an emulated phone |
 

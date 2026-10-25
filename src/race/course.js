@@ -71,7 +71,7 @@ export const methods = {
 
   courseReturnPoint(b) {
     const t = this.track;
-    const idx = t.wrap(b.trackIdx + Math.round(12 / t.spacing));
+    const idx = t.step(b.trackIdx, 12 / t.spacing, (fork) => b.ai?.routes?.[fork.id]);
     const pr = t.project(b.pos.x, b.pos.z, b.trackIdx);
     return t.point(idx, Math.sign(pr.lateral) * (t.hw[idx] - 6));
   },
@@ -81,7 +81,7 @@ export const methods = {
     if (!focus || Math.random() > dt * 5) return;
     let x, z;
     if (this.track.banked) {
-      const idx = focus.trackIdx + Math.round((Math.random() - 0.3) * 60);
+      const idx = this.track.step(focus.trackIdx, (Math.random() - 0.3) * 60);
       const p = this.track.point(idx, (Math.random() - 0.5) * 2 * this.track.widthAt(idx));
       x = p.x;
       z = p.z;

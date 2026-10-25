@@ -6,7 +6,7 @@ import { driveAI } from './ai.js';
 import { TrackFeatures } from './features.js';
 import { Wakes } from './wake.js';
 import { t as tr } from './i18n.js';
-import { ACCEL, ARMOR_SPEED, BANK_MARGIN, ISLAND_MARGIN, BASE_SPEED, BRAKE, CIRCLE_OFFSET, COAST, FALL_GRAVITY, GRIP, HOLD_IDS, KO_TIME, LAPS, MAX_HP, OFF_COURSE_SPEED, OUTER_LIMIT, RADIUS, REGEN_DELAY, REGEN_MAX, REGEN_RAMP, REGEN_START, REVERSE_SPEED, TURN_RATE, approach, clamp } from './race/shared.js';
+import { ACCEL, ARMOR_SPEED, BANK_MARGIN, BASE_SPEED, BRAKE, CIRCLE_OFFSET, COAST, FALL_GRAVITY, GRIP, HOLD_IDS, KO_TIME, LAPS, MAX_HP, OFF_COURSE_SPEED, OUTER_LIMIT, RADIUS, REGEN_DELAY, REGEN_MAX, REGEN_RAMP, REGEN_START, REVERSE_SPEED, TURN_RATE, approach, clamp } from './race/shared.js';
 import { Boat } from './race/boat.js';
 import * as machinegun from './race/attachments/machinegun.js';
 import * as missiles from './race/attachments/missiles.js';
@@ -84,7 +84,7 @@ export class Race {
       b.pos.set(p.x, 0, p.z);
       b.heading = t.heading(idx);
       b.trackIdx = idx;
-      b.trackS = idx * t.spacing;
+      b.trackS = t.sAt[idx];
       b.dist = b.trackS - t.length;
       b.waterY = waveHeight(p.x, p.z, 0);
     });
@@ -251,7 +251,6 @@ export class Race {
     b.trackIdx = pr.idx;
     if (t.river) this.followRiver(b, pr.s);
 
-    b.lastLateral = pr.lateral;
     b.offCourse = Math.abs(pr.lateral) > t.hw[pr.idx] + 1.5 ? b.offCourse + dt : 0;
     if (b.offCourse > 0 && b.speed > OFF_COURSE_SPEED * BASE_SPEED) b.speed *= Math.exp(-1.5 * dt);
     this.collideShores(b);
@@ -277,27 +276,6 @@ export class Race {
       }
     }
 
-    const island = t.isl[pr.idx];
-    if (island > 0 && Math.abs(pr.lateral) < island + ISLAND_MARGIN) {
-      const sgn = pr.lateral < 0 ? -1 : 1;
-      const nx = t.nx[pr.idx];
-      const nz = t.nz[pr.idx];
-      const over = sgn * (island + ISLAND_MARGIN) - pr.lateral;
-      b.pos.x += nx * over;
-      b.pos.z += nz * over;
-      const vn = -(b.vel.x * nx + b.vel.z * nz) * sgn;
-      if (vn > 0) {
-        b.vel.x += nx * sgn * vn * 1.5;
-        b.vel.z += nz * sgn * vn * 1.5;
-        if (vn > 9) {
-          b.speed *= 0.85;
-          b.bump(3);
-          this.fx.splash(b.pos.x, b.waterY, b.pos.z, 0.6);
-          this.sfx.play('boing', b.pos);
-        }
-      }
-    }
-
     if (b.isPlayer) {
       const facing = fx * t.tx[pr.idx] + fz * t.tz[pr.idx];
       b.wrongWay = facing < -0.3 && b.speed > 4 ? b.wrongWay + dt : 0;
@@ -306,12 +284,9 @@ export class Race {
 
   respawn(b) {
     const t = this.track;
-    const idx = t.wrap(b.trackIdx - 10);
+    const idx = t.step(b.trackIdx, -10);
     let lateral = 0;
-    const side = (b.lastLateral ?? 0) < 0 ? -1 : 1;
-    const middle = t.isl[idx] > 0 ? t.channel(idx, side) : 0;
-    const candidates = t.isl[idx] > 0 ? [middle, middle - 6, middle + 6, t.channel(idx, -side)] : [0, -10, 10, -18, 18];
-    for (const candidate of candidates) {
+    for (const candidate of [0, -10, 10, -18, 18]) {
       const p = t.point(idx, candidate);
       if (this.boats.every((o) => o === b || Math.hypot(o.pos.x - p.x, o.pos.z - p.z) > 9)) {
         lateral = candidate;
@@ -333,7 +308,7 @@ export class Race {
     b.stun = 0;
     for (const heat of Object.values(b.heat)) heat.trigger = false;
     b.exploded = false;
-    const s = idx * t.spacing;
+    const s = t.sAt[idx];
     let ds = s - b.trackS;
     if (ds < -t.length / 2) ds += t.length;
     else if (ds > t.length / 2) ds -= t.length;

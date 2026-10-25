@@ -131,12 +131,12 @@ export class Director {
     if (this.shot === 'chase' && nearExit) this.shot = 'lead';
     if (this.shot === 'chase' || this.shot === 'lead') {
       const ahead = this.shot === 'chase' ? -14 : 16;
-      const at = this.idx + Math.round(ahead / t.spacing);
-      const p = t.point(at, t.offIsland(at, clamp(t.project(f.pos.x, f.pos.z, this.idx).lateral * 0.6 + this.side * 4, -hw + 4, hw - 4)));
+      const at = t.step(this.idx, ahead / t.spacing);
+      const p = t.point(at, clamp(t.project(f.pos.x, f.pos.z, this.idx).lateral * 0.6 + this.side * 4, -hw + 4, hw - 4));
       desired = new THREE.Vector3(p.x, level + (this.shot === 'chase' ? 6 : 5), p.z);
     } else if (this.shot === 'bank') {
       if (!this.anchor) {
-        const p = t.point(this.idx + Math.round(45 / t.spacing), this.side * (hw - 3));
+        const p = t.point(t.step(this.idx, 45 / t.spacing), this.side * (hw - 3));
         this.anchor = new THREE.Vector3(p.x, waveHeight(p.x, p.z, 0) + 3, p.z);
       }
       desired = this.anchor.clone();
@@ -173,13 +173,13 @@ export class Director {
     let desired;
     if (this.shot === 'chase' || this.shot === 'lead' || this.shot === 'high') {
       const ahead = this.shot === 'lead' ? 14 : this.shot === 'high' ? -18 : -12;
-      const idx = this.idx + Math.round(ahead / t.spacing);
+      const idx = t.step(this.idx, ahead / t.spacing);
       const lateral = t.project(f.pos.x, f.pos.z, this.idx).lateral * 0.7 + this.side * 2.5;
-      const p = t.point(idx, t.offIsland(idx, clamp(lateral, -room(idx), room(idx))));
+      const p = t.point(idx, clamp(lateral, -room(idx), room(idx)));
       desired = new THREE.Vector3(p.x, level + (this.shot === 'high' ? 15 : this.shot === 'chase' ? 5.5 : 4.5), p.z);
     } else {
       if (!this.anchor) {
-        const idx = this.idx + Math.round(36 / t.spacing);
+        const idx = t.step(this.idx, 36 / t.spacing);
         const p = t.point(idx, this.side * room(idx));
         this.anchor = new THREE.Vector3(p.x, waveHeight(p.x, p.z, 0) + 2.5, p.z);
       }

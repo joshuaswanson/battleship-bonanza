@@ -16,7 +16,6 @@ export const REGEN_MAX = 22;
 export const OFF_COURSE_SPEED = 0.35;
 export const OUTER_LIMIT = 45;
 export const BANK_MARGIN = 2.5;
-export const ISLAND_MARGIN = 2.8;
 export const FALL_GRAVITY = 42;
 export const SHORE_MARGIN = 2.2;
 export const SAW_LEAK = 0.4;

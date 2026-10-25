@@ -56,7 +56,9 @@ export class Hud {
   setTrack(track) {
     this.track = track;
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-    for (let i = 0; i < track.N; i++) {
+    for (let i = 0; i < track.total; i++) {
+      if (i === track.N) i = 2 * track.N;
+      if (i >= track.total) break;
       minX = Math.min(minX, track.px[i]);
       maxX = Math.max(maxX, track.px[i]);
       minZ = Math.min(minZ, track.pz[i]);
@@ -521,36 +523,23 @@ export class Hud {
     ctx.lineCap = 'round';
     const band = (color, grow) => {
       ctx.strokeStyle = color;
-      for (let i = 0; i < track.N; i += 6) {
-        const j = (i + 6) % track.N;
-        ctx.lineWidth = Math.max(track.hw[i], track.hw[j]) * 2 * this.mapScale + grow;
-        ctx.beginPath();
-        ctx.moveTo(...this.toMap(track.px[i], track.pz[i]));
-        ctx.lineTo(...this.toMap(track.px[j], track.pz[j]));
-        ctx.stroke();
+      for (const seg of track.segments) {
+        const chain = seg.ring ? [] : [seg.from];
+        for (let i = seg.start; i <= seg.end; i += 6) chain.push(i);
+        chain.push(seg.ring ? seg.start : seg.end, ...(seg.ring ? [] : [seg.to]));
+        for (let k = 0; k < chain.length - 1; k++) {
+          const i = chain[k];
+          const j = chain[k + 1];
+          ctx.lineWidth = Math.max(track.hw[i], track.hw[j]) * 2 * this.mapScale + grow;
+          ctx.beginPath();
+          ctx.moveTo(...this.toMap(track.px[i], track.pz[i]));
+          ctx.lineTo(...this.toMap(track.px[j], track.pz[j]));
+          ctx.stroke();
+        }
       }
     };
     band('#0E2A47', 6);
     band('#7FE6EE', 0);
-    for (const island of track.islands) {
-      const edge = [];
-      for (let k = 0; k <= island.len; k += 3) {
-        const i = track.wrap(island.start + k);
-        edge.push(this.toMap(track.px[i] + track.nx[i] * track.isl[i], track.pz[i] + track.nz[i] * track.isl[i]));
-      }
-      for (let k = island.len; k >= 0; k -= 3) {
-        const i = track.wrap(island.start + k);
-        edge.push(this.toMap(track.px[i] - track.nx[i] * track.isl[i], track.pz[i] - track.nz[i] * track.isl[i]));
-      }
-      ctx.fillStyle = '#F2D59B';
-      ctx.strokeStyle = '#0E2A47';
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      edge.forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-    }
 
     const [sx, sy] = this.toMap(track.px[0], track.pz[0]);
     ctx.fillStyle = '#FFFFFF';

@@ -30,9 +30,10 @@ export async function courseSurface(track, tick, { margin = 340, cell = 3, amp =
   maxZ += margin;
   const cols = Math.ceil((maxX - minX) / cell) + 1;
   const rows = Math.ceil((maxZ - minZ) / cell) + 1;
-  const nearest = new Int16Array(cols * rows);
-  const { N, px, pz, tx, tz, wrap, spacing } = track;
+  const nearest = new Int32Array(cols * rows);
+  const { px, pz, tx, tz, wrap, sAt, sScale } = track;
   const step = 4;
+  const segOf = (i) => track.segments.find((seg) => i >= seg.start && i <= seg.end);
   for (let r = 0; r < rows; r++) {
     await tick();
     const z = minZ + r * cell;
@@ -40,15 +41,18 @@ export async function courseSurface(track, tick, { margin = 340, cell = 3, amp =
       const x = minX + c * cell;
       let best = 0;
       let bestD = Infinity;
-      for (let i = 0; i < N; i += step) {
-        const d = (x - px[i]) ** 2 + (z - pz[i]) ** 2;
-        if (d < bestD) {
-          bestD = d;
-          best = i;
+      for (const seg of track.segments) {
+        for (let i = seg.start; i <= seg.end; i += step) {
+          const d = (x - px[i]) ** 2 + (z - pz[i]) ** 2;
+          if (d < bestD) {
+            bestD = d;
+            best = i;
+          }
         }
       }
+      const seg = segOf(best);
       for (let k = best - step; k <= best + step; k++) {
-        const i = wrap(k);
+        const i = seg.ring ? wrap(k) : Math.min(seg.end, Math.max(seg.start, k));
         const d = (x - px[i]) ** 2 + (z - pz[i]) ** 2;
         if (d < bestD) {
           bestD = d;
@@ -66,10 +70,10 @@ export async function courseSurface(track, tick, { margin = 340, cell = 3, amp =
       const r = Math.min(rows - 1, Math.max(0, Math.round((z - minZ) / cell)));
       const i = nearest[r * cols + c];
       out.idx = i;
-      out.s = i * spacing + (x - px[i]) * tx[i] + (z - pz[i]) * tz[i];
+      out.s = sAt[i] + ((x - px[i]) * tx[i] + (z - pz[i]) * tz[i]) * sScale[i];
       out.dist = Math.hypot(x - px[i], z - pz[i]);
       out.edge = out.dist - track.hw[i];
-      out.amp = amp(i);
+      out.amp = amp(track.mainIndex(i));
       return out;
     },
   };
@@ -166,10 +170,22 @@ export function courseBuoys(track, keep, spacing = 15) {
   const geometry = new THREE.SphereGeometry(1, 14, 10).scale(0.95, 0.8, 0.95);
   const spots = [];
   const count = Math.floor(track.length / spacing);
-  for (let i = 0; i < count; i++) {
-    const idx = track.wrap(Math.round((i * spacing) / track.spacing));
-    for (const side of [-1, 1]) {
-      if (keep(idx, side)) spots.push({ p: track.point(idx, side * (track.hw[idx] + 1.5)), red: (i + (side > 0 ? 1 : 0)) % 2 === 1, side, i });
+  const within = (seg, p) => {
+    for (let i = seg.start; i <= seg.end; i += 2) {
+      if (Math.hypot(p.x - track.px[i], p.z - track.pz[i]) < track.hw[i] + 0.5) return true;
+    }
+    return false;
+  };
+  for (const seg of track.segments) {
+    const n = seg.ring ? count : Math.max(1, Math.floor(((seg.end - seg.start + 1) * track.spacing) / spacing));
+    for (let i = 0; i < n; i++) {
+      const idx = seg.ring ? track.wrap(Math.round((i * spacing) / track.spacing)) : seg.start + Math.round((i * (seg.end - seg.start)) / Math.max(1, n - 1));
+      for (const side of [-1, 1]) {
+        if (!keep(idx, side)) continue;
+        const p = track.point(idx, side * (track.hw[idx] + 1.5));
+        if (track.segments.some((other) => other !== seg && within(other, p))) continue;
+        spots.push({ p, red: (i + (side > 0 ? 1 : 0)) % 2 === 1, side, i, seg, n });
+      }
     }
   }
   const buoys = new THREE.InstancedMesh(geometry, toon(0xffffff), Math.max(1, spots.length));
@@ -180,13 +196,15 @@ export function courseBuoys(track, keep, spacing = 15) {
   spots.forEach((s, i) => buoys.setColorAt(i, s.red ? red : white));
   buoys.frustumCulled = lines.frustumCulled = false;
   const links = [];
-  for (const side of [-1, 1]) {
-    const row = spots.filter((s) => s.side === side);
-    for (let k = 0; k < row.length; k++) {
-      const a = row[k];
-      const b = row[(k + 1) % row.length];
-      const step = (b.i - a.i + count) % count;
-      if (step === 1) links.push([a.p, b.p]);
+  for (const seg of track.segments) {
+    for (const side of [-1, 1]) {
+      const row = spots.filter((s) => s.side === side && s.seg === seg);
+      for (let k = 0; k < row.length; k++) {
+        const a = row[k];
+        const b = row[(k + 1) % row.length];
+        const step = seg.ring ? (b.i - a.i + count) % count : b.i - a.i;
+        if (step === 1) links.push([a.p, b.p]);
+      }
     }
   }
   const PARTS = 4;
