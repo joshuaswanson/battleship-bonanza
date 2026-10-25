@@ -7,6 +7,25 @@ const MAX_POINTS = 40;
 const STRIPS = 3;
 const MAX_VERTS = 8 * MAX_POINTS * STRIPS * 6;
 
+const SIDES = [-1, 1, 0];
+const BAND_A = { inner: 0, outer: 0, alpha: 0 };
+const BAND_B = { inner: 0, outer: 0, alpha: 0 };
+function band(p, age, u, side, out) {
+  if (side) {
+    const center = side * (1.5 + p.speed * 15 * age);
+    const half = 0.45 + 1.2 * u;
+    out.inner = center - half;
+    out.outer = center + half;
+    out.alpha = Math.pow(1 - u, 1.1) * (0.6 + 0.6 * p.speed);
+  } else {
+    const half = 1.5 + 2.5 * u;
+    out.inner = -half;
+    out.outer = half;
+    out.alpha = Math.pow(1 - u, 2.5) * (0.5 + 0.6 * p.speed);
+  }
+  return out;
+}
+
 const VERT = /* glsl */ `
   attribute float aAlpha;
   attribute float aEdge;
@@ -51,6 +70,9 @@ export class Wakes {
     this.positions = new Float32Array(MAX_VERTS * 3);
     this.alphas = new Float32Array(MAX_VERTS);
     this.edges = new Float32Array(MAX_VERTS);
+    this.ys = new Float32Array(MAX_POINTS);
+    this.us = new Float32Array(MAX_POINTS);
+    this.ages = new Float32Array(MAX_POINTS);
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3).setUsage(THREE.DynamicDrawUsage));
     geometry.setAttribute('aAlpha', new THREE.BufferAttribute(this.alphas, 1).setUsage(THREE.DynamicDrawUsage));
@@ -107,52 +129,41 @@ export class Wakes {
       this.edges[v] = edge;
       v++;
     };
-    const strips = [
-      { side: -1, arm: true },
-      { side: 1, arm: true },
-      { side: 0, arm: false },
-    ];
+    const { ys, us, ages } = this;
     for (const trail of this.trails.values()) {
+      for (let i = 0; i < trail.length; i++) {
+        const p = trail[i];
+        ages[i] = time - p.t;
+        us[i] = Math.min(1, ages[i] / LIFE);
+        ys[i] = waveHeight(p.x, p.z, time) + 0.06;
+      }
       for (let i = 0; i < trail.length - 1; i++) {
         const a = trail[i];
         const b = trail[i + 1];
         if (a.cut) continue;
-        const ends = [a, b].map((p) => {
-          const age = time - p.t;
-          const u = Math.min(1, age / LIFE);
-          return { p, u, age, y: waveHeight(p.x, p.z, time) + 0.06 };
-        });
-        if (Math.abs(ends[0].y - ends[1].y) > 1.5) continue;
-        for (const strip of strips) {
+        if (Math.abs(ys[i] - ys[i + 1]) > 1.5) continue;
+        for (const side of SIDES) {
           if (v + 6 > MAX_VERTS) break;
-          const edgesOf = ({ p, u, age }) => {
-            if (strip.arm) {
-              const center = strip.side * (1.5 + p.speed * 15 * age);
-              const half = 0.45 + 1.2 * u;
-              const alpha = Math.pow(1 - u, 1.1) * (0.6 + 0.6 * p.speed);
-              return { inner: center - half, outer: center + half, alpha };
-            }
-            const half = 1.5 + 2.5 * u;
-            return { inner: -half, outer: half, alpha: Math.pow(1 - u, 2.5) * (0.5 + 0.6 * p.speed) };
-          };
-          const ea = edgesOf(ends[0]);
-          const eb = edgesOf(ends[1]);
-          const at = (end, lateral) => [end.p.x + end.p.lx * lateral, end.y, end.p.z + end.p.lz * lateral];
-          const a0 = at(ends[0], ea.inner);
-          const a1 = at(ends[0], ea.outer);
-          const b0 = at(ends[1], eb.inner);
-          const b1 = at(ends[1], eb.outer);
-          put(...a0, ea.alpha, -1);
-          put(...b0, eb.alpha, -1);
-          put(...a1, ea.alpha, 1);
-          put(...a1, ea.alpha, 1);
-          put(...b0, eb.alpha, -1);
-          put(...b1, eb.alpha, 1);
+          const ea = band(a, ages[i], us[i], side, BAND_A);
+          const eb = band(b, ages[i + 1], us[i + 1], side, BAND_B);
+          const ya = ys[i];
+          const yb = ys[i + 1];
+          put(a.x + a.lx * ea.inner, ya, a.z + a.lz * ea.inner, ea.alpha, -1);
+          put(b.x + b.lx * eb.inner, yb, b.z + b.lz * eb.inner, eb.alpha, -1);
+          put(a.x + a.lx * ea.outer, ya, a.z + a.lz * ea.outer, ea.alpha, 1);
+          put(a.x + a.lx * ea.outer, ya, a.z + a.lz * ea.outer, ea.alpha, 1);
+          put(b.x + b.lx * eb.inner, yb, b.z + b.lz * eb.inner, eb.alpha, -1);
+          put(b.x + b.lx * eb.outer, yb, b.z + b.lz * eb.outer, eb.alpha, 1);
         }
       }
     }
     this.geometry.setDrawRange(0, v);
-    for (const name of ['position', 'aAlpha', 'aEdge']) this.geometry.attributes[name].needsUpdate = true;
+    for (const name of ['position', 'aAlpha', 'aEdge']) {
+      const attribute = this.geometry.attributes[name];
+      attribute.clearUpdateRanges();
+      attribute.addUpdateRange(0, v * attribute.itemSize);
+      attribute.needsUpdate = true;
+    }
   }
 
   dispose() {
