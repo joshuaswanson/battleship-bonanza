@@ -262,7 +262,7 @@ async function buildTerrain(surface, track, tick) {
   return new THREE.Mesh(geometry, toon(0xffffff, { vertexColors: true }));
 }
 
-export function ribbon(track, from, to, levelAt, positions, shades, shadeAt = () => [1, 1, 1]) {
+export function ribbon(track, from, to, levelAt, positions, shades, shadeAt = () => [1, 1, 1], flow = null) {
   const hw = track.halfWidth + 8;
   const lanes = 10;
   const at = (k, lane) => {
@@ -281,16 +281,19 @@ export function ribbon(track, from, to, levelAt, positions, shades, shadeAt = ()
       const [bx, bz] = at(k, lane + 1);
       const [cx, cz] = at(k + 1, lane);
       const [dx, dz] = at(k + 1, lane + 1);
-      const quad = [[ax, y0, az, k], [cx, y1, cz, k + 1], [bx, y0, bz, k], [bx, y0, bz, k], [cx, y1, cz, k + 1], [dx, y1, dz, k + 1]];
-      for (const [x, y, z, kk] of quad) {
+      const l0 = (2 * lane) / lanes - 1;
+      const l1 = (2 * (lane + 1)) / lanes - 1;
+      const quad = [[ax, y0, az, k, l0], [cx, y1, cz, k + 1, l0], [bx, y0, bz, k, l1], [bx, y0, bz, k, l1], [cx, y1, cz, k + 1, l0], [dx, y1, dz, k + 1, l1]];
+      for (const [x, y, z, kk, lat] of quad) {
         positions.push(x, y, z);
         shades.push(...shadeAt(x, y, z, kk));
+        flow?.push(kk * track.spacing, lat);
       }
     }
   }
 }
 
-function routeRibbon(track, route, positions, shades) {
+function routeRibbon(track, route, positions, shades, flow = null) {
   const chain = [route.from];
   for (let i = route.first; i <= route.last; i++) chain.push(i);
   chain.push(route.to);
@@ -311,9 +314,14 @@ function routeRibbon(track, route, positions, shades) {
       const [bx, bz] = at(i, lane + 1);
       const [cx, cz] = at(j, lane);
       const [dx, dz] = at(j, lane + 1);
-      for (const [x, y, z] of [[ax, y0, az], [cx, y1, cz], [bx, y0, bz], [bx, y0, bz], [cx, y1, cz], [dx, y1, dz]]) {
+      const l0 = (2 * lane) / lanes - 1;
+      const l1 = (2 * (lane + 1)) / lanes - 1;
+      const si = track.sAt[i];
+      const sj = si + Math.hypot(track.px[j] - track.px[i], track.pz[j] - track.pz[i]) * track.sScale[i];
+      for (const [x, y, z, sv, lat] of [[ax, y0, az, si, l0], [cx, y1, cz, sj, l0], [bx, y0, bz, si, l1], [bx, y0, bz, si, l1], [cx, y1, cz, sj, l0], [dx, y1, dz, sj, l1]]) {
         positions.push(x, y, z);
         shades.push(1, 1, 1);
+        flow?.push(sv, lat);
       }
     }
   }
@@ -332,22 +340,27 @@ export function caveWaterShade(torches, ends) {
 export const lowLevel = (track) => (s) => track.level(s, track.pastSeam(s) ? 1 : 0);
 export const copyLevel = (track) => (s) => highLevel(track, s);
 
-export function buildRiver(track, { deep = 0x1c8f86, shallow = 0x4fd6b4 } = {}) {
+export function buildRiver(track, { deep = 0x1c8f86, shallow = 0x4fd6b4, flowSpeed = 0.35, foamAt = () => 0, rapids = 0 } = {}) {
   const { river, spacing, N } = track;
   const kIn = Math.round(river.tunnelIn / spacing);
   const kOut = Math.round(river.tunnelOut / spacing);
   const kSeam = Math.round(river.seam / spacing);
   const positions = [];
   const shades = [];
+  const flow = [];
   const ends = [kIn, kOut];
-  ribbon(track, kOut, kIn + N, (s) => track.level(s), positions, shades);
-  ribbon(track, kIn, kOut, lowLevel(track), positions, shades, caveWaterShade(caveTorches(track, kIn, kOut, lowLevel(track)), ends));
-  ribbon(track, kSeam - GHOST, kOut, copyLevel(track), positions, shades, caveWaterShade(caveTorches(track, kIn, kOut, copyLevel(track)), ends));
-  for (const r of track.routes) routeRibbon(track, r, positions, shades);
+  ribbon(track, kOut, kIn + N, (s) => track.level(s), positions, shades, undefined, flow);
+  ribbon(track, kIn, kOut, lowLevel(track), positions, shades, caveWaterShade(caveTorches(track, kIn, kOut, lowLevel(track)), ends), flow);
+  ribbon(track, kSeam - GHOST, kOut, copyLevel(track), positions, shades, caveWaterShade(caveTorches(track, kIn, kOut, copyLevel(track)), ends), flow);
+  for (const r of track.routes) routeRibbon(track, r, positions, shades, flow);
+  const foam = [];
+  for (let k = 0; k < flow.length; k += 2) foam.push(foamAt(flow[k] % track.length, flow[k + 1]));
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   geometry.setAttribute('aShade', new THREE.Float32BufferAttribute(shades, 3));
-  return createWater({ geometry, flat: true, amp: RIVER_AMP, deep, shallow });
+  geometry.setAttribute('aFlow', new THREE.Float32BufferAttribute(flow, 2));
+  geometry.setAttribute('aFoam', new THREE.Float32BufferAttribute(foam, 1));
+  return createWater({ geometry, flat: true, amp: RIVER_AMP, deep, shallow, flowSpeed, rapids });
 }
 
 export const GHOST = 45;
