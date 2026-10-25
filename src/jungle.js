@@ -1209,7 +1209,7 @@ function addBanana(batch, x, y, z, rand, big = false) {
 
 
 function leafGeometry(width, droop, fold) {
-  const steps = 8;
+  const steps = 5;
   const pos = [];
   const index = [];
   const rows = [];
