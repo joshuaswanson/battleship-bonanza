@@ -1281,6 +1281,9 @@ function addFern(batch, x, y, z, rand) {
   }
 }
 
+const UNDER_CHUNK = 120;
+const UNDER_FAR = 300;
+
 export async function createJungle(group, track, fx) {
   const tick = slicer();
   const fog = new THREE.Fog(SKY_GREEN, 130, 560);
@@ -1312,6 +1315,7 @@ export async function createJungle(group, track, fx) {
   }
 
   const batch = new Batcher();
+  const under = new Batcher();
 
   const rand = mulberry32(7203);
   const hw = track.halfWidth;
@@ -1361,9 +1365,9 @@ export async function createJungle(group, track, fx) {
     const height = 11 + rand() * 8;
     choppable(x, y, z, height, 0.9, (b) => addPalm(b, x, y - 0.5, z, rand, { height, lean: rand() * 0.5, dir: rand() * Math.PI * 2 }));
   });
-  await place(800, 3, 22, (x, y, z) => addBanana(batch, x, y, z, rand));
-  await place(700, 3.5, 16, (x, y, z) => addBush(batch, x, y, z, rand));
-  await place(400, 5, 30, (x, y, z) => addFern(batch, x, y, z, rand));
+  await place(800, 3, 22, (x, y, z) => addBanana(under, x, y, z, rand));
+  await place(700, 3.5, 16, (x, y, z) => addBush(under, x, y, z, rand));
+  await place(400, 5, 30, (x, y, z) => addFern(under, x, y, z, rand));
   const riverside = [...Array(track.N).keys(), ...Array.from({ length: routeSamples }, (_, k) => 2 * track.N + k)];
   for (const side of [-1, 1]) {
     for (const k of riverside) {
@@ -1379,9 +1383,9 @@ export async function createJungle(group, track, fx) {
         if (tunnelMask(track, s) > 0 || track.river.drops.some((d) => Math.abs(track.ahead(d.s, s) - 2) < 10 || track.ahead(s, d.s) < 6)) continue;
         const ground = Math.max(terrainHeight(surface, track, x, z), track.level(s) - 0.3);
         const roll = rand();
-        if (roll < 0.45) addBush(batch, x, ground - 0.2, z, rand, out);
-        else if (roll < 0.75) addReeds(batch, x, ground - 0.3, z, rand, out);
-        else addBanana(batch, x, ground - 0.2, z, rand, rand() < 0.4);
+        if (roll < 0.45) addBush(under, x, ground - 0.2, z, rand, out);
+        else if (roll < 0.75) addReeds(under, x, ground - 0.3, z, rand, out);
+        else addBanana(under, x, ground - 0.2, z, rand, rand() < 0.4);
       }
     }
   }
@@ -1408,7 +1412,8 @@ export async function createJungle(group, track, fx) {
   }
   const scenery = new THREE.Group();
   chopper.finish(JUNGLE_COLORS);
-  const chunks = await batch.buildAsync(scenery, 0.1, JUNGLE_COLORS, undefined, tick);
+  const chunks = await batch.buildAsync(scenery, 0.1, JUNGLE_COLORS, 110, tick);
+  const undergrowth = await under.buildAsync(scenery, 0.1, JUNGLE_COLORS, UNDER_CHUNK, tick);
   group.add(scenery);
 
   group.add(createArch(track, hw));
@@ -1446,6 +1451,7 @@ export async function createJungle(group, track, fx) {
     update(t, dt, camera) {
       water.update(t);
       cullChunks(chunks, camera, fog.far);
+      cullChunks(undergrowth, camera, UNDER_FAR);
       cullChunks(tunnel.userData.chunks, camera, fog.far);
       chopper.update(dt, (f) => {
         const tip = f.pivot.clone().addScaledVector(new THREE.Vector3(-f.axis.z, 0, f.axis.x), f.height * 0.6);
