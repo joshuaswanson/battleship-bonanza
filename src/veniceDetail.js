@@ -192,7 +192,7 @@ export function building(batch, windows, x, z, yaw, w, d, h, rand, { canal = fal
 }
 
 export function archBridge(batch, track, idx, { rise, peak, width, color, rim = 'stone', shops = false }) {
-  const i = track.wrap(idx);
+  const i = track.norm(idx);
   const half = track.hw[i] + 7;
   const open = track.hw[i] + 2;
   const deck = (x) => 2 + (peak - 2) * (1 - (x / half) ** 2);

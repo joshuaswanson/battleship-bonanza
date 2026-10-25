@@ -169,10 +169,21 @@ function canalWalls(track, landAt) {
     const p = track.point(i, lat);
     return new THREE.Vector3(p.x, y, p.z);
   };
-  for (const side of [-1, 1]) {
-    for (let i = 0; i < track.N; i++) {
-      const j = (i + 1) % track.N;
-      if (!landAt(i, side) || !landAt(j, side)) continue;
+  const within = (seg, p) => {
+    for (let i = seg.start; i <= seg.end; i += 2) {
+      if (Math.hypot(p.x - track.px[i], p.z - track.pz[i]) < track.hw[i] - 0.5) return true;
+    }
+    return false;
+  };
+  const open = (seg, i, side) => {
+    const p = track.point(i, side * track.hw[i]);
+    return track.segments.some((other) => other !== seg && within(other, p));
+  };
+  for (const seg of track.segments) for (const side of [-1, 1]) {
+    for (let i = seg.start; i <= seg.end; i++) {
+      const j = seg.ring ? (i + 1) % track.N : track.next[i];
+      if (!seg.ring && i === seg.end) continue;
+      if (!landAt(i, side) || !landAt(j, side) || open(seg, i, side) || open(seg, j, side)) continue;
       const li = side * track.hw[i];
       const lj = side * track.hw[j];
       const ri = side * (track.hw[i] + WALK);
@@ -265,12 +276,19 @@ export async function createVenice(group, track, fx) {
   }
   taken.push(...bridges.map((b) => ({ x: b.x, z: b.z, r: 6 })));
 
-  for (const side of [-1, 1]) {
+  for (const r of track.routes) {
+    const mid = r.first + Math.round(r.count / 2);
+    const bridge = archBridge(batch, track, mid, { rise: 6, peak: 7, width: 5, color: 'wood' });
+    bridges.push(bridge);
+    taken.push({ x: bridge.x, z: bridge.z, r: 6 });
+  }
+  for (const seg of track.segments) for (const side of [-1, 1]) {
+    const count = seg.end - seg.start + 1;
     let k = 0;
-    while (k < N) {
+    while (k < count) {
       const w = 8 + rand() * 6;
       const steps = Math.max(2, Math.round(w / track.spacing));
-      const mid = track.wrap(k + Math.floor(steps / 2));
+      const mid = seg.ring ? track.wrap(k + Math.floor(steps / 2)) : seg.start + Math.min(count - 1, k + Math.floor(steps / 2));
       k += steps;
       if (!landAt(mid, side)) continue;
       const hw = track.hw[mid];
