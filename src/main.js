@@ -678,7 +678,9 @@ if (import.meta.env.DEV) {
 }
 
 goTitle();
-requestAnimationFrame(frame);
-requestAnimationFrame(() => document.body.classList.remove('booting'));
-setTimeout(() => loadout.showThumbs(), 600);
+cam.update(0, race, false);
+renderer.compileAsync(scene, camera).finally(() => {
+  requestAnimationFrame(frame);
+  requestAnimationFrame(() => document.body.classList.remove('booting'));
+});
 setTimeout(() => prepareVenue('jungle'), 1500);
