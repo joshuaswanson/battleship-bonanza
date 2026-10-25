@@ -61,6 +61,56 @@ function welded(geometry) {
   weldedCache.set(geometry, g);
   return g;
 }
+const TINT_ATTRIBUTES = ['position', 'normal', 'color'];
+const CHOP_ATTRIBUTES = ['position', 'normal', 'color', 'aChop'];
+const normalMatrix = new THREE.Matrix3();
+const placed = new THREE.Vector3();
+function mergePlaced(items, names) {
+  let verts = 0;
+  let count = 0;
+  for (const { g } of items) {
+    verts += g.attributes.position.count;
+    count += g.index.count;
+  }
+  const geometry = new THREE.BufferGeometry();
+  for (const name of names) {
+    const size = name === 'aChop' ? 2 : items[0].g.attributes[name]?.itemSize ?? 3;
+    geometry.setAttribute(name, new THREE.BufferAttribute(new Float32Array(verts * size), size));
+  }
+  const index = new (verts > 65535 ? Uint32Array : Uint16Array)(count);
+  let v = 0;
+  let c = 0;
+  for (const { g, matrix, tint, chop } of items) {
+    const n = g.attributes.position.count;
+    normalMatrix.getNormalMatrix(matrix);
+    for (const name of names) {
+      const { array, itemSize } = geometry.attributes[name];
+      const from = g.attributes[name];
+      let o = v * itemSize;
+      if (name === 'position' || name === 'normal') {
+        for (let k = 0; k < n; k++, o += 3) {
+          placed.fromBufferAttribute(from, k);
+          if (name === 'position') placed.applyMatrix4(matrix);
+          else placed.applyMatrix3(normalMatrix).normalize();
+          array[o] = placed.x;
+          array[o + 1] = placed.y;
+          array[o + 2] = placed.z;
+        }
+      } else if (name === 'aChop' || (name === 'color' && tint)) {
+        const fill = name === 'aChop' ? chop : tint;
+        for (let k = 0; k < n; k++, o += itemSize) for (let j = 0; j < itemSize; j++) array[o + j] = fill[j];
+      } else {
+        for (let k = 0; k < n; k++, o += itemSize) for (let j = 0; j < itemSize; j++) array[o + j] = from.getComponent(k, j);
+      }
+    }
+    const src = g.index.array;
+    for (let k = 0; k < src.length; k++) index[c + k] = src[k] + v;
+    c += src.length;
+    v += n;
+  }
+  geometry.setIndex(new THREE.BufferAttribute(index, 1));
+  return geometry;
+}
 function releaseArray() {
   if (import.meta.env.DEV && window.__bb?.keepArrays) return;
   this.array = null;
@@ -132,45 +182,21 @@ export class Batcher {
     }
     const merged = { lined: [], plain: [], mossy: [], chop: [] };
     const tint = new THREE.Color();
+    const rgb = (key) => tint.set(colors[key]).toArray();
     for (const [geometry, all] of shapes) {
       const tagged = this.chopper ? all.filter((e) => e.tag) : [];
       const list = tagged.length ? all.filter((e) => !e.tag) : all;
       const source = welded(geometry);
+      const painted = geometry.hasAttribute('color');
       for (const e of tagged) {
-        const g = source.clone().applyMatrix4(e.matrix);
-        if (g.hasAttribute('uv')) g.deleteAttribute('uv');
-        const n = g.attributes.position.count;
-        if (!g.hasAttribute('color')) {
-          tint.set(colors[e.key]);
-          const rgb = new Float32Array(n * 3);
-          for (let k = 0; k < n; k++) rgb.set([tint.r, tint.g, tint.b], k * 3);
-          g.setAttribute('color', new THREE.BufferAttribute(rgb, 3));
-        }
-        const chop = new Float32Array(n * 2);
-        for (let k = 0; k < n; k++) chop.set([e.tag.id, e.tag.trunk ? 1 : 0], k * 2);
-        g.setAttribute('aChop', new THREE.BufferAttribute(chop, 2));
-        for (const name of Object.keys(g.attributes)) if (!['position', 'normal', 'color', 'aChop'].includes(name)) g.deleteAttribute(name);
-        merged.chop.push(g);
+        merged.chop.push({ g: source, matrix: e.matrix, tint: painted ? null : rgb(e.key), chop: [e.tag.id, e.tag.trunk ? 1 : 0] });
       }
       if (!list.length) continue;
       const mossy = geometry.hasAttribute('aGreen');
-      const painted = geometry.hasAttribute('color');
       if (list.length < INSTANCE_MIN || painted || mossy) {
         for (const e of list) {
-          const g = source.clone().applyMatrix4(e.matrix);
-          if (g.hasAttribute('uv')) g.deleteAttribute('uv');
-          if (mossy) {
-            merged.mossy.push(g);
-            continue;
-          }
-          if (!painted) {
-            tint.set(colors[e.key]);
-            const n = g.attributes.position.count;
-            const rgb = new Float32Array(n * 3);
-            for (let k = 0; k < n; k++) rgb.set([tint.r, tint.g, tint.b], k * 3);
-            g.setAttribute('color', new THREE.BufferAttribute(rgb, 3));
-          }
-          (NO_OUTLINE.has(e.key) ? merged.plain : merged.lined).push(g);
+          const item = { g: source, matrix: e.matrix, tint: painted || mossy ? null : rgb(e.key) };
+          (mossy ? merged.mossy : NO_OUTLINE.has(e.key) ? merged.plain : merged.lined).push(item);
         }
         continue;
       }
@@ -190,8 +216,8 @@ export class Batcher {
     }
     for (const [kind, list] of Object.entries(merged)) {
       if (!list.length) continue;
-      const geometry = mergeGeometries(list);
-      for (const g of list) g.dispose();
+      const names = kind === 'mossy' ? Object.keys(list[0].g.attributes).filter((n) => n !== 'uv') : kind === 'chop' ? CHOP_ATTRIBUTES : TINT_ATTRIBUTES;
+      const geometry = mergePlaced(list, names);
       geometry.computeBoundingSphere();
       for (const attribute of [...Object.values(geometry.attributes), geometry.index]) attribute.onUpload(releaseArray);
       if (kind === 'chop') {
