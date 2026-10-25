@@ -1282,6 +1282,7 @@ function addFern(batch, x, y, z, rand) {
 }
 
 const UNDER_CHUNK = 120;
+const DISCARD = { add() {} };
 const UNDER_FAR = 300;
 
 export async function createJungle(group, track, fx) {
@@ -1347,7 +1348,8 @@ export async function createJungle(group, track, fx) {
       await tick();
       const p = bankSpot(from, to);
       if (!p) continue;
-      plant(p.x, terrainHeight(surface, track, p.x, p.z), p.z, p.river);
+      const sliver = surface.sample(p.x - p.river.x * 8, p.z - p.river.z * 8).edge < 0;
+      plant(p.x, terrainHeight(surface, track, p.x, p.z), p.z, p.river, sliver);
       n++;
     }
   };
@@ -1356,7 +1358,7 @@ export async function createJungle(group, track, fx) {
   const choppable = (x, y, z, height, radius, build) => build(surface.sample(x, z).dist > hw + 22 ? batch : chopper.plant(batch, { x, z, base: y - 1, height, radius }));
   await place(300, 9, 50, (x, y, z, river) => choppable(x, y, z, 24, 1.7, (b) => addGiant(b, x, y, z, rand, 1, river)));
   await place(850, 6, 40, (x, y, z, river) => choppable(x, y, z, 12, 1, (b) => addBroadleaf(b, x, y, z, rand, 0.9 + rand() * 0.5, river)));
-  await place(500, 6, 45, (x, y, z) => addBanana(batch, x, y, z, rand, true));
+  await place(500, 6, 45, (x, y, z, river, sliver) => addBanana(sliver ? DISCARD : batch, x, y, z, rand, true));
   await place(180, 5, 30, (x, y, z) => {
     const height = 4 + rand() * 4;
     choppable(x, y, z, height, 0.8, (b) => addPalm(b, x, y - 0.5, z, rand, { height, lean: rand() * 0.2, dir: rand() * Math.PI * 2 }));
@@ -1365,9 +1367,9 @@ export async function createJungle(group, track, fx) {
     const height = 11 + rand() * 8;
     choppable(x, y, z, height, 0.9, (b) => addPalm(b, x, y - 0.5, z, rand, { height, lean: rand() * 0.5, dir: rand() * Math.PI * 2 }));
   });
-  await place(800, 3, 22, (x, y, z) => addBanana(under, x, y, z, rand));
-  await place(700, 3.5, 16, (x, y, z) => addBush(under, x, y, z, rand));
-  await place(400, 5, 30, (x, y, z) => addFern(under, x, y, z, rand));
+  await place(800, 3, 22, (x, y, z, river, sliver) => addBanana(sliver ? DISCARD : under, x, y, z, rand));
+  await place(700, 3.5, 16, (x, y, z, river, sliver) => addBush(sliver ? DISCARD : under, x, y, z, rand));
+  await place(400, 5, 30, (x, y, z, river, sliver) => addFern(sliver ? DISCARD : under, x, y, z, rand));
   const riverside = [...Array(track.N).keys(), ...Array.from({ length: routeSamples }, (_, k) => 2 * track.N + k)];
   for (const side of [-1, 1]) {
     for (const k of riverside) {
@@ -1379,13 +1381,15 @@ export async function createJungle(group, track, fx) {
         const along = (rand() - 0.5) * track.spacing;
         const x = track.px[i] + track.nx[i] * lat + track.tx[i] * along;
         const z = track.pz[i] + track.nz[i] * lat + track.tz[i] * along;
-        const { s } = surface.sample(x, z);
+        const { s, edge } = surface.sample(x, z);
         if (tunnelMask(track, s) > 0 || track.river.drops.some((d) => Math.abs(track.ahead(d.s, s) - 2) < 10 || track.ahead(s, d.s) < 6)) continue;
         const ground = Math.max(terrainHeight(surface, track, x, z), track.level(s) - 0.3);
         const roll = rand();
-        if (roll < 0.45) addBush(under, x, ground - 0.2, z, rand, out);
-        else if (roll < 0.75) addReeds(under, x, ground - 0.3, z, rand, out);
-        else addBanana(under, x, ground - 0.2, z, rand, rand() < 0.4);
+        const sliver = surface.sample(x + out.x * 8, z + out.z * 8).edge < 0;
+        const target = edge < -3 || sliver ? DISCARD : under;
+        if (roll < 0.45) addBush(target, x, ground - 0.2, z, rand, out);
+        else if (roll < 0.75) addReeds(target, x, ground - 0.3, z, rand, out);
+        else addBanana(target, x, ground - 0.2, z, rand, rand() < 0.4);
       }
     }
   }
