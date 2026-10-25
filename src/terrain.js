@@ -208,14 +208,13 @@ export function courseBuoys(track, keep, spacing = 15) {
     }
   }
   const PARTS = 4;
+  const BOB_RANGE = 250;
   const rope = new THREE.InstancedMesh(new THREE.CylinderGeometry(1, 1, 1, 5).rotateX(Math.PI / 2).translate(0, 0, 0.5), toon(0xf3e2b8), Math.max(1, links.length * PARTS));
   const floats = new THREE.InstancedMesh(new THREE.CylinderGeometry(1, 1, 1, 10).rotateZ(Math.PI / 2), toon(0xffffff), Math.max(1, links.length * (PARTS - 1)));
   rope.count = links.length * PARTS;
   floats.count = links.length * (PARTS - 1);
   for (let k = 0; k < floats.count; k++) floats.setColorAt(k, k % 2 ? red : white);
   rope.frustumCulled = floats.frustumCulled = false;
-  const a = new THREE.Vector3();
-  const b = new THREE.Vector3();
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
   const z = new THREE.Vector3(0, 0, 1);
@@ -229,12 +228,16 @@ export function courseBuoys(track, keep, spacing = 15) {
   const dummy = new THREE.Object3D();
   const group = new THREE.Group();
   group.add(buoys, lines, rope, floats);
-  group.userData.update = (t) => {
+  const points = Array.from({ length: PARTS + 1 }, () => new THREE.Vector3());
+  let placed = false;
+  group.userData.update = (t, camera) => {
+    const near = (x, z) => !placed || !camera || Math.hypot(x - camera.position.x, z - camera.position.z) < BOB_RANGE;
     links.forEach(([p0, p1], li) => {
+      if (!near((p0.x + p1.x) / 2, (p0.z + p1.z) / 2)) return;
+      for (let k = 0; k <= PARTS; k++) pointAt(p0, p1, k / PARTS, t, points[k]);
       for (let k = 0; k < PARTS; k++) {
-        pointAt(p0, p1, k / PARTS, t, a);
-        pointAt(p0, p1, (k + 1) / PARTS, t, b);
-        dir.subVectors(b, a);
+        const a = points[k];
+        dir.subVectors(points[k + 1], a);
         const len = dir.length();
         q.setFromUnitVectors(z, dir.divideScalar(len || 1));
         rope.setMatrixAt(li * PARTS + k, m.compose(a, q, sc.set(0.07, 0.07, len)));
@@ -246,12 +249,14 @@ export function courseBuoys(track, keep, spacing = 15) {
     rope.instanceMatrix.needsUpdate = true;
     floats.instanceMatrix.needsUpdate = true;
     spots.forEach(({ p }, i) => {
+      if (!near(p.x, p.z)) return;
       dummy.position.set(p.x, waveHeight(p.x, p.z, t) + 0.15, p.z);
       dummy.rotation.set(Math.sin(t * 1.7 + i) * 0.15, 0, Math.cos(t * 1.3 + i * 0.7) * 0.15);
       dummy.updateMatrix();
       buoys.setMatrixAt(i, dummy.matrix);
       lines.setMatrixAt(i, dummy.matrix);
     });
+    placed = true;
     buoys.instanceMatrix.needsUpdate = true;
     lines.instanceMatrix.needsUpdate = true;
   };

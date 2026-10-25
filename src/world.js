@@ -1182,7 +1182,7 @@ export function createWorld(scene, track) {
       water.update(t);
       cullChunks(chunks, camera, fog.far);
       sky.position.copy(camera.position);
-      buoys.userData.update(t);
+      buoys.userData.update(t, camera);
       for (const cloud of clouds) {
         cloud.position.x += cloud.userData.speed * dt;
         if (cloud.position.x > 800) cloud.position.x = -800;
