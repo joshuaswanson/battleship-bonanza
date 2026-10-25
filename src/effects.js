@@ -86,8 +86,12 @@ class ParticlePool {
       n++;
     }
     this.mesh.count = n;
-    this.mesh.instanceMatrix.needsUpdate = true;
-    this.mesh.instanceColor.needsUpdate = true;
+    if (!n) return;
+    for (const attribute of [this.mesh.instanceMatrix, this.mesh.instanceColor]) {
+      attribute.clearUpdateRanges();
+      attribute.addUpdateRange(0, n * attribute.itemSize);
+      attribute.needsUpdate = true;
+    }
   }
 }
 
