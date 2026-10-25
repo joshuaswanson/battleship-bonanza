@@ -104,8 +104,9 @@ function butteAt(x, z) {
 }
 
 function canyonHeight(surface, track, x, z) {
-  const { level, dist, s } = surface.sample(x, z);
+  const { level, edge, s } = surface.sample(x, z);
   const hw = track.halfWidth;
+  const dist = edge + hw;
   const lift = buttes.length ? butteAt(x, z) : 0;
   if (lift > 0) {
     const floor = level - 4 + smooth(hw - 4, hw + 6, dist) * 6.5;
@@ -380,10 +381,10 @@ export async function createCanyon(group, track, fx) {
   const nearDrop = (s, before, after) => track.river.drops.some((d) => track.ahead(s, d.s) < before || track.ahead(d.s, s) < after);
   const startClear = (s) => track.ahead(s, 0) < 60 || track.ahead(0, s) < 50;
 
-  for (let n = 0, tries = 0; n < 34 && tries < 600; tries++) {
+  for (let n = 0, tries = 0; n < 12 && tries < 900; tries++) {
     const idx = Math.floor(rand() * track.N);
     const s = idx * track.spacing;
-    if (tunnelMask(track, s) > 0 || nearDrop(s, 30, 25) || startClear(s)) continue;
+    if (tunnelMask(track, s) > 0 || nearDrop(s, 70, 70) || startClear(s) || rapidsAt(s) > 0.15) continue;
     const size = 2.2 + rand() * 2.4;
     const room = hw - 2.5 - size - 8;
     if (room < 5) continue;
@@ -397,7 +398,7 @@ export async function createCanyon(group, track, fx) {
       boulder(batch, p.x + Math.cos(a) * r, track.level(s) - 0.6, p.z + Math.sin(a) * r, size * (0.35 + rand() * 0.25), rand);
     }
     batch.add('foam', CYL, mat(p.x, track.level(s) + 0.12, p.z, size * 1.35, 0.05, size * 1.35));
-    shores.push({ x: p.x, z: p.z, rx: size * 0.9, rz: size * 0.9, rot: 0 });
+    shores.push({ x: p.x, z: p.z, rx: size * 0.9, rz: size * 0.9, rot: 0, top: track.level(s) + size * 0.55 });
     n++;
   }
 
@@ -405,7 +406,7 @@ export async function createCanyon(group, track, fx) {
     await tick();
     const idx = Math.floor(rand() * track.N);
     const side = rand() < 0.5 ? -1 : 1;
-    const p = track.point(idx, side * (hw + 1 + rand() * 7));
+    const p = track.point(idx, side * (hw + 4 + rand() * 6));
     const s = surface.sample(p.x, p.z).s;
     if (tunnelMask(track, s) > 0 || nearDrop(s, 12, 8)) continue;
     const y = height(p.x, p.z);

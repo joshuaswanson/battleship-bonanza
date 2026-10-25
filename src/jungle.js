@@ -172,8 +172,9 @@ function tikiSpots(track) {
 }
 
 function terrainHeight(surface, track, x, z) {
-  const { level, dist, s } = surface.sample(x, z);
+  const { level, edge, s } = surface.sample(x, z);
   const hw = track.halfWidth;
+  const dist = edge + hw;
   const bank = smooth(hw - 4, hw + 7, dist);
   const hills = smooth(hw + 7, hw + 70, dist) * (2 + 7 * noise(x, z));
   const mountains = smooth(140, 330, dist) * 70 * (0.5 + 0.6 * noise(x * 1.7 + 300, z * 1.7));

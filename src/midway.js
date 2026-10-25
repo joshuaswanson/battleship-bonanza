@@ -345,25 +345,34 @@ export async function createMidway(group, track, fx) {
   place(0.33, -1, 16, 172 * BATTLESHIP_SCALE, 30 * BATTLESHIP_SCALE, 0.12, bigShip);
   place(0.86, 1, 20, 172 * BATTLESHIP_SCALE, 30 * BATTLESHIP_SCALE, -0.18, bigShip);
   for (const r of track.routes) {
-    const mid = r.first + Math.round(r.count / 2);
-    let near = mid;
-    let nearD = Infinity;
-    for (let i = r.from; i !== r.to; i = track.next[i]) {
-      const d = Math.hypot(track.px[i] - track.px[mid], track.pz[i] - track.pz[mid]);
-      if (d < nearD) {
-        nearD = d;
-        near = i;
+    let best = null;
+    for (let k = Math.round(r.count * 0.3); k <= Math.round(r.count * 0.7); k += 2) {
+      const i = r.first + k;
+      let near = r.from;
+      let nearD = Infinity;
+      for (let j = r.from; j !== r.to; j = track.next[j]) {
+        const d = Math.hypot(track.px[j] - track.px[i], track.pz[j] - track.pz[i]);
+        if (d < nearD) {
+          nearD = d;
+          near = j;
+        }
       }
+      const x = (track.px[i] + track.px[near]) / 2;
+      const z = (track.pz[i] + track.pz[near]) / 2;
+      const yaw = Math.atan2(track.px[i] - track.px[near], track.pz[i] - track.pz[near]) + Math.PI / 2;
+      if (fits(x, z, yaw, 96, 11, 4) && (!best || nearD > best.gap)) best = { x, z, yaw, gap: nearD };
     }
-    const x = (track.px[mid] + track.px[near]) / 2;
-    const z = (track.pz[mid] + track.pz[near]) / 2;
-    const yaw = track.heading(mid);
-    if (fits(x, z, yaw, 96, 11, 5)) {
+    if (best) {
       const local = { local: [] };
-      const size = tinCan(x, z, yaw, local);
-      for (const g of local.local) guns.push(g.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw).add(new THREE.Vector3(x, 0, z)));
-      ships.push({ x, z, L: size.L });
-      shores.push({ x, z, rx: size.B / 2 + 0.5, rz: size.L / 2, rot: yaw });
+      const size = tinCan(best.x, best.z, best.yaw, local);
+      for (const g of local.local) {
+        const w = g.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), best.yaw).add(new THREE.Vector3(best.x, 0, best.z));
+        w.s = g.s ?? 1;
+        guns.push(w);
+      }
+      ships.push({ x: best.x, z: best.z, L: size.L });
+      shores.push({ x: best.x, z: best.z, rx: size.B / 2 + 0.5, rz: size.L / 2, rot: best.yaw });
+      group.userData.splitShip = { x: best.x, z: best.z, yaw: best.yaw };
     }
   }
   for (const [f, side, angle] of [[0.04, -1, 0.5], [0.48, 1, -0.4], [0.74, -1, 0.2], [0.24, 1, 0.9]]) {
