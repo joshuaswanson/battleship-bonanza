@@ -2,8 +2,12 @@ export const COUNT_LAND = 0.11;
 const RACE_VOLUME = 0.45;
 const SFX_VOLUME = 0.85;
 
-function track(file, volume) {
-  const audio = new Audio(`${import.meta.env.BASE_URL}${file}`);
+const RACE_SONGS = ['race-music.mp3', 'coral-cannonade.mp3', 'torpedo-tide-rider.mp3'];
+
+function track(file, volume, preload = 'auto') {
+  const audio = new Audio();
+  audio.preload = preload;
+  audio.src = `${import.meta.env.BASE_URL}${file}`;
   audio.loop = true;
   audio.volume = volume;
   return audio;
@@ -15,7 +19,10 @@ export class Sfx {
     this.soundOn = localStorage.getItem('bb-sound') !== '0';
     this.musicOn = localStorage.getItem('bb-music') !== '0';
     this.listener = null;
-    this.tracks = { menu: track('menu-music.mp3', 0.45), race: track('race-music.mp3', RACE_VOLUME) };
+    this.raceSongs = RACE_SONGS.map((file) => track(file, RACE_VOLUME, 'none'));
+    this.raceSong = (Number(localStorage.getItem('bb-race-song')) || 0) % RACE_SONGS.length;
+    this.tracks = { menu: track('menu-music.mp3', 0.45), race: this.raceSongs[this.raceSong] };
+    this.preloadRaceSong();
     this.musicWanted = null;
     this.music = this.tracks.menu;
   }
@@ -24,9 +31,25 @@ export class Sfx {
     return this.ctx ? (this.ctx.outputLatency || 0) + (this.ctx.baseLatency || 0) : 0;
   }
 
+  nextRaceSong() {
+    this.tracks.race.pause();
+    this.tracks.race = this.raceSongs[this.raceSong];
+    this.tracks.race.volume = RACE_VOLUME;
+    this.raceSong = (this.raceSong + 1) % this.raceSongs.length;
+    localStorage.setItem('bb-race-song', this.raceSong);
+    this.preloadRaceSong();
+  }
+
+  preloadRaceSong() {
+    const audio = this.raceSongs[this.raceSong];
+    if (audio.preload === 'auto') return;
+    audio.preload = 'auto';
+    audio.load();
+  }
+
   playMusic(name, { at, loop = true } = {}) {
     if (name !== this.musicWanted) {
-      for (const audio of Object.values(this.tracks)) audio.pause();
+      for (const audio of [this.tracks.menu, ...this.raceSongs]) audio.pause();
       if (name) this.tracks[name].currentTime = 0;
     }
     this.musicWanted = name;

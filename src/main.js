@@ -366,6 +366,7 @@ async function startRace() {
   if (!setup.items.every(Boolean)) return;
   sfx.unlock();
   sfx.playMusic(null);
+  sfx.nextRaceSong();
   sfx.duckMusic(false);
   saveSetup();
   const map = pickMap(false);
