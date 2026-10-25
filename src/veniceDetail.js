@@ -82,19 +82,19 @@ export function building(batch, windows, x, z, yaw, w, d, h, rand, { canal = fal
   const front = d / 2;
   put('stone', BOX, 0, 1.6, 0, w + 0.2, 3.2, d + 0.2);
   put(color, BOX, 0, 3.2 + (h - 3.2) / 2, 0, w, h - 3.2, d);
-  for (let g = 0.8; g < 3.1; g += 0.8) put('groove', BOX, 0, g, front + 0.11, w + 0.22, 0.07, 0.04);
+  for (let g = 0.8; g < 3.1; g += 0.8) for (const face of [1, -1]) put('groove', BOX, 0, g, face * (front + 0.11), w + 0.22, 0.07, 0.04);
   const style = pick(['gothic', 'gothic', 'round', 'square'], rand);
   const shutters = style === 'square' || rand() < 0.3 ? pick(['shutter', 'shutterBrown'], rand) : null;
   const floors = Math.max(1, Math.floor((h - 3.4) / 3.4));
   const cols = Math.max(2, Math.floor(w / 2.6));
-  const faces = canal ? [1] : [1, -1];
-  for (const face of faces) {
+  for (const face of [1, -1]) {
     const fz = face * (front + 0.02);
     const ry = face > 0 ? 0 : Math.PI;
+    const canalFace = canal && face > 0;
     for (let f = 0; f < floors; f++) {
       const y = 3.4 + f * 3.4 + 0.75;
-      if (canal) put('stone', BOX, 0, 3.4 + f * 3.4, fz + face * 0.06, w + 0.12, 0.2, 0.14);
-      const nobile = canal && f === 0 && w >= 10 && rand() < 0.6;
+      if (canalFace) put('stone', BOX, 0, 3.4 + f * 3.4, fz + face * 0.06, w + 0.12, 0.2, 0.14);
+      const nobile = canalFace && f === 0 && w >= 10 && rand() < 0.6;
       if (nobile) {
         const n = 3 + Math.floor(rand() * 2);
         const span = Math.min(w - 2, n * 1.3);
@@ -126,12 +126,37 @@ export function building(batch, windows, x, z, yaw, w, d, h, rand, { canal = fal
         }
       }
     }
-    if (canal) {
+    if (canalFace) {
       const n = Math.floor(w / 0.7);
       for (let k = 0; k < n; k++) win('stone', BOX, -w / 2 + (k + 0.5) * (w / n), h - 0.35, fz + face * 0.12, 0.3, 0.3, 0.24);
       put('stone', BOX, 0, h - 0.05, fz + face * 0.2, w + 0.5, 0.3, 0.4);
     }
   }
+  for (const side of [-1, 1]) {
+    const sx = side * (w / 2 + 0.02);
+    const ry = (side * Math.PI) / 2;
+    const sideCols = Math.max(1, Math.floor(d / 3.4));
+    for (let g = 0.8; g < 3.1; g += 0.8) put('groove', BOX, side * (w / 2 + 0.11), g, 0, 0.04, 0.07, d + 0.22);
+    for (let f = 0; f < floors; f++) {
+      const y = 3.4 + f * 3.4 + 0.75;
+      put('stone', BOX, side * (w / 2 + 0.06), 3.4 + f * 3.4, 0, 0.14, 0.18, d + 0.1);
+      for (let c = 0; c < sideCols; c++) {
+        if (rand() < 0.22) continue;
+        const lz = (c - (sideCols - 1) / 2) * (d / sideCols);
+        windowAt(win, style, sx, y, lz, 0.95, 2.1, ry);
+        if (shutters) {
+          for (const s2 of [-1, 1]) win(shutters, BOX, sx + side * 0.08, y + 1.05, lz + s2 * 0.9, 0.08, 2.1, 0.58, 0, 0);
+        }
+        if (rand() < 0.14) {
+          win('flowerBox', BOX, sx + side * 0.3, y - 0.25, lz, 0.45, 0.35, 1.2);
+          for (let k = 0; k < 4; k++) win(rand() < 0.7 ? 'flower' : 'leafy', BALL, sx + side * 0.32, y + 0.02 + rand() * 0.08, lz - 0.45 + k * 0.3, 0.15, 0.15, 0.17);
+        }
+      }
+    }
+    put('roofDark', CYL, side * (w / 2 + 0.16), (h + 1) / 2, d / 2 - 0.5, 0.11, h - 1, 0.11);
+    put('stone', BOX, side * (w / 2 + 0.2), h - 0.05, 0, 0.4, 0.3, d + 0.5);
+  }
+  put('stone', BOX, 0, h - 0.05, -(front + 0.2), w + 0.5, 0.3, 0.4);
   put('stone', BOX, 0, h + 0.15, 0, w + 0.7, 0.35, d + 0.7);
   put(rand() < 0.5 ? 'roof' : 'roofDark', HIP, 0, h + 0.3, 0, w * 1.04, 2.2 + rand() * 1.2, d * 1.04);
   const chimneys = 1 + Math.floor(rand() * 3);
