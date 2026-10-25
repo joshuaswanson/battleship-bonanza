@@ -6,7 +6,7 @@ import '@fontsource/saira-condensed/900.css';
 import './style.css';
 import * as THREE from 'three';
 import { createTrack } from './track.js';
-import { createWorld } from './world.js';
+import { createWorld, buildBudget } from './world.js';
 import { MAPS } from './maps.js';
 import { Recorder, Replay } from './replay.js';
 import { Hints } from './hints.js';
@@ -368,7 +368,8 @@ async function startRace() {
   sfx.duckMusic(false);
   saveSetup();
   const map = pickMap(false);
-  await prepareVenue(map);
+  if (venues[map]) await prepareVenue(map);
+  else await showLoading(map, prepareVenue(map));
   newRace(false, map);
   for (const id of Object.keys(venues)) if (id !== 'bay' && id !== map) disposeVenue(id);
   mode = 'race';
@@ -378,6 +379,22 @@ async function startRace() {
   hud.show(true);
   showScreen(null);
   document.activeElement?.blur();
+}
+
+let loading = false;
+async function showLoading(map, ready) {
+  $('loading-title').textContent = t(`map_${map}`);
+  $('loading-blurb').textContent = t(`mapBlurb_${map}`);
+  $('loading').classList.add('on');
+  loading = true;
+  buildBudget.ms = 40;
+  try {
+    await ready;
+  } finally {
+    buildBudget.ms = 6;
+    loading = false;
+    $('loading').classList.remove('on');
+  }
 }
 
 function pause(on) {
@@ -536,6 +553,10 @@ let last = performance.now();
 function frame(now) {
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
   last = now;
+  if (loading) {
+    requestAnimationFrame(frame);
+    return;
+  }
   const state = input.poll();
   const pressed = input.pressed;
 

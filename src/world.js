@@ -240,10 +240,12 @@ const VERTEX_TOON = () => (vertexToon ??= toon(0xffffff, { vertexColors: true })
 
 const CHUNK = 220;
 
-export function slicer(budget = 6) {
+export const buildBudget = { ms: 6 };
+
+export function slicer() {
   let start = performance.now();
   return async () => {
-    if (performance.now() - start < budget) return;
+    if (performance.now() - start < buildBudget.ms) return;
     await new Promise((r) => setTimeout(r, 0));
     start = performance.now();
   };
