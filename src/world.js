@@ -50,14 +50,16 @@ function mossyRock() {
 
 const INSTANCE_MIN = 12;
 const weldedCache = new WeakMap();
-function welded(geometry) {
-  if (geometry.index && geometry.hasAttribute('normal')) return geometry;
+function welded(geometry, weld) {
+  if (geometry.hasAttribute('normal') && (geometry.index || !weld)) return geometry;
   let g = weldedCache.get(geometry);
   if (g) return g;
   g = geometry.index ? geometry.toNonIndexed() : geometry.clone();
   if (!g.hasAttribute('normal')) g.computeVertexNormals();
-  if (g.hasAttribute('uv')) g.deleteAttribute('uv');
-  g = mergeVertices(g);
+  if (weld) {
+    if (g.hasAttribute('uv')) g.deleteAttribute('uv');
+    g = mergeVertices(g);
+  }
   weldedCache.set(geometry, g);
   return g;
 }
@@ -70,7 +72,7 @@ function mergePlaced(items, names) {
   let count = 0;
   for (const { g } of items) {
     verts += g.attributes.position.count;
-    count += g.index.count;
+    count += g.index ? g.index.count : g.attributes.position.count;
   }
   const geometry = new THREE.BufferGeometry();
   for (const name of names) {
@@ -103,9 +105,14 @@ function mergePlaced(items, names) {
         for (let k = 0; k < n; k++, o += itemSize) for (let j = 0; j < itemSize; j++) array[o + j] = from.getComponent(k, j);
       }
     }
-    const src = g.index.array;
-    for (let k = 0; k < src.length; k++) index[c + k] = src[k] + v;
-    c += src.length;
+    if (g.index) {
+      const src = g.index.array;
+      for (let k = 0; k < src.length; k++) index[c + k] = src[k] + v;
+      c += src.length;
+    } else {
+      for (let k = 0; k < n; k++) index[c + k] = v + k;
+      c += n;
+    }
     v += n;
   }
   geometry.setIndex(new THREE.BufferAttribute(index, 1));
@@ -186,7 +193,7 @@ export class Batcher {
     for (const [geometry, all] of shapes) {
       const tagged = this.chopper ? all.filter((e) => e.tag) : [];
       const list = tagged.length ? all.filter((e) => !e.tag) : all;
-      const source = welded(geometry);
+      const source = welded(geometry, all.length > 1);
       const painted = geometry.hasAttribute('color');
       for (const e of tagged) {
         merged.chop.push({ g: source, matrix: e.matrix, tint: painted ? null : rgb(e.key), chop: [e.tag.id, e.tag.trunk ? 1 : 0] });
