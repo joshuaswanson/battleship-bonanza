@@ -516,9 +516,50 @@ export class Hud {
   }
 
   drawMap(race) {
-    const { ctx, track } = this;
+    const { ctx } = this;
     const w = this.map.width;
+    if (this.mapBaseFor !== race || this.mapBase?.width !== w) {
+      this.mapBase = this.drawMapBase(race, w);
+      this.mapBaseFor = race;
+    }
     ctx.clearRect(0, 0, w, w);
+    ctx.drawImage(this.mapBase, 0, 0);
+    const sorted = [...race.boats].sort((a, b) => (a.isPlayer ? 1 : 0) - (b.isPlayer ? 1 : 0));
+    for (const b of sorted) {
+      if (!b.isPlayer && b.has('camo')) continue;
+      const [x, y] = this.toMap(b.pos.x, b.pos.z);
+      ctx.globalAlpha = b.alive ? 1 : 0.4;
+      ctx.fillStyle = `#${b.color.toString(16).padStart(6, '0')}`;
+      ctx.strokeStyle = '#0E2A47';
+      ctx.lineWidth = 2.5;
+      if (b.isPlayer) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(-b.heading);
+        ctx.beginPath();
+        ctx.moveTo(0, -9);
+        ctx.lineTo(7, 7);
+        ctx.lineTo(0, 3);
+        ctx.lineTo(-7, 7);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      } else {
+        ctx.beginPath();
+        ctx.arc(x, y, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  drawMapBase(race, w) {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = w;
+    const ctx = canvas.getContext('2d');
+    const { track } = this;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
     const band = (color, grow) => {
@@ -560,34 +601,6 @@ export class Hud {
       ctx.fill();
       ctx.stroke();
     }
-    const sorted = [...race.boats].sort((a, b) => (a.isPlayer ? 1 : 0) - (b.isPlayer ? 1 : 0));
-    for (const b of sorted) {
-      if (!b.isPlayer && b.has('camo')) continue;
-      const [x, y] = this.toMap(b.pos.x, b.pos.z);
-      ctx.globalAlpha = b.alive ? 1 : 0.4;
-      ctx.fillStyle = `#${b.color.toString(16).padStart(6, '0')}`;
-      ctx.strokeStyle = '#0E2A47';
-      ctx.lineWidth = 2.5;
-      if (b.isPlayer) {
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.rotate(-b.heading);
-        ctx.beginPath();
-        ctx.moveTo(0, -9);
-        ctx.lineTo(7, 7);
-        ctx.lineTo(0, 3);
-        ctx.lineTo(-7, 7);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-        ctx.restore();
-      } else {
-        ctx.beginPath();
-        ctx.arc(x, y, 5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-      }
-    }
-    ctx.globalAlpha = 1;
+    return canvas;
   }
 }
