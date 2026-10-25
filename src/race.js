@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { ITEMS } from './items.js';
-import { reloadMissile, reloadMine } from './boatModel.js';
+import { reloadMissile, reloadMine, disposeBoat } from './boatModel.js';
 import { waveHeight } from './water.js';
 import { driveAI } from './ai.js';
 import { TrackFeatures } from './features.js';
@@ -573,7 +573,10 @@ export class Race {
   }
 
   dispose() {
-    for (const b of this.boats) this.scene.remove(b.model.root, b.shadow);
+    for (const b of this.boats) {
+      this.scene.remove(b.model.root, b.shadow);
+      disposeBoat(b.model);
+    }
     for (const m of this.missiles) this.scene.remove(m.mesh);
     for (const m of this.mines) this.scene.remove(m.mesh);
     for (const h of this.hooks) this.scene.remove(h.mesh, h.rope, h.loose?.mesh ?? h.rope);

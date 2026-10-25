@@ -500,6 +500,13 @@ export function buildBoat(color, items) {
   return refs;
 }
 
+export function disposeBoat(refs) {
+  refs.root.traverse((o) => {
+    if (o.isInstancedMesh) o.dispose();
+    o.geometry?.dispose();
+  });
+}
+
 export const charClock = { value: 0 };
 
 const CHAR_GLSL = /* glsl */ `

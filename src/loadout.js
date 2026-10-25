@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GROUPS, ITEMS, ITEM_IDS, STATS, statsFor } from './items.js';
 import { t, itemName, itemBlurb, comboName } from './i18n.js';
 import { buildYard } from './yardProps.js';
-import { buildBoat, buildItemModel, slotLock, laserWobble, aimLaserGun, buildMine, buildMissile, buildHook, aimTurret, spendMissile, reloadMissile, updateMissileTips, missileDirection, stepGun, stepLaser, stepFlame, stepSaw, flameDirection, newHeat, gunDirection, flashGun, laserDirection, pointLaserGun, launchMine, reloadMine, updateMineHolder } from './boatModel.js';
+import { buildBoat, disposeBoat, buildItemModel, slotLock, laserWobble, aimLaserGun, buildMine, buildMissile, buildHook, aimTurret, spendMissile, reloadMissile, updateMissileTips, missileDirection, stepGun, stepLaser, stepFlame, stepSaw, flameDirection, newHeat, gunDirection, flashGun, laserDirection, pointLaserGun, launchMine, reloadMine, updateMineHolder } from './boatModel.js';
 import { createWater, seaWaves as waveHeight } from './water.js';
 import { Effects } from './effects.js';
 import { SUN_DIR, createSky } from './world.js';
@@ -424,7 +424,10 @@ export class Loadout {
 
   rebuildBoat() {
     this.recharge = null;
-    if (this.boat) this.scene.remove(this.boat.root);
+    if (this.boat) {
+      this.scene.remove(this.boat.root);
+      disposeBoat(this.boat);
+    }
     this.heat = { machinegun: newHeat(), laser: newHeat(), flamethrower: newHeat(), saw: newHeat() };
     this.boat = buildBoat(this.setup.color, this.setup.items);
     this.scene.add(this.boat.root);
