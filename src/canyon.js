@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { toon, mulberry32 } from './toon.js';
+import { canyonGround } from './groundShader.js';
 import { groundHit } from './terrain.js';
 import { frame } from './alpine.js';
 import { Batcher, cullChunks, slicer, COLORS, mat, ROCK, createSky, createCloud, createArch, SUN_DIR } from './world.js';
@@ -147,6 +148,7 @@ async function buildTerrain(surface, track, tick) {
   }
   const positions = [];
   const colors = [];
+  const kinds = [];
   const sand = new THREE.Color(0xd9b98a);
   const wetSand = new THREE.Color(0xa88a62);
   const dust = new THREE.Color(0xd8a46a);
@@ -175,6 +177,7 @@ async function buildTerrain(surface, track, tick) {
       }
       positions.push(v.x, v.y, v.z);
       colors.push(tint.r, tint.g, tint.b);
+      kinds.push(v.y < lvl + 1.6 ? 0 : 1);
     }
   };
   for (let r = 0; r < rows - 1; r++) {
@@ -188,8 +191,9 @@ async function buildTerrain(surface, track, tick) {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  geometry.setAttribute('aKind', new THREE.Float32BufferAttribute(kinds, 1));
   geometry.computeVertexNormals();
-  return new THREE.Mesh(geometry, toon(0xffffff, { vertexColors: true }));
+  return new THREE.Mesh(geometry, canyonGround(toon(0xffffff, { vertexColors: true })));
 }
 
 const CYL = new THREE.CylinderGeometry(1, 1, 1, 10);
@@ -338,7 +342,25 @@ export async function createCanyon(group, track, fx) {
   const height = (x, z) => canyonHeight(surface, track, x, z);
   group.add(await buildTerrain(surface, track, tick));
   await tick();
-  const water = buildRiver(track, { deep: 0x23807a, shallow: 0x62c9ad });
+  const rapidsAt = (s) => {
+    if (track.inTunnel(s)) return 0;
+    let foam = 0.18 * smooth(0.45, 0.8, 0.5 + 0.5 * Math.sin(s * 0.021) * Math.sin(s * 0.0071 + 1.3));
+    foam = Math.max(foam, 0.8 * smooth(0.55, 0.85, 0.5 + 0.5 * Math.sin(s * 0.017 + 2) * Math.sin(s * 0.0053)));
+    for (const d of track.river.drops) {
+      const before = track.ahead(s, d.s);
+      const after = track.ahead(d.s, s);
+      if (before < 26) foam = Math.max(foam, 0.75 * (1 - before / 26));
+      if (after < 45) foam = Math.max(foam, 0.85 * (1 - after / 45));
+    }
+    return foam;
+  };
+  const water = buildRiver(track, {
+    deep: 0x23807a,
+    shallow: 0x62c9ad,
+    flowSpeed: 1.05,
+    rapids: 0.6,
+    foamAt: (s, lat) => Math.min(1, rapidsAt(s) + 0.22 * smooth(0.75, 1, Math.abs(lat))),
+  });
   group.add(water.mesh);
   const falls = track.river.drops.map((drop) => buildFalls(track, drop));
   for (const f of falls) group.add(f.mesh);

@@ -109,3 +109,85 @@ export function alpineGround(material) {
   material.customProgramCacheKey = () => 'alpine-ground';
   return material;
 }
+
+const CANYON = /* glsl */ `
+  varying float vKind;
+  vec3 strata(float id) {
+    float h = gHash(vec2(id, 4.1));
+    vec3 a = vec3(0.552, 0.091, 0.028);
+    vec3 b = vec3(0.716, 0.202, 0.048);
+    vec3 c = vec3(0.815, 0.456, 0.202);
+    vec3 d = vec3(0.445, 0.068, 0.025);
+    vec3 e = vec3(0.879, 0.658, 0.361);
+    vec3 f = vec3(0.332, 0.061, 0.032);
+    vec3 g = vec3(0.631, 0.144, 0.040);
+    return h < 0.2 ? a : h < 0.36 ? b : h < 0.47 ? c : h < 0.62 ? d : h < 0.68 ? e : h < 0.8 ? f : g;
+  }
+
+  vec3 canyonRock(vec3 p, vec3 n, float px) {
+    float warp = gFbm(p.xz * 0.011) * 14.0 + gFbm(p.xz * 0.05 + 7.0) * 2.5;
+    float layer = (p.y + warp) / 4.2;
+    float id = floor(layer);
+    float band = fract(layer);
+    vec3 color = strata(id);
+    color *= mix(0.82, 1.05, smoothstep(0.0, 0.35, band));
+    color = mix(color, color * 1.18, smoothstep(0.9, 0.97, band) * (1.0 - smoothstep(0.97, 1.0, band)));
+    color *= 1.0 - (1.0 - smoothstep(0.0, 0.05, band)) * 0.35;
+    float wx = abs(n.x) / (abs(n.x) + abs(n.z) + 1e-4);
+    vec2 uvA = vec2(p.x, p.y);
+    vec2 uvB = vec2(p.z, p.y);
+    vec4 slabA = gCell(uvA * vec2(0.14, 0.05));
+    vec4 slabB = gCell(uvB * vec2(0.14, 0.05) + 31.0);
+    vec4 slab = wx > 0.5 ? slabB : slabA;
+    float seam = 1.0 - smoothstep(0.02, 0.1, slab.y - slab.x);
+    color *= (0.9 + 0.18 * slab.z) * (1.0 - 0.14 * clamp(slab.w * 1.6, -1.0, 1.0));
+    color *= 1.0 - seam * 0.3 * gFade(px, 0.14);
+    float grain = mix(gNoise(uvA * 0.9), gNoise(uvB * 0.9), wx);
+    color *= 1.0 + (grain - 0.5) * 0.16 * gFade(px, 0.9);
+    float stain = smoothstep(0.55, 0.8, gNoise(vec2((wx > 0.5 ? p.z : p.x) * 0.08, p.y * 0.02)));
+    color *= 1.0 - stain * 0.22;
+    return color;
+  }
+
+  vec3 canyonTop(vec3 c, vec2 q, float px) {
+    vec3 dust = vec3(0.687, 0.371, 0.144);
+    vec3 color = mix(c, dust, 0.45) * mix(0.9, 1.08, gFbm(q * 0.03));
+    color = mix(color, vec3(0.32, 0.36, 0.15), smoothstep(0.62, 0.72, gNoise(q * 0.22 + 5.0)) * 0.55 * gFade(px, 0.22));
+    color *= 1.0 - smoothstep(0.74, 0.8, gNoise(q * 0.9 + 2.0)) * 0.18 * gFade(px, 0.9);
+    return color;
+  }
+
+  vec3 canyonSand(vec3 c, vec2 q, float px) {
+    vec3 color = c * mix(0.93, 1.06, gFbm(q * 0.08));
+    color *= 1.0 + (sin(q.x * 1.3 + gNoise(q * 0.2) * 4.0) * 0.5 + 0.5 - 0.5) * 0.08 * gFade(px, 1.3);
+    color = mix(color, color * 0.72, smoothstep(0.78, 0.84, gNoise(q * 1.4 + 9.0)) * gFade(px, 1.4));
+    return color;
+  }
+`;
+
+export function canyonGround(material) {
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float aKind;\nvarying float vKind;\nvarying vec3 vGround;\nvarying vec3 vGroundN;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\nvKind = aKind;\nvGround = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvGroundN = normalize(mat3(modelMatrix) * objectNormal);');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>\n${NOISE}\n${CANYON}`)
+      .replace(
+        '#include <color_fragment>',
+        /* glsl */ `#include <color_fragment>
+        {
+          vec3 c = diffuseColor.rgb;
+          float px = length(fwidth(vGround.xz));
+          vec3 n = normalize(vGroundN);
+          vec3 rock = canyonRock(vGround, n, px);
+          vec3 top = canyonTop(rock, vGround.xz, px);
+          vec3 sand = canyonSand(c, vGround.xz, px);
+          float steep = 1.0 - smoothstep(0.55, 0.8, n.y);
+          vec3 ground = mix(top, rock, steep);
+          diffuseColor.rgb = mix(sand, ground, smoothstep(0.2, 0.8, vKind));
+        }`,
+      );
+  };
+  material.customProgramCacheKey = () => 'canyon-ground';
+  return material;
+}
