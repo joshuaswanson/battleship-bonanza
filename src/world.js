@@ -693,6 +693,45 @@ function addIsland(batch, x, z, r, rand, { clearCenter = 0 } = {}) {
   return sand;
 }
 
+function addCourseIsland(batch, track, island, rand) {
+  const sand = [];
+  const green = [];
+  const reach = track.spacing * 5;
+  for (let k = 0; k <= island.len; k += 3) {
+    const i = track.wrap(island.start + k);
+    const half = track.isl[i];
+    if (half < 1.5) continue;
+    const blob = { x: track.px[i], z: track.pz[i], rx: half + 1.6, rz: reach, rot: track.heading(i), y: -1, h: Math.min(5.5, 1.8 + half * 0.2) };
+    sand.push(blob);
+    addBlob(batch, 'sand', blob);
+    if (k % 6 === 0) {
+      batch.add('foam', RING, mat(blob.x, 0.25, blob.z, blob.rx * 1.04, 6, blob.rz * 1.04, 0, blob.rot, 0));
+      batch.add('foam', RING, mat(blob.x, 0.1, blob.z, blob.rx * 1.14, 4, blob.rz * 1.14, 0, blob.rot, 0));
+    }
+    if (half > 7) {
+      const g = { x: blob.x + (rand() - 0.5) * 2, z: blob.z + (rand() - 0.5) * 2, rx: half * 0.62, rz: reach * 0.8, rot: blob.rot, y: blob.h - 3.2, h: 3.4 + rand() * 0.6 };
+      green.push(g);
+      addBlob(batch, k % 12 < 6 ? 'grass' : 'grassDeep', g);
+    }
+  }
+  const groundAt = (x, z) => Math.max(islandSurface(sand)(x, z), islandSurface(green)(x, z));
+  const mid = track.wrap(island.start + Math.round(island.len / 2));
+  const top = addPillar(batch, track.px[mid], track.pz[mid], rand, { radius: track.isl[mid] * 0.5, height: 38 + rand() * 10, plants: 0.8 });
+  for (let k = 6; k <= island.len - 6; k += 4) {
+    const i = track.wrap(island.start + k);
+    const half = track.isl[i];
+    if (half < 6 || rand() < 0.45) continue;
+    const lateral = (rand() - 0.5) * 1.4 * half;
+    const x = track.px[i] + track.nx[i] * lateral;
+    const z = track.pz[i] + track.nz[i] * lateral;
+    if (Math.hypot(x - track.px[mid], z - track.pz[mid]) < track.isl[mid] * 0.5 + 3) continue;
+    const y = groundAt(x, z);
+    if (y < 0.6) continue;
+    addPalm(batch, x, y - 0.4, z, rand, { height: 8 + rand() * 9, lean: 0.1 + (Math.abs(lateral) / half) ** 2 * 0.5, dir: track.heading(i) + (lateral < 0 ? -1 : 1) * Math.PI / 2 + (rand() - 0.5) * 0.8 });
+  }
+  return top;
+}
+
 const PILLAR_DARK = new THREE.Color(0xb07a4f);
 const PILLAR_STREAK = new THREE.Color(0xdcb183);
 const PILLAR_LIGHT = new THREE.Color(0xf4e2c0);
@@ -1052,7 +1091,8 @@ export function createWorld(scene, track) {
       const x = gx + (rand() - 0.5) * 34;
       const z = gz + (rand() - 0.5) * 34;
       if (rand() < 0.6) continue;
-      const clearance = track.project(x, z).distance - half;
+      const near = track.project(x, z);
+      const clearance = near.distance - track.hw[near.idx];
       const mesa = rand() < 0.18;
       const radius = mesa ? 13 + rand() * 12 : 4 + rand() * 9;
       if (clearance < radius + 6) continue;
@@ -1065,6 +1105,7 @@ export function createWorld(scene, track) {
     }
   }
   addMainland(batch, rand);
+  for (const island of track.islands) addCourseIsland(batch, track, island, rand);
   const islands = pillars.map((p) => ({ x: p.x, z: p.z, r: p.r }));
   const stacks = [];
 
@@ -1094,7 +1135,8 @@ export function createWorld(scene, track) {
   for (let tries = 0; markers.length < 22 && tries < 600; tries++) {
     const x = (rand() - 0.5) * 900;
     const z = (rand() - 0.5) * 900 + 60;
-    const clearance = track.project(x, z).distance - half;
+    const near = track.project(x, z);
+    const clearance = near.distance - track.hw[near.idx];
     if (clearance < 8 || clearance > 120) continue;
     if (islands.some((o) => Math.hypot(o.x - x, o.z - z) < o.r + 8)) continue;
     if (z > mainlandEdge(x) - 12) continue;

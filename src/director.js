@@ -131,7 +131,8 @@ export class Director {
     if (this.shot === 'chase' && nearExit) this.shot = 'lead';
     if (this.shot === 'chase' || this.shot === 'lead') {
       const ahead = this.shot === 'chase' ? -14 : 16;
-      const p = t.point(this.idx + Math.round(ahead / t.spacing), clamp(t.project(f.pos.x, f.pos.z, this.idx).lateral * 0.6 + this.side * 4, -hw + 4, hw - 4));
+      const at = this.idx + Math.round(ahead / t.spacing);
+      const p = t.point(at, t.offIsland(at, clamp(t.project(f.pos.x, f.pos.z, this.idx).lateral * 0.6 + this.side * 4, -hw + 4, hw - 4)));
       desired = new THREE.Vector3(p.x, level + (this.shot === 'chase' ? 6 : 5), p.z);
     } else if (this.shot === 'bank') {
       if (!this.anchor) {
@@ -174,7 +175,7 @@ export class Director {
       const ahead = this.shot === 'lead' ? 14 : this.shot === 'high' ? -18 : -12;
       const idx = this.idx + Math.round(ahead / t.spacing);
       const lateral = t.project(f.pos.x, f.pos.z, this.idx).lateral * 0.7 + this.side * 2.5;
-      const p = t.point(idx, clamp(lateral, -room(idx), room(idx)));
+      const p = t.point(idx, t.offIsland(idx, clamp(lateral, -room(idx), room(idx))));
       desired = new THREE.Vector3(p.x, level + (this.shot === 'high' ? 15 : this.shot === 'chase' ? 5.5 : 4.5), p.z);
     } else {
       if (!this.anchor) {

@@ -532,6 +532,25 @@ export class Hud {
     };
     band('#0E2A47', 6);
     band('#7FE6EE', 0);
+    for (const island of track.islands) {
+      const edge = [];
+      for (let k = 0; k <= island.len; k += 3) {
+        const i = track.wrap(island.start + k);
+        edge.push(this.toMap(track.px[i] + track.nx[i] * track.isl[i], track.pz[i] + track.nz[i] * track.isl[i]));
+      }
+      for (let k = island.len; k >= 0; k -= 3) {
+        const i = track.wrap(island.start + k);
+        edge.push(this.toMap(track.px[i] - track.nx[i] * track.isl[i], track.pz[i] - track.nz[i] * track.isl[i]));
+      }
+      ctx.fillStyle = '#F2D59B';
+      ctx.strokeStyle = '#0E2A47';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      edge.forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
 
     const [sx, sy] = this.toMap(track.px[0], track.pz[0]);
     ctx.fillStyle = '#FFFFFF';

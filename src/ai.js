@@ -30,7 +30,17 @@ export function driveAI(race, b, dt) {
   const half = track.hw[idx];
   const feature = ai.thrillSeeker ? race.features.nearestAhead(b, 70) : null;
   const wanted = feature ? feature.lateral : ai.lane + Math.sin(ai.laneT) * 6;
-  const lane = clamp(wanted + ai.dodge, -(half - 5), half - 5);
+  let lane = clamp(wanted + ai.dodge, -(half - 5), half - 5);
+  if (track.isl[idx] > 0 || track.isl[b.trackIdx] > 0) {
+    if (!ai.splitSide) {
+      const prefer = feature && Math.abs(feature.lateral) > track.isl[feature.idx] ? Math.sign(feature.lateral) : 0;
+      ai.splitSide = prefer || (Math.random() < 0.5 ? -1 : 1);
+    }
+    const inner = track.isl[idx] + 6;
+    lane = ai.splitSide * clamp(ai.splitSide * lane, inner, Math.max(inner, half - 5));
+  } else {
+    ai.splitSide = 0;
+  }
   const target = track.point(idx, lane);
   const desired = Math.atan2(target.x - b.pos.x, target.z - b.pos.z);
   const diff = wrapAngle(desired - b.heading);

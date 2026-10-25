@@ -55,6 +55,27 @@ export function createTrack(map, scale = 1) {
     const u = keys.length > 1 ? into / span : 0;
     hw[i] = a[1] + (b[1] - a[1]) * u * u * (3 - 2 * u);
   }
+  const isl = new Float32Array(N);
+  const islands = (map.splits ?? []).map((split) => {
+    const len = Math.round(split.span * N);
+    const start = Math.round((split.at - split.span / 2) * N);
+    for (let k = 0; k <= len; k++) {
+      const i = wrap(start + k);
+      const half = split.island * scale * Math.sin((Math.PI * k) / len) ** 0.8;
+      isl[i] = Math.max(isl[i], half);
+      hw[i] = Math.max(hw[i], half + split.channel * scale);
+    }
+    return { start: wrap(start), len, island: split.island * scale, channel: split.channel * scale };
+  });
+  const channel = (idx, side) => {
+    const i = wrap(Math.round(idx));
+    return side * (isl[i] + (hw[i] - isl[i]) / 2);
+  };
+  const offIsland = (idx, lateral, room = 3) => {
+    const i = wrap(Math.round(idx));
+    if (!isl[i] || Math.abs(lateral) >= isl[i] + room) return lateral;
+    return (lateral < 0 ? -1 : 1) * (isl[i] + room);
+  };
   const widthAt = (idx) => hw[wrap(Math.round(idx))];
 
   function project(x, z, hint = -1, window = 60) {
@@ -123,5 +144,5 @@ export function createTrack(map, scale = 1) {
     return ahead(river.seam, s) < ahead(river.seam, river.tunnelOut) + 100;
   }
 
-  return { N, length, spacing, px, pz, tx, tz, nx, nz, wrap, project, point, heading, halfWidth: map.halfWidth * scale, hw, scale, widthAt, banked: !!(map.river || map.banked), map, river, level, inTunnel, pastSeam, ahead };
+  return { N, length, spacing, px, pz, tx, tz, nx, nz, wrap, project, point, heading, halfWidth: map.halfWidth * scale, hw, isl, islands, channel, offIsland, scale, widthAt, banked: !!(map.river || map.banked), map, river, level, inTunnel, pastSeam, ahead };
 }
