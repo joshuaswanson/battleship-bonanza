@@ -2,6 +2,8 @@ import * as THREE from 'three';
 
 const RATE = 1 / 30;
 const STRIDE = 11;
+const EMIT = 16;
+const EMIT_CHUNK = 4096;
 
 function boatNodes(b) {
   const m = b.model;
@@ -80,6 +82,13 @@ function readNode(node, a, b, o, k) {
 
 const cloneArg = (v) => (v?.isVector3 ? v.clone() : v);
 
+function applyFrame(state, frame) {
+  const { nodes, values } = frame;
+  for (let i = 0; i < nodes.length; i++) state.set(values.subarray(i * STRIDE, i * STRIDE + STRIDE), nodes[i] * STRIDE);
+}
+
+const emitTime = (rec, i) => rec.emits[Math.floor(i / EMIT_CHUNK)][(i % EMIT_CHUNK) * EMIT];
+
 export class Recorder {
   constructor(race, fx) {
     this.race = race;
@@ -90,26 +99,49 @@ export class Recorder {
     this.start = null;
     this.nodes = race.boats.flatMap((b) => boatNodes(b));
     this.mats = race.boats.flatMap((b) => boatMaterials(b));
-    this.size = this.nodes.length * STRIDE + this.mats.length + race.boats.length * 7;
+    this.rest = this.mats.length + race.boats.length * 7;
+    this.state = new Float32Array(this.nodes.length * STRIDE);
+    this.scratch = new Float32Array(STRIDE);
+    this.changed = new Uint16Array(this.nodes.length);
+    this.emits = [];
+    this.emitCount = 0;
+    this.full = false;
     this.pools = [fx.puffs, fx.sparks, fx.soot, fx.fire, fx.fireMid, fx.fireCore, fx.casings].map((pool) => [pool, 'emit']);
     this.pools.push([fx.rings, 'take'], [fx.beams, 'take'], [fx.shells, 'take'], [fx.lightning, 'add'], [fx.decals, 'stamp']);
     if (race.chopper) this.pools.push([race.chopper, 'chop']);
-    for (const [pool, name] of this.pools) {
+    this.pools.forEach(([pool, name], id) => {
       const original = pool[name].bind(pool);
       pool[name] = (...args) => {
-        this.events.push({ t: this.race.time, pool, name, args: args.map(cloneArg) });
+        if (!this.full) this.log(id, pool, name, args);
         return original(...args);
       };
-    }
+    });
     const sfx = race.sfx;
     race.sfx = {
       play: (name, pos) => {
-        this.events.push({ t: this.race.time, sound: name, pos: pos ? new THREE.Vector3(pos.x, pos.y ?? 0, pos.z) : null });
+        if (!this.full) this.events.push({ t: this.race.time, sound: name, pos: pos ? new THREE.Vector3(pos.x, pos.y ?? 0, pos.z) : null });
         sfx.play(name, pos);
       },
     };
     race.features.sfx = race.sfx;
     this.sfx = sfx;
+  }
+
+  log(id, pool, name, args) {
+    if (name === 'emit' && args.length <= EMIT - 3 && args.every((a) => typeof a === 'number')) this.logEmit(id, args);
+    else this.events.push({ t: this.race.time, pool, name, args: args.map(cloneArg) });
+  }
+
+  logEmit(id, args) {
+    const at = this.emitCount % EMIT_CHUNK;
+    if (at === 0) this.emits.push(new Float32Array(EMIT_CHUNK * EMIT));
+    const chunk = this.emits.at(-1);
+    const o = at * EMIT;
+    chunk[o] = this.race.time;
+    chunk[o + 1] = id;
+    chunk[o + 2] = args.length;
+    chunk.set(args, o + 3);
+    this.emitCount++;
   }
 
   detach() {
@@ -121,23 +153,38 @@ export class Recorder {
   capture() {
     const race = this.race;
     if (this.start === null && race.state === 'racing') this.start = race.time - 1;
-    if (race.time < this.next) return;
-    this.next = race.time + RATE;
-    const data = new Float32Array(this.size);
-    let o = 0;
-    for (const node of this.nodes) {
-      writeNode(data, o, node);
-      o += STRIDE;
+    if (race.time < this.next || this.full) return;
+    if (this.start !== null && race.time > this.start + this.sfx.musicLength('race') + 3) {
+      this.full = true;
+      return;
     }
-    for (const m of this.mats) data[o++] = readMat(m);
+    this.next = race.time + RATE;
+    const { state, scratch, changed } = this;
+    let count = 0;
+    this.nodes.forEach((node, n) => {
+      writeNode(scratch, 0, node);
+      const o = n * STRIDE;
+      for (let i = 0; i < STRIDE; i++) {
+        if (scratch[i] === state[o + i] && this.frames.length) continue;
+        state.set(scratch, o);
+        changed[count++] = n;
+        break;
+      }
+    });
+    const nodes = changed.slice(0, count);
+    const values = new Float32Array(count * STRIDE);
+    for (let i = 0; i < count; i++) values.set(state.subarray(nodes[i] * STRIDE, nodes[i] * STRIDE + STRIDE), i * STRIDE);
+    const rest = new Float32Array(this.rest);
+    let o = 0;
+    for (const m of this.mats) rest[o++] = readMat(m);
     for (const b of race.boats) {
-      data[o++] = b.pos.x;
-      data[o++] = b.pos.y;
-      data[o++] = b.pos.z;
-      data[o++] = b.waterY;
-      data[o++] = b.heading;
-      data[o++] = b.speed;
-      data[o++] = (b.alive ? 1 : 0) + (b.air ? 2 : 0);
+      rest[o++] = b.pos.x;
+      rest[o++] = b.pos.y;
+      rest[o++] = b.pos.z;
+      rest[o++] = b.waterY;
+      rest[o++] = b.heading;
+      rest[o++] = b.speed;
+      rest[o++] = (b.alive ? 1 : 0) + (b.air ? 2 : 0);
     }
     const loose = [];
     const add = (node) => {
@@ -155,9 +202,8 @@ export class Recorder {
       if (h.loose) loose.push({ node: h.loose.mesh, parent: race.scene, geometry: h.loose.mesh.geometry.clone() });
       else add(h.rope);
     }
-    const count = race.bulletMesh.count;
-    const bullets = [race.bulletMesh, race.bulletOutline].map((mesh) => mesh.instanceMatrix.array.slice(0, count * 16));
-    this.frames.push({ t: race.time, data, loose, bullets, count });
+    const bullets = [race.bulletMesh, race.bulletOutline].map((mesh) => mesh.instanceMatrix.array.slice(0, race.bulletMesh.count * 16));
+    this.frames.push({ t: race.time, nodes, values, rest, loose, bullets, count: race.bulletMesh.count });
   }
 }
 
@@ -171,6 +217,14 @@ export class Replay {
     this.songAt = (recorder.start ?? this.time) + 1;
     this.end = Math.min(recorder.frames.at(-1)?.t ?? this.time, this.songAt + sfx.musicLength('race') + 1);
     this.frame = 0;
+    this.cur = new Float32Array(recorder.state.length);
+    this.nxt = new Float32Array(recorder.state.length);
+    if (recorder.frames.length) applyFrame(this.cur, recorder.frames[0]);
+    this.nxt.set(this.cur);
+    if (recorder.frames.length > 1) applyFrame(this.nxt, recorder.frames[1]);
+    this.emit = 0;
+    this.emitArgs = [];
+    while (this.emit < recorder.emitCount && emitTime(recorder, this.emit) < this.time) this.emit++;
     this.event = 0;
     while (this.event < recorder.events.length && recorder.events[this.event].t < this.time) this.event++;
     recorder.fx.decals.clear();
@@ -192,25 +246,30 @@ export class Replay {
       this.sfx.playMusic('race', { at: this.time - this.songAt, loop: false });
       this.songAt = null;
     }
-    while (this.frame < frames.length - 2 && frames[this.frame + 1].t <= this.time) this.frame++;
+    while (this.frame < frames.length - 2 && frames[this.frame + 1].t <= this.time) {
+      this.frame++;
+      this.cur.set(this.nxt);
+      applyFrame(this.nxt, frames[this.frame + 1]);
+    }
     const a = frames[this.frame];
     const b = frames[Math.min(frames.length - 1, this.frame + 1)];
     const k = b.t > a.t ? Math.min(1, Math.max(0, (this.time - a.t) / (b.t - a.t))) : 0;
 
     let o = 0;
     for (const node of nodes) {
-      readNode(node, a.data, b.data, o, k);
+      readNode(node, this.cur, this.nxt, o, k);
       o += STRIDE;
     }
-    for (const m of mats) writeMat(m, a.data[o++]);
+    o = 0;
+    for (const m of mats) writeMat(m, a.rest[o++]);
     for (const boat of this.race.boats) {
-      const lerp = (i) => a.data[o + i] + (b.data[o + i] - a.data[o + i]) * k;
-      const jump = Math.abs(b.data[o + 3] - a.data[o + 3]) > 30;
-      boat.pos.set(lerp(0), jump ? a.data[o + 1] : lerp(1), lerp(2));
-      boat.waterY = jump ? a.data[o + 3] : lerp(3);
-      boat.heading = a.data[o + 4];
-      boat.speed = a.data[o + 5];
-      const flags = a.data[o + 6];
+      const lerp = (i) => a.rest[o + i] + (b.rest[o + i] - a.rest[o + i]) * k;
+      const jump = Math.abs(b.rest[o + 3] - a.rest[o + 3]) > 30;
+      boat.pos.set(lerp(0), jump ? a.rest[o + 1] : lerp(1), lerp(2));
+      boat.waterY = jump ? a.rest[o + 3] : lerp(3);
+      boat.heading = a.rest[o + 4];
+      boat.speed = a.rest[o + 5];
+      const flags = a.rest[o + 6];
       boat.ko = flags % 2 === 1 ? 0 : 1;
       boat.air = flags >= 2 ? {} : null;
       o += 7;
@@ -235,6 +294,17 @@ export class Replay {
       mesh.instanceMatrix.needsUpdate = true;
     }
 
+    const rec = this.rec;
+    while (this.emit < rec.emitCount && emitTime(rec, this.emit) <= this.time) {
+      const chunk = rec.emits[Math.floor(this.emit / EMIT_CHUNK)];
+      const at = (this.emit % EMIT_CHUNK) * EMIT;
+      const [pool, name] = rec.pools[chunk[at + 1]];
+      const args = this.emitArgs;
+      args.length = chunk[at + 2];
+      for (let i = 0; i < args.length; i++) args[i] = chunk[at + 3 + i];
+      Object.getPrototypeOf(pool)[name].apply(pool, args);
+      this.emit++;
+    }
     while (this.event < events.length && events[this.event].t <= this.time) {
       const e = events[this.event++];
       if (e.sound) this.sfx.play(e.sound, e.pos);
