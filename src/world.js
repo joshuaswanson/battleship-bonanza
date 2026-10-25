@@ -49,6 +49,18 @@ function mossyRock() {
 }
 
 const INSTANCE_MIN = 12;
+const weldedCache = new WeakMap();
+function welded(geometry) {
+  if (geometry.index && geometry.hasAttribute('normal')) return geometry;
+  let g = weldedCache.get(geometry);
+  if (g) return g;
+  g = geometry.index ? geometry.toNonIndexed() : geometry.clone();
+  if (!g.hasAttribute('normal')) g.computeVertexNormals();
+  if (g.hasAttribute('uv')) g.deleteAttribute('uv');
+  g = mergeVertices(g);
+  weldedCache.set(geometry, g);
+  return g;
+}
 function releaseArray() {
   if (import.meta.env.DEV && window.__bb?.keepArrays) return;
   this.array = null;
@@ -123,12 +135,11 @@ export class Batcher {
     for (const [geometry, all] of shapes) {
       const tagged = this.chopper ? all.filter((e) => e.tag) : [];
       const list = tagged.length ? all.filter((e) => !e.tag) : all;
+      const source = welded(geometry);
       for (const e of tagged) {
-        const g = geometry.clone().applyMatrix4(e.matrix);
+        const g = source.clone().applyMatrix4(e.matrix);
         if (g.hasAttribute('uv')) g.deleteAttribute('uv');
-        if (!g.hasAttribute('normal')) g.computeVertexNormals();
         const n = g.attributes.position.count;
-        if (!g.index) g.setIndex(Array.from({ length: n }, (_, k) => k));
         if (!g.hasAttribute('color')) {
           tint.set(colors[e.key]);
           const rgb = new Float32Array(n * 3);
@@ -146,9 +157,8 @@ export class Batcher {
       const painted = geometry.hasAttribute('color');
       if (list.length < INSTANCE_MIN || painted || mossy) {
         for (const e of list) {
-          const g = (geometry.index ? geometry.toNonIndexed() : geometry.clone()).applyMatrix4(e.matrix);
-          g.deleteAttribute('uv');
-          if (!g.hasAttribute('normal')) g.computeVertexNormals();
+          const g = source.clone().applyMatrix4(e.matrix);
+          if (g.hasAttribute('uv')) g.deleteAttribute('uv');
           if (mossy) {
             merged.mossy.push(g);
             continue;
@@ -164,7 +174,7 @@ export class Batcher {
         }
         continue;
       }
-      const mesh = new THREE.InstancedMesh(geometry, WHITE_TOON(), list.length);
+      const mesh = new THREE.InstancedMesh(source, WHITE_TOON(), list.length);
       list.forEach((e, k) => {
         mesh.setMatrixAt(k, e.matrix);
         mesh.setColorAt(k, tint.set(colors[e.key]));
@@ -172,7 +182,7 @@ export class Batcher {
       mesh.computeBoundingSphere();
       parent.add(mesh);
       if (outline) {
-        const line = new THREE.InstancedMesh(geometry, outlineMaterial(outline), list.length);
+        const line = new THREE.InstancedMesh(source, outlineMaterial(outline), list.length);
         line.instanceMatrix = mesh.instanceMatrix;
         line.boundingSphere = mesh.boundingSphere;
         parent.add(line);
@@ -183,7 +193,7 @@ export class Batcher {
       const geometry = mergeGeometries(list);
       for (const g of list) g.dispose();
       geometry.computeBoundingSphere();
-      for (const attribute of Object.values(geometry.attributes)) attribute.onUpload(releaseArray);
+      for (const attribute of [...Object.values(geometry.attributes), geometry.index]) attribute.onUpload(releaseArray);
       if (kind === 'chop') {
         parent.add(new THREE.Mesh(geometry, this.chopper.material()));
         if (outline) parent.add(new THREE.Mesh(geometry, this.chopper.outline(outline)));
