@@ -28,7 +28,7 @@ console.log('shipboard explosions in 120 s of play:', natural);
 await page.evaluate(() => { window.__bb.steps = 1; });
 const at = await page.evaluate(() => {
   const { THREE } = window.__bb;
-  const d = window.__ud.decks.find((x) => x.rz > 80 && x.rz < 100);
+  const d = window.__ud.decks.find((x) => x.rz > 80 && x.rz < 130);
   const lz = d.rz * 0.3;
   const p = new THREE.Vector3(d.x + Math.sin(d.rot) * lz, d.tops[Math.floor((0.3 / 2 + 0.5) * 40)], d.z + Math.cos(d.rot) * lz);
   window.__ud.hitShip(p, 1.8);
