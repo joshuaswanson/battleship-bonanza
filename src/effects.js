@@ -102,6 +102,7 @@ class Transient {
       });
       const mesh = new THREE.Mesh(geometry, material);
       mesh.visible = false;
+      mesh.matrixWorldAutoUpdate = false;
       mesh.frustumCulled = false;
       scene.add(mesh);
       this.items.push({ mesh, life: 0, maxLife: 1, update: null });
@@ -113,6 +114,7 @@ class Transient {
     this.next = (this.next + 1) % this.items.length;
     item.mesh.material.color.set(color);
     item.mesh.visible = true;
+    item.mesh.matrixWorldAutoUpdate = true;
     item.life = life;
     item.maxLife = life;
     item.update = update;
@@ -125,6 +127,7 @@ class Transient {
       item.life -= dt;
       if (item.life <= 0) {
         item.mesh.visible = false;
+        item.mesh.matrixWorldAutoUpdate = false;
         continue;
       }
       item.update(item.mesh, 1 - item.life / item.maxLife);

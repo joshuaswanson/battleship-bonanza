@@ -224,7 +224,13 @@ export function slicer(budget = 6) {
 
 export function cullChunks(chunks, camera, far) {
   const { x, z } = camera.position;
-  for (const c of chunks) c.group.visible = Math.hypot(c.x - x, c.z - z) - c.radius < far;
+  for (const c of chunks) {
+    if (c.group.matrixWorldAutoUpdate) {
+      c.group.updateWorldMatrix(true, true);
+      c.group.matrixWorldAutoUpdate = false;
+    }
+    c.group.visible = Math.hypot(c.x - x, c.z - z) - c.radius < far;
+  }
 }
 
 const m4 = new THREE.Matrix4();

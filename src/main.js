@@ -157,6 +157,7 @@ function prepareVenue(id) {
     const scale = MAPS[id].scale ?? 1;
     const group = new THREE.Group();
     group.visible = false;
+    group.matrixWorldAutoUpdate = false;
     const built = createTrack(MAPS[id]);
     const world = BUILDERS[id] ? await (await BUILDERS[id]())(group, built, fx) : createWorld(group, built);
     const track = scale === 1 ? built : createTrack(MAPS[id], scale);
@@ -172,6 +173,7 @@ function prepareVenue(id) {
   const track = createTrack(MAPS.bay);
   const group = new THREE.Group();
   group.visible = false;
+  group.matrixWorldAutoUpdate = false;
   scene.add(group);
   venues.bay = { track, world: createWorld(group, track), group };
 }
@@ -181,7 +183,9 @@ const hud = new Hud(current.track, sfx);
 function useVenue(id) {
   const next = venue(id);
   current.group.visible = false;
+  current.group.matrixWorldAutoUpdate = false;
   next.group.visible = true;
+  next.group.matrixWorldAutoUpdate = true;
   scene.fog = next.world.fog;
   setSurface(next.world.surface ?? null);
   hud.setTrack(next.track);
