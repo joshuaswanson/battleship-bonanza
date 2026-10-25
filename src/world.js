@@ -67,6 +67,29 @@ const TINT_ATTRIBUTES = ['position', 'normal', 'color'];
 const CHOP_ATTRIBUTES = ['position', 'normal', 'color', 'aChop'];
 const normalMatrix = new THREE.Matrix3();
 const placed = new THREE.Vector3();
+const flat = (attribute, size) => attribute.itemSize === size && !attribute.isInterleavedBufferAttribute && !attribute.normalized && attribute.array instanceof Float32Array;
+function transformPoints(src, n, e, out, o) {
+  for (let k = 0; k < n * 3; k += 3, o += 3) {
+    const x = src[k];
+    const y = src[k + 1];
+    const z = src[k + 2];
+    const w = 1 / (e[3] * x + e[7] * y + e[11] * z + e[15]);
+    out[o] = (e[0] * x + e[4] * y + e[8] * z + e[12]) * w;
+    out[o + 1] = (e[1] * x + e[5] * y + e[9] * z + e[13]) * w;
+    out[o + 2] = (e[2] * x + e[6] * y + e[10] * z + e[14]) * w;
+  }
+}
+function transformNormals(src, n, m, out, o) {
+  for (let k = 0; k < n * 3; k += 3, o += 3) {
+    const x = m[0] * src[k] + m[3] * src[k + 1] + m[6] * src[k + 2];
+    const y = m[1] * src[k] + m[4] * src[k + 1] + m[7] * src[k + 2];
+    const z = m[2] * src[k] + m[5] * src[k + 1] + m[8] * src[k + 2];
+    const len = Math.sqrt(x * x + y * y + z * z) || 1;
+    out[o] = x / len;
+    out[o + 1] = y / len;
+    out[o + 2] = z / len;
+  }
+}
 function mergePlaced(items, names) {
   let verts = 0;
   let count = 0;
@@ -89,7 +112,11 @@ function mergePlaced(items, names) {
       const { array, itemSize } = geometry.attributes[name];
       const from = g.attributes[name];
       let o = v * itemSize;
-      if (name === 'position' || name === 'normal') {
+      if (name === 'position' && flat(from, 3)) {
+        transformPoints(from.array, n, matrix.elements, array, o);
+      } else if (name === 'normal' && flat(from, 3)) {
+        transformNormals(from.array, n, normalMatrix.elements, array, o);
+      } else if (name === 'position' || name === 'normal') {
         for (let k = 0; k < n; k++, o += 3) {
           placed.fromBufferAttribute(from, k);
           if (name === 'position') placed.applyMatrix4(matrix);
@@ -101,6 +128,8 @@ function mergePlaced(items, names) {
       } else if (name === 'aChop' || (name === 'color' && tint)) {
         const fill = name === 'aChop' ? chop : tint;
         for (let k = 0; k < n; k++, o += itemSize) for (let j = 0; j < itemSize; j++) array[o + j] = fill[j];
+      } else if (flat(from, itemSize)) {
+        array.set(from.array.subarray(0, n * itemSize), o);
       } else {
         for (let k = 0; k < n; k++, o += itemSize) for (let j = 0; j < itemSize; j++) array[o + j] = from.getComponent(k, j);
       }
@@ -791,6 +820,7 @@ function paintPillar(g, top) {
   return g;
 }
 
+let pillarTemplate = null;
 function pillarGeometry(radius, height, rand) {
   const waist = 0.45 + rand() * 0.45;
   const waistAt = 0.3 + rand() * 0.3;
@@ -799,7 +829,7 @@ function pillarGeometry(radius, height, rand) {
   const stretch = 0.75 + rand() * 0.5;
   const turn = rand() * Math.PI;
   const lumps = Array.from({ length: 5 }, () => ({ k: 1 + Math.floor(rand() * 5), p: rand() * 6, a: 0.04 + rand() * 0.1, v: rand() * 0.2 }));
-  const g = mergeVertices(new THREE.CylinderGeometry(1, 1, 1, 16, 22).translate(0, 0.5, 0).deleteAttribute('normal').deleteAttribute('uv'));
+  const g = (pillarTemplate ??= mergeVertices(new THREE.CylinderGeometry(1, 1, 1, 16, 22).translate(0, 0.5, 0).deleteAttribute('normal').deleteAttribute('uv'))).clone();
   const pos = g.attributes.position;
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i);
