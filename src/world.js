@@ -1127,7 +1127,7 @@ export function createWorld(scene, track) {
   const shores = [];
   const pillars = [];
   const fits = (x, z, r) => !pillars.some((o) => Math.hypot(o.x - x, o.z - z) < o.r + r + 6);
-  for (const f of [0.2, 0.47, 0.72]) shores.push(...addArch(batch, track, f, rand));
+  for (const f of [0.2, 0.565, 0.72]) shores.push(...addArch(batch, track, f, rand));
   for (const f of [0.2, 0.47, 0.72]) {
     const idx = track.wrap(Math.round(f * track.N));
     for (const side of [-1, 1]) {
