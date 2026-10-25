@@ -1,6 +1,26 @@
 import { launch, startRace, autopilot, check } from '../lib.mjs';
+import { createTrack } from '../../src/track.js';
+import { MAPS } from '../../src/maps.js';
 
-for (const map of (process.argv[2] ?? 'bay').split(',')) {
+function sharpestTurn(t, r) {
+  const chain = [];
+  for (let k = -25; k < 0; k++) chain.push(t.wrap(r.from + k));
+  for (let i = r.first; i <= r.last; i++) chain.push(i);
+  for (let k = 0; k < 25; k++) chain.push(t.wrap(r.to + k));
+  const span = Math.round(20 / t.spacing);
+  let worst = 0;
+  for (let k = span; k < chain.length - span; k++) {
+    const [a, b, c] = [chain[k - span], chain[k], chain[k + span]];
+    const h1 = Math.atan2(t.px[b] - t.px[a], t.pz[b] - t.pz[a]);
+    const h2 = Math.atan2(t.px[c] - t.px[b], t.pz[c] - t.pz[b]);
+    worst = Math.max(worst, (Math.abs(Math.atan2(Math.sin(h2 - h1), Math.cos(h2 - h1))) * 180) / Math.PI);
+  }
+  return worst;
+}
+
+for (const map of (process.argv[2] ?? 'bay,jungle,alps,venice,midway,canyon').split(',')) {
+  const track = createTrack(MAPS[map], MAPS[map].scale ?? 1);
+  for (const r of track.routes) check(`${map}: route ${r.id} has no hairpin turns`, sharpestTurn(track, r) <= 40, `${sharpestTurn(track, r).toFixed(0)}° per 20 units`);
   const { browser, page } = await launch({ width: 640, height: 400 });
   await startRace(page, { map });
   await page.evaluate(() => {

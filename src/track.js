@@ -20,6 +20,20 @@ function smoothKeys(keys, f) {
 const STICK = 5;
 const INTENT = 14;
 
+function relax(points, passes) {
+  let pts = points.map((p) => p.clone());
+  const fixed = 3;
+  for (let pass = 0; pass < passes; pass++) {
+    const next = pts.map((p) => p.clone());
+    for (let k = fixed; k < pts.length - fixed; k++) {
+      next[k].x = pts[k].x * 0.5 + (pts[k - 1].x + pts[k + 1].x) * 0.25;
+      next[k].z = pts[k].z * 0.5 + (pts[k - 1].z + pts[k + 1].z) * 0.25;
+    }
+    pts = next;
+  }
+  return pts;
+}
+
 export function createTrack(map, scale = 1) {
   const curve = new THREE.CatmullRomCurve3(
     map.control.map(([x, z]) => new THREE.Vector3(x * scale, 0, z * scale)),
@@ -40,7 +54,27 @@ export function createTrack(map, scale = 1) {
     const to = wrap(Math.round(route.to * N));
     const p = (i) => points[i];
     const dir = (i) => points[(i + 1) % N].clone().sub(points[(i - 1 + N) % N]).normalize();
-    const lead = route.lead ?? 30;
+    const lead = route.lead ?? 45;
+    if (route.offset) {
+      const steps = (((to - from) % N) + N) % N;
+      const ramp = Math.min(route.ramp ?? 120, (steps * spacing) / 2.4);
+      const ease = (x) => {
+        const t = Math.min(1, Math.max(0, x / ramp));
+        return t * t * t * (t * (t * 6 - 15) + 10);
+      };
+      const offsetPoints = [];
+      for (let k = 0; k <= steps; k++) {
+        const i = (from + k) % N;
+        const along = k * spacing;
+        const d = route.side * route.offset * scale * ease(along) * ease(steps * spacing - along);
+        const n = dir(i);
+        offsetPoints.push(new THREE.Vector3(points[i].x + n.z * d, 0, points[i].z - n.x * d));
+      }
+      const relaxed = relax(offsetPoints, route.smooth ?? 60);
+      const curve = new THREE.CatmullRomCurve3(relaxed.filter((_, k) => k % 3 === 0 || k === relaxed.length - 1), false, 'centripetal');
+      const count = Math.max(4, Math.round(curve.getLength() / spacing));
+      return { route, from, to, path: curve, count, samples: curve.getSpacedPoints(count).slice(1, -1) };
+    }
     const path = new THREE.CatmullRomCurve3(
       [
         p(from).clone(),
@@ -52,8 +86,10 @@ export function createTrack(map, scale = 1) {
       false,
       'centripetal',
     );
-    const count = Math.max(4, Math.round(path.getLength() / spacing));
-    return { route, from, to, path, count, samples: path.getSpacedPoints(count).slice(1, -1) };
+    const smoothed = relax(path.getSpacedPoints(Math.max(8, Math.round(path.getLength() / spacing))), route.smooth ?? 400);
+    const curve = new THREE.CatmullRomCurve3(smoothed.filter((_, k) => k % 3 === 0 || k === smoothed.length - 1), false, 'centripetal');
+    const count = Math.max(4, Math.round(curve.getLength() / spacing));
+    return { route, from, to, path: curve, count, samples: curve.getSpacedPoints(count).slice(1, -1) };
   });
   const total = BASE + routeSpecs.reduce((sum, r) => sum + r.samples.length, 0);
 
@@ -113,10 +149,27 @@ export function createTrack(map, scale = 1) {
   });
 
   const forkOf = new Int16Array(total).fill(-1);
-  const zone = Math.round(60 / spacing);
   for (const r of routes) {
+    let apart = r.count;
+    for (let k = 0; k < r.count; k++) {
+      const i = r.first + k;
+      let best = Infinity;
+      let near = r.from;
+      for (let j = r.from, n = 0; j !== r.to && n < N; j = next[j], n++) {
+        const d = (px[j] - px[i]) ** 2 + (pz[j] - pz[i]) ** 2;
+        if (d < best) {
+          best = d;
+          near = j;
+        }
+      }
+      if (Math.sqrt(best) > hw[i] + hw[near]) {
+        apart = k;
+        break;
+      }
+    }
+    const zone = Math.min(r.count, apart + Math.round(25 / spacing));
     for (let k = -Math.round(20 / spacing); k < zone; k++) forkOf[wrap(r.from + k)] = r.id;
-    for (let k = 0; k < Math.min(zone, r.count); k++) forkOf[r.first + k] = r.id;
+    for (let k = 0; k < zone; k++) forkOf[r.first + k] = r.id;
   }
 
   const tangent = (i) => {
