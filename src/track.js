@@ -240,14 +240,15 @@ export function createTrack(map, scale = 1) {
     let best = hint;
     let bestD = Infinity;
     let bestScore = Infinity;
-    const home = want ?? route[hint];
+    const loose = want === null;
+    const home = loose ? -2 : want ?? route[hint];
     while (head < tail) {
       const i = queue[head];
       const d = depth[head++];
       const dx = x - px[i];
       const dz = z - pz[i];
       const dist = dx * dx + dz * dz;
-      const score = route[i] === home ? dist : (Math.sqrt(dist) + (want === undefined ? STICK : INTENT)) ** 2;
+      const score = loose || route[i] === home ? dist : (Math.sqrt(dist) + (want === undefined ? STICK : INTENT)) ** 2;
       if (score < bestScore) {
         bestScore = score;
         bestD = dist;

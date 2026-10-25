@@ -31,6 +31,7 @@ Pass or fail tests. `node tools/checks/all.mjs` runs all of them and lists the f
 | `chop.mjs [map]` | The laser fells trees |
 | `river.mjs` | The jungle cave lift and the waterfall jump |
 | `routes.mjs [maps]` | Boats take both routes at each fork, everyone finishes, and race progress never jumps |
+| `routereturn.mjs [maps]` | Boats in either channel are tracked on that channel, and return to course points into a channel |
 | `planes.mjs` | Midway plane speeds and frame rate |
 | `shiphits.mjs` | Midway shells and crashing planes explode on the ships. Set `QUICK=1` to skip the 30 second count |
 | `sound.mjs` | Engine, weapon, gadget and music sounds |

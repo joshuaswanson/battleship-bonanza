@@ -41,7 +41,9 @@ for (const map of (process.argv[2] ?? 'bay,jungle,alps,venice,midway,canyon').sp
         }
         last.set(b, b.dist);
         const key = `${b.index}:${b.lap}`;
-        if (b.trackIdx >= base) stats.laps.set(key, 'route');
+        const r = race.track.routes[race.track.route[b.trackIdx]];
+        const middle = r && Math.abs(b.trackIdx - r.first - r.count / 2) < r.count * 0.2;
+        if (middle) stats.laps.set(key, 'route');
         else if (!stats.laps.has(key)) stats.laps.set(key, 'main');
       }
     };

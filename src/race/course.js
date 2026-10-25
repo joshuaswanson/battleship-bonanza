@@ -33,6 +33,7 @@ export const methods = {
 
   collideShores(b) {
     for (const blob of this.shores) {
+      if (blob.top !== undefined && b.waterY + b.yOffset > blob.top) continue;
       const dx = b.pos.x - blob.x;
       const dz = b.pos.z - blob.z;
       if (Math.abs(dx) > blob.rx + blob.rz + 4 || Math.abs(dz) > blob.rx + blob.rz + 4) continue;

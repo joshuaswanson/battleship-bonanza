@@ -244,7 +244,11 @@ export class Race {
 
     const fork = t.forkNear(b.trackIdx);
     const choice = fork ? b.ai?.routes?.[fork.id] : undefined;
-    const pr = t.project(b.pos.x, b.pos.z, b.trackIdx, 60, choice === undefined ? undefined : choice ? fork.id : -1);
+    let pr = t.project(b.pos.x, b.pos.z, b.trackIdx, 60, choice === undefined ? undefined : choice ? fork.id : -1);
+    if (t.routes.length && Math.abs(pr.lateral) > t.hw[pr.idx] - 1) {
+      const free = t.project(b.pos.x, b.pos.z);
+      if (free.route !== pr.route && Math.abs(free.lateral) < Math.abs(pr.lateral) - (t.hw[pr.idx] - t.hw[free.idx])) pr = free;
+    }
     let ds = pr.s - b.trackS;
     if (ds < -t.length / 2) ds += t.length;
     else if (ds > t.length / 2) ds -= t.length;
@@ -257,7 +261,7 @@ export class Race {
     if (b.offCourse > 0 && b.speed > OFF_COURSE_SPEED * BASE_SPEED) b.speed *= Math.exp(-1.5 * dt);
     this.collideShores(b);
 
-    const lim = t.reach ? t.reach[pr.lateral > 0 ? 1 : 0][pr.idx] : t.hw[pr.idx] + (t.banked ? -BANK_MARGIN : OUTER_LIMIT);
+    const lim = t.reach ? t.reach[pr.lateral > 0 ? 1 : 0][pr.idx] : t.hw[pr.idx] + (t.banked ? -(t.map.bankMargin ?? BANK_MARGIN) : OUTER_LIMIT);
     if (Math.abs(pr.lateral) > lim) {
       const sgn = Math.sign(pr.lateral);
       const nx = t.nx[pr.idx];
