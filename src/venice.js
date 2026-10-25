@@ -346,6 +346,7 @@ export async function createVenice(group, track, fx) {
     const side = rand() < 0.5 ? -1 : 1;
     if (!landAt(i, side)) continue;
     if (bridges.some((b) => Math.hypot(b.x - track.px[i], b.z - track.pz[i]) < 14)) continue;
+    if (track.routes.some((r) => [r.from, r.to].some((k) => Math.hypot(track.px[k] - track.px[i], track.pz[k] - track.pz[i]) < 70))) continue;
     const p = track.point(i, side * (track.hw[i] - 1.1));
     const yaw = track.heading(i);
     gondola(batch, p.x, p.z, yaw, rand, { covered: rand() >= 0.4 && rand() < 0.35 });
