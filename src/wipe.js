@@ -21,7 +21,7 @@ export function createWipe(canvas, sfx) {
     ctx.fillStyle = '#0e2a47';
     ctx.beginPath();
     ctx.rect(0, 0, w, h);
-    ctx.arc(cx, cy, r + band, 0, Math.PI * 2, true);
+    if (r > 0.5) ctx.arc(cx, cy, r + band, 0, Math.PI * 2, true);
     ctx.fill('evenodd');
     if (r <= 0.5) return;
     const segments = 8;
