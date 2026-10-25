@@ -676,8 +676,11 @@ function referenced(refs) {
 
 const isOutline = (o) => o.isMesh && o.material?.uniforms?.uThickness;
 
+const tintable = (m, refs) => m.isMeshToonMaterial && !m.map && !m.transparent && m.side === THREE.FrontSide && refs.materials.includes(m);
+
 function flattenStatic(root, refs) {
   const keep = referenced(refs);
+  let tinted = null;
   const parents = [];
   root.traverse((o) => parents.push(o));
   for (const parent of parents) {
@@ -687,22 +690,35 @@ function flattenStatic(root, refs) {
       if (!child.children.every(isOutline)) continue;
       const line = child.children[0];
       const uv = child.geometry.hasAttribute('uv') && !!child.material.map;
-      const id = `${child.material.uuid}|${line ? line.material.uniforms.uThickness.value : 'none'}|${uv}`;
-      if (!groups.has(id)) groups.set(id, { material: child.material, line: line?.material, uv, list: [] });
+      const tint = tintable(child.material, refs);
+      const id = `${tint ? 'tint' : child.material.uuid}|${line ? line.material.uniforms.uThickness.value : 'none'}|${uv}`;
+      if (!groups.has(id)) groups.set(id, { material: child.material, line: line?.material, uv, tint, list: [] });
       groups.get(id).list.push(child);
     }
-    for (const { material, line, uv, list } of groups.values()) {
+    for (const { material, line, uv, tint, list } of groups.values()) {
       if (list.length < 2) continue;
       const parts = list.map((child) => {
         child.updateMatrix();
         const g = (child.geometry.index ? child.geometry.toNonIndexed() : child.geometry.clone()).applyMatrix4(child.matrix);
         for (const name of Object.keys(g.attributes)) if (name !== 'position' && name !== 'normal' && !(uv && name === 'uv')) g.deleteAttribute(name);
+        if (tint) {
+          const { r, g: green, b } = child.material.color;
+          const n = g.attributes.position.count;
+          const rgb = new Float32Array(n * 3);
+          for (let k = 0; k < n * 3; k += 3) rgb.set([r, green, b], k);
+          g.setAttribute('color', new THREE.BufferAttribute(rgb, 3));
+        }
         return g;
       });
       const geometry = mergeGeometries(parts);
       for (const g of parts) g.dispose();
       if (!geometry) continue;
-      const mesh = new THREE.Mesh(geometry, material);
+      if (tint && !tinted) {
+        tinted = toon(0xffffff, { vertexColors: true, emissive: 0xffffff, emissiveIntensity: 0 });
+        charrable(tinted, refs.char);
+        refs.materials.push(tinted);
+      }
+      const mesh = new THREE.Mesh(geometry, tint ? tinted : material);
       if (line) mesh.add(new THREE.Mesh(geometry, line));
       for (const child of list) parent.remove(child);
       parent.add(mesh);
