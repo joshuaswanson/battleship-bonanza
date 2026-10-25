@@ -18,6 +18,7 @@ function smoothKeys(keys, f) {
 }
 
 const STICK = 5;
+const INTENT = 14;
 
 export function createTrack(map, scale = 1) {
   const curve = new THREE.CatmullRomCurve3(
@@ -111,6 +112,13 @@ export function createTrack(map, scale = 1) {
     cursor += count;
   });
 
+  const forkOf = new Int16Array(total).fill(-1);
+  const zone = Math.round(60 / spacing);
+  for (const r of routes) {
+    for (let k = -Math.round(20 / spacing); k < zone; k++) forkOf[wrap(r.from + k)] = r.id;
+    for (let k = 0; k < Math.min(zone, r.count); k++) forkOf[r.first + k] = r.id;
+  }
+
   const tangent = (i) => {
     const a = prev[i];
     const b = next[i];
@@ -124,6 +132,11 @@ export function createTrack(map, scale = 1) {
   };
   for (let i = 0; i < N; i++) tangent(i);
   for (let i = BASE; i < total; i++) tangent(i);
+  for (const r of routes) {
+    const k = r.first + Math.min(r.count - 1, Math.round(45 / spacing));
+    const m = wrap(r.from + Math.round(45 / spacing));
+    r.side = (px[k] - px[m]) * nx[m] + (pz[k] - pz[m]) * nz[m] > 0 ? 1 : -1;
+  }
 
   const norm = (idx) => {
     const i = Math.round(idx);
@@ -140,6 +153,8 @@ export function createTrack(map, scale = 1) {
     for (; k < 0; k++) i = prev[i];
     return i;
   };
+
+  const forkNear = (idx) => routes[forkOf[norm(idx)]] ?? null;
 
   const mainIndex = (idx) => {
     const i = norm(idx);
@@ -162,7 +177,7 @@ export function createTrack(map, scale = 1) {
   const depth = new Int32Array(total);
   const near = [];
 
-  function nearestFrom(x, z, hint, window) {
+  function nearestFrom(x, z, hint, window, want) {
     stamp++;
     let head = 0;
     let tail = 0;
@@ -172,14 +187,14 @@ export function createTrack(map, scale = 1) {
     let best = hint;
     let bestD = Infinity;
     let bestScore = Infinity;
-    const home = route[hint];
+    const home = want ?? route[hint];
     while (head < tail) {
       const i = queue[head];
       const d = depth[head++];
       const dx = x - px[i];
       const dz = z - pz[i];
       const dist = dx * dx + dz * dz;
-      const score = route[i] === home ? dist : (Math.sqrt(dist) + STICK) ** 2;
+      const score = route[i] === home ? dist : (Math.sqrt(dist) + (want === undefined ? STICK : INTENT)) ** 2;
       if (score < bestScore) {
         bestScore = score;
         bestD = dist;
@@ -196,7 +211,7 @@ export function createTrack(map, scale = 1) {
     return [best, bestD];
   }
 
-  function project(x, z, hint = -1, window = 60) {
+  function project(x, z, hint = -1, window = 60, want = undefined) {
     let best = 0;
     let bestD = Infinity;
     if (hint < 0) {
@@ -212,7 +227,7 @@ export function createTrack(map, scale = 1) {
         }
       }
     } else {
-      [best, bestD] = nearestFrom(x, z, norm(hint), window);
+      [best, bestD] = nearestFrom(x, z, norm(hint), window, want);
     }
     const dx = x - px[best];
     const dz = z - pz[best];
@@ -244,6 +259,7 @@ export function createTrack(map, scale = 1) {
     const [tunnelIn, seam, tunnelOut] = map.river.tunnel.map((f) => Math.round((f * length) / spacing) * spacing);
     const drops = map.river.drops.map(([f, height]) => ({ s: f * length, height }));
     river = {
+      speed: map.river.speed ?? 1,
       slope: map.river.slope,
       drops,
       tunnelIn,
@@ -288,6 +304,7 @@ export function createTrack(map, scale = 1) {
     route,
     routes,
     forks,
+    forkNear,
     segments,
     wrap,
     norm,

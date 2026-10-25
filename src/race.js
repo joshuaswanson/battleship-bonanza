@@ -182,7 +182,7 @@ export class Race {
     }
 
     const controllable = b.spinTime <= 0;
-    let max = BASE_SPEED * b.skill;
+    let max = BASE_SPEED * b.skill * (t.river?.speed ?? 1);
     if (b.has('armor')) max *= ARMOR_SPEED;
     if (b.boost > 0) max *= 1.3;
     if (b.air?.jet) max *= 1.15;
@@ -242,7 +242,9 @@ export class Race {
     }
     if (b.spinTime > 0) b.spinTime -= dt;
 
-    const pr = t.project(b.pos.x, b.pos.z, b.trackIdx);
+    const fork = t.forkNear(b.trackIdx);
+    const choice = fork ? b.ai?.routes?.[fork.id] : undefined;
+    const pr = t.project(b.pos.x, b.pos.z, b.trackIdx, 60, choice === undefined ? undefined : choice ? fork.id : -1);
     let ds = pr.s - b.trackS;
     if (ds < -t.length / 2) ds += t.length;
     else if (ds > t.length / 2) ds -= t.length;

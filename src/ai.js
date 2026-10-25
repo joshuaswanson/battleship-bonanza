@@ -31,7 +31,9 @@ export function driveAI(race, b, dt) {
   const half = track.hw[idx];
   const feature = ai.thrillSeeker ? race.features.nearestAhead(b, 70, choose) : null;
   const wanted = feature ? feature.lateral : ai.lane + Math.sin(ai.laneT) * 6;
-  const lane = clamp(wanted + ai.dodge, -(half - 5), half - 5);
+  let lane = clamp(wanted + ai.dodge, -(half - 5), half - 5);
+  const fork = track.forkNear(b.trackIdx) ?? track.forkNear(idx);
+  if (fork && track.route[idx] === -1 && ai.routes?.[fork.id] === false) lane = fork.side > 0 ? Math.min(lane, -2) : Math.max(lane, 2);
   const target = track.point(idx, lane);
   const desired = Math.atan2(target.x - b.pos.x, target.z - b.pos.z);
   const diff = wrapAngle(desired - b.heading);
@@ -40,6 +42,7 @@ export function driveAI(race, b, dt) {
   b.control.throttle = Math.abs(diff) > 0.9 ? 0.5 : 1;
 
   avoidMines(race, b, ai);
+  avoidRocks(race, b, ai);
   for (const heat of Object.values(b.heat)) if (heat.heat > 0.85) heat.trigger = false;
 
   if (race.player && !race.attract && !b.isPlayer) {
@@ -65,6 +68,25 @@ function chooseRoute(race, b, fork) {
     ai.routes[fork.id] = Math.random() < (fork.pick ?? 0.5);
   }
   return ai.routes[fork.id];
+}
+
+function avoidRocks(race, b, ai) {
+  if (ai.dodgeTime > 0) return;
+  const fx = Math.sin(b.heading);
+  const fz = Math.cos(b.heading);
+  for (const rock of race.shores) {
+    const r = Math.max(rock.rx, rock.rz);
+    if (r > 12) continue;
+    const dx = rock.x - b.pos.x;
+    const dz = rock.z - b.pos.z;
+    const ahead = dx * fx + dz * fz;
+    if (ahead < 0 || ahead > 26 + r) continue;
+    const side = dx * -fz + dz * fx;
+    if (Math.abs(side) > r + 4) continue;
+    ai.dodge = side > 0 ? 8 + r : -8 - r;
+    ai.dodgeTime = 0.6;
+    return;
+  }
 }
 
 function avoidMines(race, b, ai) {
