@@ -31,7 +31,9 @@ const OUTLINE_VERT = /* glsl */ `
     vec3 n = normal;
     #ifdef USE_INSTANCING
       p = (instanceMatrix * vec4(p, 1.0)).xyz;
-      n = normalize(transpose(inverse(mat3(instanceMatrix))) * n);
+      mat3 m = mat3(instanceMatrix);
+      mat3 cofactor = mat3(cross(m[1], m[2]), cross(m[2], m[0]), cross(m[0], m[1]));
+      n = normalize(cofactor * n) * sign(dot(m[0], cofactor[0]));
     #endif
     vec4 mvPosition = modelViewMatrix * vec4(p + n * uThickness, 1.0);
     gl_Position = projectionMatrix * mvPosition;
