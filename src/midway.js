@@ -265,11 +265,12 @@ export async function createMidway(group, track, fx) {
   const ships = [];
   const half = track.halfWidth;
 
-  const fits = (x, z, yaw, L, B) => {
+  const fits = (x, z, yaw, L, B, margin = 12) => {
     for (let u = -0.5; u <= 0.5; u += 0.1) {
       const px = x + Math.sin(yaw) * L * u;
       const pz = z + Math.cos(yaw) * L * u;
-      if (track.project(px, pz).distance < half + B / 2 + 12) return false;
+      const near = track.project(px, pz);
+      if (near.distance < track.hw[near.idx] + B / 2 + margin) return false;
     }
     return ships.every((s) => Math.hypot(s.x - x, s.z - z) > (s.L + L) / 2 + 10);
   };
@@ -339,6 +340,28 @@ export async function createMidway(group, track, fx) {
   };
   place(0.33, -1, 16, 172 * BATTLESHIP_SCALE, 30 * BATTLESHIP_SCALE, 0.12, bigShip);
   place(0.86, 1, 20, 172 * BATTLESHIP_SCALE, 30 * BATTLESHIP_SCALE, -0.18, bigShip);
+  for (const r of track.routes) {
+    const mid = r.first + Math.round(r.count / 2);
+    let near = mid;
+    let nearD = Infinity;
+    for (let i = r.from; i !== r.to; i = track.next[i]) {
+      const d = Math.hypot(track.px[i] - track.px[mid], track.pz[i] - track.pz[mid]);
+      if (d < nearD) {
+        nearD = d;
+        near = i;
+      }
+    }
+    const x = (track.px[mid] + track.px[near]) / 2;
+    const z = (track.pz[mid] + track.pz[near]) / 2;
+    const yaw = track.heading(mid);
+    if (fits(x, z, yaw, 96, 11, 5)) {
+      const local = { local: [] };
+      const size = tinCan(x, z, yaw, local);
+      for (const g of local.local) guns.push(g.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw).add(new THREE.Vector3(x, 0, z)));
+      ships.push({ x, z, L: size.L });
+      shores.push({ x, z, rx: size.B / 2 + 0.5, rz: size.L / 2, rot: yaw });
+    }
+  }
   for (const [f, side, angle] of [[0.04, -1, 0.5], [0.48, 1, -0.4], [0.74, -1, 0.2], [0.24, 1, 0.9]]) {
     place(f, side, 10, 96, 11, angle, tinCan);
   }
