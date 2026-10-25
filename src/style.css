@@ -514,6 +514,23 @@ kbd {
   color: var(--foam);
 }
 
+.boot .loading-label {
+  color: var(--foam);
+}
+
+.booting .boot {
+  opacity: 1;
+  visibility: visible;
+}
+
+.booting #ui {
+  opacity: 0;
+}
+
+.booting #ui * {
+  animation-play-state: paused !important;
+}
+
 @keyframes loading-spin {
   to {
     transform: rotate(1turn);

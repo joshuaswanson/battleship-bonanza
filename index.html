@@ -5,11 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#0E2A47" />
     <title>Battleship Bonanza</title>
+    <style>
+      html, body { margin: 0; background: #0f8fb8; }
+      .loading { visibility: hidden; }
+    </style>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   </head>
-  <body>
+  <body class="booting">
     <canvas id="game"></canvas>
     <canvas class="wipe" id="wipe" aria-hidden="true"></canvas>
+    <div class="loading boot" role="status">
+      <div class="loading-ring" aria-hidden="true"></div>
+      <p class="loading-label">Loading</p>
+    </div>
     <div class="loading" id="loading" role="status">
       <div class="loading-ring" aria-hidden="true"></div>
       <p class="loading-label" data-i18n="loading">Loading</p>

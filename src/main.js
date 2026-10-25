@@ -678,4 +678,5 @@ if (import.meta.env.DEV) {
 
 goTitle();
 requestAnimationFrame(frame);
+requestAnimationFrame(() => document.body.classList.remove('booting'));
 setTimeout(() => prepareVenue('jungle'), 1500);
