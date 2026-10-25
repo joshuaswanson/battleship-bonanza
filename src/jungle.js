@@ -1309,13 +1309,18 @@ export async function createJungle(group, track, fx) {
       Math.abs(terrainHeight(surface, track, x, z + 3) - h),
     ) > 2.4;
   };
+  const routeSamples = track.total - 2 * track.N;
+  const pickIdx = () => {
+    const k = Math.floor(rand() * (track.N + routeSamples));
+    return k < track.N ? k : 2 * track.N + (k - track.N);
+  };
   const bankSpot = (from, to) => {
-    const idx = Math.floor(rand() * track.N);
+    const idx = pickIdx();
     const side = rand() < 0.5 ? -1 : 1;
     const p = track.point(idx, side * (hw + from + rand() * (to - from)));
     const { dist, s } = surface.sample(p.x, p.z);
     if (dist < hw + from - 0.5 || tunnelMask(track, s) > 0 || steep(p.x, p.z)) return null;
-    const i = track.wrap(idx);
+    const i = track.norm(idx);
     p.river = { x: -side * track.nx[i], z: -side * track.nz[i] };
     return p;
   };
@@ -1345,10 +1350,11 @@ export async function createJungle(group, track, fx) {
   await place(800, 3, 22, (x, y, z) => addBanana(batch, x, y, z, rand));
   await place(700, 3.5, 16, (x, y, z) => addBush(batch, x, y, z, rand));
   await place(400, 5, 30, (x, y, z) => addFern(batch, x, y, z, rand));
+  const riverside = [...Array(track.N).keys(), ...Array.from({ length: routeSamples }, (_, k) => 2 * track.N + k)];
   for (const side of [-1, 1]) {
-    for (let k = 0; k < track.N; k += 1) {
-      await tick();
-      const i = track.wrap(k);
+    for (const k of riverside) {
+      if (k % 40 === 0) await tick();
+      const i = track.norm(k);
       const out = { x: side * track.nx[i], z: side * track.nz[i] };
       for (let n = 0; n < 2; n++) {
         const lat = side * (hw - 0.5 + rand() * 4.5);

@@ -83,7 +83,7 @@ export async function createAlps(group, track, fx) {
   group.add(sun);
 
   const N = track.N;
-  const lakeAt = (idx) => lakeness(idx / N);
+  const lakeAt = (idx) => lakeness(track.mainIndex(idx) / N);
   const surface = await courseSurface(track, tick, { amp: (i) => 0.35 + 0.35 * lakeAt(i) });
   const shoreOf = (x, z) => {
     const s = surface.sample(x, z);
@@ -320,7 +320,8 @@ export async function createAlps(group, track, fx) {
   group.add(buoys);
   group.add(createArch(track, track.hw[0]));
 
-  const reachOut = [new Float32Array(N), new Float32Array(N)];
+  const reachOut = [new Float32Array(track.total), new Float32Array(track.total)];
+  for (let i = 2 * N; i < track.total; i++) reachOut[0][i] = reachOut[1][i] = track.hw[i] - 2.5;
   for (let i = 0; i < N; i++) {
     for (const [k, sign] of [[0, -1], [1, 1]]) {
       let lat = track.hw[i];
