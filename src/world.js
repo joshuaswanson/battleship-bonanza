@@ -361,7 +361,7 @@ export function addPalm(batch, x, baseY, z, rand, { height, lean, dir }) {
   batch.add('trunk', trunkGeometry(points, radius));
 
   const top = points[points.length - 1];
-  batch.add('crown', SPHERE, mat(top.x, top.y + 0.1, top.z, radius * 1.3, radius * 1.1, radius * 1.3));
+  batch.add('crown', LOW_SPHERE, mat(top.x, top.y + 0.1, top.z, radius * 1.3, radius * 1.1, radius * 1.3));
   const palette = LEAF_PALETTES[Math.floor(rand() * LEAF_PALETTES.length)];
   const spin = rand() * Math.PI * 2;
   const size = 3.8 + height * 0.22;
