@@ -69,7 +69,7 @@ function droopyTier(seed) {
   return g;
 }
 
-const TIERS = Array.from({ length: 10 }, (_, s) => droopyTier(s * 101 + 7));
+const TIERS = Array.from({ length: 5 }, (_, s) => droopyTier(s * 101 + 7));
 export const BLOBS = [1, 2, 3, 4, 5].map((s) => lumpy(new THREE.IcosahedronGeometry(1, 1), s * 37, 0.28));
 export const STONES = [1, 2, 3, 4].map((s) => lumpy(new THREE.DodecahedronGeometry(1, 0), s * 53, 0.35));
 const TRUNK = new THREE.CylinderGeometry(0.7, 1, 1, 9).translate(0, 0.5, 0);
