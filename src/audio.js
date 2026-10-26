@@ -7,7 +7,7 @@ const RACE_SONGS = ['race-music.mp3', 'coral-cannonade.mp3', 'torpedo-tide-rider
 function track(file, volume, preload = 'auto') {
   const audio = new Audio();
   audio.preload = preload;
-  audio.src = `${import.meta.env.BASE_URL}${file}`;
+  audio.src = `${import.meta.env.BASE_URL}music/${file}`;
   audio.loop = true;
   audio.volume = volume;
   return audio;
