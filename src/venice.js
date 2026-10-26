@@ -378,7 +378,7 @@ export async function createVenice(group, track, fx) {
     const side = track.hw[i] > 30 ? landSide : n % 2 ? 1 : -1;
     if (!landAt(i, side)) continue;
     const p = track.point(i, side * (track.hw[i] + 1.1));
-    if (!free(p.x, p.z, 1.2)) continue;
+    if (!free(p.x, p.z, 1.2) || surface.sample(p.x, p.z).edge < 0.5) continue;
     streetLamp(batch, p.x, WALL_TOP, p.z);
   }
 
