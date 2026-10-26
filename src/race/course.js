@@ -1,5 +1,7 @@
 import { waveHeight, isWater } from '../water.js';
-import { SHORE_MARGIN } from './shared.js';
+import { BASE_SPEED, SHORE_MARGIN } from './shared.js';
+
+const ROCK_LAUNCH = BASE_SPEED * 0.45;
 
 export const methods = {
   followRiver(b, s) {
@@ -34,6 +36,7 @@ export const methods = {
   collideShores(b) {
     for (const blob of this.shores) {
       if (blob.top !== undefined && b.waterY + b.yOffset > blob.top) continue;
+      if (b.air?.over === blob) continue;
       const dx = b.pos.x - blob.x;
       const dz = b.pos.z - blob.z;
       if (Math.abs(dx) > blob.rx + blob.rz + 4 || Math.abs(dz) > blob.rx + blob.rz + 4) continue;
@@ -57,6 +60,10 @@ export const methods = {
       const ux = nx / len;
       const uz = nz / len;
       const vn = b.vel.x * ux + b.vel.z * uz;
+      if (blob.launch && -vn > ROCK_LAUNCH) {
+        this.launchOffRock(b, blob);
+        continue;
+      }
       if (vn < 0) {
         b.vel.x -= ux * vn * 1.6;
         b.vel.z -= uz * vn * 1.6;
@@ -68,6 +75,18 @@ export const methods = {
         }
       }
     }
+  },
+
+  launchOffRock(b, rock) {
+    b.air = { t: 0, dur: 0.9, peak: 5.4, jet: false, over: rock };
+    if (b.spinTime <= 0) {
+      b.spinTime = 1;
+      b.spinDur = 1;
+    }
+    b.speed *= 0.7;
+    b.bump(5);
+    this.fx.splash(b.pos.x, b.waterY, b.pos.z, 1.1);
+    this.sfx.play('boing', b.pos);
   },
 
   courseReturnPoint(b) {

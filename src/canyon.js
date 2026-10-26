@@ -398,7 +398,7 @@ export async function createCanyon(group, track, fx) {
       boulder(batch, p.x + Math.cos(a) * r, track.level(s) - 0.6, p.z + Math.sin(a) * r, size * (0.35 + rand() * 0.25), rand);
     }
     batch.add('foam', CYL, mat(p.x, track.level(s) + 0.12, p.z, size * 1.35, 0.05, size * 1.35));
-    shores.push({ x: p.x, z: p.z, rx: size * 0.9, rz: size * 0.9, rot: 0, top: track.level(s) + size * 0.55 });
+    shores.push({ x: p.x, z: p.z, rx: size * 0.9, rz: size * 0.9, rot: 0, top: track.level(s) + size * 0.55, launch: true });
     n++;
   }
 
