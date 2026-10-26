@@ -2,7 +2,7 @@ export const COUNT_LAND = 0.11;
 const RACE_VOLUME = 0.45;
 const SFX_VOLUME = 0.85;
 
-const RACE_SONGS = ['race-music.mp3', 'coral-cannonade.mp3', 'torpedo-tide-rider.mp3'];
+const RACE_SONGS = ['race-music.mp3', 'coral-cannonade.mp3', 'torpedo-tide-rider.mp3', 'funlit-path.mp3'];
 
 function track(file, volume, preload = 'auto') {
   const audio = new Audio();
