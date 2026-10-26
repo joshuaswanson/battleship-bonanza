@@ -24,6 +24,7 @@ import * as visuals from './race/visuals.js';
 
 export { LAPS, MAX_HP, BASE_SPEED } from './race/shared.js';
 export const COUNTDOWN = 3.7;
+const FALL_OVER_BANK = 40;
 const KIND_ITEM = { bullet: 'machinegun', saw: 'saw', laser: 'laser', reflect: 'saw', flame: 'flamethrower', fire: 'flamethrower', propane: 'flamethrower', missile: 'missiles', mine: 'mines', spikes: 'spikes' };
 
 const MODULES = [machinegun, missiles, mines, grapple, emp, jetpack, laser, flamethrower, saw, spikes, aiming, course, visuals];
@@ -34,6 +35,7 @@ export class Race {
   constructor({ scene, track, fx, sfx, defs, shores = [], solid = null, raycast = null, chopper = null, attract = false, laps = LAPS }) {
     this.shores = shores;
     this.solid = solid;
+    this.bankProbe = new THREE.Vector3();
     this.raycast = raycast;
     this.chopper = chopper;
     this.scene = scene;
@@ -258,11 +260,13 @@ export class Race {
     if (t.river) this.followRiver(b, pr.s);
 
     b.offCourse = Math.abs(pr.lateral) > t.hw[pr.idx] + 1.5 ? b.offCourse + dt : 0;
-    if (b.offCourse > 0 && b.speed > OFF_COURSE_SPEED * BASE_SPEED) b.speed *= Math.exp(-1.5 * dt);
+    if (b.offCourse > 0 && !b.air?.fall && b.speed > OFF_COURSE_SPEED * BASE_SPEED) b.speed *= Math.exp(-1.5 * dt);
     this.collideShores(b);
 
     const lim = t.reach ? t.reach[pr.lateral > 0 ? 1 : 0][pr.idx] : t.hw[pr.idx] + (t.banked ? -(t.map.bankMargin ?? BANK_MARGIN) : OUTER_LIMIT);
-    if (Math.abs(pr.lateral) > lim) {
+    const overBank = b.air?.fall && this.solid && Math.abs(pr.lateral) > lim && Math.abs(pr.lateral) < lim + FALL_OVER_BANK;
+    if (overBank) this.tumbleOnBank(b, pr);
+    else if (Math.abs(pr.lateral) > lim) {
       const sgn = Math.sign(pr.lateral);
       const nx = t.nx[pr.idx];
       const nz = t.nz[pr.idx];
@@ -286,6 +290,35 @@ export class Race {
       const facing = fx * t.tx[pr.idx] + fz * t.tz[pr.idx];
       b.wrongWay = facing < -0.3 && b.speed > 4 ? b.wrongWay + dt : 0;
     }
+  }
+
+  tumbleOnBank(b, pr) {
+    const p = this.bankProbe.set(b.pos.x, b.air.y, b.pos.z);
+    if (!this.solid(p)) return;
+    for (let k = 0; k < 80 && this.solid(p); k++) p.y += 0.5;
+    b.air.y = p.y;
+    b.air.vy = Math.max(b.air.vy, b.air.tumbled ? 0 : 7);
+    if (b.air.tumbled) return;
+    b.air.tumbled = true;
+    const t = this.track;
+    const sgn = Math.sign(pr.lateral);
+    let dx = t.tx[pr.idx] - sgn * t.nx[pr.idx] * 0.7;
+    let dz = t.tz[pr.idx] - sgn * t.nz[pr.idx] * 0.7;
+    const len = Math.hypot(dx, dz);
+    dx /= len;
+    dz /= len;
+    const speed = Math.hypot(b.vel.x, b.vel.z);
+    b.vel.x = dx * speed;
+    b.vel.z = dz * speed;
+    b.heading = Math.atan2(dx, dz);
+    if (b.spinTime <= 0) {
+      b.spinTime = 0.9;
+      b.spinDur = 0.9;
+    }
+    b.bump(6);
+    for (let k = 0; k < 8; k++) this.fx.puffs.emit(b.pos.x + (Math.random() - 0.5) * 4, p.y + 0.5, b.pos.z + (Math.random() - 0.5) * 4, (Math.random() - 0.5) * 6, 2 + Math.random() * 3, (Math.random() - 0.5) * 6, 1 + Math.random(), 0.9, 0xc9a27a, 2, 1.5, 0);
+    this.sfx.play('boing', b.pos);
+    if (b.isPlayer) this.emit('lockShake', { amount: 0.8 });
   }
 
   respawn(b) {
