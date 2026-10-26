@@ -200,9 +200,10 @@ export async function createAlps(group, track, fx) {
   {
     const idx = Math.round(0.62 * N);
     const i = track.wrap(idx);
-    coveredBridge(batch, track, idx);
+    const bridge = coveredBridge(batch, track, idx, height);
     const bridgeAt = track.point(i);
     taken.push({ x: bridgeAt.x, z: bridgeAt.z, r: track.hw[i] + 16 });
+    for (const path of bridge.paths) for (const at of path) taken.push({ x: at.x, z: at.z, r: 5 });
     const towerIdx = track.wrap(idx - Math.round(12 / track.spacing));
     const tower = track.point(towerIdx, track.hw[towerIdx] + 8);
     waterTower(batch, tower.x, Math.max(-1, height(tower.x, tower.z) - 0.6), tower.z, rand);

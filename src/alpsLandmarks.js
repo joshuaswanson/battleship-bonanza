@@ -22,6 +22,7 @@ export const LANDMARK_COLORS = {
   masonry: 0xcbc1b0,
   masonryDark: 0x9b9284,
   masonryLight: 0xe0d8c9,
+  gravel: 0xcdb98f,
   shingle: 0x7a4b32,
   shingleDark: 0x553521,
   geranium: 0xe8344a,
@@ -452,10 +453,29 @@ export function lakeDock(batch, x, z, yaw, length, rand) {
   }
 }
 
+function rampGeometry(x, width, u0, u1, top0, top1, bottom, x1 = x) {
+  const g = new THREE.BoxGeometry(1, 1, 1);
+  const pos = g.attributes.position;
+  for (let k = 0; k < pos.count; k++) {
+    const t = pos.getZ(k) + 0.5;
+    pos.setXYZ(k, x + (x1 - x) * t + pos.getX(k) * width, pos.getY(k) > 0 ? top0 + (top1 - top0) * t : bottom, u0 + (u1 - u0) * t);
+  }
+  g.computeVertexNormals();
+  return g;
+}
+
+const RAMP_SLOPE = 0.3;
+const TRAIL = 30;
+
 export function coveredBridge(batch, track, idx, height) {
   const i = track.wrap(idx);
   const p = track.point(i);
   const yaw = track.heading(i) + Math.PI / 2;
+  const along = (u) => ({ x: p.x + u * Math.sin(yaw), z: p.z + u * Math.cos(yaw) });
+  const ground = (u) => {
+    const at = along(u);
+    return height(at.x, at.z);
+  };
   const put = frame(batch, p.x, 0, p.z, yaw, 0, 0, 1);
   const hw = track.hw[i];
   const half = hw + 10;
@@ -507,7 +527,33 @@ export function coveredBridge(batch, track, idx, height) {
     put('masonryLight', BOX, 0, deck - 1.75, ez, 7.4, 0.4, 6.4);
     for (const u of [-1.6, 0, 1.6]) put('timberDark', CYL, u * 1.8, 1, end * (hw + 0.6), 0.3, 6, 0.3);
   }
-  return { p, yaw, half };
+  const paths = [];
+  for (const end of [-1, 1]) {
+    let run = 0;
+    while (run < 40 && deck + 0.25 - RAMP_SLOPE * run > ground(end * (half + run)) + 0.3) run += 0.5;
+    const span = (a, b) => (end > 0 ? [half + a, half + b] : [-half - b, -half - a]);
+    const tops = (a, b) => (end > 0 ? [a, b] : [b, a]);
+    const foot = ground(end * (half + run));
+    const bottom = Math.min(ground(end * half), foot) - 1.5;
+    const [u0, u1] = span(0, run);
+    const [top0, top1] = tops(deck + 0.25, foot + 0.3);
+    put('masonry', rampGeometry(0, 6.4, u0, u1, top0 - 0.3, top1 - 0.3, bottom), 0, 0, 0, 1, 1, 1);
+    put('timber', rampGeometry(0, 5.4, u0, u1, top0, top1, Math.min(top0, top1) - 0.6), 0, 0, 0, 1, 1, 1);
+    for (const side of [-1, 1]) put('masonryDark', rampGeometry(side * 2.95, 0.5, u0, u1, top0 + 0.6, top1 + 0.6, bottom), 0, 0, 0, 1, 1, 1);
+    const points = [];
+    for (let d = run - 1; d < run + TRAIL; d += 2) {
+      const [a, b] = span(d, d + 2.2);
+      const wave = (k) => Math.sin(k / 9) * 2.5 * end;
+      const ga = ground(end * (half + (end > 0 ? d : d + 2.2)));
+      const gb = ground(end * (half + (end > 0 ? d + 2.2 : d)));
+      const [w0, w1] = tops(wave(d - run), wave(d + 2.2 - run));
+      const width = 3.4 * (1 - 0.35 * Math.max(0, (d - run) / TRAIL));
+      put('gravel', rampGeometry(w0, width, a, b, ga + 0.12, gb + 0.12, Math.min(ga, gb) - 0.6, w1), 0, 0, 0, 1, 1, 1);
+      points.push(along(end * (half + d)));
+    }
+    paths.push(points);
+  }
+  return { p, yaw, half, paths };
 }
 
 export function waterTower(batch, x, y, z, rand) {
