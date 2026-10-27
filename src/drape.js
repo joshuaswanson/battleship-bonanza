@@ -5,7 +5,10 @@ const COLS = 14;
 const ROWS = 16;
 const WIDTH = 2 * (HULL_W + 1.6);
 const LENGTH = 6.4;
-const CENTER_Z = HULL_L * 0.42;
+const HANG_Z = HULL_L * 0.8;
+const LEAN = 0.55;
+const IMPACT = 15;
+const PRESS = 8;
 const GAP = 0.08;
 const BUMPER = 0.22;
 const SETTLE_STEPS = 140;
@@ -81,22 +84,25 @@ export class Drape {
     this.p = new Float32Array(this.count * 3);
     this.q = new Float32Array(this.count * 3);
     this.touch = new Uint8Array(this.count);
-    const top = Math.max(sheer(HULL_L) + 0.6, ...this.boxes.map((b) => b.max.y)) + 0.5;
+    const top = Math.max(sheer(HULL_L) + 0.6, ...this.boxes.map((b) => b.max.y)) + 1.6;
     for (let r = 0; r < ROWS; r++) {
+      const down = (r / (ROWS - 1)) * LENGTH;
       for (let c = 0; c < COLS; c++) {
         const i = (r * COLS + c) * 3;
         this.p[i] = (c / (COLS - 1) - 0.5) * WIDTH;
-        this.p[i + 1] = top;
-        this.p[i + 2] = CENTER_Z + (0.5 - r / (ROWS - 1)) * LENGTH;
+        this.p[i + 1] = top - down * Math.cos(LEAN);
+        this.p[i + 2] = HANG_Z + down * Math.sin(LEAN);
+        this.q[i] = this.p[i];
+        this.q[i + 1] = this.p[i + 1];
+        this.q[i + 2] = this.p[i + 2] + IMPACT * STEP;
       }
     }
-    this.q.set(this.p);
     this.mesh = new THREE.Mesh(grid(), material);
     this.mesh.userData.drape = true;
     this.mesh.frustumCulled = false;
     this.age = 0;
     this.flying = false;
-    for (let k = 0; k < SETTLE_STEPS; k++) this.step(STEP, 0, -16, 0, true);
+    for (let k = 0; k < SETTLE_STEPS; k++) this.step(STEP, 0, -16, -PRESS, true);
     this.write();
     model.body.add(this.mesh);
   }
@@ -184,7 +190,7 @@ export class Drape {
   flutter(dt, speed, time) {
     const wind = Math.min(Math.abs(speed), 70);
     const gust = Math.sin(time * 9) * 0.5 + Math.sin(time * 15.7) * 0.3;
-    this.step(Math.min(dt, 1 / 30), gust * wind * 0.12, -16 + Math.abs(gust) * wind * 0.1, -wind * 0.18, true);
+    this.step(Math.min(dt, 1 / 30), gust * wind * 0.12, -16 + Math.abs(gust) * wind * 0.08, -PRESS - wind * 0.05, true);
     this.write();
   }
 
