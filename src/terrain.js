@@ -33,30 +33,36 @@ export async function courseSurface(track, tick, { margin = 340, cell = 3, amp =
   const nearest = new Int32Array(cols * rows);
   const { px, pz, tx, tz, wrap, sAt, sScale } = track;
   const step = 4;
-  const segOf = (i) => track.segments.find((seg) => i >= seg.start && i <= seg.end);
   for (let r = 0; r < rows; r++) {
     await tick();
     const z = minZ + r * cell;
     for (let c = 0; c < cols; c++) {
       const x = minX + c * cell;
       let best = 0;
-      let bestD = Infinity;
+      let bestEdge = Infinity;
       for (const seg of track.segments) {
+        let near = seg.start;
+        let nearD = Infinity;
         for (let i = seg.start; i <= seg.end; i += step) {
           const d = (x - px[i]) ** 2 + (z - pz[i]) ** 2;
-          if (d < bestD) {
-            bestD = d;
-            best = i;
+          if (d < nearD) {
+            nearD = d;
+            near = i;
           }
         }
-      }
-      const seg = segOf(best);
-      for (let k = best - step; k <= best + step; k++) {
-        const i = seg.ring ? wrap(k) : Math.min(seg.end, Math.max(seg.start, k));
-        const d = (x - px[i]) ** 2 + (z - pz[i]) ** 2;
-        if (d < bestD) {
-          bestD = d;
-          best = i;
+        const from = near;
+        for (let k = from - step; k <= from + step; k++) {
+          const i = seg.ring ? wrap(k) : Math.min(seg.end, Math.max(seg.start, k));
+          const d = (x - px[i]) ** 2 + (z - pz[i]) ** 2;
+          if (d < nearD) {
+            nearD = d;
+            near = i;
+          }
+        }
+        const edge = Math.sqrt(nearD) - track.hw[near];
+        if (edge < bestEdge) {
+          bestEdge = edge;
+          best = near;
         }
       }
       nearest[r * cols + c] = best;
