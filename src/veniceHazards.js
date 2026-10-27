@@ -59,6 +59,7 @@ export class Laundry {
     this.drapeColor = new Uint8Array(12);
     this.drapeMaterials = CLOTHS.map((color) => toon(color, { side: THREE.DoubleSide, map: GINGHAM }));
     this.drapes = new Map();
+    this.hits = new Map();
     this.flying = [];
   }
 
@@ -114,6 +115,7 @@ export class Laundry {
   reset(race) {
     for (const drape of [...this.drapes.values(), ...this.flying]) drape.dispose();
     this.drapes.clear();
+    this.hits.clear();
     this.flying.length = 0;
     this.boats = race.boats;
     for (const s of this.sheets) Object.assign(s, { on: true, timer: 0, grow: 1 });
@@ -145,7 +147,29 @@ export class Laundry {
     });
   }
 
+  impact(b, sheet) {
+    const { line } = sheet;
+    const cos = Math.cos(b.heading);
+    const sin = Math.sin(b.heading);
+    const local = (x, z) => ({ x: x * cos - z * sin, z: x * sin + z * cos });
+    const rel = local(-b.vel.x, -b.vel.z);
+    const air = b.air;
+    const climb = !air ? 0 : air.fall ? air.vy : (air.peak * 4 * (1 - (2 * air.t) / air.dur)) / air.dur;
+    const speed = Math.hypot(rel.x, climb, rel.z) || 1;
+    const lateral = (b.pos.x - line.x) * line.nx + (b.pos.z - line.z) * line.nz;
+    return {
+      across: local(line.nx, line.nz),
+      dir: { x: rel.x / speed, y: -climb / speed, z: rel.z / speed },
+      speed,
+      top: this.lineY(line, sheet.center) - (b.waterY + 0.35 + b.yOffset),
+      offset: sheet.center - lateral,
+      width: sheet.width,
+      height: SHEET_H,
+    };
+  }
+
   snag(race, b, k, sheet) {
+    this.hits.set(b, this.impact(b, sheet));
     Object.assign(sheet, { on: false, timer: SHEET_RESPAWN, grow: 0 });
     b.blind = BLIND_TIME;
     b.laundryHit = race.time + 0.5;
@@ -175,15 +199,21 @@ export class Laundry {
     this.boats.forEach((b, k) => {
       const drape = this.drapes.get(b);
       if (b.blind > 0) {
-        if (drape) drape.flutter(dt, b.speed, time);
-        else this.drapes.set(b, new Drape(b.model, this.drapeMaterials[this.drapeColor[k]]));
+        if (drape) {
+          const cos = Math.cos(b.heading);
+          const sin = Math.sin(b.heading);
+          drape.flutter(dt, { x: -b.vel.x * cos + b.vel.z * sin, z: -b.vel.x * sin - b.vel.z * cos }, time);
+        } else {
+          this.drapes.set(b, new Drape(b.model, this.drapeMaterials[this.drapeColor[k]], this.hits.get(b)));
+          this.hits.delete(b);
+        }
       } else if (drape) {
         drape.release(this.group, b.vel);
         this.flying.push(drape);
         this.drapes.delete(b);
       }
     });
-    this.flying = this.flying.filter((drape) => drape.fly(dt) || drape.dispose());
+    this.flying = this.flying.filter((drape) => drape.fly(dt, time) || drape.dispose());
   }
 
   snapshot() {

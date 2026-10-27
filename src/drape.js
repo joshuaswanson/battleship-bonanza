@@ -1,19 +1,24 @@
 import * as THREE from 'three';
 import { HULL_L, HULL_W, halfWidth, sheer } from './boatModel.js';
+import { waveHeight } from './water.js';
 
 const COLS = 14;
-const ROWS = 16;
-const WIDTH = 2 * (HULL_W + 1.6);
-const LENGTH = 6.4;
-const HANG_Z = HULL_L * 0.8;
-const LEAN = 0.55;
-const IMPACT = 15;
-const PRESS = 8;
+const ROWS = 11;
+const GROW = 1.25;
 const GAP = 0.08;
 const BUMPER = 0.22;
-const SETTLE_STEPS = 140;
-const STEP = 1 / 60;
-const FLY_TIME = 1.8;
+const SUBSTEPS = 3;
+const TICK = 1 / (60 * SUBSTEPS);
+const GRAVITY = -16;
+const AIR_DRAG = 0.12;
+const IMPACT = 0.45;
+const CLING = 0.25;
+const TOP = [2.6, 4];
+const FLOAT_TIME = 0.9;
+const SINK_SPEED = 0.7;
+const LIFETIME = 4.5;
+
+const DEFAULT_HIT = { across: { x: 1, z: 0 }, dir: { x: 0, y: 0, z: -1 }, speed: 45, top: 3.2, offset: 0, width: 4.4, height: 2.8 };
 
 const blockers = new WeakMap();
 
@@ -41,7 +46,7 @@ function grid() {
   const uv = [];
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
-      uv.push((c / (COLS - 1)) * 3, (r / (ROWS - 1)) * 3.4);
+      uv.push((c / (COLS - 1)) * 3, (r / (ROWS - 1)) * 2.2);
       if (r < ROWS - 1 && c < COLS - 1) {
         const i = r * COLS + c;
         index.push(i, i + COLS, i + 1, i + 1, i + COLS, i + COLS + 1);
@@ -54,71 +59,79 @@ function grid() {
   return geometry;
 }
 
-function links() {
+function links(dx, dy) {
   const out = [];
   const at = (r, c) => r * COLS + c;
-  const dx = WIDTH / (COLS - 1);
-  const dz = LENGTH / (ROWS - 1);
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
       if (c < COLS - 1) out.push([at(r, c), at(r, c + 1), dx, 1]);
-      if (r < ROWS - 1) out.push([at(r, c), at(r + 1, c), dz, 1]);
+      if (r < ROWS - 1) out.push([at(r, c), at(r + 1, c), dy, 1]);
       if (r < ROWS - 1 && c < COLS - 1) {
-        out.push([at(r, c), at(r + 1, c + 1), Math.hypot(dx, dz), 0.6]);
-        out.push([at(r, c + 1), at(r + 1, c), Math.hypot(dx, dz), 0.6]);
+        out.push([at(r, c), at(r + 1, c + 1), Math.hypot(dx, dy), 0.6]);
+        out.push([at(r, c + 1), at(r + 1, c), Math.hypot(dx, dy), 0.6]);
       }
       if (c < COLS - 2) out.push([at(r, c), at(r, c + 2), dx * 2, 0.25]);
-      if (r < ROWS - 2) out.push([at(r, c), at(r + 2, c), dz * 2, 0.25]);
+      if (r < ROWS - 2) out.push([at(r, c), at(r + 2, c), dy * 2, 0.25]);
     }
   }
   return out;
 }
 
-const LINKS = links();
-
 export class Drape {
-  constructor(model, material) {
+  constructor(model, material, hit = DEFAULT_HIT) {
     this.model = model;
     this.boxes = partBoxes(model);
     this.count = COLS * ROWS;
     this.p = new Float32Array(this.count * 3);
     this.q = new Float32Array(this.count * 3);
     this.touch = new Uint8Array(this.count);
-    const top = Math.max(sheer(HULL_L) + 0.6, ...this.boxes.map((b) => b.max.y)) + 1.6;
+    this.stuck = new Uint8Array(this.count);
+    this.anchor = new Float32Array(this.count * 3);
+    this.clinging = 0;
+    this.landed = 0;
+    this.age = 0;
+    this.flying = false;
+    const width = hit.width * GROW;
+    const height = hit.height * GROW;
+    this.links = links(width / (COLS - 1), height / (ROWS - 1));
+    const flat = Math.hypot(hit.dir.x, hit.dir.z) || 1;
+    const fx = hit.dir.x / flat;
+    const fz = hit.dir.z / flat;
+    const reach = 1 / Math.hypot(fx / (HULL_W + 1), fz / (HULL_L + 0.6)) + 0.4;
+    const cx = -fx * reach + hit.across.x * hit.offset;
+    const cz = -fz * reach + hit.across.z * hit.offset;
+    const v = hit.speed * IMPACT * TICK;
     for (let r = 0; r < ROWS; r++) {
-      const down = (r / (ROWS - 1)) * LENGTH;
       for (let c = 0; c < COLS; c++) {
         const i = (r * COLS + c) * 3;
-        this.p[i] = (c / (COLS - 1) - 0.5) * WIDTH;
-        this.p[i + 1] = top - down * Math.cos(LEAN);
-        this.p[i + 2] = HANG_Z + down * Math.sin(LEAN);
-        this.q[i] = this.p[i];
-        this.q[i + 1] = this.p[i + 1];
-        this.q[i + 2] = this.p[i + 2] + IMPACT * STEP;
+        const along = (c / (COLS - 1) - 0.5) * width;
+        this.p[i] = cx + hit.across.x * along;
+        this.p[i + 1] = Math.max(TOP[0], Math.min(TOP[1], hit.top)) - (r / (ROWS - 1)) * height;
+        this.p[i + 2] = cz + hit.across.z * along;
+        this.q[i] = this.p[i] - hit.dir.x * v;
+        this.q[i + 1] = this.p[i + 1] - hit.dir.y * v;
+        this.q[i + 2] = this.p[i + 2] - hit.dir.z * v;
       }
     }
     this.mesh = new THREE.Mesh(grid(), material);
     this.mesh.userData.drape = true;
     this.mesh.frustumCulled = false;
-    this.age = 0;
-    this.flying = false;
-    for (let k = 0; k < SETTLE_STEPS; k++) this.step(STEP, 0, -16, -PRESS, true);
     this.write();
     model.body.add(this.mesh);
   }
 
-  step(dt, ax, ay, az, onBoat) {
+  step(dt, air, onBoat) {
     const { p, q, touch } = this;
-    const damp = onBoat ? 0.985 : 0.995;
     for (let i = 0; i < p.length; i += 3) {
       for (let a = 0; a < 3; a++) {
-        const v = (p[i + a] - q[i + a]) * damp;
+        const v = p[i + a] - q[i + a];
+        const drag = AIR_DRAG * (air[a] - v / dt);
         q[i + a] = p[i + a];
-        p[i + a] += v + [ax, ay, az][a] * dt * dt;
+        p[i + a] += v * 0.99 + (drag + (a === 1 ? GRAVITY : 0)) * dt * dt;
       }
     }
     for (let pass = 0; pass < 4; pass++) {
-      for (const [a, b, rest, stiff] of LINKS) {
+      for (const [a, b, rest, stiff] of this.links) {
         const ia = a * 3;
         const ib = b * 3;
         const dx = p[ib] - p[ia];
@@ -136,15 +149,24 @@ export class Drape {
       if (onBoat) for (let n = 0; n < this.count; n++) touch[n] = this.collide(n * 3) || (pass > 0 && touch[n]);
     }
     if (!onBoat) return;
+    const { stuck, anchor } = this;
     for (let n = 0; n < this.count; n++) {
-      if (!touch[n]) continue;
       const i = n * 3;
+      if (stuck[n]) {
+        for (let a = 0; a < 3; a++) p[i + a] = q[i + a] = anchor[i + a];
+        continue;
+      }
+      if (!touch[n]) continue;
       for (let a = 0; a < 3; a++) q[i + a] = p[i + a] - (p[i + a] - q[i + a]) * 0.15;
+      if (this.clinging > CLING) {
+        stuck[n] = 1;
+        for (let a = 0; a < 3; a++) anchor[i + a] = p[i + a];
+      }
     }
   }
 
   collide(i) {
-    const { p } = this;
+    const { p, q } = this;
     const x = p[i];
     const y = p[i + 1];
     const z = p[i + 2];
@@ -180,17 +202,19 @@ export class Drape {
       else p[i + 2] = box.max.z;
       hit = true;
     }
-    if (p[i + 1] < -0.2) {
-      p[i + 1] = -0.2;
-      hit = true;
-    }
+    if (p[i + 1] < -0.2) p[i + 1] = -0.2;
+    q[i] += p[i] - x;
+    q[i + 1] += p[i + 1] - y;
+    q[i + 2] += p[i + 2] - z;
     return hit;
   }
 
-  flutter(dt, speed, time) {
-    const wind = Math.min(Math.abs(speed), 70);
+  flutter(dt, air, time) {
+    this.clinging += dt;
+    const h = Math.min(dt, 1 / 30) / SUBSTEPS;
     const gust = Math.sin(time * 9) * 0.5 + Math.sin(time * 15.7) * 0.3;
-    this.step(Math.min(dt, 1 / 30), gust * wind * 0.12, -16 + Math.abs(gust) * wind * 0.08, -PRESS - wind * 0.05, true);
+    const wind = [air.x + gust * 4, gust * 3, air.z];
+    for (let k = 0; k < SUBSTEPS; k++) this.step(h, wind, true);
     this.write();
   }
 
@@ -198,34 +222,41 @@ export class Drape {
     const { body } = this.model;
     body.updateMatrixWorld(true);
     const v = new THREE.Vector3();
-    const w = new THREE.Vector3();
-    const spin = (Math.random() - 0.5) * 6;
+    const spin = (Math.random() - 0.5) * 8;
+    const fling = new THREE.Vector3(velocity.x * 0.55 + (Math.random() - 0.5) * 6, 6 + Math.random() * 3, velocity.z * 0.55 + (Math.random() - 0.5) * 6);
     for (let i = 0; i < this.p.length; i += 3) {
       v.set(this.p[i], this.p[i + 1], this.p[i + 2]).applyMatrix4(body.matrixWorld);
-      const lift = 7 + Math.random() * 2 + spin * (this.p[i] / WIDTH);
-      w.copy(velocity).multiplyScalar(0.85).setY(lift);
+      const twist = spin * ((this.p[i] + this.p[i + 2]) / 6);
       this.p.set([v.x, v.y, v.z], i);
-      this.q.set([v.x - w.x * STEP, v.y - w.y * STEP, v.z - w.z * STEP], i);
+      this.q.set([v.x - fling.x * TICK, v.y - (fling.y + twist) * TICK, v.z - fling.z * TICK], i);
     }
     this.mesh.removeFromParent();
-    this.mesh.material = this.mesh.material.clone();
-    this.mesh.material.transparent = true;
     group.add(this.mesh);
     this.flying = true;
     this.write();
   }
 
-  fly(dt) {
+  fly(dt, time) {
     this.age += dt;
-    const drag = Math.exp(-2.4 * dt);
-    for (let i = 0; i < this.p.length; i += 3) {
-      for (let a = 0; a < 3; a++) this.q[i + a] = this.p[i + a] - (this.p[i + a] - this.q[i + a]) * drag;
+    if (this.landed) this.landed += dt;
+    const h = Math.min(dt, 1 / 30) / SUBSTEPS;
+    const still = [0, 0, 0];
+    const sink = Math.max(0, this.landed - FLOAT_TIME) * SINK_SPEED;
+    for (let k = 0; k < SUBSTEPS; k++) {
+      this.step(h, still, false);
+      const { p, q } = this;
+      for (let i = 0; i < p.length; i += 3) {
+        const surface = waveHeight(p[i], p[i + 2], time) - sink;
+        if (p[i + 1] > surface) continue;
+        p[i + 1] = surface;
+        q[i] = p[i] - (p[i] - q[i]) * 0.6;
+        q[i + 1] = p[i + 1];
+        q[i + 2] = p[i + 2] - (p[i + 2] - q[i + 2]) * 0.6;
+        if (!this.landed) this.landed = 1e-3;
+      }
     }
-    this.step(Math.min(dt, 1 / 30), 0, -7, 0, false);
-    for (let i = 1; i < this.p.length; i += 3) if (this.p[i] < 0) this.p[i] = 0;
-    this.mesh.material.opacity = Math.min(1, (FLY_TIME - this.age) / 0.6);
     this.write();
-    return this.age < FLY_TIME;
+    return this.age < LIFETIME && sink < 2.5;
   }
 
   write() {
@@ -239,6 +270,5 @@ export class Drape {
   dispose() {
     this.mesh.removeFromParent();
     this.mesh.geometry.dispose();
-    if (this.flying) this.mesh.material.dispose();
   }
 }
