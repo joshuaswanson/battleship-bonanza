@@ -110,8 +110,12 @@
         <div class="maps">
           <header class="maps-head">
             <button id="btn-maps-back" class="btn btn-small" data-i18n="back">Back</button>
-            <h2 class="maps-title" data-i18n="pickCourse">Pick a course</h2>
+            <h2 class="maps-title" id="maps-title" data-i18n="pickCourse">Pick a course</h2>
           </header>
+          <div class="mode-picks" role="radiogroup">
+            <button class="mode-pick" role="radio" data-mode="race" aria-checked="true" data-i18n="modeRace">Race</button>
+            <button class="mode-pick" role="radio" data-mode="ctf" aria-checked="false" data-i18n="modeCtf">Capture the flag</button>
+          </div>
           <div class="map-cards" id="map-cards" role="radiogroup"></div>
           <button id="btn-go" class="btn btn-big btn-launch" data-i18n="startRace">Start race</button>
         </div>

@@ -1,5 +1,6 @@
 import { t, ordinal } from './i18n.js';
 import { formatTime } from './hud.js';
+import { TEAMS } from './ctf.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -35,16 +36,28 @@ export function awardBadges(boats) {
   return out;
 }
 
+const hex = (color) => `#${color.toString(16).padStart(6, '0')}`;
+
+function matchTitle(ctf, team) {
+  const score = ctf.score.map((n, k) => `<span style="color:${hex(TEAMS[k].color)}">${n}</span>`).join(' : ');
+  if (ctf.winner === null) return score;
+  return `${t(ctf.winner === team ? 'ctf_win' : 'ctf_lose')} ${score}`;
+}
+
 export function renderResults(race) {
   const p = race.player;
+  const ctf = race.mode;
   const badges = awardBadges(race.boats);
-  $('results-title').textContent = p.finished ? t('youFinished', { place: ordinal(p.finishOrder), n: p.finishOrder }) : t('raceOver');
-  $('standings').innerHTML = `<li class="st-head"><span></span><span></span><span></span><span></span><span class="st-mini"><span>${t('colDmg')}</span><span>${t('colKo')}</span><span>${t('colSunk')}</span></span></li>` + race.order
+  if (ctf) $('results-title').innerHTML = matchTitle(ctf, p.team);
+  else $('results-title').textContent = p.finished ? t('youFinished', { place: ordinal(p.finishOrder), n: p.finishOrder }) : t('raceOver');
+  const rows = ctf ? [...race.boats].sort((a, b) => a.team - b.team || b.stats.captures - a.stats.captures || b.stats.kills - a.stats.kills) : race.order;
+  $('standings').innerHTML = `<li class="st-head"><span></span><span></span><span></span><span>${ctf ? t('colCaps') : ''}</span><span class="st-mini"><span>${t('colDmg')}</span><span>${t('colKo')}</span><span>${t('colSunk')}</span></span></li>` + rows
     .map((b) => {
-      const time = b.finished ? formatTime(b.finishTime) : t('lapN', { n: b.lap });
+      const time = ctf ? String(b.stats.captures) : b.finished ? formatTime(b.finishTime) : t('lapN', { n: b.lap });
+      const place = ctf ? `<i class="st-team" style="background:${hex(TEAMS[b.team].color)}"></i>` : ordinal(b.place);
       const items = (badges.get(b) ?? []).map((k) => `<em class="badge badge-${k}">${BADGE_ICONS[k]}${t(BADGE_KEYS[k])}</em>`).join('');
       return `<li class="${b.isPlayer ? 'me' : ''}">
-        <span class="st-place">${ordinal(b.place)}</span>
+        <span class="st-place">${place}</span>
         <span class="st-dot" style="--paint:#${b.color.toString(16).padStart(6, '0')}"></span>
         <span class="st-name">${b.name}<span class="badges">${items}</span></span>
         <span class="st-time">${time}</span>

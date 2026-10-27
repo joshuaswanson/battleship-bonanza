@@ -3,6 +3,7 @@ import { ITEMS, iconSvg } from './items.js';
 import { t, ordinal, itemName } from './i18n.js';
 import { MAX_HP } from './race.js';
 import { COUNT_LAND } from './audio.js';
+import { TEAMS, CAPTURES_TO_WIN } from './ctf.js';
 
 const written = new WeakMap();
 function changed(el, key, value) {
@@ -22,6 +23,8 @@ const setLevel = (el, fraction) => {
   if (changed(el, 'level', level)) el.dataset.level = level;
 };
 
+
+const hex = (color) => `#${color.toString(16).padStart(6, '0')}`;
 
 export function formatTime(seconds) {
   const m = Math.floor(seconds / 60);
@@ -74,7 +77,9 @@ export class Hud {
   setTrack(track) {
     this.track = track;
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-    for (let i = 0; i < track.total; i++) {
+    const arena = track.map.arena;
+    if (arena) [minX, maxX, minZ, maxZ] = [-arena.rx, arena.rx, -arena.rz, arena.rz];
+    for (let i = 0; i < track.total && !arena; i++) {
       if (i === track.N) i = 2 * track.N;
       if (i >= track.total) break;
       minX = Math.min(minX, track.px[i]);
@@ -104,6 +109,8 @@ export class Hud {
     this.center.textContent = '';
     setText(this.warn, '');
     this.of.textContent = t('of', { n: race.boats.length });
+    this.root.classList.toggle('ctf', !!race.mode);
+    this.lastScore = '';
     this.slotsEl.innerHTML = `<div class="ability hull-row">
           <i class="hull-dot"></i>
           <div class="ability-body">
@@ -128,7 +135,7 @@ export class Hud {
     this.slots = [];
     for (const el of this.slotsEl.querySelectorAll('.ability[data-slot]')) this.slots[Number(el.dataset.slot)] = el;
     this.barsEl.innerHTML = race.boats
-      .map((b) => `<div class="boat-bar"><span class="boat-bar-name">${b.name}</span><div class="boat-bar-track"><div class="boat-bar-fill"></div></div></div>`)
+      .map((b) => `<div class="boat-bar"><span class="boat-bar-name"${race.mode ? ` style="color:${hex(TEAMS[b.team].color)}"` : ''}>${b.name}</span><div class="boat-bar-track"><div class="boat-bar-fill"></div></div></div>`)
       .join('');
     this.bars = [...this.barsEl.children].map((el) => {
       el.style.display = 'none';
@@ -227,6 +234,21 @@ export class Hud {
       case 'finish':
         this.pop(t('youFinished', { place: ordinal(e.place), n: e.place }), 'go');
         break;
+      case 'flagTaken': {
+        const player = this.race.player;
+        if (e.by === player) this.pop(t('ctf_youHaveIt'), 'go');
+        else if (e.team === player.team) this.pop(t('ctf_ourFlagTaken'), 'ko');
+        break;
+      }
+      case 'flagCaptured':
+        this.pop(t(e.team === this.race.player.team ? 'ctf_weScored' : 'ctf_theyScored'), e.team === this.race.player.team ? 'go' : 'ko');
+        break;
+      case 'overtime':
+        this.pop(t('ctf_overtime'), 'ko');
+        break;
+      case 'matchEnd':
+        this.pop(t(e.winner === this.race.player.team ? 'ctf_win' : 'ctf_lose'), e.winner === this.race.player.team ? 'go' : 'ko');
+        break;
       case 'feed':
         this.addFeed(e);
         break;
@@ -245,15 +267,16 @@ export class Hud {
   update(race, camera, dt) {
     const p = race.player;
     if (!p) return;
-    if (p.place !== this.lastPlace) {
-      this.place.textContent = ordinal(p.place);
-      this.place.classList.remove('bump');
-      void this.place.offsetWidth;
-      this.place.classList.add('bump');
-      this.lastPlace = p.place;
+    if (race.mode) this.updateScore(race.mode);
+    else {
+      if (p.place !== this.lastPlace) {
+        this.place.textContent = ordinal(p.place);
+        this.bumpPlace();
+        this.lastPlace = p.place;
+      }
+      setText(this.lap, p.finished ? t('finished') : t('lapOf', { n: p.lap, total: race.laps }));
+      setText(this.time, formatTime(p.finished ? p.finishTime : race.clock));
     }
-    setText(this.lap, p.finished ? t('finished') : t('lapOf', { n: p.lap, total: race.laps }));
-    setText(this.time, formatTime(p.finished ? p.finishTime : race.clock));
 
     p.items.forEach((id, i) => {
       const item = ITEMS[id];
@@ -382,6 +405,23 @@ export class Hud {
       p.el.style.opacity = p.age < 0.6 ? 1 : 1 - (p.age - 0.6) / 0.3;
       return true;
     });
+  }
+
+  bumpPlace() {
+    this.place.classList.remove('bump');
+    void this.place.offsetWidth;
+    this.place.classList.add('bump');
+  }
+
+  updateScore(ctf) {
+    const score = ctf.score.join(':');
+    if (score !== this.lastScore) {
+      this.place.innerHTML = ctf.score.map((n, team) => `<span class="score-team" style="--team:${hex(TEAMS[team].color)}">${n}</span>`).join('<span class="score-sep">:</span>');
+      if (this.lastScore) this.bumpPlace();
+      this.lastScore = score;
+    }
+    setText(this.lap, ctf.overtime ? t('ctf_suddenDeath') : t('ctf_firstTo', { n: CAPTURES_TO_WIN }));
+    setText(this.time, formatTime(Math.max(0, ctf.clock)));
   }
 
   updateBars(race, camera) {
@@ -550,7 +590,7 @@ export class Hud {
       if (!b.isPlayer && b.has('camo')) continue;
       const [x, y] = this.toMap(b.pos.x, b.pos.z);
       ctx.globalAlpha = b.alive ? 1 : 0.4;
-      ctx.fillStyle = `#${b.color.toString(16).padStart(6, '0')}`;
+      ctx.fillStyle = hex(race.mode ? TEAMS[b.team].color : b.color);
       ctx.strokeStyle = '#0E2A47';
       ctx.lineWidth = 2.5;
       if (b.isPlayer) {
@@ -574,6 +614,23 @@ export class Hud {
       }
     }
     ctx.globalAlpha = 1;
+    if (race.mode) for (const flag of race.mode.flags) this.drawFlag(flag);
+  }
+
+  drawFlag(flag) {
+    const { ctx } = this;
+    const [x, y] = this.toMap(flag.x, flag.z);
+    ctx.fillStyle = hex(TEAMS[flag.team].color);
+    ctx.strokeStyle = '#0E2A47';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x - 1, y + 2);
+    ctx.lineTo(x - 1, y - 14);
+    ctx.lineTo(x + 10, y - 9);
+    ctx.lineTo(x - 1, y - 4);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
   }
 
   drawMapBase(race, w) {
@@ -600,17 +657,39 @@ export class Hud {
         }
       }
     };
-    band('#0E2A47', 6);
-    band('#7FE6EE', 0);
+    const arena = track.map.arena;
+    if (arena) {
+      const [cx, cy] = this.toMap(0, 0);
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, arena.rx * this.mapScale, arena.rz * this.mapScale, 0, 0, Math.PI * 2);
+      ctx.fillStyle = '#7FE6EE';
+      ctx.strokeStyle = '#0E2A47';
+      ctx.lineWidth = 6;
+      ctx.stroke();
+      ctx.fill();
+      ctx.fillStyle = '#0E2A47';
+      for (const [x, z, r] of arena.islands) {
+        const [ix, iy] = this.toMap(x, z);
+        ctx.beginPath();
+        ctx.arc(ix, iy, Math.max(2.5, r * this.mapScale), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else {
+      band('#0E2A47', 6);
+      band('#7FE6EE', 0);
+    }
 
-    const [sx, sy] = this.toMap(track.px[0], track.pz[0]);
-    ctx.fillStyle = '#FFFFFF';
-    ctx.strokeStyle = '#0E2A47';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(sx, sy, 4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
+    const marks = race.mode ? race.mode.bases.map((base) => [base.x, base.z, hex(TEAMS[base.team].color), 9]) : [[track.px[0], track.pz[0], '#FFFFFF', 4]];
+    for (const [x, z, color, r] of marks) {
+      const [sx, sy] = this.toMap(x, z);
+      ctx.fillStyle = color;
+      ctx.strokeStyle = '#0E2A47';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(sx, sy, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
 
     for (const f of race.features.all) {
       const [fx, fy] = this.toMap(f.x, f.z);

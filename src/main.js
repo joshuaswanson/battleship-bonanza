@@ -8,6 +8,8 @@ import * as THREE from 'three';
 import { createTrack } from './track.js';
 import { createWorld, buildBudget } from './world.js';
 import { MAPS } from './maps.js';
+import { ARENAS } from './arenas.js';
+import { CaptureTheFlag } from './ctf.js';
 import { Recorder, Replay } from './replay.js';
 import { Hints } from './hints.js';
 import { Director } from './director.js';
@@ -112,19 +114,24 @@ const BUILDERS = {
   docks: () => import('./docks.js').then((m) => m.createDocks),
 };
 
-function prepareVenue(id) {
-  if (venues[id]) return Promise.resolve(venues[id]);
-  building[id] ??= (async () => {
+const ARENA_PREFIX = 'ctf:';
+const isArena = (key) => key.startsWith(ARENA_PREFIX);
+const mapOf = (key) => (isArena(key) ? ARENAS[key.slice(ARENA_PREFIX.length)] : MAPS[key]);
+
+function prepareVenue(key) {
+  if (venues[key]) return Promise.resolve(venues[key]);
+  building[key] ??= (async () => {
     const group = new THREE.Group();
     group.visible = false;
     group.matrixWorldAutoUpdate = false;
-    const track = createTrack(MAPS[id]);
-    const world = BUILDERS[id] ? await (await BUILDERS[id]())(group, track, fx) : createWorld(group, track);
+    const map = mapOf(key);
+    const track = createTrack(map);
+    const world = BUILDERS[map.id] ? await (await BUILDERS[map.id]())(group, track, fx) : createWorld(group, track);
     scene.add(group);
-    venues[id] = { track, world, group };
-    return venues[id];
+    venues[key] = { track, world, group };
+    return venues[key];
   })();
-  return building[id];
+  return building[key];
 }
 
 function disposeVenue(id) {
@@ -166,6 +173,7 @@ function useVenue(id) {
 function pickMap(attract) {
   if (import.meta.env.DEV && window.__bb?.map) return window.__bb.map;
   if (attract) return 'bay';
+  if (setup.mode === 'ctf') return ARENA_PREFIX + (ARENAS[setup.arena] ? setup.arena : Object.keys(ARENAS)[0]);
   if (MAPS[setup.map]) return setup.map;
   const ids = Object.keys(MAPS);
   return ids[Math.floor(Math.random() * ids.length)];
@@ -210,6 +218,11 @@ function makeDefs(player) {
   return defs;
 }
 
+function makeTeams(player) {
+  let allies = 0;
+  return makeDefs(player).map((def) => ({ ...def, team: def.isPlayer || allies++ < 2 ? 0 : 1 }));
+}
+
 let mode = 'title';
 let race = null;
 let resultsTimer = 0;
@@ -228,7 +241,9 @@ function newRace(attract, map = pickMap(attract)) {
   fx.decals.clear();
   useVenue(map);
   current.world.chopper?.reset();
-  race = new Race({ scene, track: current.track, fx, sfx: attract ? SILENT : sfx, shores: current.world.shores, solid: current.world.solid, raycast: current.world.raycast ?? null, chopper: current.world.chopper ?? null, hazards: current.world.hazards ?? null, defs: makeDefs(attract ? null : setup), attract });
+  const ctf = isArena(map) ? new CaptureTheFlag({ scene, track: current.track }) : null;
+  const defs = ctf ? makeTeams(setup) : makeDefs(attract ? null : setup);
+  race = new Race({ scene, track: current.track, fx, sfx: attract ? SILENT : sfx, shores: current.world.shores, solid: current.world.solid, raycast: current.world.raycast ?? null, chopper: current.world.chopper ?? null, hazards: current.world.hazards ?? null, mode: ctf, defs, attract });
   if (!attract) recorder = new Recorder(race, fx);
   cam.snap = true;
 }
@@ -290,7 +305,35 @@ const wipe = createWipe($('wipe'), sfx);
 const MAP_CHOICES = ['bay', 'jungle', 'canyon', 'alps', 'venice', 'midway', 'docks', 'random'];
 const die = (pips, cls) => `<svg class="die ${cls}" viewBox="0 0 40 40"><rect x="3" y="3" width="34" height="34" rx="9" fill="#fff" stroke="#0E2A47" stroke-width="3.5"/>${pips.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="3.6" fill="#0E2A47"/>`).join('')}</svg>`;
 const DICE = die([[12, 12], [20, 20], [28, 28]], 'die-a') + die([[12, 12], [28, 12], [12, 28], [28, 28], [20, 20]], 'die-b');
+function renderModes() {
+  const ctf = setup.mode === 'ctf';
+  for (const button of document.querySelectorAll('.mode-pick')) button.setAttribute('aria-checked', String(button.dataset.mode === (ctf ? 'ctf' : 'race')));
+  $('maps-title').textContent = t(ctf ? 'pickArena' : 'pickCourse');
+  $('btn-go').textContent = t(ctf ? 'startMatch' : 'startRace');
+}
+
+function renderArenas() {
+  setup.arena = ARENAS[setup.arena] ? setup.arena : Object.keys(ARENAS)[0];
+  $('map-cards').classList.add('arenas');
+  $('map-cards').innerHTML = Object.keys(ARENAS).map((id, i) => `<button class="map-card" role="radio" data-arena="${id}" aria-checked="${setup.arena === id}" style="--i:${i}">
+      <div class="map-art" style="background-image:url('${import.meta.env.BASE_URL}maps/${id}.jpg')"></div>
+      <div class="map-text"><h3>${t(`map_${id}`)}</h3><p>${t(`arenaBlurb_${id}`)}</p></div>
+    </button>`).join('');
+  for (const card of document.querySelectorAll('.map-card')) {
+    card.addEventListener('click', () => {
+      setup.arena = card.dataset.arena;
+      saveSetup();
+      sfx.play('pick');
+      for (const c of document.querySelectorAll('.map-card')) c.setAttribute('aria-checked', String(c === card));
+    });
+    card.addEventListener('dblclick', () => wipe(startRace));
+  }
+}
+
 function renderMaps() {
+  renderModes();
+  if (setup.mode === 'ctf') return renderArenas();
+  $('map-cards').classList.remove('arenas');
   $('map-cards').innerHTML = MAP_CHOICES.map((id, i) => {
     const art = id === 'random' ? 'map-art random' : 'map-art';
     const tile = (map) => `background-image:url('${import.meta.env.BASE_URL}maps/${map}.jpg')`;
@@ -314,6 +357,7 @@ function renderMaps() {
 function goMaps() {
   if (!setup.items.every(Boolean)) return;
   setup.map ??= 'random';
+  setup.mode ??= 'race';
   saveSetup();
   mode = 'maps';
   showScreen('screen-maps');
@@ -343,9 +387,10 @@ async function startRace() {
 }
 
 let loading = false;
-async function showLoading(map, ready) {
-  $('loading-title').textContent = t(`map_${map}`);
-  $('loading-blurb').textContent = t(`mapBlurb_${map}`);
+async function showLoading(key, ready) {
+  const id = mapOf(key).id;
+  $('loading-title').textContent = t(`map_${id}`);
+  $('loading-blurb').textContent = t(isArena(key) ? `arenaBlurb_${id}` : `mapBlurb_${id}`);
   $('loading').classList.add('on');
   loading = true;
   buildBudget.ms = 40;
@@ -430,6 +475,15 @@ $('btn-back').addEventListener('click', () => wipe(goTitle));
 $('btn-start').addEventListener('click', () => wipe(goMaps));
 $('btn-maps-back').addEventListener('click', () => wipe(goLoadout));
 $('btn-go').addEventListener('click', () => wipe(startRace));
+for (const button of document.querySelectorAll('.mode-pick')) {
+  button.addEventListener('click', () => {
+    if (setup.mode === button.dataset.mode) return;
+    setup.mode = button.dataset.mode;
+    saveSetup();
+    sfx.play('pick');
+    renderMaps();
+  });
+}
 let settingsOpener = null;
 function openSettings(opener) {
   settingsOpener = opener;
@@ -516,7 +570,7 @@ function handleEvents() {
     if (e.type === 'ko') cam.shake = 1.6;
     if (e.type === 'lockShake') cam.bump(e.amount);
     if (e.type === 'warp') cam.lift(e.dy);
-    if (e.type === 'finish') resultsTimer = 3.5;
+    if (e.type === 'finish' || e.type === 'matchEnd') resultsTimer = 3.5;
     if (e.type === 'go') sfx.playMusic('race');
   }
   race.events.length = 0;
@@ -560,6 +614,7 @@ function frame(now) {
     if (mode === 'race') hints.update(dt, race, state, pressed);
     fx.update(dt);
     current.world.update(time, dt, camera);
+    race.mode?.animate(time);
     if (current.world.events?.length) {
       for (const e of current.world.events.splice(0)) {
         const near = Math.max(0, 1 - e.pos.distanceTo(camera.position) / 320);
