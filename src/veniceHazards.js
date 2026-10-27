@@ -67,6 +67,7 @@ export class Laundry {
     this.frozen = false;
     this.obstacles = [];
     this.boats = [];
+    this.scale = 1;
     this.uniforms = { uTime: { value: 0 } };
     this.lines = lines.map((idx) => this.buildLine(idx, rand));
     this.sheets = this.lines.flatMap((l) => l.sheets);
@@ -146,18 +147,20 @@ export class Laundry {
       if (s.on) s.grow = Math.min(1, s.grow + dt * 2);
       else if ((s.timer -= dt) <= 0) Object.assign(s, { on: true, grow: 0 });
     }
+    const local = 1 / this.scale;
     race.boats.forEach((b, k) => {
       b.blind = b.alive ? Math.max(0, b.blind - dt) : 0;
       if (!b.alive || b.yOffset < 1 || race.time < (b.laundryHit ?? 0)) return;
+      const y = b.yOffset * local;
       for (const line of this.lines) {
-        const rx = b.pos.x - line.x;
-        const rz = b.pos.z - line.z;
-        if (Math.abs(rx * Math.sin(line.heading) + rz * Math.cos(line.heading)) > HULL_L) continue;
+        const rx = b.pos.x * local - line.x;
+        const rz = b.pos.z * local - line.z;
+        if (Math.abs(rx * Math.sin(line.heading) + rz * Math.cos(line.heading)) > HULL_L * local) continue;
         const lateral = rx * line.nx + rz * line.nz;
-        const sheet = line.sheets.find((s) => s.on && Math.abs(lateral - s.center) < s.width / 2 + HULL_W * 0.6);
+        const sheet = line.sheets.find((s) => s.on && Math.abs(lateral - s.center) < s.width / 2 + HULL_W * 0.6 * local);
         if (!sheet) continue;
         const top = this.lineY(line, sheet.center);
-        if (b.yOffset > top || b.yOffset + BOAT_TOP < top - SHEET_H * sheet.grow) continue;
+        if (y > top || y + BOAT_TOP * local < top - SHEET_H * sheet.grow) continue;
         this.snag(race, b, k, sheet);
         break;
       }
@@ -193,13 +196,14 @@ export class Laundry {
     this.sheetMesh.instanceMatrix.needsUpdate = true;
     let count = 0;
     const color = new THREE.Color();
+    const toLocal = new THREE.Matrix4().makeScale(1 / this.scale, 1 / this.scale, 1 / this.scale);
     this.boats.forEach((b, k) => {
       if (!(b.blind > 0) || count >= this.drapeMesh.instanceMatrix.count) return;
       const size = Math.max(0, Math.min(1, (BLIND_TIME - b.blind) / 0.15, b.blind / 0.3));
       const { root, body } = b.model;
       root.updateMatrix();
       body.updateMatrix();
-      this.drapeMesh.setMatrixAt(count, m.makeScale(size, size, size).premultiply(body.matrix).premultiply(root.matrix));
+      this.drapeMesh.setMatrixAt(count, m.makeScale(size, size, size).premultiply(body.matrix).premultiply(root.matrix).premultiply(toLocal));
       this.drapeMesh.setColorAt(count++, color.setHex(CLOTHS[this.drapeColor[k]]));
     });
     this.drapeMesh.count = count;

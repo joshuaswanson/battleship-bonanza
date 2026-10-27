@@ -111,6 +111,7 @@ function scaleWorld(group, world, scale) {
   }
   scenery.scale.setScalar(scale);
   group.add(scenery);
+  if (world.hazards) world.hazards.scale = scale;
   world.shores = world.shores.map((b) => ({ ...b, x: b.x * scale, z: b.z * scale, rx: b.rx * scale, rz: b.rz * scale }));
   if (world.solid) {
     const solid = world.solid;
