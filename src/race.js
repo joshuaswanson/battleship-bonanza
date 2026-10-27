@@ -253,7 +253,7 @@ export class Race {
     const fork = t.forkNear(b.trackIdx);
     const choice = fork ? b.ai?.routes?.[fork.id] : undefined;
     let pr = t.project(b.pos.x, b.pos.z, b.trackIdx, 60, choice === undefined ? undefined : choice ? fork.id : -1);
-    if (t.routes.length && Math.abs(pr.lateral) > t.hw[pr.idx] - 1) {
+    if (t.routes.length && Math.abs(pr.lateral) > Math.min(t.hw[pr.idx], this.edgeLimit(pr)) - 1) {
       const free = t.project(b.pos.x, b.pos.z);
       if (free.route !== pr.route && Math.abs(free.lateral) < Math.abs(pr.lateral) - (t.hw[pr.idx] - t.hw[free.idx])) pr = free;
     }
@@ -269,7 +269,7 @@ export class Race {
     if (b.offCourse > 0 && b.speed > OFF_COURSE_SPEED * BASE_SPEED) b.speed *= Math.exp(-1.5 * dt);
     this.collideShores(b);
 
-    const lim = t.reach ? t.reach[pr.lateral > 0 ? 1 : 0][pr.idx] : t.hw[pr.idx] + (t.banked ? -(t.map.bankMargin ?? BANK_MARGIN) : OUTER_LIMIT);
+    const lim = this.edgeLimit(pr);
     const overBank = b.air && this.solid && Math.abs(pr.lateral) > lim && Math.abs(pr.lateral) < lim + FALL_OVER_BANK && (b.air.fall || this.overDivider(b, pr));
     if (overBank) this.tumbleOnBank(b, pr);
     else if (Math.abs(pr.lateral) > lim) {
@@ -296,6 +296,11 @@ export class Race {
       const facing = fx * t.tx[pr.idx] + fz * t.tz[pr.idx];
       b.wrongWay = facing < -0.3 && b.speed > 4 ? b.wrongWay + dt : 0;
     }
+  }
+
+  edgeLimit(pr) {
+    const t = this.track;
+    return t.reach ? t.reach[pr.lateral > 0 ? 1 : 0][pr.idx] : t.hw[pr.idx] + (t.banked ? -(t.map.bankMargin ?? BANK_MARGIN) : OUTER_LIMIT);
   }
 
   overDivider(b, pr) {
