@@ -2,18 +2,20 @@ import * as THREE from 'three';
 import { HULL_L, HULL_W, halfWidth, sheer } from './boatModel.js';
 import { waveHeight } from './water.js';
 
-const COLS = 14;
-const ROWS = 11;
+const COLS = 18;
+const ROWS = 14;
 const GROW = 1.25;
 const GAP = 0.08;
 const BUMPER = 0.22;
 const SUBSTEPS = 3;
 const TICK = 1 / (60 * SUBSTEPS);
-const GRAVITY = -16;
-const AIR_DRAG = 0.12;
-const IMPACT = 0.45;
-const CLING = 0.25;
-const TOP = [2.6, 4];
+const GRAVITY = -12;
+const AIR_DRAG = 0.6;
+const IMPACT = 0.7;
+const WRAP = 14;
+const AXIS_Y = 1.5;
+const AXIS_END = HULL_L * 0.35;
+const ABOVE = [0.6, 2];
 const FLOAT_TIME = 0.9;
 const SINK_SPEED = 0.7;
 const LIFETIME = 4.5;
@@ -85,12 +87,11 @@ export class Drape {
     this.p = new Float32Array(this.count * 3);
     this.q = new Float32Array(this.count * 3);
     this.touch = new Uint8Array(this.count);
-    this.stuck = new Uint8Array(this.count);
-    this.anchor = new Float32Array(this.count * 3);
-    this.clinging = 0;
     this.landed = 0;
     this.age = 0;
     this.flying = false;
+    const crest = Math.max(sheer(HULL_L) + 0.3, ...this.boxes.filter((b) => b.max.z > 0).map((b) => b.max.y));
+    const top = Math.max(crest + ABOVE[0], Math.min(crest + ABOVE[1], hit.top));
     const width = hit.width * GROW;
     const height = hit.height * GROW;
     this.links = links(width / (COLS - 1), height / (ROWS - 1));
@@ -106,7 +107,7 @@ export class Drape {
         const i = (r * COLS + c) * 3;
         const along = (c / (COLS - 1) - 0.5) * width;
         this.p[i] = cx + hit.across.x * along;
-        this.p[i + 1] = Math.max(TOP[0], Math.min(TOP[1], hit.top)) - (r / (ROWS - 1)) * height;
+        this.p[i + 1] = top - (r / (ROWS - 1)) * height;
         this.p[i + 2] = cz + hit.across.z * along;
         this.q[i] = this.p[i] - hit.dir.x * v;
         this.q[i + 1] = this.p[i + 1] - hit.dir.y * v;
@@ -122,12 +123,23 @@ export class Drape {
 
   step(dt, air, onBoat) {
     const { p, q, touch } = this;
+    const pull = [0, 0, 0];
     for (let i = 0; i < p.length; i += 3) {
+      if (onBoat) {
+        const z = Math.max(-HULL_L, Math.min(AXIS_END, p[i + 2]));
+        const dx = -p[i];
+        const dy = AXIS_Y - p[i + 1];
+        const dz = z - p[i + 2];
+        const d = Math.hypot(dx, dy, dz) || 1;
+        pull[0] = (dx / d) * WRAP;
+        pull[1] = (dy / d) * WRAP;
+        pull[2] = (dz / d) * WRAP;
+      }
       for (let a = 0; a < 3; a++) {
         const v = p[i + a] - q[i + a];
         const drag = AIR_DRAG * (air[a] - v / dt);
         q[i + a] = p[i + a];
-        p[i + a] += v * 0.99 + (drag + (a === 1 ? GRAVITY : 0)) * dt * dt;
+        p[i + a] += v * 0.99 + (drag + pull[a] + (a === 1 ? GRAVITY : 0)) * dt * dt;
       }
     }
     for (let pass = 0; pass < 4; pass++) {
@@ -149,19 +161,10 @@ export class Drape {
       if (onBoat) for (let n = 0; n < this.count; n++) touch[n] = this.collide(n * 3) || (pass > 0 && touch[n]);
     }
     if (!onBoat) return;
-    const { stuck, anchor } = this;
     for (let n = 0; n < this.count; n++) {
-      const i = n * 3;
-      if (stuck[n]) {
-        for (let a = 0; a < 3; a++) p[i + a] = q[i + a] = anchor[i + a];
-        continue;
-      }
       if (!touch[n]) continue;
-      for (let a = 0; a < 3; a++) q[i + a] = p[i + a] - (p[i + a] - q[i + a]) * 0.15;
-      if (this.clinging > CLING) {
-        stuck[n] = 1;
-        for (let a = 0; a < 3; a++) anchor[i + a] = p[i + a];
-      }
+      const i = n * 3;
+      for (let a = 0; a < 3; a++) q[i + a] = p[i + a] - (p[i + a] - q[i + a]) * 0.1;
     }
   }
 
@@ -210,7 +213,6 @@ export class Drape {
   }
 
   flutter(dt, air, time) {
-    this.clinging += dt;
     const h = Math.min(dt, 1 / 30) / SUBSTEPS;
     const gust = Math.sin(time * 9) * 0.5 + Math.sin(time * 15.7) * 0.3;
     const wind = [air.x + gust * 4, gust * 3, air.z];
