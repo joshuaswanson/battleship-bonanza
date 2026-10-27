@@ -645,98 +645,25 @@ kbd {
 }
 
 .map-cards {
-  display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
-  gap: 1rem;
-  width: min(1240px, 100%);
-}
-
-.map-card:not(.surprise) {
-  grid-column: span 2;
-}
-
-.map-card:nth-child(5) {
-  grid-column: 2 / span 2;
-}
-
-.map-card.surprise {
-  grid-column: 1 / -1;
-  justify-self: center;
-  flex-direction: row;
-  align-items: center;
-  gap: 0.2rem;
-  padding: 0.35rem 1.4rem 0.35rem 0.5rem;
-  border-radius: 999px;
-}
-
-.map-card.surprise .map-art {
-  position: relative;
-  flex: none;
-  width: 74px;
-  height: 46px;
-  aspect-ratio: auto;
-  border: none;
-  background: none;
-}
-
-.map-card.surprise .map-text {
   display: flex;
-  align-items: baseline;
-  gap: 0.7rem;
-  padding: 0;
+  gap: 1.1rem;
+  width: min(1240px, 100%);
+  padding: 0.6rem 1.2rem 1.4rem;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scroll-padding: 0 1.2rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--sun) transparent;
 }
 
-.map-card.surprise .map-text h3 {
-  margin: 0;
-  white-space: nowrap;
-}
-
-.die {
-  position: absolute;
-  width: 36px;
-  height: 36px;
-  filter: drop-shadow(0 3px 0 #0e2a47);
-  transition: transform 260ms cubic-bezier(0.2, 1.6, 0.4, 1);
-}
-
-.die-a {
-  left: 4px;
-  top: 6px;
-  transform: rotate(-14deg);
-}
-
-.die-b {
-  left: 32px;
-  top: 2px;
-  transform: rotate(12deg);
-}
-
-.map-card.surprise:hover .die-a {
-  transform: rotate(-200deg) translateY(-4px);
-}
-
-.map-card.surprise:hover .die-b {
-  transform: rotate(190deg) translateY(-6px);
-}
-
-.map-card:not(.surprise) .map-art {
-  aspect-ratio: auto;
-  height: clamp(36px, calc((100vh - 470px) / 2), 190px);
-}
-
-@media (max-height: 560px) {
-  .map-card:not(.surprise) .map-art {
-    height: clamp(36px, calc((100vh - 390px) / 2), 200px);
-  }
-}
-
-@media (max-height: 420px) {
-  .map-text p {
-    display: none;
-  }
+.map-cards.arenas {
+  justify-content: center;
 }
 
 .map-card {
+  flex: 0 0 clamp(220px, 24vw, 300px);
+  scroll-snap-align: start;
   display: flex;
   flex-direction: column;
   padding: 0;
@@ -751,7 +678,7 @@ kbd {
   cursor: pointer;
   transition: transform 140ms ease, box-shadow 140ms ease;
   animation: card-in 420ms cubic-bezier(0.2, 1.5, 0.4, 1) both;
-  animation-delay: calc(var(--i) * 90ms + 150ms);
+  animation-delay: calc(var(--i) * 70ms + 150ms);
 }
 
 @keyframes card-in {
@@ -774,10 +701,22 @@ kbd {
 
 .map-art {
   position: relative;
-  aspect-ratio: 16 / 8.5;
+  height: clamp(110px, 30vh, 220px);
   border-bottom: 4px solid var(--ink);
   background-size: cover;
   background-position: center;
+}
+
+.map-art.random {
+  display: grid;
+  place-items: center;
+  background: var(--sea);
+}
+
+.map-art.random .dice {
+  position: relative;
+  width: 112px;
+  height: 92px;
 }
 
 .map-text {
@@ -798,35 +737,62 @@ kbd {
   line-height: 1.35;
 }
 
-.mode-picks {
+@media (max-height: 420px) {
+  .map-text p {
+    display: none;
+  }
+}
+
+.die {
+  position: absolute;
+  width: 56px;
+  height: 56px;
+  filter: drop-shadow(0 4px 0 #0e2a47);
+  transition: transform 260ms cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+
+.die-a {
+  left: 4px;
+  top: 22px;
+  transform: rotate(-14deg);
+}
+
+.die-b {
+  left: 50px;
+  top: 8px;
+  transform: rotate(12deg);
+}
+
+.map-card.surprise:hover .die-a {
+  transform: rotate(-200deg) translateY(-4px);
+}
+
+.map-card.surprise:hover .die-b {
+  transform: rotate(190deg) translateY(-6px);
+}
+
+.mode-cards {
   display: flex;
-  gap: 0.35rem;
-  padding: 0.35rem;
-  background: var(--ink);
-  border-radius: 999px;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1.6rem;
+  width: min(900px, 100%);
 }
 
-.mode-pick {
-  padding: 0.45em 1.3em;
-  font: inherit;
-  font-family: var(--race);
-  font-weight: 900;
-  font-size: 1.35rem;
-  color: var(--foam);
-  background: none;
-  border: none;
-  border-radius: 999px;
-  cursor: pointer;
-  transform: skewX(-8deg);
+.mode-cards .map-card {
+  flex: 0 1 clamp(240px, 34vw, 380px);
 }
 
-.mode-pick[aria-checked='true'] {
-  color: var(--ink);
-  background: var(--sun);
+.mode-cards .map-art {
+  display: grid;
+  place-items: center;
+  height: clamp(120px, 34vh, 250px);
+  background: var(--sea);
 }
 
-.map-cards.arenas .map-card {
-  grid-column: 4 / span 2;
+.mode-cards .map-art svg {
+  width: 62%;
+  height: 80%;
 }
 
 #btn-go {
@@ -834,17 +800,6 @@ kbd {
   min-width: 320px;
   padding-left: 2.2em;
   padding-right: 2.2em;
-}
-
-@media (max-width: 800px) and (min-height: 561px) {
-  .map-cards {
-    grid-template-columns: 1fr;
-  }
-  .map-card:not(.surprise),
-  .map-card.surprise {
-    grid-column: auto;
-    grid-row: auto;
-  }
 }
 
 .title-row {

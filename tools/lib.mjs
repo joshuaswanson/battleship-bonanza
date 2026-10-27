@@ -39,6 +39,8 @@ export async function startRace(page, { map = 'bay', items } = {}) {
   }, map);
   await openShipyard(page, items);
   await page.evaluate(() => document.getElementById('btn-start').click());
+  await page.waitForFunction(() => !document.getElementById('screen-modes').classList.contains('hidden') && !document.getElementById('wipe').classList.contains('on'), { polling: 100 });
+  await page.evaluate(() => document.querySelector('.mode-card[data-mode="race"]').click());
   await page.waitForFunction(() => !document.getElementById('screen-maps').classList.contains('hidden') && !document.getElementById('wipe').classList.contains('on'), { polling: 100 });
   await page.evaluate(() => document.getElementById('btn-go').click());
   await page.waitForFunction(() => window.__bb.race && !window.__bb.race.attract && !document.getElementById('wipe').classList.contains('on'), { polling: 100, timeout: process.env.CI ? 300000 : 60000 });

@@ -8,6 +8,8 @@ for (const map of (process.argv[2] ?? 'bay,jungle,alps,venice,midway,canyon,dock
   await click(page, '#btn-play');
   await settled(page, 'screen-loadout');
   await click(page, '#btn-start');
+  await settled(page, 'screen-modes');
+  await click(page, '.mode-card[data-mode="race"]');
   await settled(page, 'screen-maps');
   await click(page, `.map-card[data-map="${map}"]`);
   await click(page, '#btn-go');

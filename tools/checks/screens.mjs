@@ -32,6 +32,9 @@ check('two locked items keep their slots', (await pick(['jetpack', 'grapple'])) 
 check('free items can swap', (await pick(['spikes', 'saw'])) === 'spikes,saw' && (await page.evaluate(() => !!document.querySelector('.slot-swap'))));
 await page.click('#btn-start');
 await wait(1600);
+await page.screenshot({ path: 'tools/shots/screen-modes.png' });
+await page.click('.mode-card[data-mode="race"]');
+await wait(1600);
 await page.screenshot({ path: 'tools/shots/screen-courses.png' });
 await page.click('.map-card[data-map="jungle"]');
 await page.click('#btn-go');

@@ -274,7 +274,7 @@ function endReplay() {
   $('btn-replay').focus();
 }
 
-const screens = ['screen-title', 'screen-howto', 'screen-settings', 'screen-credits', 'screen-loadout', 'screen-maps', 'screen-pause', 'screen-results'];
+const screens = ['screen-title', 'screen-howto', 'screen-settings', 'screen-credits', 'screen-loadout', 'screen-modes', 'screen-maps', 'screen-pause', 'screen-results'];
 function showScreen(id) {
   for (const s of screens) $(s).classList.toggle('hidden', s !== id);
   loadout.active = false;
@@ -307,7 +307,7 @@ const die = (pips, cls) => `<svg class="die ${cls}" viewBox="0 0 40 40"><rect x=
 const DICE = die([[12, 12], [20, 20], [28, 28]], 'die-a') + die([[12, 12], [28, 12], [12, 28], [28, 28], [20, 20]], 'die-b');
 function renderModes() {
   const ctf = setup.mode === 'ctf';
-  for (const button of document.querySelectorAll('.mode-pick')) button.setAttribute('aria-checked', String(button.dataset.mode === (ctf ? 'ctf' : 'race')));
+  for (const card of document.querySelectorAll('.mode-card')) card.setAttribute('aria-checked', String(card.dataset.mode === (ctf ? 'ctf' : 'race')));
   $('maps-title').textContent = t(ctf ? 'pickArena' : 'pickCourse');
   $('btn-go').textContent = t(ctf ? 'startMatch' : 'startRace');
 }
@@ -339,7 +339,7 @@ function renderMaps() {
     const tile = (map) => `background-image:url('${import.meta.env.BASE_URL}maps/${map}.jpg')`;
     const style = id === 'random' ? '' : ` style="${tile(id)}"`;
     return `<button class="map-card${id === 'random' ? ' surprise' : ''}" role="radio" data-map="${id}" aria-checked="${setup.map === id}" style="--i:${i}">
-      <div class="${art}"${style}>${id === 'random' ? DICE : ''}</div>
+      <div class="${art}"${style}>${id === 'random' ? `<div class="dice">${DICE}</div>` : ''}</div>
       <div class="map-text"><h3>${t(`map_${id}`)}</h3><p>${t(`mapBlurb_${id}`)}</p></div>
     </button>`;
   }).join('');
@@ -354,10 +354,18 @@ function renderMaps() {
   }
 }
 
-function goMaps() {
+function goModes() {
   if (!setup.items.every(Boolean)) return;
-  setup.map ??= 'random';
   setup.mode ??= 'race';
+  saveSetup();
+  mode = 'modes';
+  showScreen('screen-modes');
+  renderModes();
+  document.querySelector('.mode-card[aria-checked="true"]')?.focus();
+}
+
+function goMaps() {
+  setup.map ??= 'random';
   saveSetup();
   mode = 'maps';
   showScreen('screen-maps');
@@ -472,16 +480,16 @@ $('btn-howto-close').addEventListener('click', () => {
   howtoOpener?.focus();
 });
 $('btn-back').addEventListener('click', () => wipe(goTitle));
-$('btn-start').addEventListener('click', () => wipe(goMaps));
-$('btn-maps-back').addEventListener('click', () => wipe(goLoadout));
+$('btn-start').addEventListener('click', () => wipe(goModes));
+$('btn-modes-back').addEventListener('click', () => wipe(goLoadout));
+$('btn-maps-back').addEventListener('click', () => wipe(goModes));
 $('btn-go').addEventListener('click', () => wipe(startRace));
-for (const button of document.querySelectorAll('.mode-pick')) {
-  button.addEventListener('click', () => {
-    if (setup.mode === button.dataset.mode) return;
-    setup.mode = button.dataset.mode;
+for (const card of document.querySelectorAll('.mode-card')) {
+  card.addEventListener('click', () => {
+    setup.mode = card.dataset.mode;
     saveSetup();
     sfx.play('pick');
-    renderMaps();
+    wipe(goMaps);
   });
 }
 let settingsOpener = null;
