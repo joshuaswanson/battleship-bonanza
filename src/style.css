@@ -613,7 +613,8 @@ kbd {
   align-items: center;
   justify-content: center;
   gap: 1.1rem;
-  padding: 1.5rem;
+  --pad: 1.5rem;
+  padding: var(--pad);
   background: rgba(14, 42, 71, 0.35);
 }
 
@@ -647,14 +648,22 @@ kbd {
 .map-cards {
   display: flex;
   gap: 1.1rem;
-  width: min(1240px, 100%);
-  padding: 0.6rem 1.2rem 1.4rem;
+  align-self: stretch;
+  margin: 0 calc(-1 * var(--pad));
+  padding: 0.6rem calc(var(--pad) + 0.5rem) 1.4rem;
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scroll-snap-type: x mandatory;
-  scroll-padding: 0 1.2rem;
-  scrollbar-width: thin;
-  scrollbar-color: var(--sun) transparent;
+  scroll-padding: 0 calc(var(--pad) + 0.5rem);
+  scrollbar-width: none;
+}
+
+.map-cards::-webkit-scrollbar {
+  display: none;
+}
+
+.map-cards > .map-card:last-child {
+  margin-right: 0.9rem;
 }
 
 .map-cards.arenas {
@@ -784,15 +793,8 @@ kbd {
 }
 
 .mode-cards .map-art {
-  display: grid;
-  place-items: center;
   height: clamp(120px, 34vh, 250px);
-  background: var(--sea);
-}
-
-.mode-cards .map-art svg {
-  width: 62%;
-  height: 80%;
+  background-color: var(--sea);
 }
 
 #btn-go {
@@ -3019,7 +3021,7 @@ kbd {
 
   .maps {
     gap: 0.7rem;
-    padding: 0.6rem;
+    --pad: 0.6rem;
   }
   .maps-title {
     font-size: 1.8rem;

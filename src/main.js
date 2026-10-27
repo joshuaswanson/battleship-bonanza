@@ -307,7 +307,6 @@ const die = (pips, cls) => `<svg class="die ${cls}" viewBox="0 0 40 40"><rect x=
 const DICE = die([[12, 12], [20, 20], [28, 28]], 'die-a') + die([[12, 12], [28, 12], [12, 28], [28, 28], [20, 20]], 'die-b');
 function renderModes() {
   const ctf = setup.mode === 'ctf';
-  for (const card of document.querySelectorAll('.mode-card')) card.setAttribute('aria-checked', String(card.dataset.mode === (ctf ? 'ctf' : 'race')));
   $('maps-title').textContent = t(ctf ? 'pickArena' : 'pickCourse');
   $('btn-go').textContent = t(ctf ? 'startMatch' : 'startRace');
 }
@@ -361,7 +360,7 @@ function goModes() {
   mode = 'modes';
   showScreen('screen-modes');
   renderModes();
-  document.querySelector('.mode-card[aria-checked="true"]')?.focus();
+  document.querySelector(`.mode-card[data-mode="${setup.mode}"]`)?.focus();
 }
 
 function goMaps() {
@@ -484,6 +483,7 @@ $('btn-start').addEventListener('click', () => wipe(goModes));
 $('btn-modes-back').addEventListener('click', () => wipe(goLoadout));
 $('btn-maps-back').addEventListener('click', () => wipe(goModes));
 $('btn-go').addEventListener('click', () => wipe(startRace));
+for (const art of document.querySelectorAll('[data-shot]')) art.style.backgroundImage = `url('${import.meta.env.BASE_URL}modes/${art.dataset.shot}.jpg')`;
 for (const card of document.querySelectorAll('.mode-card')) {
   card.addEventListener('click', () => {
     setup.mode = card.dataset.mode;
