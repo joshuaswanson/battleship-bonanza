@@ -34,9 +34,9 @@ function relax(points, passes) {
   return pts;
 }
 
-export function createTrack(map, scale = 1) {
+export function createTrack(map) {
   const curve = new THREE.CatmullRomCurve3(
-    map.control.map(([x, z]) => new THREE.Vector3(x * scale, 0, z * scale)),
+    map.control.map(([x, z]) => new THREE.Vector3(x, 0, z)),
     true,
     'centripetal',
   );
@@ -48,7 +48,7 @@ export function createTrack(map, scale = 1) {
   const wrap = (i) => ((i % N) + N) % N;
   const ahead = (from, s) => (((s - from) % length) + length) % length;
 
-  const keys = (map.widths ?? [[0, map.halfWidth]]).map(([f, w]) => [f, w * scale]);
+  const keys = (map.widths ?? [[0, map.halfWidth]]).map(([f, w]) => [f, w]);
   const routeSpecs = (map.routes ?? []).map((route) => {
     const from = wrap(Math.round(route.from * N));
     const to = wrap(Math.round(route.to * N));
@@ -66,7 +66,7 @@ export function createTrack(map, scale = 1) {
       for (let k = 0; k <= steps; k++) {
         const i = (from + k) % N;
         const along = k * spacing;
-        const d = route.side * route.offset * scale * ease(along) * ease(steps * spacing - along);
+        const d = route.side * route.offset * ease(along) * ease(steps * spacing - along);
         const n = dir(i);
         offsetPoints.push(new THREE.Vector3(points[i].x + n.z * d, 0, points[i].z - n.x * d));
       }
@@ -78,9 +78,9 @@ export function createTrack(map, scale = 1) {
     const path = new THREE.CatmullRomCurve3(
       [
         p(from).clone(),
-        p(from).clone().addScaledVector(dir(from), lead * scale),
-        ...route.via.map(([x, z]) => new THREE.Vector3(x * scale, 0, z * scale)),
-        p(to).clone().addScaledVector(dir(to), -lead * scale),
+        p(from).clone().addScaledVector(dir(from), lead),
+        ...route.via.map(([x, z]) => new THREE.Vector3(x, 0, z)),
+        p(to).clone().addScaledVector(dir(to), -lead),
         p(to).clone(),
       ],
       false,
@@ -124,7 +124,7 @@ export function createTrack(map, scale = 1) {
     const count = spec.samples.length;
     const span = ahead(spec.from * spacing, spec.to * spacing);
     const realLength = spec.path.getLength();
-    const width = (spec.route.halfWidth ?? map.halfWidth) * scale;
+    const width = spec.route.halfWidth ?? map.halfWidth;
     const taper = Math.min(8, Math.floor(count / 4));
     spec.samples.forEach((p, k) => {
       const i = first + k;
@@ -367,8 +367,7 @@ export function createTrack(map, scale = 1) {
     project,
     point,
     heading,
-    halfWidth: map.halfWidth * scale,
-    scale,
+    halfWidth: map.halfWidth,
     widthAt,
     banked: !!(map.river || map.banked),
     map,

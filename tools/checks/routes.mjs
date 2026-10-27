@@ -19,7 +19,7 @@ function sharpestTurn(t, r) {
 }
 
 for (const map of (process.argv[2] ?? 'bay,jungle,alps,venice,midway,canyon,docks').split(',')) {
-  const track = createTrack(MAPS[map], MAPS[map].scale ?? 1);
+  const track = createTrack(MAPS[map]);
   for (const r of track.routes) check(`${map}: route ${r.id} has no hairpin turns`, sharpestTurn(track, r) <= 40, `${sharpestTurn(track, r).toFixed(0)}° per 20 units`);
   const { browser, page } = await launch({ width: 640, height: 400 });
   await startRace(page, { map });

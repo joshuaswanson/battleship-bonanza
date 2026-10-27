@@ -214,8 +214,8 @@ export async function createVenice(group, track, fx) {
 
   const N = track.N;
   const surface = await courseSurface(track, tick, { margin: 220, amp: () => 0.3 });
-  const island = (x, z) => ((x + 10) / 400) ** 2 + ((z - 150) / 265) ** 2 + 0.08 * (noise(x * 2, z * 2) - 0.5) < 1;
-  const lagoon = (x, z) => z < -48 + 10 * Math.sin(x * 0.02);
+  const island = (x, z) => ((x + 11) / 448) ** 2 + ((z - 168) / 297) ** 2 + 0.08 * (noise(x * 1.8, z * 1.8) - 0.5) < 1;
+  const lagoon = (x, z) => z < -54 + 11 * Math.sin(x * 0.018);
   const dry = (x, z) => island(x, z) && !lagoon(x, z);
   const height = (x, z) => {
     if (!dry(x, z)) return -4;
@@ -255,7 +255,7 @@ export async function createVenice(group, track, fx) {
     salute(batch, p.x, p.z);
     taken.push({ x: p.x, z: p.z, r: 18 });
   }
-  sanGiorgio(batch, 40, -200);
+  sanGiorgio(batch, 45, -224);
 
   const bridges = [];
   const curvature = (f) => {
@@ -382,10 +382,10 @@ export async function createVenice(group, track, fx) {
   }
 
   for (let tries = 0, made = 0; made < 26 && tries < 400; tries++) {
-    const x = -300 + rand() * 600;
-    const z = -60 - rand() * 220;
+    const x = -336 + rand() * 672;
+    const z = -67 - rand() * 246;
     const s = surface.sample(x, z);
-    if (s.edge < 6 || !lagoon(x, z) || Math.hypot(x - 40, z + 200) < 50) continue;
+    if (s.edge < 6 || !lagoon(x, z) || Math.hypot(x - 45, z + 224) < 56) continue;
     for (let k = 0; k < 3; k++) batch.add('woodDark', CYL, mat(x + Math.cos(k * 2.1) * 0.5, 1.5, z + Math.sin(k * 2.1) * 0.5, 0.3, 7, 0.3, Math.cos(k * 2.1) * 0.12, 0, Math.sin(k * 2.1) * 0.12));
     batch.add('rope', CYL, mat(x, 3.5, z, 0.9, 0.3, 0.9));
     made++;
