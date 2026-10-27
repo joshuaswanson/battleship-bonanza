@@ -1039,6 +1039,20 @@ kbd {
   transform: translateY(-50%);
 }
 
+.yard-tools {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  gap: 0.5rem;
+}
+
+.yard-tools .btn-icon svg {
+  width: 1.2em;
+  height: 1.2em;
+}
+
 .yard-left,
 .yard-right {
   display: flex;

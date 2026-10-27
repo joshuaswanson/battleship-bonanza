@@ -453,20 +453,32 @@ function openHowto(opener) {
   showScreen('screen-howto');
   $('btn-howto-close').focus();
 }
+function menuScreen() {
+  if (mode === 'paused') showScreen('screen-pause');
+  else if (mode === 'loadout') {
+    showScreen('screen-loadout');
+    loadout.active = true;
+  } else showScreen('screen-title');
+}
 $('btn-howto').addEventListener('click', () => openHowto($('btn-howto')));
+$('btn-yard-howto').addEventListener('click', () => openHowto($('btn-yard-howto')));
 $('btn-pause-howto').addEventListener('click', () => openHowto($('btn-pause-howto')));
 $('btn-howto-close').addEventListener('click', () => {
-  showScreen(mode === 'paused' ? 'screen-pause' : 'screen-title');
+  menuScreen();
   howtoOpener?.focus();
 });
 $('btn-back').addEventListener('click', () => wipe(goTitle));
 $('btn-start').addEventListener('click', () => wipe(goMaps));
 $('btn-maps-back').addEventListener('click', () => wipe(goLoadout));
 $('btn-go').addEventListener('click', () => wipe(startRace));
-$('btn-settings').addEventListener('click', () => {
+let settingsOpener = null;
+function openSettings(opener) {
+  settingsOpener = opener;
   showScreen('screen-settings');
   document.querySelector('.lang[aria-pressed="true"]')?.focus();
-});
+}
+$('btn-settings').addEventListener('click', () => openSettings($('btn-settings')));
+$('btn-yard-settings').addEventListener('click', () => openSettings($('btn-yard-settings')));
 function renderToggles() {
   $('toggle-sound').setAttribute('aria-checked', String(sfx.soundOn));
   $('toggle-music').setAttribute('aria-checked', String(sfx.musicOn));
@@ -492,8 +504,8 @@ $('btn-credits-close').addEventListener('click', () => {
   $('btn-credits').focus();
 });
 $('btn-settings-close').addEventListener('click', () => {
-  showScreen('screen-title');
-  $('btn-settings').focus();
+  menuScreen();
+  settingsOpener?.focus();
 });
 $('btn-resume').addEventListener('click', () => pause(false));
 $('btn-restart').addEventListener('click', startRace);
