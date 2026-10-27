@@ -21,31 +21,6 @@ const BANNER_W = 3.8;
 const BANNER_H = 2.5;
 const CARRY_SCALE = 0.6;
 
-function bannerTexture(color) {
-  const canvas = document.createElement('canvas');
-  canvas.width = 128;
-  canvas.height = 84;
-  const ctx = canvas.getContext('2d');
-  const hex = `#${color.toString(16).padStart(6, '0')}`;
-  ctx.fillStyle = hex;
-  ctx.fillRect(0, 0, 128, 84);
-  ctx.fillStyle = 'rgba(14, 42, 71, 0.28)';
-  ctx.fillRect(0, 0, 128, 9);
-  ctx.fillRect(0, 75, 128, 9);
-  ctx.fillStyle = '#ffffff';
-  ctx.beginPath();
-  for (let k = 0; k < 10; k++) {
-    const a = -Math.PI / 2 + (k * Math.PI) / 5;
-    const r = k % 2 ? 11 : 25;
-    ctx.lineTo(66 + Math.cos(a) * r, 43 + Math.sin(a) * r);
-  }
-  ctx.closePath();
-  ctx.fill();
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  return texture;
-}
-
 const COLS = 12;
 const ROWS = 7;
 const HOIST = 0.18;
@@ -213,7 +188,7 @@ function flagMesh(color) {
   for (const y of [0.5, 1.2]) group.add(outlined(new THREE.CylinderGeometry(0.27, 0.27, 0.3, 12).translate(0, y, 0), toon(color), 0.05));
   group.add(outlined(new THREE.SphereGeometry(0.46, 14, 10).translate(0, POLE + 0.3, 0), toon(0xffd23f), 0.06));
   const banner = new Banner();
-  const cloth = outlined(banner.geometry, toon(0xffffff, { map: bannerTexture(color), side: THREE.DoubleSide }), 0.05);
+  const cloth = outlined(banner.geometry, toon(color, { side: THREE.DoubleSide }), 0.05);
   cloth.frustumCulled = false;
   cloth.children[0].frustumCulled = false;
   group.add(cloth);
