@@ -918,23 +918,27 @@ function archGeometry(span, height, thick, rand) {
 
 function addArch(batch, track, fraction, rand) {
   const idx = track.wrap(Math.round(fraction * track.N));
-  const half = track.halfWidth;
-  const span = half + 11;
+  const p = track.point(idx, 0);
+  return addArchAt(batch, p.x, p.z, track.heading(idx), track.halfWidth + 11, rand);
+}
+
+function addArchAt(batch, x0, z0, heading, span, rand) {
   const height = 26 + rand() * 6;
   const thick = 5 + rand() * 1.5;
-  const p = track.point(idx, 0);
-  const heading = track.heading(idx);
+  const p = { x: x0, z: z0 };
   const slab = archGeometry(span, height, thick, rand).applyMatrix4(mat(p.x, 0, p.z, 1, 1, 1, 0, heading, 0));
   batch.add('rockland', slab);
-  const nx = track.nx[idx];
-  const nz = track.nz[idx];
+  const nx = Math.cos(heading);
+  const nz = -Math.sin(heading);
+  const tx = Math.sin(heading);
+  const tz = Math.cos(heading);
   const probe = new THREE.Mesh(slab, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
   const ray = new THREE.Raycaster();
   for (let k = -3; k <= 3; k++) {
     const lat = (k / 3) * span * 0.75;
     for (const off of [-1.5, 1.5]) {
-      const x = p.x + nx * lat + track.tx[idx] * off;
-      const z = p.z + nz * lat + track.tz[idx] * off;
+      const x = p.x + nx * lat + tx * off;
+      const z = p.z + nz * lat + tz * off;
       ray.set(new THREE.Vector3(x, height + 40, z), new THREE.Vector3(0, -1, 0));
       const hit = ray.intersectObject(probe)[0];
       if (hit && hit.face.normal.y > 0.4) plantTop(batch, x, hit.point.y, z, 1.4, rand, 0.25);
@@ -1108,6 +1112,7 @@ function createMarkerBuoy(kind) {
 }
 
 export function createWorld(scene, track) {
+  if (track.map.arena) return createBayArena(scene, track.map.arena);
   const fog = new THREE.Fog(SKY_HORIZON, 480, 950);
 
   const sky = createSky();
@@ -1230,6 +1235,97 @@ export function createWorld(scene, track) {
         m.rotation.x = Math.sin(t * 1.4 + ph) * 0.12;
         m.rotation.z = Math.cos(t * 1.1 + ph) * 0.12;
         if (m.userData.light) m.userData.light.visible = (t + ph) % 2 < 0.35;
+      }
+    },
+  };
+}
+
+function createBayArena(scene, arena) {
+  const fog = new THREE.Fog(SKY_HORIZON, 480, 950);
+  const sky = createSky();
+  scene.add(sky);
+  scene.add(new THREE.HemisphereLight(0xe8f8ff, 0x3cc4d4, 1.4));
+  const sun = new THREE.DirectionalLight(0xfff0d8, 2.4);
+  sun.position.copy(SUN_DIR).multiplyScalar(100);
+  scene.add(sun);
+  const water = createWater();
+  scene.add(water.mesh);
+
+  const rand = mulberry32(20261028);
+  const batch = new Batcher();
+  const shores = [];
+  const reach = (x, z) => Math.sqrt((x / arena.rx) ** 2 + (z / arena.rz) ** 2);
+  for (const [x, z, radius, height] of arena.islands) shores.push(addPillar(batch, x, z, rand, { radius, height }).blob);
+  for (const [x, z, heading, span] of arena.arches) shores.push(...addArchAt(batch, x, z, heading, span, rand));
+  for (const [bx, bz] of arena.bases) {
+    const out = Math.sign(bx) * (arena.rx + 34);
+    const home = addPillar(batch, out, bz, rand, { radius: 10, height: 36, plants: 0.5 });
+    addLighthouse(batch, home.top.x, home.top.z, home.top.y);
+  }
+  const wall = [];
+  for (let a = 0; a < Math.PI * 2; ) {
+    const radius = 9 + rand() * 9;
+    const ex = Math.cos(a) * arena.rx;
+    const ez = Math.sin(a) * arena.rz;
+    const nx = ex / arena.rx ** 2;
+    const nz = ez / arena.rz ** 2;
+    const nl = Math.hypot(nx, nz);
+    const x = ex + (nx / nl) * (radius + 1);
+    const z = ez + (nz / nl) * (radius + 1);
+    if (z < mainlandEdge(x) - radius - 14) {
+      addPillar(batch, x, z, rand, { radius, height: 22 + rand() * 46 });
+      wall.push({ x, z, r: radius });
+    }
+    a += (radius * 1.5) / Math.hypot(arena.rx * Math.sin(a), arena.rz * Math.cos(a));
+  }
+  for (let gx = -560; gx <= 560; gx += 42) {
+    for (let gz = -500; gz <= 580; gz += 42) {
+      const x = gx + (rand() - 0.5) * 34;
+      const z = gz + (rand() - 0.5) * 34;
+      if (rand() < 0.55) continue;
+      const radius = 5 + rand() * 12;
+      if (reach(x, z) < 1 + (radius + 30) / arena.rz) continue;
+      if (z > mainlandEdge(x) - radius - 14) continue;
+      if (wall.some((o) => Math.hypot(o.x - x, o.z - z) < o.r + radius + 4)) continue;
+      addPillar(batch, x, z, rand, { radius, height: 30 + rand() * 80 });
+      wall.push({ x, z, r: radius });
+    }
+  }
+  addMainland(batch, rand);
+
+  const scenery = new THREE.Group();
+  const chunks = batch.build(scenery);
+  scene.add(scenery);
+
+  const clouds = [];
+  for (let i = 0; i < 16; i++) {
+    const cloud = createCloud(rand);
+    const a = rand() * Math.PI * 2;
+    const d = 150 + rand() * 600;
+    cloud.position.set(Math.cos(a) * d, 110 + rand() * 70, Math.sin(a) * d);
+    cloud.userData.speed = 2 + rand() * 3;
+    clouds.push(cloud);
+    scene.add(cloud);
+  }
+
+  return {
+    fog,
+    water,
+    sun,
+    islands: arena.islands.map(([x, z, r]) => ({ x, z, r })),
+    shores,
+    solid(p) {
+      if (p.z > mainlandEdge(p.x) && p.y < 70) return new THREE.Vector3(0, 0, -1);
+      return ellipseHit(shores, p);
+    },
+    stacks: [],
+    update(t, dt, camera) {
+      water.update(t);
+      cullChunks(chunks, camera, fog.far);
+      sky.position.copy(camera.position);
+      for (const cloud of clouds) {
+        cloud.position.x += cloud.userData.speed * dt;
+        if (cloud.position.x > 800) cloud.position.x = -800;
       }
     },
   };
