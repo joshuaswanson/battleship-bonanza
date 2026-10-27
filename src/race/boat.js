@@ -62,7 +62,6 @@ export class Boat {
 
     this.air = null;
     this.grip = 1;
-    this.spotted = 0;
     this.blind = 0;
     this.spinTime = 0;
     this.spinDur = 1;

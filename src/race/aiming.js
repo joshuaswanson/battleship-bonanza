@@ -16,13 +16,12 @@ export const methods = {
       const dz = o.pos.z - b.pos.z;
       const d = Math.hypot(dx, dz);
       if (d > range || d < minRange || d === 0) continue;
-      const rank = o.spotted > 0 ? d * 0.6 : d;
-      if (rank > bestD) continue;
+      if (d > bestD) continue;
       const dot = (dx * fx + dz * fz) / d;
       if (dot < minDot || dot > maxDot) continue;
       if (filter && !filter(o)) continue;
       best = o;
-      bestD = rank;
+      bestD = d;
     }
     return best;
   },

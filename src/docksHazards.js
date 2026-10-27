@@ -13,8 +13,8 @@ const BRIDGE_WIDTH = 7;
 const BRIDGE_CYCLE = [5, 2, 5, 2];
 const BRIDGE_OPEN = 1.25;
 const LOAD_BOTTOM = 1;
-const SPOT_TIME = 3.5;
-const SPOT_RADIUS = 10;
+export const SEARCH_BEAM = 8;
+export const SEARCH_POOL = 16;
 
 const SLICK_VERT = /* glsl */ `
   uniform float uTime;
@@ -105,7 +105,7 @@ export class DockHazards {
     this.buildSlicks(rand, amp);
     this.buildDrums(rand);
     this.gantries = gantries.map((g) => this.buildGantry(g, rand));
-    this.sweepers = sweepers.map((s) => ({ ...s, lock: null, lockTime: 0, rest: 0, aim: new THREE.Vector3(s.head.x, 0, s.head.z) }));
+    this.sweepers = sweepers.map((s) => ({ ...s, aim: new THREE.Vector3(s.head.x, 0, s.head.z) }));
     this.bridge = bridge ? this.buildBridge(bridge) : null;
   }
 
@@ -282,12 +282,8 @@ export class DockHazards {
   reset(race) {
     for (const d of this.drums) Object.assign(d, { alive: true, timer: 0, fuse: 0, owner: null, grow: 1 });
     for (const s of this.slicks) Object.assign(s, { burn: 0, igniter: null });
-    for (const s of this.sweepers) Object.assign(s, { lock: null, lockTime: 0, rest: 0 });
     this.pending.length = 0;
-    for (const b of race.boats) {
-      b.grip = 1;
-      b.spotted = 0;
-    }
+    for (const b of race.boats) b.grip = 1;
   }
 
   animate(worldTime, dt) {
@@ -353,10 +349,6 @@ export class DockHazards {
   }
 
   sweep(s, time, dt) {
-    if (s.lock) {
-      s.aim.lerp(new THREE.Vector3(s.lock.pos.x, 0, s.lock.pos.z), Math.min(1, dt * 8));
-      return;
-    }
     const t = this.track;
     const a = time * s.speed + s.phase;
     const idx = t.wrap(s.idx + Math.round((Math.sin(a) * 55) / t.spacing));
@@ -367,8 +359,8 @@ export class DockHazards {
   animateSweepers(time, dt) {
     for (const s of this.sweepers) {
       if (!this.frozen) this.sweep(s, time, dt);
-      this.lights.placeBeam(s.beam, s.head, s.aim, 7);
-      this.lights.placePool(s.pool, s.aim.x, 0.5, s.aim.z, 12);
+      this.lights.placeBeam(s.beam, s.head, s.aim, SEARCH_BEAM);
+      this.lights.placePool(s.pool, s.aim.x, 0.5, s.aim.z, SEARCH_POOL);
     }
     if (this.sweepers.length) {
       this.lights.beamMesh.instanceMatrix.needsUpdate = true;
@@ -412,7 +404,6 @@ export class DockHazards {
     this.playDrums(race, dt, blasts);
     for (const g of this.gantries) this.playGantry(race, g);
     if (this.bridge) this.playBridge(race);
-    this.playSweepers(race, dt);
     this.listObstacles();
   }
 
@@ -622,35 +613,6 @@ export class DockHazards {
       race.fx.sparkBurst(p.x, p.y + 2, p.z, 0xffffff, 18);
       race.sfx.play('clank', b.pos);
       if (b.isPlayer) race.emit('lockShake', { amount: 1.3 });
-    }
-  }
-
-  playSweepers(race, dt) {
-    for (const b of race.boats) {
-      const was = b.spotted ?? 0;
-      b.spotted = Math.max(0, was - dt);
-      if (b.spotted > 0 && Math.floor(b.spotted / 0.45) !== Math.floor(was / 0.45)) race.fx.followRing(b.pos, 0xff3b30, 3.5, 0.5);
-    }
-    for (const s of this.sweepers) {
-      s.rest = Math.max(0, s.rest - dt);
-      if (s.lock) {
-        s.lockTime -= dt;
-        if (s.lockTime <= 0 || !s.lock.alive || s.lock.finished) {
-          s.lock = null;
-          s.rest = 3;
-        }
-      }
-      for (const b of race.boats) {
-        if (!b.alive || (b.finished && !race.attract)) continue;
-        if (Math.hypot(b.pos.x - s.aim.x, b.pos.z - s.aim.z) > SPOT_RADIUS) continue;
-        if (!(b.spotted > 0) && b.isPlayer) race.emit('spotted');
-        b.spotted = SPOT_TIME;
-        if (!s.lock && s.rest <= 0) {
-          s.lock = b;
-          s.lockTime = 2.5;
-          race.sfx.play('seekLock', b.pos);
-        }
-      }
     }
   }
 }
