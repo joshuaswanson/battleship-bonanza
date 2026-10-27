@@ -18,7 +18,7 @@ export const methods = {
       b.flameRay = { x: origin.x, z: origin.z, dx: dir.x, dz: dir.z, time: this.time };
       const c = new THREE.Vector3();
       for (const o of this.boats) {
-        if (o === b || !o.alive) continue;
+        if (o === b || !o.alive || this.allied(b, o)) continue;
         o.center(c).sub(origin);
         const along = c.x * dir.x + c.z * dir.z;
         if (along < -1 || along > FLAME_REACH) continue;
@@ -76,7 +76,7 @@ export const methods = {
     this.sfx.play('boom', b.pos);
     if (this.player && Math.hypot(this.player.pos.x - c.x, this.player.pos.z - c.z) < 120) this.emit('blast');
     for (const o of this.boats) {
-      if (o === b || !o.alive) continue;
+      if (o === b || !o.alive || this.allied(b, o)) continue;
       const dx = o.pos.x - b.pos.x;
       const dz = o.pos.z - b.pos.z;
       const d = Math.hypot(dx, dz);

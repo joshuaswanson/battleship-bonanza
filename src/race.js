@@ -8,6 +8,7 @@ import { Wakes } from './wake.js';
 import { t as tr } from './i18n.js';
 import { ACCEL, ARMOR_SPEED, BANK_MARGIN, BASE_SPEED, BRAKE, CIRCLE_OFFSET, COAST, FALL_GRAVITY, GRIP, HOLD_IDS, KO_TIME, LAPS, MAX_HP, OFF_COURSE_SPEED, OUTER_LIMIT, RADIUS, REGEN_DELAY, REGEN_MAX, REGEN_RAMP, REGEN_START, REVERSE_SPEED, TURN_RATE, approach, clamp } from './race/shared.js';
 import { Boat } from './race/boat.js';
+import { CARRIER_SPEED } from './ctf.js';
 import * as machinegun from './race/attachments/machinegun.js';
 import * as missiles from './race/attachments/missiles.js';
 import * as mines from './race/attachments/mines.js';
@@ -33,20 +34,21 @@ const MODULES = [machinegun, missiles, mines, grapple, emp, jetpack, laser, flam
 export class Race {
   actions = Object.assign({}, ...MODULES.map((m) => m.actions ?? {}));
 
-  constructor({ scene, track, fx, sfx, defs, shores = [], solid = null, raycast = null, chopper = null, hazards = null, attract = false, laps = LAPS }) {
+  constructor({ scene, track, fx, sfx, defs, shores = [], solid = null, raycast = null, chopper = null, hazards = null, mode = null, attract = false, laps = LAPS }) {
     this.shores = shores;
     this.solid = solid;
     this.bankProbe = new THREE.Vector3();
     this.raycast = raycast;
     this.chopper = chopper;
     this.hazards = hazards;
+    this.mode = mode;
     this.blasts = [];
     this.scene = scene;
     this.track = track;
     this.fx = fx;
     this.sfx = sfx;
     this.attract = attract;
-    this.laps = attract ? Infinity : laps;
+    this.laps = attract || mode ? Infinity : laps;
     this.boats = defs.map((def, i) => new Boat(def, i, scene));
     this.player = this.boats.find((b) => b.isPlayer) ?? null;
     this.bullets = [];
@@ -75,7 +77,8 @@ export class Race {
 
     this.features = new TrackFeatures(scene, track, fx, sfx);
     this.wakes = new Wakes(scene, fx.water);
-    this.placeGrid();
+    if (mode) mode.reset(this);
+    else this.placeGrid();
     hazards?.reset(this);
   }
 
@@ -144,10 +147,11 @@ export class Race {
     this.updateFlames(dt);
     this.features.update(this, dt, this.time);
     this.hazards?.play(this, dt);
+    this.mode?.play(this, dt);
     this.blasts.length = 0;
     for (const b of this.boats) this.updateVisual(b, dt);
     this.wakes.update(this.boats, this.time);
-    this.updateStandings();
+    if (!this.mode) this.updateStandings();
   }
 
   updateBoat(b, dt) {
@@ -195,6 +199,7 @@ export class Race {
     if (b.boost > 0) max *= 1.3;
     if (b.air?.jet) max *= 1.15;
     if (b.stun > 0) max *= 0.5;
+    if (b.flag) max *= CARRIER_SPEED;
     if (this.isTethered(b)) max *= 0.8;
     if (b.offCourse > 0) max *= OFF_COURSE_SPEED;
 
@@ -250,6 +255,14 @@ export class Race {
     }
     if (b.spinTime > 0) b.spinTime -= dt;
 
+    if (this.mode) {
+      this.collideShores(b);
+      this.mode.confine(this, b);
+    } else this.followCourse(b, dt, fx, fz);
+  }
+
+  followCourse(b, dt, fx, fz) {
+    const t = this.track;
     const fork = t.forkNear(b.trackIdx);
     const choice = fork ? b.ai?.routes?.[fork.id] : undefined;
     let pr = t.project(b.pos.x, b.pos.z, b.trackIdx, 60, choice === undefined ? undefined : choice ? fork.id : -1);
@@ -345,20 +358,23 @@ export class Race {
     if (b.isPlayer) this.emit('lockShake', { amount: 0.8 });
   }
 
-  respawn(b) {
+  respawnSpot(b) {
+    if (this.mode) return this.mode.spawnSpot(b);
     const t = this.track;
     const idx = t.step(b.trackIdx, -10);
-    let lateral = 0;
-    for (const candidate of [0, -10, 10, -18, 18]) {
-      const p = t.point(idx, candidate);
-      if (this.boats.every((o) => o === b || Math.hypot(o.pos.x - p.x, o.pos.z - p.z) > 9)) {
-        lateral = candidate;
-        break;
-      }
+    const spot = (lateral) => ({ ...t.point(idx, lateral), heading: t.heading(idx), idx });
+    for (const lateral of [0, -10, 10, -18, 18]) {
+      const p = t.point(idx, lateral);
+      if (this.boats.every((o) => o === b || Math.hypot(o.pos.x - p.x, o.pos.z - p.z) > 9)) return spot(lateral);
     }
-    const p = t.point(idx, lateral);
-    b.pos.set(p.x, 0, p.z);
-    b.heading = t.heading(idx);
+    return spot(0);
+  }
+
+  respawn(b) {
+    const t = this.track;
+    const spot = this.respawnSpot(b);
+    b.pos.set(spot.x, 0, spot.z);
+    b.heading = spot.heading;
     b.vel.set(0, 0, 0);
     b.speed = 12;
     b.hp = MAX_HP;
@@ -371,16 +387,18 @@ export class Race {
     b.stun = 0;
     for (const heat of Object.values(b.heat)) heat.trigger = false;
     b.exploded = false;
-    const s = t.sAt[idx];
-    let ds = s - b.trackS;
-    if (ds < -t.length / 2) ds += t.length;
-    else if (ds > t.length / 2) ds -= t.length;
-    b.dist += ds;
-    b.trackS = s;
-    b.trackIdx = idx;
+    if (spot.idx !== undefined) {
+      const s = t.sAt[spot.idx];
+      let ds = s - b.trackS;
+      if (ds < -t.length / 2) ds += t.length;
+      else if (ds > t.length / 2) ds -= t.length;
+      b.dist += ds;
+      b.trackS = s;
+      b.trackIdx = spot.idx;
+    }
     b.model.body.rotation.set(0, 0, 0);
     b.bump(6);
-    this.fx.splash(p.x, b.waterY, p.z, 1);
+    this.fx.splash(spot.x, b.waterY, spot.z, 1);
   }
 
   collideBoats() {
@@ -433,7 +451,12 @@ export class Race {
     }
   }
 
+  allied(a, o) {
+    return !!this.mode && a !== o && a.team === o.team;
+  }
+
   damage(target, amount, source, kind, { knockX = 0, knockZ = 0, spin = 0, stun = 0, launch = 0 } = {}) {
+    if (this.allied(source, target)) return false;
     if (!target.alive || target.invuln > 0 || (target.finished && !this.attract)) return false;
     const c = target.center();
     const blocked = (target.has('armor') && (kind === 'bullet' || kind === 'spikes' || kind === 'saw')) || (target.has('spikes') && kind === 'saw');
@@ -640,6 +663,7 @@ export class Race {
     this.scene.remove(this.bulletMesh, this.bulletOutline);
     this.features.dispose();
     this.wakes.dispose();
+    this.mode?.dispose();
   }
 }
 

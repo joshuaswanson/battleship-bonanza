@@ -17,7 +17,7 @@ export const methods = {
         this.fx.arcTo(() => this.empOrigin(p.owner), () => (this.missiles.includes(m) ? m.pos.clone() : null), 0.3);
       }
       for (const o of this.boats) {
-        if (o === p.owner || !o.alive || p.jolted.has(o)) continue;
+        if (o === p.owner || !o.alive || p.jolted.has(o) || this.allied(p.owner, o)) continue;
         if (o.center(new THREE.Vector3()).distanceTo(center) > r + 1.5) continue;
         p.jolted.add(o);
         for (const id of o.items) {

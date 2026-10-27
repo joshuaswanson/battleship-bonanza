@@ -11,7 +11,7 @@ export const methods = {
     const fx = Math.sin(b.heading);
     const fz = Math.cos(b.heading);
     for (const o of this.boats) {
-      if (o === b || !o.alive || o.invuln > 0 || (o.finished && !this.attract)) continue;
+      if (o === b || !o.alive || o.invuln > 0 || (o.finished && !this.attract) || this.allied(b, o)) continue;
       const dx = o.pos.x - b.pos.x;
       const dz = o.pos.z - b.pos.z;
       const d = Math.hypot(dx, dz);
@@ -54,7 +54,7 @@ export const methods = {
     if (b.blind > 0) return null;
     const slot = b.items.indexOf(t.id);
     const wanted = b.aim[t.id];
-    const usable = (o) => o && o !== b && o.alive && this.inArc(b, slot, o.pos.x, o.pos.z) && Math.hypot(o.pos.x - b.pos.x, o.pos.z - b.pos.z) < WATCH_RANGE;
+    const usable = (o) => o && o !== b && o.alive && !this.allied(b, o) && this.inArc(b, slot, o.pos.x, o.pos.z) && Math.hypot(o.pos.x - b.pos.x, o.pos.z - b.pos.z) < WATCH_RANGE;
     if (usable(wanted)) return wanted;
     let best = null;
     let bestD = WATCH_RANGE;
@@ -70,6 +70,7 @@ export const methods = {
   },
 
   willAttack(b, o) {
+    if (this.mode) return !this.allied(b, o);
     const player = this.player;
     if (b.isPlayer || this.attract || !player || player.finished) return true;
     const cached = b.attackRolls.get(o);

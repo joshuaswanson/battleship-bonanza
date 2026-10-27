@@ -124,11 +124,14 @@ export class TrackFeatures {
     this.sfx = sfx;
     this.texture = chevronTexture();
     this.arrows = new THREE.MeshBasicMaterial({ map: this.texture, transparent: true });
-    const place = ([fraction, lateral, routeId], mesh, kind) => {
+    const onCourse = ([fraction, lateral, routeId]) => {
       const route = track.routes[routeId];
       const idx = route ? route.first + Math.min(route.count - 1, Math.round(fraction * route.count)) : track.wrap(Math.round(fraction * track.N));
-      const p = track.point(idx, lateral);
-      const heading = track.heading(idx);
+      return { idx, lateral, p: track.point(idx, lateral), heading: track.heading(idx) };
+    };
+    const inArena = ([x, z, heading]) => ({ idx: track.project(x, z).idx, lateral: 0, p: { x, z }, heading });
+    const place = (spot, mesh, kind) => {
+      const { idx, lateral, p, heading } = track.map.arena ? inArena(spot) : onCourse(spot);
       mesh.position.set(p.x, 0, p.z);
       mesh.rotation.y = heading;
       scene.add(mesh);

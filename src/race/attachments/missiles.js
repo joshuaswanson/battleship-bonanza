@@ -80,7 +80,7 @@ export const actions = {
     const chased = new Set(this.missiles.filter((m) => m.owner === b && m.target).map((m) => m.target));
     for (const q of b.missileQueue) if (q.target) chased.add(q.target);
     const targets = this.boats
-      .filter((o) => o !== b && o.alive && o.invuln <= 0 && !o.has('camo') && !(o.finished && !this.attract) && this.willAttack(b, o))
+      .filter((o) => o !== b && !this.allied(b, o) && o.alive && o.invuln <= 0 && !o.has('camo') && !(o.finished && !this.attract) && this.willAttack(b, o))
       .map((o) => ({ o, d: Math.hypot(o.pos.x - b.pos.x, o.pos.z - b.pos.z) + (chased.has(o) ? 60 : 0) }))
       .filter((t) => t.d <= 240)
       .sort((x, y) => x.d - y.d)

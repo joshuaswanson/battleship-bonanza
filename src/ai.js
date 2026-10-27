@@ -26,15 +26,7 @@ export function driveAI(race, b, dt) {
   if (ai.dodgeTime <= 0) ai.dodge *= Math.exp(-3 * dt);
 
   const look = Math.round((16 + Math.abs(b.speed) * 0.5) / track.spacing);
-  const choose = (fork) => chooseRoute(race, b, fork);
-  const idx = track.step(b.trackIdx, look, choose);
-  const half = track.hw[idx];
-  const feature = ai.thrillSeeker ? race.features.nearestAhead(b, 70, choose) : null;
-  const wanted = feature ? feature.lateral : ai.lane + Math.sin(ai.laneT) * 6;
-  let lane = clamp(wanted + ai.dodge, -(half - 5), half - 5);
-  const fork = track.forkNear(b.trackIdx) ?? track.forkNear(idx);
-  if (fork && track.route[idx] === -1 && ai.routes?.[fork.id] === false) lane = fork.side > 0 ? Math.min(lane, -2) : Math.max(lane, 2);
-  const target = track.point(idx, lane);
+  const target = race.mode ? dodged(race.mode.navigate(race, b, look), b, ai) : courseTarget(race, b, look);
   const desired = Math.atan2(target.x - b.pos.x, target.z - b.pos.z);
   const diff = wrapAngle(desired - b.heading);
 
@@ -46,7 +38,7 @@ export function driveAI(race, b, dt) {
   if (race.hazards) avoidHazards(race, b, ai);
   for (const heat of Object.values(b.heat)) if (heat.heat > 0.85) heat.trigger = false;
 
-  if (race.player && !race.attract && !b.isPlayer) {
+  if (race.player && !race.attract && !b.isPlayer && !race.mode) {
     const gap = race.player.dist - b.dist;
     b.skill = ai.base * clamp(1 + gap / 1000, 0.8, 1.18);
   } else {
@@ -58,6 +50,28 @@ export function driveAI(race, b, dt) {
     ai.think = race.incomingThreats(b).length ? 0.08 : 0.2 + Math.random() * 0.35;
     if (race.state === 'racing' && (race.clock > 2.5 || race.attract)) useItems(race, b, ai);
   }
+}
+
+function courseTarget(race, b, look) {
+  const ai = b.ai;
+  const track = race.track;
+  const choose = (fork) => chooseRoute(race, b, fork);
+  const idx = track.step(b.trackIdx, look, choose);
+  const half = track.hw[idx];
+  const feature = ai.thrillSeeker ? race.features.nearestAhead(b, 70, choose) : null;
+  const wanted = feature ? feature.lateral : ai.lane + Math.sin(ai.laneT) * 6;
+  let lane = clamp(wanted + ai.dodge, -(half - 5), half - 5);
+  const fork = track.forkNear(b.trackIdx) ?? track.forkNear(idx);
+  if (fork && track.route[idx] === -1 && ai.routes?.[fork.id] === false) lane = fork.side > 0 ? Math.min(lane, -2) : Math.max(lane, 2);
+  return track.point(idx, lane);
+}
+
+function dodged(target, b, ai) {
+  if (!ai.dodge) return target;
+  const dx = target.x - b.pos.x;
+  const dz = target.z - b.pos.z;
+  const len = Math.hypot(dx, dz) || 1;
+  return { x: target.x + (dz / len) * ai.dodge, z: target.z - (dx / len) * ai.dodge };
 }
 
 function chooseRoute(race, b, fork) {
