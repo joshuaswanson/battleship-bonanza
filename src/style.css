@@ -324,12 +324,12 @@ kbd {
 }
 
 .title-credit {
-  margin-top: -4.5vh;
-  margin-bottom: 7vh;
+  margin-top: -8.5vh;
+  margin-bottom: 10vh;
   padding: 0.2rem 1.3rem 0.25rem;
   font-family: var(--race);
   font-weight: 800;
-  font-size: 2rem;
+  font-size: 2.4rem;
   line-height: 1.1;
   color: var(--ink);
   text-decoration: none;
@@ -899,9 +899,9 @@ kbd {
 
 @media (max-width: 600px) {
   .title-credit {
-    font-size: 1.2rem;
-    margin-top: -2.5vh;
-    margin-bottom: 3vh;
+    font-size: 1.4rem;
+    margin-top: -4.5vh;
+    margin-bottom: 4.5vh;
   }
 }
 
@@ -2855,8 +2855,8 @@ kbd {
     width: min(64vh, 60vw);
   }
   .title-credit {
-    margin: -1.2rem 0 0.4rem;
-    font-size: 1.05rem;
+    margin: -2rem 0 1rem;
+    font-size: 1.25rem;
   }
   .btn-play {
     min-width: 200px;
