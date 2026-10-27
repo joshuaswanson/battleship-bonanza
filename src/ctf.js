@@ -46,36 +46,185 @@ function bannerTexture(color) {
   return texture;
 }
 
+const COLS = 12;
+const ROWS = 7;
+const HOIST = 0.18;
+const THICK = 0.06;
+const WIND = new THREE.Vector3(1, 0, 0.45).normalize().multiplyScalar(9);
+const GRAVITY = new THREE.Vector3(0, -9.8, 0);
+
+function bannerLinks() {
+  const out = [];
+  const at = (r, c) => r * COLS + c;
+  const dx = BANNER_W / (COLS - 1);
+  const dy = BANNER_H / (ROWS - 1);
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      if (c < COLS - 1) out.push([at(r, c), at(r, c + 1), dx, 1]);
+      if (r < ROWS - 1) out.push([at(r, c), at(r + 1, c), dy, 1]);
+      if (r < ROWS - 1 && c < COLS - 1) {
+        out.push([at(r, c), at(r + 1, c + 1), Math.hypot(dx, dy), 0.7]);
+        out.push([at(r, c + 1), at(r + 1, c), Math.hypot(dx, dy), 0.7]);
+      }
+      if (c < COLS - 2) out.push([at(r, c), at(r, c + 2), dx * 2, 0.3]);
+      if (r < ROWS - 2) out.push([at(r, c), at(r + 2, c), dy * 2, 0.3]);
+    }
+  }
+  return out;
+}
+
+const LINKS = bannerLinks();
+
+function slabGeometry() {
+  const n = COLS * ROWS;
+  const index = [];
+  const uv = [];
+  for (let side = 0; side < 2; side++) {
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) uv.push(c / (COLS - 1), 1 - r / (ROWS - 1));
+  }
+  for (let r = 0; r < ROWS - 1; r++) {
+    for (let c = 0; c < COLS - 1; c++) {
+      const i = r * COLS + c;
+      index.push(i, i + COLS, i + 1, i + 1, i + COLS, i + COLS + 1);
+      index.push(n + i, n + i + 1, n + i + COLS, n + i + 1, n + i + COLS + 1, n + i + COLS);
+    }
+  }
+  const ring = [];
+  for (let c = 0; c < COLS; c++) ring.push(c);
+  for (let r = 1; r < ROWS; r++) ring.push(r * COLS + COLS - 1);
+  for (let c = COLS - 2; c >= 0; c--) ring.push((ROWS - 1) * COLS + c);
+  for (let r = ROWS - 2; r > 0; r--) ring.push(r * COLS);
+  ring.forEach((a, k) => {
+    const b = ring[(k + 1) % ring.length];
+    index.push(a, b, n + a, b, n + b, n + a);
+  });
+  const geometry = new THREE.BufferGeometry();
+  geometry.setIndex(index);
+  geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 6), 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  return geometry;
+}
+
+class Banner {
+  constructor() {
+    const n = COLS * ROWS;
+    this.rest = new Float32Array(n * 3);
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const i = (r * COLS + c) * 3;
+        this.rest[i] = HOIST + (c / (COLS - 1)) * BANNER_W;
+        this.rest[i + 1] = POLE - 0.25 - (r / (ROWS - 1)) * BANNER_H;
+      }
+    }
+    this.p = this.rest.slice();
+    this.q = this.rest.slice();
+    this.geometry = slabGeometry();
+    this.wind = new THREE.Vector3();
+    this.gravity = new THREE.Vector3();
+    this.write();
+  }
+
+  step(dt, time, phase) {
+    const { p, q, rest, wind, gravity } = this;
+    const strength = wind.length();
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const i = (r * COLS + c) * 3;
+        if (c === 0) {
+          for (let a = 0; a < 3; a++) p[i + a] = q[i + a] = rest[i + a];
+          continue;
+        }
+        const gust = 1 + 0.35 * Math.sin(time * 7.3 + c * 0.9 + r * 0.6 + phase);
+        const flap = Math.sin(time * 9.5 - c * 0.85 + phase) * strength * 0.45;
+        const w = [wind.x * gust, wind.y * gust, wind.z * gust + flap];
+        const g = [gravity.x, gravity.y, gravity.z];
+        for (let a = 0; a < 3; a++) {
+          const v = p[i + a] - q[i + a];
+          const drag = 1.8 * (w[a] - v / dt);
+          q[i + a] = p[i + a];
+          p[i + a] += v * 0.99 + (g[a] + drag) * dt * dt;
+        }
+      }
+    }
+    for (let pass = 0; pass < 5; pass++) {
+      for (const [a, b, len, stiff] of LINKS) {
+        const ia = a * 3;
+        const ib = b * 3;
+        const dx = p[ib] - p[ia];
+        const dy = p[ib + 1] - p[ia + 1];
+        const dz = p[ib + 2] - p[ia + 2];
+        const d = Math.hypot(dx, dy, dz) || 1e-6;
+        const pinA = a % COLS === 0;
+        const pinB = b % COLS === 0;
+        const k = ((d - len) / d) * stiff * (pinA || pinB ? 1 : 0.5);
+        if (!pinA) {
+          p[ia] += dx * k;
+          p[ia + 1] += dy * k;
+          p[ia + 2] += dz * k;
+        }
+        if (!pinB) {
+          p[ib] -= dx * k;
+          p[ib + 1] -= dy * k;
+          p[ib + 2] -= dz * k;
+        }
+      }
+    }
+  }
+
+  write() {
+    const { p } = this;
+    const out = this.geometry.attributes.position.array;
+    const n = COLS * ROWS;
+    const at = (r, c) => (Math.max(0, Math.min(ROWS - 1, r)) * COLS + Math.max(0, Math.min(COLS - 1, c))) * 3;
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const i = at(r, c);
+        const a = at(r, c - 1);
+        const b = at(r, c + 1);
+        const u = at(r - 1, c);
+        const d = at(r + 1, c);
+        const ux = p[b] - p[a];
+        const uy = p[b + 1] - p[a + 1];
+        const uz = p[b + 2] - p[a + 2];
+        const vx = p[d] - p[u];
+        const vy = p[d + 1] - p[u + 1];
+        const vz = p[d + 2] - p[u + 2];
+        const nx = vy * uz - vz * uy;
+        const ny = vz * ux - vx * uz;
+        const nz = vx * uy - vy * ux;
+        const len = (Math.hypot(nx, ny, nz) || 1) / THICK;
+        out[i] = p[i] + nx / len;
+        out[i + 1] = p[i + 1] + ny / len;
+        out[i + 2] = p[i + 2] + nz / len;
+        out[n * 3 + i] = p[i] - nx / len;
+        out[n * 3 + i + 1] = p[i + 1] - ny / len;
+        out[n * 3 + i + 2] = p[i + 2] - nz / len;
+      }
+    }
+    this.geometry.attributes.position.needsUpdate = true;
+    this.geometry.computeVertexNormals();
+    this.geometry.computeBoundingSphere();
+  }
+}
+
 function flagMesh(color) {
   const group = new THREE.Group();
   group.add(outlined(new THREE.CylinderGeometry(0.2, 0.24, POLE, 12).translate(0, POLE / 2, 0), toon(0xf6f1e6), 0.06));
   for (const y of [0.5, 1.2]) group.add(outlined(new THREE.CylinderGeometry(0.27, 0.27, 0.3, 12).translate(0, y, 0), toon(color), 0.05));
   group.add(outlined(new THREE.SphereGeometry(0.46, 14, 10).translate(0, POLE + 0.3, 0), toon(0xffd23f), 0.06));
-  const geometry = new THREE.BoxGeometry(BANNER_W, BANNER_H, 0.14, 14, 6, 1).translate(BANNER_W / 2 + 0.18, POLE - BANNER_H / 2 - 0.25, 0);
-  const banner = outlined(geometry, toon(0xffffff, { map: bannerTexture(color) }), 0.05);
-  group.add(banner);
+  const banner = new Banner();
+  const cloth = outlined(banner.geometry, toon(0xffffff, { map: bannerTexture(color), side: THREE.DoubleSide }), 0.05);
+  cloth.frustumCulled = false;
+  cloth.children[0].frustumCulled = false;
+  group.add(cloth);
   const beam = new THREE.Mesh(
     new THREE.CylinderGeometry(0.7, 0.7, 70, 12, 1, true).translate(0, POLE + 36, 0),
     new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }),
   );
   group.add(beam);
   group.matrixAutoUpdate = false;
-  group.userData.banner = { geometry, rest: geometry.attributes.position.array.slice() };
+  group.userData.banner = banner;
   return group;
-}
-
-function wave(banner, time, phase) {
-  const { geometry, rest } = banner;
-  const pos = geometry.attributes.position.array;
-  for (let i = 0; i < pos.length; i += 3) {
-    const u = Math.max(0, (rest[i] - 0.18) / BANNER_W);
-    const swing = Math.sin(time * 6.5 - u * 5 + phase) * 0.38 * u;
-    pos[i] = rest[i] - u * u * 0.25;
-    pos[i + 1] = rest[i + 1] + Math.sin(time * 4.3 - u * 3 + phase) * 0.1 * u - u * 0.18;
-    pos[i + 2] = rest[i + 2] + swing;
-  }
-  geometry.attributes.position.needsUpdate = true;
-  geometry.computeVertexNormals();
 }
 
 function baseMesh(base, color) {
@@ -409,11 +558,12 @@ export class CaptureTheFlag {
   }
 
   animate(time) {
+    const dt = Math.min(1 / 30, Math.max(0, time - (this.lastTime ?? time)));
+    this.lastTime = time;
     for (const mesh of this.baseMeshes) mesh.position.y = waveHeight(mesh.position.x, mesh.position.z, time) * 0.8;
     for (const b of this.race?.boats ?? []) b.model.flag.visible = !this.flags.some((flag) => flag.state === 'carried' && flag.carrier === b);
     for (const flag of this.flags) {
       const { mesh } = flag;
-      wave(mesh.userData.banner, time, flag.team * 1.7);
       if (flag.state === 'carried' && flag.carrier) {
         const { root, body, flag: staff } = flag.carrier.model;
         root.updateMatrix();
@@ -423,10 +573,25 @@ export class CaptureTheFlag {
       } else {
         const y = waveHeight(flag.x, flag.z, time);
         const tilt = flag.state === 'dropped' ? 0.35 + Math.sin(time * 2 + flag.team) * 0.1 : 0;
-        const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(tilt, time * 0.4, Math.cos(time * 1.7) * 0.05));
+        const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(tilt, flag.team * Math.PI, Math.cos(time * 1.7) * 0.05));
         mesh.matrix.compose(new THREE.Vector3(flag.x, y + (flag.state === 'home' ? 0.6 : -0.6), flag.z), q, new THREE.Vector3(1, 1, 1));
       }
+      this.blow(flag, dt, time);
     }
+  }
+
+  blow(flag, dt, time) {
+    const banner = flag.mesh.userData.banner;
+    if (dt <= 0) return banner.write();
+    const turn = new THREE.Quaternion();
+    flag.mesh.matrix.decompose(new THREE.Vector3(), turn, new THREE.Vector3());
+    turn.invert();
+    banner.wind.copy(WIND).multiplyScalar(1 + 0.3 * Math.sin(time * 1.3 + flag.team));
+    if (flag.state === 'carried' && flag.carrier) banner.wind.sub(flag.carrier.vel);
+    banner.wind.applyQuaternion(turn);
+    banner.gravity.copy(GRAVITY).applyQuaternion(turn);
+    for (let k = 0; k < 2; k++) banner.step(dt / 2, time, flag.team * 1.7);
+    banner.write();
   }
 
   snapshot() {
