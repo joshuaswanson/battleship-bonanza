@@ -218,6 +218,9 @@ export class Hud {
       case 'falls':
         this.pop(t('wheee'), 'go');
         break;
+      case 'spotted':
+        this.pop(t('spotted'), 'ko');
+        break;
       case 'dodge':
         this.pop(t('dodged'), 'go');
         break;

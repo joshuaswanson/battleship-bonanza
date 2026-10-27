@@ -55,6 +55,16 @@ const shots = {
     c.position.set(t.px[k] + t.nx[k] * 7, y + 7, t.pz[k] + t.nz[k] * 7);
     c.lookAt(t.px[k2], y + 17, t.pz[k2]);
   },
+  docks: () => {
+    const t = window.__bb.race.track;
+    const k = Math.round(0.9 * t.N);
+    const k2 = Math.round(0.985 * t.N) % t.N;
+    const from = t.point(k, t.hw[k] * 0.5);
+    const to = t.point(k2, -t.hw[k2] * 0.55);
+    const c = window.__bb.camera;
+    c.position.set(from.x, 9, from.z);
+    c.lookAt(to.x, 16, to.z);
+  },
   midway: () => {
     let c = null;
     window.__bb.scene.traverse((o) => {

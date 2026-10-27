@@ -149,6 +149,7 @@ const BUILDERS = {
   venice: () => import('./venice.js').then((m) => m.createVenice),
   midway: () => import('./midway.js').then((m) => m.createMidway),
   canyon: () => import('./canyon.js').then((m) => m.createCanyon),
+  docks: () => import('./docks.js').then((m) => m.createDocks),
 };
 
 function prepareVenue(id) {
@@ -199,6 +200,7 @@ function useVenue(id) {
   next.group.visible = true;
   next.group.matrixWorldAutoUpdate = true;
   scene.fog = next.world.fog;
+  fx.setWater(next.world.spray);
   setSurface(next.world.surface ?? null);
   hud.setTrack(next.track);
   current = next;
@@ -269,7 +271,7 @@ function newRace(attract, map = pickMap(attract)) {
   fx.decals.clear();
   useVenue(map);
   current.world.chopper?.reset();
-  race = new Race({ scene, track: current.track, fx, sfx: attract ? SILENT : sfx, shores: current.world.shores, solid: current.world.solid, raycast: current.world.raycast ?? null, chopper: current.world.chopper ?? null, defs: makeDefs(attract ? null : setup), attract });
+  race = new Race({ scene, track: current.track, fx, sfx: attract ? SILENT : sfx, shores: current.world.shores, solid: current.world.solid, raycast: current.world.raycast ?? null, chopper: current.world.chopper ?? null, hazards: current.world.hazards ?? null, defs: makeDefs(attract ? null : setup), attract });
   if (!attract) recorder = new Recorder(race, fx);
   cam.snap = true;
 }
@@ -328,7 +330,7 @@ function goLoadout() {
 
 const wipe = createWipe($('wipe'), sfx);
 
-const MAP_CHOICES = ['bay', 'jungle', 'canyon', 'alps', 'venice', 'midway', 'random'];
+const MAP_CHOICES = ['bay', 'jungle', 'canyon', 'alps', 'venice', 'midway', 'docks', 'random'];
 const die = (pips, cls) => `<svg class="die ${cls}" viewBox="0 0 40 40"><rect x="3" y="3" width="34" height="34" rx="9" fill="#fff" stroke="#0E2A47" stroke-width="3.5"/>${pips.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="3.6" fill="#0E2A47"/>`).join('')}</svg>`;
 const DICE = die([[12, 12], [20, 20], [28, 28]], 'die-a') + die([[12, 12], [28, 12], [12, 28], [28, 28], [20, 20]], 'die-b');
 function renderMaps() {
@@ -682,7 +684,7 @@ if (import.meta.env.DEV) {
       race?.dispose();
       const defs = PAINTS.map((paint, i) => ({ name: `Boat ${i + 1}`, color: paint.value, items: arrange(shuffle(ITEM_IDS).slice(0, 2)) }));
       useVenue(map);
-      race = new Race({ scene, track: current.track, fx, sfx, shores: current.world.shores, solid: current.world.solid, raycast: current.world.raycast ?? null, chopper: current.world.chopper ?? null, defs, attract: false });
+      race = new Race({ scene, track: current.track, fx, sfx, shores: current.world.shores, solid: current.world.solid, raycast: current.world.raycast ?? null, chopper: current.world.chopper ?? null, hazards: current.world.hazards ?? null, defs, attract: false });
       mode = 'sim';
       hud.show(false);
       showScreen(null);

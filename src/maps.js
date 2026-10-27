@@ -1,3 +1,38 @@
+function quayLoop(corners) {
+  const points = [];
+  const n = corners.length;
+  for (let k = 0; k < n; k++) {
+    const [px, pz] = corners[(k - 1 + n) % n];
+    const [x, z, r = 0] = corners[k];
+    const [nx, nz] = corners[(k + 1) % n];
+    const ax = x - px, az = z - pz, bx = nx - x, bz = nz - z;
+    const la = Math.hypot(ax, az), lb = Math.hypot(bx, bz);
+    const turn = Math.atan2(ax * bz - az * bx, ax * bx + az * bz);
+    const cut = Math.min(r * Math.tan(Math.abs(turn) / 2), la * 0.45, lb * 0.45);
+    const from = [x - (ax / la) * cut, z - (az / la) * cut];
+    const to = [x + (bx / lb) * cut, z + (bz / lb) * cut];
+    const [lx, lz] = points.length ? points[points.length - 1] : from;
+    const run = Math.hypot(from[0] - lx, from[1] - lz);
+    for (let u = 1, steps = Math.max(1, Math.round(run / 30)); u < steps; u++) points.push([lx + ((from[0] - lx) * u) / steps, lz + ((from[1] - lz) * u) / steps]);
+    if (!cut) {
+      points.push([x, z]);
+      continue;
+    }
+    const steps = Math.max(2, Math.round((Math.abs(turn) * r) / 12));
+    for (let u = 0; u <= steps; u++) {
+      const t = u / steps;
+      const qx = (1 - t) ** 2 * from[0] + 2 * (1 - t) * t * x + t * t * to[0];
+      const qz = (1 - t) ** 2 * from[1] + 2 * (1 - t) * t * z + t * t * to[1];
+      points.push([qx, qz]);
+    }
+  }
+  const [lx, lz] = points[points.length - 1];
+  const [fx, fz] = points[0];
+  const steps = Math.max(1, Math.round(Math.hypot(fx - lx, fz - lz) / 30));
+  for (let u = 1; u < steps; u++) points.push([lx + ((fx - lx) * u) / steps, lz + ((fz - lz) * u) / steps]);
+  return points;
+}
+
 export const MAPS = {
   bay: {
     id: 'bay',
@@ -73,6 +108,19 @@ export const MAPS = {
     pads: [[0.04, 6], [0.13, -8], [0.3, 8], [0.38, -6], [0.52, 7], [0.57, -7], [0.72, 6], [0.96, -5], [0.3, 0, 0], [0.65, 0, 0]],
     ramps: [[0.09, 0], [0.34, 6], [0.5, -5], [0.69, 0]],
     routes: [{ from: 0.45, to: 0.62, side: 1, offset: 56, halfWidth: 14, smooth: 260 }],
+  },
+  docks: {
+    id: 'docks',
+    halfWidth: 30,
+    banked: true,
+    widths: [[0, 40], [0.1, 40], [0.18, 34], [0.3, 32], [0.36, 24], [0.54, 24], [0.6, 30], [0.7, 34], [0.82, 34], [0.9, 40]],
+    control: quayLoop([
+      [0, -60], [260, -60, 110], [390, 90, 100], [330, 270, 90], [170, 255, 80], [125, 110, 70], [20, 105, 70],
+      [-30, 280, 80], [-200, 345, 100], [-360, 235, 100], [-300, 90, 90], [-370, -60, 130],
+    ]),
+    pads: [[0.03, 8], [0.09, -8], [0.24, 6], [0.44, 0], [0.66, -6], [0.75, 6], [0.89, 0], [0.96, -8], [0.3, 0, 0], [0.75, 0, 0]],
+    ramps: [[0.16, 0], [0.58, 0], [0.8, 0], [0.4, 0, 0]],
+    routes: [{ from: 0.335, to: 0.565, via: [[120, 262], [20, 276]], halfWidth: 15, smooth: 60 }],
   },
   midway: {
     id: 'midway',

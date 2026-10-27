@@ -646,13 +646,17 @@ kbd {
 
 .map-cards {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(8, minmax(0, 1fr));
   gap: 1rem;
-  width: min(1120px, 100%);
+  width: min(1240px, 100%);
 }
 
 .map-card:not(.surprise) {
   grid-column: span 2;
+}
+
+.map-card:nth-child(5) {
+  grid-column: 2 / span 2;
 }
 
 .map-card.surprise {
