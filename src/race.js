@@ -8,7 +8,7 @@ import { Wakes } from './wake.js';
 import { t as tr } from './i18n.js';
 import { ACCEL, ARMOR_SPEED, BANK_MARGIN, BASE_SPEED, BRAKE, CIRCLE_OFFSET, COAST, FALL_GRAVITY, GRIP, HOLD_IDS, KO_TIME, LAPS, MAX_HP, OFF_COURSE_SPEED, OUTER_LIMIT, RADIUS, REGEN_DELAY, REGEN_MAX, REGEN_RAMP, REGEN_START, REVERSE_SPEED, TURN_RATE, approach, clamp } from './race/shared.js';
 import { Boat } from './race/boat.js';
-import { CARRIER_SPEED } from './ctf.js';
+import { carrierSpeed } from './ctf.js';
 import * as machinegun from './race/attachments/machinegun.js';
 import * as missiles from './race/attachments/missiles.js';
 import * as mines from './race/attachments/mines.js';
@@ -199,7 +199,7 @@ export class Race {
     if (b.boost > 0) max *= 1.3;
     if (b.air?.jet) max *= 1.15;
     if (b.stun > 0) max *= 0.5;
-    if (b.flag) max *= CARRIER_SPEED;
+    if (b.flag) max *= carrierSpeed(b.flag, this.time);
     if (this.isTethered(b)) max *= 0.8;
     if (b.offCourse > 0) max *= OFF_COURSE_SPEED;
 

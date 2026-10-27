@@ -240,6 +240,9 @@ export class Hud {
         else if (e.team === player.team) this.pop(t('ctf_ourFlagTaken'), 'ko');
         break;
       }
+      case 'flagNeeded':
+        if (e.by === this.race.player) this.pop(t('ctf_needFlag'), 'ko');
+        break;
       case 'flagCaptured':
         this.pop(t(e.team === this.race.player.team ? 'ctf_weScored' : 'ctf_theyScored'), e.team === this.race.player.team ? 'go' : 'ko');
         break;

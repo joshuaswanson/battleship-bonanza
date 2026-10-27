@@ -6,7 +6,10 @@ import { t as tr } from './i18n.js';
 export const TEAMS = [{ color: 0x2f86ff }, { color: 0xff4a3d }];
 export const CAPTURES_TO_WIN = 3;
 export const MATCH_TIME = 300;
-export const CARRIER_SPEED = 0.85;
+const CARRIER_SPEED = 0.85;
+const TIRED_SPEED = 0.6;
+const TIRE_AFTER = 20;
+const TIRE_TIME = 25;
 const FLAG_REACH = 7;
 const CAPTURE_REACH = 10;
 const DROP_RETURN = 15;
@@ -14,6 +17,9 @@ const PATROL_SWAP = 7;
 const CELL = 6;
 const CLEARANCE = 5;
 const SIGHT = 14;
+const LOITER = 22;
+const RECOVER_RANGE = 150;
+const WAIT_NOTICE = 4;
 const STATES = ['home', 'carried', 'dropped'];
 
 const POLE = 7.6;
@@ -27,6 +33,11 @@ const HOIST = 0.18;
 const THICK = 0.06;
 const WIND = new THREE.Vector3(1, 0, 0.45).normalize().multiplyScalar(9);
 const GRAVITY = new THREE.Vector3(0, -9.8, 0);
+
+export function carrierSpeed(flag, time) {
+  const tired = Math.min(1, Math.max(0, time - flag.takenAt - TIRE_AFTER) / TIRE_TIME);
+  return CARRIER_SPEED + (TIRED_SPEED - CARRIER_SPEED) * tired;
+}
 
 function bannerLinks() {
   const out = [];
@@ -359,12 +370,17 @@ export class CaptureTheFlag {
         race.sfx.play('boost', b.pos);
       }
       const home = this.bases[b.team];
-      if (b.flag && Math.hypot(b.pos.x - home.x, b.pos.z - home.z) < CAPTURE_REACH) this.capture(race, b);
+      if (!b.flag || Math.hypot(b.pos.x - home.x, b.pos.z - home.z) >= CAPTURE_REACH) continue;
+      if (mine.state === 'home') this.capture(race, b);
+      else if (!(race.time < b.waitNotice)) {
+        b.waitNotice = race.time + WAIT_NOTICE;
+        race.emit('flagNeeded', { by: b });
+      }
     }
   }
 
   take(race, flag, b) {
-    Object.assign(flag, { state: 'carried', carrier: b, timer: 0 });
+    Object.assign(flag, { state: 'carried', carrier: b, timer: 0, takenAt: race.time });
     b.flag = flag;
     race.emit('flagTaken', { team: flag.team, by: b });
     race.emit('feed', { text: tr('ctf_took', { b: b.name }), player: true });
@@ -408,9 +424,14 @@ export class CaptureTheFlag {
     const mine = this.flags[b.team];
     const theirs = this.flags[1 - b.team];
     const home = this.bases[b.team];
-    if (b.flag) return home;
     const away = (p) => Math.hypot(p.x - b.pos.x, p.z - b.pos.z);
     const near = (p, range) => away(p) < range;
+    if (b.flag) {
+      if (mine.state === 'home') return home;
+      if (mine.state === 'dropped' && near(mine, RECOVER_RANGE)) return mine;
+      const a = race.time * 0.35 + b.slot * 2;
+      return { x: home.x + Math.cos(a) * LOITER, z: home.z + Math.sin(a) * LOITER };
+    }
     const defending = b.ai.role === 'defend';
     if (mine.state === 'carried' && (defending || theirs.state === 'carried' || away(mine) < away(theirs))) return mine.carrier.pos;
     if (mine.state === 'dropped' && (defending || near(mine, 300))) return mine;
