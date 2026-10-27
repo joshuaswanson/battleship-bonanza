@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { toon } from './toon.js';
 import { HULL_L, HULL_W } from './boatModel.js';
+import { Drape } from './drape.js';
 
 export const LINE_HEIGHT = 10;
 export const LINE_POST = 1.5;
@@ -10,7 +11,6 @@ const GAP = 6.5;
 const SHEET_RESPAWN = 18;
 const BLIND_TIME = 4;
 const BOAT_TOP = 2.6;
-const DRAPE_Y = 2.3;
 const CLOTHS = [0xff7ab8, 0x5ec8f2, 0xffd23f, 0x8ce06a, 0xffffff, 0xf08a6a];
 
 function ginghamTexture() {
@@ -43,21 +43,6 @@ function fluttering(uniforms, displace) {
   return material;
 }
 
-function drapeGeometry() {
-  const halfW = HULL_W + 0.8;
-  const halfL = HULL_L * 0.75;
-  const geometry = new THREE.PlaneGeometry(halfW * 2, halfL * 2, 8, 10).rotateX(-Math.PI / 2);
-  const pos = geometry.attributes.position;
-  for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i) / halfW;
-    const z = pos.getZ(i) / halfL;
-    pos.setY(i, DRAPE_Y - 1.5 * x * x - 0.6 * z * z);
-  }
-  geometry.attributes.uv.array.forEach((v, i, uv) => (uv[i] = v * (i % 2 ? 4 : 2.5)));
-  geometry.computeVertexNormals();
-  return geometry;
-}
-
 export class Laundry {
   constructor({ group, track, lines, rand }) {
     this.track = track;
@@ -71,7 +56,10 @@ export class Laundry {
     this.lines = lines.map((idx) => this.buildLine(idx, rand));
     this.sheets = this.lines.flatMap((l) => l.sheets);
     this.buildSheets();
-    this.buildDrapes();
+    this.drapeColor = new Uint8Array(12);
+    this.drapeMaterials = CLOTHS.map((color) => toon(color, { side: THREE.DoubleSide, map: GINGHAM }));
+    this.drapes = new Map();
+    this.flying = [];
   }
 
   buildLine(idx, rand) {
@@ -123,17 +111,10 @@ export class Laundry {
     this.group.add(this.sheetMesh, pegs);
   }
 
-  buildDrapes() {
-    const material = fluttering(this.uniforms, 'transformed.y += sin(uTime * 14.0 + position.z * 1.5 + instanceMatrix[3].x) * 0.22 * (0.3 + clamp(-position.z / 3.0, 0.0, 1.0));');
-    this.drapeMesh = new THREE.InstancedMesh(drapeGeometry(), material, 12);
-    this.drapeMesh.frustumCulled = false;
-    this.drapeMesh.count = 0;
-    this.drapeMesh.setColorAt(0, new THREE.Color());
-    this.drapeColor = new Uint8Array(12);
-    this.group.add(this.drapeMesh);
-  }
-
   reset(race) {
+    for (const drape of [...this.drapes.values(), ...this.flying]) drape.dispose();
+    this.drapes.clear();
+    this.flying.length = 0;
     this.boats = race.boats;
     for (const s of this.sheets) Object.assign(s, { on: true, timer: 0, grow: 1 });
     for (const b of race.boats) b.blind = 0;
@@ -176,7 +157,7 @@ export class Laundry {
     if (b.isPlayer) race.emit('laundry');
   }
 
-  animate(worldTime) {
+  animate(worldTime, dt) {
     const time = this.clock ?? worldTime;
     this.uniforms.uTime.value = time;
     const m = new THREE.Matrix4();
@@ -191,20 +172,18 @@ export class Laundry {
       this.sheetMesh.setMatrixAt(k, m.compose(p, q, s.set(sheet.width, grow, 1)));
     });
     this.sheetMesh.instanceMatrix.needsUpdate = true;
-    let count = 0;
-    const color = new THREE.Color();
     this.boats.forEach((b, k) => {
-      if (!(b.blind > 0) || count >= this.drapeMesh.instanceMatrix.count) return;
-      const size = Math.max(0, Math.min(1, (BLIND_TIME - b.blind) / 0.15, b.blind / 0.3));
-      const { root, body } = b.model;
-      root.updateMatrix();
-      body.updateMatrix();
-      this.drapeMesh.setMatrixAt(count, m.makeScale(size, size, size).premultiply(body.matrix).premultiply(root.matrix));
-      this.drapeMesh.setColorAt(count++, color.setHex(CLOTHS[this.drapeColor[k]]));
+      const drape = this.drapes.get(b);
+      if (b.blind > 0) {
+        if (drape) drape.flutter(dt, b.speed, time);
+        else this.drapes.set(b, new Drape(b.model, this.drapeMaterials[this.drapeColor[k]]));
+      } else if (drape) {
+        drape.release(this.group, b.vel);
+        this.flying.push(drape);
+        this.drapes.delete(b);
+      }
     });
-    this.drapeMesh.count = count;
-    this.drapeMesh.instanceMatrix.needsUpdate = true;
-    if (this.drapeMesh.instanceColor) this.drapeMesh.instanceColor.needsUpdate = true;
+    this.flying = this.flying.filter((drape) => drape.fly(dt) || drape.dispose());
   }
 
   snapshot() {
