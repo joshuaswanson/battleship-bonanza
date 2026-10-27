@@ -1048,9 +1048,13 @@ kbd {
   gap: 0.5rem;
 }
 
+.yard-tools .btn-icon {
+  padding: 0.3em 0.75em;
+}
+
 .yard-tools .btn-icon svg {
-  width: 1.2em;
-  height: 1.2em;
+  width: 1.4em;
+  height: 1.4em;
 }
 
 .yard-left,
