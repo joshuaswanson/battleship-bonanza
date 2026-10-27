@@ -42,6 +42,7 @@ export const methods = {
           if (o.distanceToAxis2D(mine.pos.x, mine.pos.z) < 4) {
             this.fx.explosion(mine.pos.x, water + 0.5, mine.pos.z, 1.2);
             this.sfx.play('mineBoom', mine.pos);
+            this.blasts.push({ x: mine.pos.x, z: mine.pos.z, owner: mine.owner });
             this.damage(o, 40, mine.owner, 'mine', { spin: 1, launch: 0.9 });
             this.removeMine(mine);
             break;

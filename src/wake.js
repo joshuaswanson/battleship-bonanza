@@ -46,6 +46,8 @@ const VERT = /* glsl */ `
 
 const FRAG = /* glsl */ `
   uniform float uTime;
+  uniform vec3 uFoam;
+  uniform vec3 uTint;
   varying float vAlpha;
   varying float vEdge;
   varying vec2 vXZ;
@@ -58,14 +60,14 @@ const FRAG = /* glsl */ `
     float foam = vAlpha * edge * (0.55 + 0.45 * n);
     float a = smoothstep(0.26, 0.32, foam);
     if (a < 0.01) discard;
-    gl_FragColor = vec4(mix(vec3(0.8, 0.95, 1.0), vec3(1.0), smoothstep(0.4, 0.7, foam)), a * 0.85);
+    gl_FragColor = vec4(mix(uTint, uFoam, smoothstep(0.4, 0.7, foam)), a * 0.85);
     #include <colorspace_fragment>
     #include <fog_fragment>
   }
 `;
 
 export class Wakes {
-  constructor(scene) {
+  constructor(scene, water) {
     this.scene = scene;
     this.positions = new Float32Array(MAX_VERTS * 3);
     this.alphas = new Float32Array(MAX_VERTS);
@@ -79,7 +81,7 @@ export class Wakes {
     geometry.setAttribute('aEdge', new THREE.BufferAttribute(this.edges, 1).setUsage(THREE.DynamicDrawUsage));
     this.geometry = geometry;
     this.material = new THREE.ShaderMaterial({
-      uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uTime: { value: 0 } }]),
+      uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uTime: { value: 0 }, uFoam: { value: null }, uTint: { value: null } }]),
       vertexShader: VERT,
       fragmentShader: FRAG,
       transparent: true,
@@ -88,6 +90,8 @@ export class Wakes {
       polygonOffset: true,
       polygonOffsetFactor: -2,
     });
+    this.material.uniforms.uFoam.value = water.foam;
+    this.material.uniforms.uTint.value = water.wake;
     this.mesh = new THREE.Mesh(geometry, this.material);
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = 2;

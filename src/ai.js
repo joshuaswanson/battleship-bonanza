@@ -43,6 +43,7 @@ export function driveAI(race, b, dt) {
 
   avoidMines(race, b, ai);
   avoidRocks(race, b, ai);
+  if (race.hazards) avoidHazards(race, b, ai);
   for (const heat of Object.values(b.heat)) if (heat.heat > 0.85) heat.trigger = false;
 
   if (race.player && !race.attract && !b.isPlayer) {
@@ -85,6 +86,24 @@ function avoidRocks(race, b, ai) {
     if (Math.abs(side) > r + 4) continue;
     ai.dodge = side > 0 ? 8 + r : -8 - r;
     ai.dodgeTime = 0.6;
+    return;
+  }
+}
+
+function avoidHazards(race, b, ai) {
+  if (ai.dodgeTime > 0) return;
+  const fx = Math.sin(b.heading);
+  const fz = Math.cos(b.heading);
+  for (const o of race.hazards.obstacles) {
+    if (o.drum && ai.thrillSeeker) continue;
+    const dx = o.x - b.pos.x;
+    const dz = o.z - b.pos.z;
+    const ahead = dx * fx + dz * fz;
+    if (ahead < 0 || ahead > 24 + o.r) continue;
+    const side = dx * -fz + dz * fx;
+    if (Math.abs(side) > o.r + 3.5) continue;
+    ai.dodge = side > 0 ? 7 + o.r : -7 - o.r;
+    ai.dodgeTime = 0.5;
     return;
   }
 }

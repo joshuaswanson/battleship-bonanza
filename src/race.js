@@ -33,12 +33,14 @@ const MODULES = [machinegun, missiles, mines, grapple, emp, jetpack, laser, flam
 export class Race {
   actions = Object.assign({}, ...MODULES.map((m) => m.actions ?? {}));
 
-  constructor({ scene, track, fx, sfx, defs, shores = [], solid = null, raycast = null, chopper = null, attract = false, laps = LAPS }) {
+  constructor({ scene, track, fx, sfx, defs, shores = [], solid = null, raycast = null, chopper = null, hazards = null, attract = false, laps = LAPS }) {
     this.shores = shores;
     this.solid = solid;
     this.bankProbe = new THREE.Vector3();
     this.raycast = raycast;
     this.chopper = chopper;
+    this.hazards = hazards;
+    this.blasts = [];
     this.scene = scene;
     this.track = track;
     this.fx = fx;
@@ -72,8 +74,9 @@ export class Race {
     }
 
     this.features = new TrackFeatures(scene, track, fx, sfx);
-    this.wakes = new Wakes(scene);
+    this.wakes = new Wakes(scene, fx.water);
     this.placeGrid();
+    hazards?.reset(this);
   }
 
   placeGrid() {
@@ -140,6 +143,8 @@ export class Race {
     this.updateLasers(dt);
     this.updateFlames(dt);
     this.features.update(this, dt, this.time);
+    this.hazards?.play(this, dt);
+    this.blasts.length = 0;
     for (const b of this.boats) this.updateVisual(b, dt);
     this.wakes.update(this.boats, this.time);
     this.updateStandings();
@@ -208,7 +213,7 @@ export class Race {
 
     const fx = Math.sin(b.heading);
     const fz = Math.cos(b.heading);
-    const k = 1 - Math.exp(-(b.air ? 1 : GRIP) * dt);
+    const k = 1 - Math.exp(-(b.air ? 1 : GRIP * b.grip) * dt);
     b.vel.x += (fx * b.speed - b.vel.x) * k;
     b.vel.z += (fz * b.speed - b.vel.z) * k;
 

@@ -13,10 +13,10 @@ export const methods = {
       if (m.fizzle > 0) {
         m.fizzle -= dt;
         if (m.fizzle <= 0) return this.explodeMissile(m, null, 0.5);
-      } else if (m.target && m.target.alive && (m.lockTime -= dt) > 0) {
+      } else if (m.target && m.target.alive && (m.target.spotted > 0 || (m.lockTime -= dt) > 0)) {
         desired.copy(m.target.center()).sub(m.pos).normalize();
         const angle = m.dir.angleTo(desired);
-        const maxTurn = 2.5 * dt;
+        const maxTurn = (m.target.spotted > 0 ? 4 : 2.5) * dt;
         m.dir.lerp(desired, angle > maxTurn ? maxTurn / angle : 1).normalize();
         if (this.solid || this.raycast) {
           let blocked;
@@ -66,6 +66,7 @@ export const methods = {
   explodeMissile(m, victim, power) {
     this.fx.explosion(m.pos.x, m.pos.y, m.pos.z, power * 0.7);
     this.sfx.play('boom', m.pos);
+    this.blasts.push({ x: m.pos.x, z: m.pos.z, owner: m.owner });
     this.scene.remove(m.mesh);
     if (victim) {
       this.damage(victim, 11, m.owner, 'missile', { knockX: m.dir.x * 6, knockZ: m.dir.z * 6, stun: 0.2 });
@@ -82,6 +83,7 @@ export const actions = {
       .filter((o) => o !== b && o.alive && o.invuln <= 0 && !o.has('camo') && !(o.finished && !this.attract) && this.willAttack(b, o))
       .map((o) => ({ o, d: Math.hypot(o.pos.x - b.pos.x, o.pos.z - b.pos.z) + (chased.has(o) ? 60 : 0) }))
       .filter((t) => t.d <= 240)
+      .map((t) => ({ o: t.o, d: t.d - (t.o.spotted > 0 ? 80 : 0) }))
       .sort((x, y) => x.d - y.d)
       .map((t) => t.o);
     const target = targets[0] ?? null;

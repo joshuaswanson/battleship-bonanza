@@ -203,7 +203,7 @@ export class Recorder {
       else add(h.rope);
     }
     const bullets = [race.bulletMesh, race.bulletOutline].map((mesh) => mesh.instanceMatrix.array.slice(0, race.bulletMesh.count * 16));
-    this.frames.push({ t: race.time, nodes, values, rest, loose, bullets, count: race.bulletMesh.count });
+    this.frames.push({ t: race.time, nodes, values, rest, loose, bullets, count: race.bulletMesh.count, hazards: race.hazards?.snapshot() ?? null });
   }
 }
 
@@ -310,6 +310,7 @@ export class Replay {
       if (e.sound) this.sfx.play(e.sound, e.pos);
       else Object.getPrototypeOf(e.pool)[e.name].apply(e.pool, e.args);
     }
+    if (a.hazards) this.race.hazards.restore(a.hazards, this.time);
     this.race.wakes.update(this.race.boats, this.time);
   }
 }

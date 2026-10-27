@@ -478,6 +478,8 @@ class Decals {
 export class Effects {
   constructor(scene, surface = waveHeight) {
     this.puffs = new ParticlePool(scene, toon(0xffffff, { emissive: 0x6f93ad }), 4200);
+    this.water = { foam: new THREE.Color(), wake: new THREE.Color() };
+    this.setWater();
     this.sparks = new ParticlePool(scene, glow(0xffffff), 900);
     this.soot = new ParticlePool(scene, toon(0xffffff), 1800);
     this.fire = new ParticlePool(scene, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.92, depthWrite: false }), 2600);
@@ -540,25 +542,33 @@ export class Effects {
     }
   }
 
+  setWater({ foam = 0xffffff, tint = 0xbff6ff, wake = 0xe7f9ff, glow = 0x6f93ad } = {}) {
+    this.foam = foam;
+    this.tint = tint;
+    this.water.foam.set(foam);
+    this.water.wake.set(wake);
+    this.puffs.mesh.material.emissive.set(glow);
+  }
+
   splash(x, y, z, power = 1) {
     const r = Math.random;
     const count = Math.round(24 * power) + 3;
     for (let i = 0; i < count; i++) {
       const a = r() * Math.PI * 2;
       const sp = (4 + r() * 7) * power;
-      this.puffs.emit(x, y, z, Math.cos(a) * sp, (7 + r() * 9) * power, Math.sin(a) * sp, 0.4 + r() * 0.55 * power, 0.7 + r() * 0.5, r() < 0.3 ? 0xbff6ff : 0xffffff, 22, 0.5, 1);
+      this.puffs.emit(x, y, z, Math.cos(a) * sp, (7 + r() * 9) * power, Math.sin(a) * sp, 0.4 + r() * 0.55 * power, 0.7 + r() * 0.5, r() < 0.3 ? this.tint : this.foam, 22, 0.5, 1);
     }
     if (power >= 0.5) {
       for (let i = 0; i < 8 * power; i++) {
-        this.puffs.emit(x + (r() - 0.5) * power, y, z + (r() - 0.5) * power, (r() - 0.5) * 2, (12 + r() * 8) * Math.sqrt(power), (r() - 0.5) * 2, (0.5 + r() * 0.4) * power, 0.9 + r() * 0.3, 0xffffff, 24, 0.3, 1);
+        this.puffs.emit(x + (r() - 0.5) * power, y, z + (r() - 0.5) * power, (r() - 0.5) * 2, (12 + r() * 8) * Math.sqrt(power), (r() - 0.5) * 2, (0.5 + r() * 0.4) * power, 0.9 + r() * 0.3, this.foam, 24, 0.3, 1);
       }
     }
-    this.ring(x, y + 0.2, z, 0xffffff, 1 * power, 7 * power, 0.7);
+    this.ring(x, y + 0.2, z, this.foam, 1 * power, 7 * power, 0.7);
   }
 
   droplet(x, y, z, vx, vy, vz, size = 0.3) {
     const r = Math.random;
-    this.puffs.emit(x, y, z, vx, vy, vz, size * (0.7 + r() * 0.6), 0.5 + r() * 0.4, r() < 0.35 ? 0xbff6ff : 0xffffff, 22, 0.8, 1);
+    this.puffs.emit(x, y, z, vx, vy, vz, size * (0.7 + r() * 0.6), 0.5 + r() * 0.4, r() < 0.35 ? this.tint : this.foam, 22, 0.8, 1);
   }
 
   spray(x, y, z, fx, fz, sx, sz, speed, steer) {
@@ -657,7 +667,7 @@ export class Effects {
 
   bubbles(x, y, z) {
     const r = Math.random;
-    this.puffs.emit(x + (r() - 0.5) * 3, y, z + (r() - 0.5) * 3, (r() - 0.5), 2 + r() * 2, (r() - 0.5), 0.25 + r() * 0.35, 0.8 + r() * 0.6, r() < 0.5 ? 0xbff6ff : 0xffffff, -2, 1, 0);
+    this.puffs.emit(x + (r() - 0.5) * 3, y, z + (r() - 0.5) * 3, (r() - 0.5), 2 + r() * 2, (r() - 0.5), 0.25 + r() * 0.35, 0.8 + r() * 0.6, r() < 0.5 ? this.tint : this.foam, -2, 1, 0);
   }
 
   ring(x, y, z, color, from, to, life, opacity = 0.9) {

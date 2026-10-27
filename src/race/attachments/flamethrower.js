@@ -15,6 +15,7 @@ export const methods = {
       dir.y = 0;
       dir.normalize();
       this.fx.flameSpray(origin, dir, b.vel);
+      b.flameRay = { x: origin.x, z: origin.z, dx: dir.x, dz: dir.z, time: this.time };
       const c = new THREE.Vector3();
       for (const o of this.boats) {
         if (o === b || !o.alive) continue;
