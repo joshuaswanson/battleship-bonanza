@@ -221,6 +221,9 @@ export class Hud {
       case 'spotted':
         this.pop(t('spotted'), 'ko');
         break;
+      case 'laundry':
+        this.pop(t('laundry'), 'ko');
+        break;
       case 'dodge':
         this.pop(t('dodged'), 'go');
         break;

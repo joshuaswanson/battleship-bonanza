@@ -86,7 +86,7 @@ export const actions = {
       .map((t) => ({ o: t.o, d: t.d - (t.o.spotted > 0 ? 80 : 0) }))
       .sort((x, y) => x.d - y.d)
       .map((t) => t.o);
-    const target = targets[0] ?? null;
+    const target = b.blind > 0 ? null : targets[0] ?? null;
     b.model.busy.missiles = 1;
     b.missileAim = target ? this.relativeAngle(b, target) : 0;
     b.missileQueue.push({ target, wait: 0.12 });

@@ -5,6 +5,7 @@ import { FLAME_REACH, HALF_ARC, HIT_RADIUS, WATCH_RANGE, clamp, wrapAngle } from
 
 export const methods = {
   findTarget(b, { range, minDot = -1, maxDot = 1, filter = null, minRange = 0 }) {
+    if (b.blind > 0) return null;
     let best = null;
     let bestD = range;
     const fx = Math.sin(b.heading);
@@ -51,6 +52,7 @@ export const methods = {
   },
 
   turretTarget(b, t) {
+    if (b.blind > 0) return null;
     const slot = b.items.indexOf(t.id);
     const wanted = b.aim[t.id];
     const usable = (o) => o && o !== b && o.alive && this.inArc(b, slot, o.pos.x, o.pos.z) && Math.hypot(o.pos.x - b.pos.x, o.pos.z - b.pos.z) < WATCH_RANGE;
