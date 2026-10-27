@@ -16,26 +16,66 @@ const CLEARANCE = 5;
 const SIGHT = 14;
 const STATES = ['home', 'carried', 'dropped'];
 
-const CLOTH_VERT = `transformed.z += sin(uTime * 7.0 + position.x * 2.2) * 0.22 * (position.x + 1.1);`;
+const POLE = 7.6;
+const BANNER_W = 3.8;
+const BANNER_H = 2.5;
+const CARRY_SCALE = 0.6;
 
-function flagMesh(color, uniforms) {
+function bannerTexture(color) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 84;
+  const ctx = canvas.getContext('2d');
+  const hex = `#${color.toString(16).padStart(6, '0')}`;
+  ctx.fillStyle = hex;
+  ctx.fillRect(0, 0, 128, 84);
+  ctx.fillStyle = 'rgba(14, 42, 71, 0.28)';
+  ctx.fillRect(0, 0, 128, 9);
+  ctx.fillRect(0, 75, 128, 9);
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  for (let k = 0; k < 10; k++) {
+    const a = -Math.PI / 2 + (k * Math.PI) / 5;
+    const r = k % 2 ? 11 : 25;
+    ctx.lineTo(66 + Math.cos(a) * r, 43 + Math.sin(a) * r);
+  }
+  ctx.closePath();
+  ctx.fill();
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+function flagMesh(color) {
   const group = new THREE.Group();
-  const pole = outlined(new THREE.CylinderGeometry(0.12, 0.12, 7, 8).translate(0, 3.5, 0), toon(0xf3eee2), 0.04);
-  const knob = outlined(new THREE.SphereGeometry(0.32, 10, 8).translate(0, 7.1, 0), toon(0xffd23f), 0.04);
-  const material = toon(color, { side: THREE.DoubleSide });
-  material.onBeforeCompile = (shader) => {
-    shader.uniforms.uTime = uniforms.uTime;
-    shader.vertexShader = 'uniform float uTime;\n' + shader.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>\n${CLOTH_VERT}`);
-  };
-  material.customProgramCacheKey = () => 'ctf-cloth';
-  const cloth = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 2, 8, 2).translate(1.7, 5.8, 0), material);
+  group.add(outlined(new THREE.CylinderGeometry(0.2, 0.24, POLE, 12).translate(0, POLE / 2, 0), toon(0xf6f1e6), 0.06));
+  for (const y of [0.5, 1.2]) group.add(outlined(new THREE.CylinderGeometry(0.27, 0.27, 0.3, 12).translate(0, y, 0), toon(color), 0.05));
+  group.add(outlined(new THREE.SphereGeometry(0.46, 14, 10).translate(0, POLE + 0.3, 0), toon(0xffd23f), 0.06));
+  const geometry = new THREE.BoxGeometry(BANNER_W, BANNER_H, 0.14, 14, 6, 1).translate(BANNER_W / 2 + 0.18, POLE - BANNER_H / 2 - 0.25, 0);
+  const banner = outlined(geometry, toon(0xffffff, { map: bannerTexture(color) }), 0.05);
+  group.add(banner);
   const beam = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.9, 0.9, 70, 12, 1, true).translate(0, 42, 0),
-    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.28, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }),
+    new THREE.CylinderGeometry(0.7, 0.7, 70, 12, 1, true).translate(0, POLE + 36, 0),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }),
   );
-  group.add(pole, knob, cloth, beam);
+  group.add(beam);
   group.matrixAutoUpdate = false;
+  group.userData.banner = { geometry, rest: geometry.attributes.position.array.slice() };
   return group;
+}
+
+function wave(banner, time, phase) {
+  const { geometry, rest } = banner;
+  const pos = geometry.attributes.position.array;
+  for (let i = 0; i < pos.length; i += 3) {
+    const u = Math.max(0, (rest[i] - 0.18) / BANNER_W);
+    const swing = Math.sin(time * 6.5 - u * 5 + phase) * 0.38 * u;
+    pos[i] = rest[i] - u * u * 0.25;
+    pos[i + 1] = rest[i + 1] + Math.sin(time * 4.3 - u * 3 + phase) * 0.1 * u - u * 0.18;
+    pos[i + 2] = rest[i + 2] + swing;
+  }
+  geometry.attributes.position.needsUpdate = true;
+  geometry.computeVertexNormals();
 }
 
 function baseMesh(base, color) {
@@ -67,13 +107,12 @@ export class CaptureTheFlag {
     this.scene = scene;
     this.group = new THREE.Group();
     scene.add(this.group);
-    this.uniforms = { uTime: { value: 0 } };
     this.arena = track.map.arena;
     this.bases = this.arena.bases.map(([x, z], team) => ({ team, x, z, heading: Math.atan2(-x, -z) }));
     this.baseMeshes = this.bases.map((base) => baseMesh(base, TEAMS[base.team].color));
     this.group.add(...this.baseMeshes);
     this.flags = this.bases.map((base) => {
-      const mesh = flagMesh(TEAMS[base.team].color, this.uniforms);
+      const mesh = flagMesh(TEAMS[base.team].color);
       this.group.add(mesh);
       return { team: base.team, base, state: 'home', carrier: null, x: base.x, z: base.z, timer: 0, mesh };
     });
@@ -81,7 +120,7 @@ export class CaptureTheFlag {
     this.rows = Math.ceil((this.arena.rz * 2) / CELL) + 1;
     this.queue = new Int32Array(this.cols * this.rows);
     this.matrix = new THREE.Matrix4();
-    this.offset = new THREE.Matrix4().compose(new THREE.Vector3(0, 1.6, -3.4), new THREE.Quaternion(), new THREE.Vector3(0.55, 0.55, 0.55));
+    this.mount = new THREE.Matrix4();
   }
 
   reset(race) {
@@ -370,14 +409,17 @@ export class CaptureTheFlag {
   }
 
   animate(time) {
-    this.uniforms.uTime.value = time;
     for (const mesh of this.baseMeshes) mesh.position.y = waveHeight(mesh.position.x, mesh.position.z, time) * 0.8;
+    for (const b of this.race?.boats ?? []) b.model.flag.visible = !this.flags.some((flag) => flag.state === 'carried' && flag.carrier === b);
     for (const flag of this.flags) {
       const { mesh } = flag;
+      wave(mesh.userData.banner, time, flag.team * 1.7);
       if (flag.state === 'carried' && flag.carrier) {
-        const { root } = flag.carrier.model;
+        const { root, body, flag: staff } = flag.carrier.model;
         root.updateMatrix();
-        mesh.matrix.multiplyMatrices(root.matrix, this.offset);
+        body.updateMatrix();
+        this.mount.compose(staff.position.clone().setY(staff.position.y - 1.4), new THREE.Quaternion(), new THREE.Vector3(CARRY_SCALE, CARRY_SCALE, CARRY_SCALE));
+        mesh.matrix.multiplyMatrices(root.matrix, body.matrix).multiply(this.mount);
       } else {
         const y = waveHeight(flag.x, flag.z, time);
         const tilt = flag.state === 'dropped' ? 0.35 + Math.sin(time * 2 + flag.team) * 0.1 : 0;
