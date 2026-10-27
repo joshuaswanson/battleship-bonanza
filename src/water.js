@@ -133,7 +133,7 @@ const FRAG = /* glsl */ `
   }
 `;
 
-export function createWater({ size = 1800, segments = 240, geometry = null, flat = false, amp = 1, deep = 0x0f8fb8, shallow = 0x35d6e0, flowSpeed = 0.35, rapids = 0 } = {}) {
+export function createWater({ size = 1800, segments = 240, geometry = null, flat = false, amp = 1, deep = 0x0f8fb8, shallow = 0x35d6e0, foam = 0xf4fbff, flowSpeed = 0.35, rapids = 0 } = {}) {
   geometry ??= new THREE.PlaneGeometry(size, size, segments, segments);
   if (!flat) geometry.rotateX(-Math.PI / 2);
   const material = new THREE.ShaderMaterial({
@@ -144,7 +144,7 @@ export function createWater({ size = 1800, segments = 240, geometry = null, flat
         uAmp: { value: amp },
         uDeep: { value: new THREE.Color(deep) },
         uShallow: { value: new THREE.Color(shallow) },
-        uFoam: { value: new THREE.Color(0xf4fbff) },
+        uFoam: { value: new THREE.Color(foam) },
         uSunDir: { value: new THREE.Vector3(0.4, 1, 0.3) },
         uFlowSpeed: { value: flowSpeed },
         uRapids: { value: rapids },
