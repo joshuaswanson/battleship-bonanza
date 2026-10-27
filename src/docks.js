@@ -3,16 +3,16 @@ import { Collider } from './collider.js';
 import { createWater } from './water.js';
 import { toon, mulberry32 } from './toon.js';
 import { Batcher, cullChunks, slicer, COLORS, mat, createSky, createArch } from './world.js';
-import { DockHazards } from './docksHazards.js';
+import { DockHazards, SEARCH_BEAM, SEARCH_POOL } from './docksHazards.js';
 import { courseSurface, buildHeightfield, courseBuoys, noise } from './terrain.js';
 import { DOCK_COLORS, GLOW_COLORS, CONTAINER, Decals, containerStack, quayCrane, goliathCrane, cargoShip, warehouse, oilTank, floodMast, bollard, drums, pallets, chimney, pipeBridge } from './docksProps.js';
 
 const COLORS_ALL = { ...COLORS, ...DOCK_COLORS, ...GLOW_COLORS };
 const QUAY_TOP = 2.2;
 const WALK = 5;
-const SKY_TOP = 0x0b1030;
-const SKY_HORIZON = 0x5a3d5c;
-const HAZE = 0x2a2a42;
+const SKY_TOP = 0x04061a;
+const SKY_HORIZON = 0x1b1530;
+const HAZE = 0x0f0f1e;
 
 const BEAM_VERT = /* glsl */ `
   varying float vAlong;
@@ -114,6 +114,7 @@ const BEAM = new THREE.ConeGeometry(1, 1, 18, 1, true).translate(0, -0.5, 0);
 const POOL = new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2);
 const WARM = new THREE.Color(0xffc27a);
 const COOL = new THREE.Color(0xbcd4ff);
+const SEARCH = new THREE.Color(0xe6f0ff);
 const UP = new THREE.Vector3(0, 1, 0);
 
 class Lights {
@@ -249,11 +250,11 @@ export async function createDocks(group, track, fx) {
   moon.lookAt(0, 0, 0);
   sky.add(moon);
   group.add(sky);
-  group.add(new THREE.HemisphereLight(0x8496d6, 0x2b2733, 1.05));
-  const sun = new THREE.DirectionalLight(0xffb37a, 1.5);
+  group.add(new THREE.HemisphereLight(0x6a7cc4, 0x1c1a24, 0.25));
+  const sun = new THREE.DirectionalLight(0xffb37a, 0.35);
   sun.position.set(-60, 45, 80);
   group.add(sun);
-  const moonLight = new THREE.DirectionalLight(0x9db4ff, 0.7);
+  const moonLight = new THREE.DirectionalLight(0x9db4ff, 0.3);
   moonLight.position.set(-40, 80, -60);
   group.add(moonLight);
 
@@ -275,7 +276,7 @@ export async function createDocks(group, track, fx) {
   };
   group.add(quayWalls(track, landAt));
 
-  const water = createWater({ deep: 0x18201a, shallow: 0x3a4529, foam: 0x8f8b62, amp: 0.8 });
+  const water = createWater({ deep: 0x0a0e0b, shallow: 0x1b2214, foam: 0x4a4834, amp: 0.8 });
   group.add(water.mesh);
 
   const batch = new Batcher();
@@ -331,8 +332,8 @@ export async function createDocks(group, track, fx) {
     batch.add('steel', CAP, mat(p.x, QUAY_TOP + 30.5, p.z, 4, 1, 4));
     glow.add('lampCool', LAMP, mat(p.x, QUAY_TOP + 31.6, p.z, 1.3, 1.3, 1.3));
     const head = new THREE.Vector3(p.x, QUAY_TOP + 31.6, p.z);
-    const beam = lights.beam(head, head.clone().add(new THREE.Vector3(0, -30, 30)), 7, COOL, 1.1);
-    const pool = lights.pool(p.x, 0.5, p.z, 12, COOL, 0.9);
+    const beam = lights.beam(head, head.clone().add(new THREE.Vector3(0, -30, 30)), SEARCH_BEAM, SEARCH, 3.4);
+    const pool = lights.pool(p.x, 0.5, p.z, SEARCH_POOL, SEARCH, 3);
     sweepers.push({ head, beam, pool, idx: i, phase: rand() * Math.PI * 2, speed: 0.35 + rand() * 0.25 });
     taken.push({ x: p.x, z: p.z, r: 3 });
   }
@@ -537,7 +538,7 @@ export async function createDocks(group, track, fx) {
   return {
     fog,
     hazards,
-    spray: { foam: 0xa3a372, tint: 0x6f7a44, wake: 0x7c8550, glow: 0x262b1c },
+    spray: { foam: 0x6a6a4a, tint: 0x3c4426, wake: 0x485030, glow: 0x161a10 },
     water,
     sun,
     surface,
