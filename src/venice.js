@@ -63,8 +63,8 @@ const FUNNEL = new THREE.CylinderGeometry(1, 0.35, 1, 8);
 const roofShape = new THREE.Shape([new THREE.Vector2(-1, 0), new THREE.Vector2(1, 0), new THREE.Vector2(0, 1)]);
 const ROOF = new THREE.ExtrudeGeometry(roofShape, { depth: 1, bevelEnabled: false }).translate(0, 0, -0.5);
 
-const WALL_TOP = 1.25;
-const WALK = 3;
+const WALL_TOP = 1.4;
+const WALK = 3.36;
 const LINE_AHEAD = 35;
 
 function placer(batch) {
@@ -84,75 +84,75 @@ function landmarks(batch, group, track, idx, side) {
   };
   const face = Math.atan2(-side * track.nx[i], -side * track.nz[i]);
 
-  const palace = at(38, WALK + 10);
+  const palace = at(42.56, WALK + 11.2);
   dogesPalace(batch, group, palace.x, palace.z, face);
-  const tower = at(-14, WALK + 26);
+  const tower = at(-15.68, WALK + 29.12);
   campanile(batch, tower.x, tower.z);
 
-  const basilica = at(14, WALK + 62);
+  const basilica = at(15.68, WALK + 69.44);
   const bo = new THREE.Vector3(basilica.x, 0, basilica.z);
-  put('cream', BOX, bo, face, 0, WALL_TOP + 9, 0, 40, 18, 30);
-  put('trim', BOX, bo, face, 0, WALL_TOP + 18.4, 0, 41, 0.8, 31);
-  for (const k of [-16, -8, 0, 8, 16]) {
-    put('gold', BOX, bo, face, k, WALL_TOP + 7, 15.05, 6, 10, 0.2);
-    put('door', BOX, bo, face, k, WALL_TOP + 4, 15.2, 4.4, 8, 0.2);
-    put('door', BALL, bo, face, k, WALL_TOP + 8, 15.2, 2.2, 2.2, 0.1);
-    put('cream', ROOF, bo, face, k, WALL_TOP + 18.8, 14, 3.4, 4, 2, 0, 0);
+  put('cream', BOX, bo, face, 0, WALL_TOP + 10.08, 0, 44.8, 20.16, 33.6);
+  put('trim', BOX, bo, face, 0, WALL_TOP + 20.61, 0, 45.92, 0.9, 34.72);
+  for (const k of [-17.92, -8.96, 0, 8.96, 17.92]) {
+    put('gold', BOX, bo, face, k, WALL_TOP + 7.84, 16.86, 6.72, 11.2, 0.22);
+    put('door', BOX, bo, face, k, WALL_TOP + 4.48, 17.02, 4.93, 8.96, 0.22);
+    put('door', BALL, bo, face, k, WALL_TOP + 8.96, 17.02, 2.46, 2.46, 0.11);
+    put('cream', ROOF, bo, face, k, WALL_TOP + 21.06, 15.68, 3.81, 4.48, 2.24, 0, 0);
   }
-  for (const [lx, lz, r] of [[0, 0, 8], [-12, 0, 6], [12, 0, 6], [0, -10, 6], [0, 10, 6]]) {
-    put('lead', CYL, bo, face, lx, WALL_TOP + 20.5, lz, r * 0.8, 4, r * 0.8);
-    put('lead', DOME, bo, face, lx, WALL_TOP + 22.5, lz, r, r * 1.1, r);
-    put('gold', BALL, bo, face, lx, WALL_TOP + 23 + r * 1.1, lz, 0.7, 1.2, 0.7);
+  for (const [lx, lz, r] of [[0, 0, 8.96], [-13.44, 0, 6.72], [13.44, 0, 6.72], [0, -11.2, 6.72], [0, 11.2, 6.72]]) {
+    put('lead', CYL, bo, face, lx, WALL_TOP + 22.96, lz, r * 0.8, 4.48, r * 0.8);
+    put('lead', DOME, bo, face, lx, WALL_TOP + 25.2, lz, r, r * 1.1, r);
+    put('gold', BALL, bo, face, lx, WALL_TOP + 25.76 + r * 1.1, lz, 0.78, 1.34, 0.78);
   }
-  for (const along of [-2, 10]) {
-    const c = at(along, WALK - 0.5);
-    batch.add('trim', CYL, mat(c.x, WALL_TOP + 8, c.z, 0.9, 16, 0.9));
-    batch.add('gold', BOX, mat(c.x, WALL_TOP + 16.6, c.z, 1.6, 1.2, 2.4));
-    batch.add('gold', BALL, mat(c.x, WALL_TOP + 17.8, c.z, 0.7, 0.9, 0.7));
+  for (const along of [-2.24, 11.2]) {
+    const c = at(along, WALK - 0.56);
+    batch.add('trim', CYL, mat(c.x, WALL_TOP + 8.96, c.z, 1.01, 17.92, 1.01));
+    batch.add('gold', BOX, mat(c.x, WALL_TOP + 18.59, c.z, 1.79, 1.34, 2.69));
+    batch.add('gold', BALL, mat(c.x, WALL_TOP + 19.94, c.z, 0.78, 1.01, 0.78));
   }
-  const library = at(-34, WALK + 9);
+  const library = at(-38.08, WALK + 10.08);
   const lo = new THREE.Vector3(library.x, 0, library.z);
-  put('trim', BOX, lo, face, 0, WALL_TOP + 8, 0, 36, 16, 16);
-  for (let k = -16; k <= 16; k += 4) {
-    put('door', BOX, lo, face, k, WALL_TOP + 3, 8.05, 2.4, 4.6, 0.2);
-    put('window', BOX, lo, face, k, WALL_TOP + 11, 8.05, 1.6, 3, 0.2);
-    put('cream', CYL, lo, face, k + 2, WALL_TOP + 8, 8.3, 0.4, 16, 0.4);
+  put('trim', BOX, lo, face, 0, WALL_TOP + 8.96, 0, 40.32, 17.92, 17.92);
+  for (let k = -17.92; k <= 17.92; k += 4.48) {
+    put('door', BOX, lo, face, k, WALL_TOP + 3.36, 9.02, 2.69, 5.15, 0.22);
+    put('window', BOX, lo, face, k, WALL_TOP + 12.32, 9.02, 1.79, 3.36, 0.22);
+    put('cream', CYL, lo, face, k + 2.24, WALL_TOP + 8.96, 9.3, 0.45, 17.92, 0.45);
   }
   return [
-    { x: palace.x, z: palace.z, r: 34 },
-    { x: tower.x, z: tower.z, r: 10 },
-    { x: basilica.x, z: basilica.z, r: 32 },
-    { x: library.x, z: library.z, r: 24 },
-    { x: (palace.x + library.x) / 2, z: (palace.z + library.z) / 2, r: 30 },
-    { x: (basilica.x + tower.x) / 2, z: (basilica.z + tower.z) / 2, r: 30 },
+    { x: palace.x, z: palace.z, r: 38.08 },
+    { x: tower.x, z: tower.z, r: 11.2 },
+    { x: basilica.x, z: basilica.z, r: 35.84 },
+    { x: library.x, z: library.z, r: 26.88 },
+    { x: (palace.x + library.x) / 2, z: (palace.z + library.z) / 2, r: 33.6 },
+    { x: (basilica.x + tower.x) / 2, z: (basilica.z + tower.z) / 2, r: 33.6 },
   ];
 }
 
 function salute(batch, x, z) {
-  batch.add('trim', OCT, mat(x, WALL_TOP + 8, z, 14, 16, 14));
-  batch.add('trim', CYL, mat(x, WALL_TOP + 19, z, 10, 6, 10));
-  batch.add('domeWhite', DOME, mat(x, WALL_TOP + 22, z, 11, 12, 11));
-  batch.add('trim', CYL, mat(x, WALL_TOP + 35, z, 2, 4, 2));
-  batch.add('lead', DOME, mat(x, WALL_TOP + 37, z, 2.2, 2.2, 2.2));
-  batch.add('gold', BALL, mat(x, WALL_TOP + 40, z, 0.6, 1, 0.6));
+  batch.add('trim', OCT, mat(x, WALL_TOP + 8.96, z, 15.68, 17.92, 15.68));
+  batch.add('trim', CYL, mat(x, WALL_TOP + 21.28, z, 11.2, 6.72, 11.2));
+  batch.add('domeWhite', DOME, mat(x, WALL_TOP + 24.64, z, 12.32, 13.44, 12.32));
+  batch.add('trim', CYL, mat(x, WALL_TOP + 39.2, z, 2.24, 4.48, 2.24));
+  batch.add('lead', DOME, mat(x, WALL_TOP + 41.44, z, 2.46, 2.46, 2.46));
+  batch.add('gold', BALL, mat(x, WALL_TOP + 44.8, z, 0.67, 1.12, 0.67));
   for (let k = 0; k < 8; k++) {
     const a = (k / 8) * Math.PI * 2;
-    batch.add('trim', BALL, mat(x + Math.cos(a) * 12.5, WALL_TOP + 17, z + Math.sin(a) * 12.5, 2, 2.4, 2));
-    batch.add('door', BOX, mat(x + Math.cos(a) * 13.3, WALL_TOP + 6, z + Math.sin(a) * 13.3, 0.3, 7, 3, 0, -a, 0));
+    batch.add('trim', BALL, mat(x + Math.cos(a) * 14, WALL_TOP + 19.04, z + Math.sin(a) * 14, 2.24, 2.69, 2.24));
+    batch.add('door', BOX, mat(x + Math.cos(a) * 14.9, WALL_TOP + 6.72, z + Math.sin(a) * 14.9, 0.34, 7.84, 3.36, 0, -a, 0));
   }
 }
 
 function sanGiorgio(batch, x, z) {
-  batch.add('quay', CYL, mat(x, -0.8, z, 42, 4, 30));
-  batch.add('trim', BOX, mat(x, WALL_TOP + 9, z, 22, 18, 26));
-  batch.add('trim', ROOF, mat(x, WALL_TOP + 18, z + 13.2, 11.5, 5, 1));
-  for (const k of [-7, -2.5, 2.5, 7]) batch.add('trim', CYL, mat(x + k, WALL_TOP + 8, z + 13.4, 0.7, 16, 0.7));
-  batch.add('door', BOX, mat(x, WALL_TOP + 3.5, z + 13.1, 3, 7, 0.2));
-  batch.add('domeWhite', DOME, mat(x, WALL_TOP + 18, z - 4, 7, 8, 7));
-  batch.add('brick', BOX, mat(x + 16, WALL_TOP + 17, z - 6, 6, 34, 6));
-  batch.add('belfry', BOX, mat(x + 16, WALL_TOP + 36, z - 6, 6.4, 4, 6.4));
-  batch.add('spire', HIP, mat(x + 16, WALL_TOP + 38, z - 6, 6, 8, 6));
-  for (let k = 0; k < 6; k++) batch.add(FACADES[k], BOX, mat(x - 26 + k * 6, WALL_TOP + 5, z - 20 + (k % 2) * 3, 5.6, 10 + (k % 3) * 2, 8));
+  batch.add('quay', CYL, mat(x, -0.9, z, 47.04, 4.48, 33.6));
+  batch.add('trim', BOX, mat(x, WALL_TOP + 10.08, z, 24.64, 20.16, 29.12));
+  batch.add('trim', ROOF, mat(x, WALL_TOP + 20.16, z + 14.78, 12.88, 5.6, 1.12));
+  for (const k of [-7.84, -2.8, 2.8, 7.84]) batch.add('trim', CYL, mat(x + k, WALL_TOP + 8.96, z + 15.01, 0.78, 17.92, 0.78));
+  batch.add('door', BOX, mat(x, WALL_TOP + 3.92, z + 14.67, 3.36, 7.84, 0.22));
+  batch.add('domeWhite', DOME, mat(x, WALL_TOP + 20.16, z - 4.48, 7.84, 8.96, 7.84));
+  batch.add('brick', BOX, mat(x + 17.92, WALL_TOP + 19.04, z - 6.72, 6.72, 38.08, 6.72));
+  batch.add('belfry', BOX, mat(x + 17.92, WALL_TOP + 40.32, z - 6.72, 7.17, 4.48, 7.17));
+  batch.add('spire', HIP, mat(x + 17.92, WALL_TOP + 42.56, z - 6.72, 6.72, 8.96, 6.72));
+  for (let k = 0; k < 6; k++) batch.add(FACADES[k], BOX, mat(x - 29.12 + k * 6.72, WALL_TOP + 5.6, z - 22.4 + (k % 2) * 3.36, 6.27, 11.2 + (k % 3) * 2.24, 8.96));
 }
 
 function canalWalls(track, landAt) {
@@ -173,7 +173,7 @@ function canalWalls(track, landAt) {
   };
   const within = (seg, p) => {
     for (let i = seg.start; i <= seg.end; i += 2) {
-      if (Math.hypot(p.x - track.px[i], p.z - track.pz[i]) < track.hw[i] - 0.5) return true;
+      if (Math.hypot(p.x - track.px[i], p.z - track.pz[i]) < track.hw[i] - 0.56) return true;
     }
     return false;
   };
@@ -190,8 +190,8 @@ function canalWalls(track, landAt) {
       const lj = side * track.hw[j];
       const ri = side * (track.hw[i] + WALK);
       const rj = side * (track.hw[j] + WALK);
-      quad(P(i, li, -3), P(j, lj, -3), P(j, lj, 0.3), P(i, li, 0.3), algae);
-      quad(P(i, li, 0.3), P(j, lj, 0.3), P(j, lj, WALL_TOP), P(i, li, WALL_TOP), stone);
+      quad(P(i, li, -3.36), P(j, lj, -3.36), P(j, lj, 0.34), P(i, li, 0.34), algae);
+      quad(P(i, li, 0.34), P(j, lj, 0.34), P(j, lj, WALL_TOP), P(i, li, WALL_TOP), stone);
       quad(P(i, li, WALL_TOP), P(j, lj, WALL_TOP), P(j, rj, WALL_TOP), P(i, ri, WALL_TOP), paving);
     }
   }
@@ -213,23 +213,23 @@ export async function createVenice(group, track, fx) {
   group.add(sun);
 
   const N = track.N;
-  const surface = await courseSurface(track, tick, { margin: 220, amp: () => 0.3 });
+  const surface = await courseSurface(track, tick, { margin: 246.4, amp: () => 0.3 });
   const island = (x, z) => ((x + 11) / 448) ** 2 + ((z - 168) / 297) ** 2 + 0.08 * (noise(x * 1.8, z * 1.8) - 0.5) < 1;
   const lagoon = (x, z) => z < -54 + 11 * Math.sin(x * 0.018);
   const dry = (x, z) => island(x, z) && !lagoon(x, z);
   const height = (x, z) => {
-    if (!dry(x, z)) return -4;
+    if (!dry(x, z)) return -4.48;
     const edge = surface.sample(x, z).edge;
-    return edge < 1.5 ? -4 : WALL_TOP - 0.05;
+    return edge < 1.68 ? -4.48 : WALL_TOP - 0.06;
   };
   const paint = (x, y, z, ny, color) => {
     if (y < 0) color.set(0x2c6e66);
     else if (ny < 0.6) color.set(0xefe8d8);
-    else color.set((Math.floor(x / 5) + Math.floor(z / 5)) % 2 ? 0xd9ccb0 : 0xcfc0a2);
+    else color.set((Math.floor(x / 5.6) + Math.floor(z / 5.6)) % 2 ? 0xd9ccb0 : 0xcfc0a2);
   };
   group.add(await buildHeightfield({ bounds: surface.bounds, step: 3, height, paint, tick }));
   const landAt = (i, side) => {
-    const p = track.point(i, side * (track.hw[i] + WALK + 1));
+    const p = track.point(i, side * (track.hw[i] + WALK + 1.12));
     return dry(p.x, p.z);
   };
   group.add(canalWalls(track, landAt));
@@ -251,9 +251,9 @@ export async function createVenice(group, track, fx) {
   const mouth = Math.round(0.125 * N);
   const saluteSide = -landSide;
   if (landAt(mouth, saluteSide)) {
-    const p = track.point(mouth, saluteSide * (track.hw[mouth] + WALK + 16));
+    const p = track.point(mouth, saluteSide * (track.hw[mouth] + WALK + 17.92));
     salute(batch, p.x, p.z);
-    taken.push({ x: p.x, z: p.z, r: 18 });
+    taken.push({ x: p.x, z: p.z, r: 20.16 });
   }
   sanGiorgio(batch, 45, -224);
 
@@ -271,18 +271,18 @@ export async function createVenice(group, track, fx) {
   };
   const rialto = Math.round(straightest(0.24, 0.34) * N);
   group.userData.rialto = rialto;
-  bridges.push(archBridge(batch, track, rialto, { rise: 10, peak: 9, width: 16, color: 'trim', shops: true }));
-  bridges.push(archBridge(batch, track, Math.round(straightest(0.4, 0.46) * N), { rise: 8, peak: 8.5, width: 6, color: 'wood' }));
+  bridges.push(archBridge(batch, track, rialto, { rise: 11.2, peak: 10.08, width: 17.92, color: 'trim', shops: true }));
+  bridges.push(archBridge(batch, track, Math.round(straightest(0.4, 0.46) * N), { rise: 8.96, peak: 9.52, width: 6.72, color: 'wood' }));
   for (const [a, b] of [[0.58, 0.62], [0.66, 0.7], [0.74, 0.77], [0.8, 0.83]]) {
-    bridges.push(archBridge(batch, track, Math.round(straightest(a, b) * N), { rise: 7, peak: 7.5, width: 5, color: 'trim' }));
+    bridges.push(archBridge(batch, track, Math.round(straightest(a, b) * N), { rise: 7.84, peak: 8.4, width: 5.6, color: 'trim' }));
   }
-  taken.push(...bridges.map((b) => ({ x: b.x, z: b.z, r: 6 })));
+  taken.push(...bridges.map((b) => ({ x: b.x, z: b.z, r: 6.72 })));
 
   for (const r of track.routes) {
     const mid = r.first + Math.round(r.count / 2);
-    const bridge = archBridge(batch, track, mid, { rise: 6, peak: 7, width: 5, color: 'wood' });
+    const bridge = archBridge(batch, track, mid, { rise: 6.72, peak: 7.84, width: 5.6, color: 'wood' });
     bridges.push(bridge);
-    taken.push({ x: bridge.x, z: bridge.z, r: 6 });
+    taken.push({ x: bridge.x, z: bridge.z, r: 6.72 });
   }
   const laundryLines = track.map.ramps
     .filter(([, , routeId]) => routeId === undefined)
@@ -298,34 +298,34 @@ export async function createVenice(group, track, fx) {
     const count = seg.end - seg.start + 1;
     let k = 0;
     while (k < count) {
-      const w = 8 + rand() * 6;
+      const w = 8.96 + rand() * 6.72;
       const steps = Math.max(2, Math.round(w / track.spacing));
       const mid = seg.ring ? track.wrap(k + Math.floor(steps / 2)) : seg.start + Math.min(count - 1, k + Math.floor(steps / 2));
       k += steps;
       if (!landAt(mid, side)) continue;
       const hw = track.hw[mid];
-      const d = 11 + rand() * 7;
-      const h = 11 + rand() * 13 + (hw > 22 ? 4 : 0);
-      const front = hw + (hw > 22 && rand() < 0.5 ? 0.2 : WALK);
+      const d = 12.32 + rand() * 7.84;
+      const h = 12.32 + rand() * 14.56 + (hw > 25 ? 4.48 : 0);
+      const front = hw + (hw > 25 && rand() < 0.5 ? 0.22 : WALK);
       const c = track.point(mid, side * (front + d / 2));
       if (!free(c.x, c.z, Math.min(w, d) / 2)) continue;
       const yaw = Math.atan2(-side * track.nx[mid], -side * track.nz[mid]);
       const corner = [-1, 1].every((a) => [-1, 1].every((b) => {
         const x = c.x + Math.cos(yaw) * (a * w / 2) + Math.sin(yaw) * (b * d / 2);
         const z = c.z - Math.sin(yaw) * (a * w / 2) + Math.cos(yaw) * (b * d / 2);
-        return dry(x, z) && surface.sample(x, z).edge > -0.5;
+        return dry(x, z) && surface.sample(x, z).edge > -0.56;
       }));
       if (!corner) continue;
-      building(batch, windows, c.x, c.z, yaw, w, d, h, rand, { canal: true, onWater: front < hw + 1, color: FACADES[Math.floor(rand() * FACADES.length)] });
+      building(batch, windows, c.x, c.z, yaw, w, d, h, rand, { canal: true, onWater: front < hw + 1.12, color: FACADES[Math.floor(rand() * FACADES.length)] });
       taken.push({ x: c.x, z: c.z, r: Math.min(w, d) / 2 });
       if (rand() < 0.3) {
-        const pp = track.point(mid, side * (hw - 0.4));
+        const pp = track.point(mid, side * (hw - 0.45));
         const color = ['poleBlue', 'poleRed'][Math.floor(rand() * 2)];
         pole(batch, pp.x, pp.z, color, rand);
-        const q = track.point(mid + 2, side * (hw - 0.4));
+        const q = track.point(mid + 2, side * (hw - 0.45));
         pole(batch, q.x, q.z, color, rand);
         if (rand() < 0.4) {
-          const r = track.point(mid + 4, side * (hw - 0.4));
+          const r = track.point(mid + 4, side * (hw - 0.45));
           pole(batch, r.x, r.z, color, rand);
         }
       }
@@ -333,21 +333,21 @@ export async function createVenice(group, track, fx) {
   }
 
   const { minX, maxX, minZ, maxZ } = surface.bounds;
-  for (let gx = minX; gx < maxX; gx += 15) {
+  for (let gx = minX; gx < maxX; gx += 16.8) {
     await tick();
-    for (let gz = minZ; gz < maxZ; gz += 15) {
-      const x = gx + (rand() - 0.5) * 6;
-      const z = gz + (rand() - 0.5) * 6;
+    for (let gz = minZ; gz < maxZ; gz += 16.8) {
+      const x = gx + (rand() - 0.5) * 6.72;
+      const z = gz + (rand() - 0.5) * 6.72;
       if (!dry(x, z)) continue;
       const s = surface.sample(x, z);
-      if (s.edge < 14) continue;
-      const w = 9 + rand() * 6;
-      const d = 9 + rand() * 6;
+      if (s.edge < 15.68) continue;
+      const w = 10.08 + rand() * 6.72;
+      const d = 10.08 + rand() * 6.72;
       if (!free(x, z, Math.max(w, d) * 0.45)) continue;
       const corners = [[-1, -1], [1, -1], [-1, 1], [1, 1]].every(([a, b]) => dry(x + a * w * 0.6, z + b * d * 0.6));
       if (!corners) continue;
       const yaw = track.heading(s.idx);
-      building(batch, windows, x, z, yaw, w, d, 10 + rand() * 14, rand, { color: FACADES[Math.floor(rand() * FACADES.length)] });
+      building(batch, windows, x, z, yaw, w, d, 11.2 + rand() * 15.68, rand, { color: FACADES[Math.floor(rand() * FACADES.length)] });
       taken.push({ x, z, r: Math.max(w, d) * 0.45 });
     }
   }
@@ -358,25 +358,25 @@ export async function createVenice(group, track, fx) {
   });
   for (let i = 0; i < N; i += 4) {
     const f = i / N;
-    if (track.hw[i] > 30 || rand() < 0.75) continue;
+    if (track.hw[i] > 34 || rand() < 0.75) continue;
     const side = rand() < 0.5 ? -1 : 1;
     if (!landAt(i, side)) continue;
-    if (bridges.some((b) => Math.hypot(b.x - track.px[i], b.z - track.pz[i]) < 14)) continue;
-    if (track.routes.some((r) => [r.from, r.to].some((k) => Math.hypot(track.px[k] - track.px[i], track.pz[k] - track.pz[i]) < 70))) continue;
-    const p = track.point(i, side * (track.hw[i] - 1.1));
-    if (inRoute(p.x, p.z, 8)) continue;
+    if (bridges.some((b) => Math.hypot(b.x - track.px[i], b.z - track.pz[i]) < 15.68)) continue;
+    if (track.routes.some((r) => [r.from, r.to].some((k) => Math.hypot(track.px[k] - track.px[i], track.pz[k] - track.pz[i]) < 78.4))) continue;
+    const p = track.point(i, side * (track.hw[i] - 1.23));
+    if (inRoute(p.x, p.z, 8.96)) continue;
     const yaw = track.heading(i);
     gondola(batch, p.x, p.z, yaw, rand, { covered: rand() >= 0.4 && rand() < 0.35 });
-    shores.push({ x: p.x, z: p.z, rx: 1, rz: 5, rot: yaw });
+    shores.push({ x: p.x, z: p.z, rx: 1.12, rz: 5.6, rot: yaw });
     if (f > 0.56 && f < 0.84 && rand() < 0.3) {
-      const a = track.point(i, -(track.hw[i] + 1));
-      const b = track.point(i, track.hw[i] + 1);
+      const a = track.point(i, -(track.hw[i] + 1.12));
+      const b = track.point(i, track.hw[i] + 1.12);
       const len = Math.hypot(b.x - a.x, b.z - a.z);
       const lineYaw = Math.atan2(b.x - a.x, b.z - a.z);
-      batch.add('rope', BOX, mat((a.x + b.x) / 2, 12, (a.z + b.z) / 2, 0.08, 0.08, len, 0, lineYaw, 0));
+      batch.add('rope', BOX, mat((a.x + b.x) / 2, 13.44, (a.z + b.z) / 2, 0.09, 0.09, len, 0, lineYaw, 0));
       for (let c = 0; c < 7; c++) {
         const u = 0.15 + (c / 6) * 0.7 + (rand() - 0.5) * 0.05;
-        batch.add(['clothA', 'clothB', 'clothC', 'clothD'][Math.floor(rand() * 4)], BOX, mat(a.x + (b.x - a.x) * u, 11.1, a.z + (b.z - a.z) * u, 1.3, 1.6, 0.1, 0, lineYaw + Math.PI / 2, 0));
+        batch.add(['clothA', 'clothB', 'clothC', 'clothD'][Math.floor(rand() * 4)], BOX, mat(a.x + (b.x - a.x) * u, 12.43, a.z + (b.z - a.z) * u, 1.46, 1.79, 0.11, 0, lineYaw + Math.PI / 2, 0));
       }
     }
   }
@@ -385,17 +385,17 @@ export async function createVenice(group, track, fx) {
     const x = -336 + rand() * 672;
     const z = -67 - rand() * 246;
     const s = surface.sample(x, z);
-    if (s.edge < 6 || !lagoon(x, z) || Math.hypot(x - 45, z + 224) < 56) continue;
-    for (let k = 0; k < 3; k++) batch.add('woodDark', CYL, mat(x + Math.cos(k * 2.1) * 0.5, 1.5, z + Math.sin(k * 2.1) * 0.5, 0.3, 7, 0.3, Math.cos(k * 2.1) * 0.12, 0, Math.sin(k * 2.1) * 0.12));
-    batch.add('rope', CYL, mat(x, 3.5, z, 0.9, 0.3, 0.9));
+    if (s.edge < 6.72 || !lagoon(x, z) || Math.hypot(x - 45, z + 224) < 56) continue;
+    for (let k = 0; k < 3; k++) batch.add('woodDark', CYL, mat(x + Math.cos(k * 2.1) * 0.56, 1.68, z + Math.sin(k * 2.1) * 0.56, 0.34, 7.84, 0.34, Math.cos(k * 2.1) * 0.12, 0, Math.sin(k * 2.1) * 0.12));
+    batch.add('rope', CYL, mat(x, 3.92, z, 1.01, 0.34, 1.01));
     made++;
   }
 
   for (let i = 0, n = 0; i < N; i += 11, n++) {
-    const side = track.hw[i] > 30 ? landSide : n % 2 ? 1 : -1;
+    const side = track.hw[i] > 34 ? landSide : n % 2 ? 1 : -1;
     if (!landAt(i, side)) continue;
-    const p = track.point(i, side * (track.hw[i] + 1.1));
-    if (!free(p.x, p.z, 1.2) || surface.sample(p.x, p.z).edge < 0.5) continue;
+    const p = track.point(i, side * (track.hw[i] + 1.23));
+    if (!free(p.x, p.z, 1.34) || surface.sample(p.x, p.z).edge < 0.56) continue;
     streetLamp(batch, p.x, WALL_TOP, p.z);
   }
 
