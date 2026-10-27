@@ -4,6 +4,7 @@ import { createWater } from './water.js';
 import { toon, glow, mulberry32 } from './toon.js';
 import { Batcher, cullChunks, slicer, COLORS, mat, createSky, createCloud, createArch, SUN_DIR } from './world.js';
 import { courseSurface, buildHeightfield, courseBuoys, noise } from './terrain.js';
+import { Laundry, LINE_HEIGHT, LINE_POST } from './veniceHazards.js';
 import { DETAIL_COLORS, building, archBridge, gondola, pole, streetLamp, dogesPalace, campanile } from './veniceDetail.js';
 
 const FACADES = ['terracotta', 'ochre', 'pink', 'salmon', 'cream', 'rose', 'butter', 'brick', 'sage'];
@@ -64,6 +65,7 @@ const ROOF = new THREE.ExtrudeGeometry(roofShape, { depth: 1, bevelEnabled: fals
 
 const WALL_TOP = 1.25;
 const WALK = 3;
+const LINE_AHEAD = 35;
 
 function placer(batch) {
   return (key, geometry, o, yaw, lx, y, lz, sx, sy, sz, rx = 0, rz = 0) => {
@@ -282,6 +284,16 @@ export async function createVenice(group, track, fx) {
     bridges.push(bridge);
     taken.push({ x: bridge.x, z: bridge.z, r: 6 });
   }
+  const laundryLines = track.map.ramps
+    .filter(([, , routeId]) => routeId === undefined)
+    .map(([f]) => track.wrap(Math.round(f * N) + Math.round(LINE_AHEAD / track.spacing)))
+    .filter((i) => !bridges.some((b) => Math.hypot(b.x - track.px[i], b.z - track.pz[i]) < 30));
+  for (const i of laundryLines) for (const side of [-1, 1]) {
+    const p = track.point(i, side * (track.hw[i] + LINE_POST));
+    batch.add('woodDark', CYL, mat(p.x, (LINE_HEIGHT - 1) / 2, p.z, 0.28, LINE_HEIGHT + 1.6, 0.28));
+    batch.add('wood', BOX, mat(p.x, LINE_HEIGHT + 0.2, p.z, 0.2, 0.2, 1.6, 0, track.heading(i), 0));
+    taken.push({ x: p.x, z: p.z, r: 1.5 });
+  }
   for (const seg of track.segments) for (const side of [-1, 1]) {
     const count = seg.end - seg.start + 1;
     let k = 0;
@@ -391,6 +403,7 @@ export async function createVenice(group, track, fx) {
   const chunks = await batch.buildAsync(scenery, 0.1, VENICE_COLORS, undefined, tick);
   const glass = await windows.buildAsync(scenery, 0, VENICE_COLORS, undefined, tick);
   group.add(scenery);
+  const hazards = new Laundry({ group, track, lines: laundryLines, rand: mulberry32(4207) });
 
   const buoys = courseBuoys(track, (idx, side) => !landAt(idx, side));
   group.add(buoys);
@@ -408,10 +421,11 @@ export async function createVenice(group, track, fx) {
   }
 
   const collider = new Collider();
-  await collider.addObject(group, new Set([sky, water.mesh, buoys, ...clouds]), tick);
+  await collider.addObject(group, new Set([sky, water.mesh, buoys, hazards.group, ...clouds]), tick);
 
   return {
     fog,
+    hazards,
     water,
     sun,
     surface,
@@ -424,6 +438,7 @@ export async function createVenice(group, track, fx) {
       cullChunks(glass, camera, fog.far * 0.6);
       sky.position.copy(camera.position);
       buoys.userData.update(t, camera);
+      hazards.animate(t);
       for (const cloud of clouds) {
         cloud.position.x += cloud.userData.speed * dt;
         if (cloud.position.x > 800) cloud.position.x = -800;
