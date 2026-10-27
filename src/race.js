@@ -25,6 +25,7 @@ import * as visuals from './race/visuals.js';
 export { LAPS, MAX_HP, BASE_SPEED } from './race/shared.js';
 export const COUNTDOWN = 3.7;
 const FALL_OVER_BANK = 40;
+const DIVIDER = 24;
 const KIND_ITEM = { bullet: 'machinegun', saw: 'saw', laser: 'laser', reflect: 'saw', flame: 'flamethrower', fire: 'flamethrower', propane: 'flamethrower', missile: 'missiles', mine: 'mines', spikes: 'spikes' };
 
 const MODULES = [machinegun, missiles, mines, grapple, emp, jetpack, laser, flamethrower, saw, spikes, aiming, course, visuals];
@@ -259,12 +260,12 @@ export class Race {
     b.trackIdx = pr.idx;
     if (t.river) this.followRiver(b, pr.s);
 
-    b.offCourse = Math.abs(pr.lateral) > t.hw[pr.idx] + 1.5 ? b.offCourse + dt : 0;
-    if (b.offCourse > 0 && !b.air?.fall && b.speed > OFF_COURSE_SPEED * BASE_SPEED) b.speed *= Math.exp(-1.5 * dt);
+    b.offCourse = !b.air && Math.abs(pr.lateral) > t.hw[pr.idx] + 1.5 ? b.offCourse + dt : 0;
+    if (b.offCourse > 0 && b.speed > OFF_COURSE_SPEED * BASE_SPEED) b.speed *= Math.exp(-1.5 * dt);
     this.collideShores(b);
 
     const lim = t.reach ? t.reach[pr.lateral > 0 ? 1 : 0][pr.idx] : t.hw[pr.idx] + (t.banked ? -(t.map.bankMargin ?? BANK_MARGIN) : OUTER_LIMIT);
-    const overBank = b.air?.fall && this.solid && Math.abs(pr.lateral) > lim && Math.abs(pr.lateral) < lim + FALL_OVER_BANK;
+    const overBank = b.air && this.solid && Math.abs(pr.lateral) > lim && Math.abs(pr.lateral) < lim + FALL_OVER_BANK && (b.air.fall || this.overDivider(b, pr));
     if (overBank) this.tumbleOnBank(b, pr);
     else if (Math.abs(pr.lateral) > lim) {
       const sgn = Math.sign(pr.lateral);
@@ -292,9 +293,22 @@ export class Race {
     }
   }
 
+  overDivider(b, pr) {
+    const t = this.track;
+    for (const seg of t.segments) {
+      if (seg.route === pr.route) continue;
+      for (let i = seg.start; i <= seg.end; i += 2) {
+        if (Math.hypot(b.pos.x - t.px[i], b.pos.z - t.pz[i]) < t.hw[i] + DIVIDER) return true;
+      }
+    }
+    return false;
+  }
+
   tumbleOnBank(b, pr) {
-    const p = this.bankProbe.set(b.pos.x, b.air.y, b.pos.z);
+    const y = b.air.fall ? b.air.y : (b.surfaceLevel ?? 0) + b.yOffset;
+    const p = this.bankProbe.set(b.pos.x, y, b.pos.z);
     if (!this.solid(p)) return;
+    if (!b.air.fall) b.air = { fall: true, y, vy: (b.air.peak * 4 * (1 - (2 * b.air.t) / b.air.dur)) / b.air.dur };
     for (let k = 0; k < 80 && this.solid(p); k++) p.y += 0.5;
     b.air.y = p.y;
     b.air.vy = Math.max(b.air.vy, b.air.tumbled ? 0 : 7);
