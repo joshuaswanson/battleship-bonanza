@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { frame } from './alpine.js';
 import { GOTHIC, ROUND } from './veniceDetail.js';
+import { mulberry32 } from './toon.js';
 
 export const TOWN_COLORS = {
   plaster: 0xf7f3ea,
@@ -90,6 +91,10 @@ export const TOWN_COLORS = {
   shedC: 0x6f9ec9,
   fence: 0xf3eee2,
   bench: 0x7a5232,
+  gravelBed: 0x9a9184,
+  trainRed: 0xd8343a,
+  barnWood: 0x9a5a36,
+  rapeseed: 0xf2d43a,
 };
 
 const FACADES = ['cream', 'ochre', 'yellow', 'pink', 'salmon', 'mint', 'sky', 'lilac', 'apricot', 'plaster'];
@@ -108,8 +113,6 @@ const TRUNK = new THREE.CylinderGeometry(0.7, 1, 1, 9).translate(0, 0.5, 0);
 const HIP = new THREE.ConeGeometry(Math.SQRT2 / 2, 1, 4).rotateY(Math.PI / 4).translate(0, 0.5, 0);
 const prism = new THREE.Shape([new THREE.Vector2(-1, 0), new THREE.Vector2(1, 0), new THREE.Vector2(0, 1)]);
 const GABLE = new THREE.ExtrudeGeometry(prism, { depth: 1, bevelEnabled: false }).translate(0, 0, -0.5);
-const WILLOW_DOME = new THREE.SphereGeometry(1, 14, 7, 0, Math.PI * 2, 0, Math.PI / 2);
-const STRAND = new THREE.ConeGeometry(0.5, 1, 5).rotateX(Math.PI).translate(0, -0.5, 0);
 const SPIRE = new THREE.LatheGeometry([[1, 0], [0.82, 0.08], [0.55, 0.3], [0.3, 0.62], [0.12, 0.92], [0, 1]].map(([r, y]) => new THREE.Vector2(r, y)), 8);
 const TOWER_CAP = new THREE.LatheGeometry([[1, 0], [0.9, 0.05], [0.72, 0.18], [0.45, 0.48], [0.2, 0.78], [0, 1]].map(([r, y]) => new THREE.Vector2(r, y)), 16);
 const mansardShape = new THREE.Shape([new THREE.Vector2(-0.5, 0), new THREE.Vector2(0.5, 0), new THREE.Vector2(0.42, 0.55), new THREE.Vector2(0.2, 1), new THREE.Vector2(-0.2, 1), new THREE.Vector2(-0.42, 0.55)]);
@@ -237,16 +240,16 @@ export function gabledHouse(batch, windows, x, y, z, yaw, w, d, floors, rand, { 
 export function hoelderlinTower(batch, windows, x, y, z, yaw) {
   const put = frame(batch, x, y, z, yaw, 0, 0, 1);
   const win = frame(windows, x, y, z, yaw, 0, 0, 1);
-  const R = 4.2;
-  const H = 12.6;
+  const R = 4.4;
+  const H = 16.5;
   put('stoneDark', CYL, 0, -2.6, 0, R + 0.6, 6.4, R + 0.6);
   put('stone', CYL, 0, 0.6, 0, R + 0.35, 1.2, R + 0.35);
   put('hoelderlin', CYL, 0, H / 2 + 0.6, 0, R, H, R);
   put('stone', CYL, 0, H + 0.75, 0, R + 0.3, 0.35, R + 0.3);
-  put('slate', TOWER_CAP, 0, H + 0.9, 0, R + 0.7, 10.5, R + 0.7);
-  put('slate', CYL, 0, H + 11.3, 0, 0.16, 1.2, 0.16);
-  put('gold', BALL, 0, H + 12.1, 0, 0.3, 0.3, 0.3);
-  for (const [level, spread] of [[3.4, 1.2], [6.9, 1.5], [10.3, 1.5]]) {
+  put('slate', TOWER_CAP, 0, H + 0.9, 0, R + 0.7, 12, R + 0.7);
+  put('slate', CYL, 0, H + 12.8, 0, 0.16, 1.2, 0.16);
+  put('gold', BALL, 0, H + 13.6, 0, 0.32, 0.32, 0.32);
+  for (const [level, spread] of [[3.4, 1.2], [7.2, 1.5], [10.9, 1.5], [14.5, 1.5]]) {
     for (let k = -1; k <= 1; k++) {
       const a = k * spread * 0.62;
       windowPane(win, 'window', Math.sin(a) * (R + 0.02), level, Math.cos(a) * (R + 0.02), 0.85, 1.45, a);
@@ -420,32 +423,84 @@ export function planeTree(batch, x, y, z, rand, s = 1) {
   return { height: (h + 9) * s };
 }
 
-export function willow(batch, foliage, x, y, z, rand, s = 1) {
-  const yaw = rand() * 6.3;
-  const tiltX = (rand() - 0.5) * 0.12;
-  const tiltZ = (rand() - 0.5) * 0.12;
-  const put = frame(batch, x, y, z, yaw, tiltX, tiltZ, s);
-  const hang = frame(foliage, x, y, z, yaw, tiltX, tiltZ, s);
-  put('bark', TRUNK, 0, -0.5, 0, 0.8, 6, 0.8);
+function cascadeGeometry(seed, [light, mid, dark]) {
+  const rand = mulberry32(seed);
+  const SEG = 40;
+  const DOME = 3;
+  const RINGS = 10;
+  const shoulder = (0.85 * Math.PI) / 2;
+  const hem = Array.from({ length: SEG }, () => 0.04 + rand() * 0.24);
+  const phase = rand() * 6;
+  const positions = [0, 1, 0];
+  const top = new THREE.Color(light);
+  const body = new THREE.Color(mid);
+  const under = new THREE.Color(dark);
+  const c = new THREE.Color();
+  const colors = [...top.toArray()];
+  for (let r = 1; r <= RINGS; r++) {
+    for (let k = 0; k < SEG; k++) {
+      const a = (k / SEG) * Math.PI * 2;
+      let y;
+      let rad;
+      if (r <= DOME) {
+        const phi = (r / DOME) * shoulder;
+        y = 0.62 + 0.38 * Math.cos(phi);
+        rad = Math.sin(phi);
+      } else {
+        const t = (r - DOME) / (RINGS - DOME);
+        y = 0.62 + 0.38 * Math.cos(shoulder) - (0.62 + 0.38 * Math.cos(shoulder) - hem[k]) * t;
+        rad = Math.sin(shoulder) + 0.12 * t;
+      }
+      const depth = r / RINGS;
+      rad *= 1 + (0.07 * Math.sin(a * 13 + phase) + 0.035 * Math.sin(a * 31 + phase * 2)) * depth;
+      positions.push(Math.sin(a) * rad, y, Math.cos(a) * rad);
+      const ridge = 0.5 + 0.5 * Math.sin(a * 13 + phase);
+      c.copy(top).lerp(body, Math.min(1, depth * 1.4)).lerp(under, depth * depth * 0.35 * (1 - ridge));
+      colors.push(c.r, c.g, c.b);
+    }
+  }
+  const capY = hem.reduce((sum, h) => sum + h, 0) / SEG + 0.1;
+  positions.push(0, capY, 0);
+  colors.push(...under.toArray());
+  const index = [];
+  const at = (r, k) => 1 + (r - 1) * SEG + (k % SEG);
+  for (let k = 0; k < SEG; k++) index.push(0, at(1, k), at(1, k + 1));
+  for (let r = 1; r < RINGS; r++) {
+    for (let k = 0; k < SEG; k++) index.push(at(r, k), at(r + 1, k), at(r + 1, k + 1), at(r, k), at(r + 1, k + 1), at(r, k + 1));
+  }
+  const cap = positions.length / 3 - 1;
+  for (let k = 0; k < SEG; k++) index.push(cap, at(RINGS, k + 1), at(RINGS, k));
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  geometry.setIndex(index);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+const CASCADES = [
+  cascadeGeometry(11, [0xc4e070, 0x93c04e, 0x4f7d2c]),
+  cascadeGeometry(23, [0xb5d862, 0x86b647, 0x4a7629]),
+  cascadeGeometry(37, [0xd0e67e, 0x9cc755, 0x56852f]),
+];
+
+export function willow(batch, x, y, z, rand, s = 1) {
+  const put = frame(batch, x, y, z, rand() * 6.3, (rand() - 0.5) * 0.1, (rand() - 0.5) * 0.1, s);
+  put('bark', TRUNK, 0, -0.5, 0, 0.9, 5.5, 0.9);
   for (let k = 0; k < 3; k++) {
     const a = (k / 3) * Math.PI * 2 + rand();
-    put('bark', TRUNK, 0, 5, 0, 0.32, 4.5, 0.32, Math.cos(a) * 0.6, 0, -Math.sin(a) * 0.6);
+    put('bark', TRUNK, 0, 4.4, 0, 0.4, 5, 0.4, Math.cos(a) * 0.65, 0, -Math.sin(a) * 0.65);
   }
-  const R = 5.6 + rand() * 1.2;
-  const top = 11.5 + rand() * 1.5;
-  put('willow', LOW_BALL, 0, top - 2.4, 0, R * 0.8, 2.6, R * 0.8);
-  for (let k = 0; k < 4; k++) {
-    const a = (k / 4) * Math.PI * 2 + rand();
-    put(pick(['willow', 'willowLight'], rand), LOW_BALL, Math.sin(a) * R * 0.45, top - 1.8 + rand() * 0.6, Math.cos(a) * R * 0.45, R * 0.42, 1.8, R * 0.42);
-  }
-  for (let ring = 0; ring < 3; ring++) {
-    const count = [40, 32, 18][ring];
-    for (let k = 0; k < count; k++) {
-      const a = (k / count) * Math.PI * 2 + rand() * 0.25;
-      const r = R * [0.86, 0.66, 0.4][ring] * (0.94 + rand() * 0.1);
-      const len = (top - 2.8) * (0.72 + rand() * 0.28) - ring;
-      hang(pick(['willow', 'willowDark', 'willowLight', 'willow'], rand), STRAND, Math.sin(a) * r, top - 2.4, Math.cos(a) * r, 1.3 + rand() * 0.5, len, 0.7, Math.cos(a) * 0.07, a, -Math.sin(a) * 0.07);
-    }
+  const R = 5.4 + rand() * 1.2;
+  const top = 12 + rand() * 1.5;
+  put('willow', pick(CASCADES, rand), 0, 0.6, 0, R, top - 0.6, R);
+  const lobes = 3 + Math.floor(rand() * 2);
+  for (let k = 0; k < lobes; k++) {
+    const a = (k / lobes) * Math.PI * 2 + rand() * 0.8;
+    const d = R * (0.45 + rand() * 0.2);
+    const r = R * (0.5 + rand() * 0.15);
+    const h = (top - 0.6) * (0.68 + rand() * 0.18);
+    put('willow', pick(CASCADES, rand), Math.sin(a) * d, 0.4 + rand() * 0.6, Math.cos(a) * d, r, h, r, 0, rand() * 6);
   }
   return { height: (top + 0.5) * s };
 }
@@ -723,4 +778,98 @@ export function archBridge(batch, track, idx, spans, { deck = 9.5, width = 17, f
     for (let k = from + 3; k < to - 3; k += 6) put('frameWhite', BOX, k, deck + 0.06, 0, 3, 0.04, 0.2);
   }
   return { x: p.x, z: p.z, yaw };
+}
+
+export function station(batch, windows, x, y, z, yaw) {
+  const put = frame(batch, x, y, z, yaw, 0, 0, 1);
+  const win = frame(windows, x, y, z, yaw, 0, 0, 1);
+  put('stoneDark', BOX, 0, -2, 0, 74, 4.6, 15);
+  put('cream', BOX, 0, 4.5, 0, 72, 9, 14);
+  put('roof', HIP, 0, 9, 0, 72.5, 4.5, 14.6);
+  put('cream', BOX, 0, 7, 0, 18, 14, 16);
+  put('roofDark', HIP, 0, 14, 0, 18.6, 5, 16.6);
+  for (let k = -32; k <= 32; k += 3.2) {
+    if (Math.abs(k) < 9) continue;
+    for (const level of [2.6, 6.4]) windowPane(win, 'window', k, level, 7.03, 1.2, 1.9, 0);
+  }
+  for (const k of [-5.4, 0, 5.4]) windowPane(win, 'window', k, 7.5, 8.03, 3.4, 7, 0);
+  put('stone', BOX, 0, 12.2, 8.06, 17.4, 0.6, 0.2);
+  put('clockFace', CYL, 0, 15.2, 7.4, 1.5, 0.2, 1.5, Math.PI / 2);
+  put('ironDark', BOX, 0, 15.5, 7.55, 0.14, 1.1, 0.06);
+  put('ironDark', BOX, 0.35, 15.2, 7.55, 0.8, 0.12, 0.06);
+  put('shirtB', BOX, 0, 10.6, 8.2, 9, 1.2, 0.2);
+  put('frameWhite', BOX, 0, 10.6, 8.32, 8, 0.4, 0.06);
+  for (const side of [-1, 1]) {
+    put('stone', BOX, 0, 0.4, side * 14 - 7, 80, 0.8, 5);
+    for (let k = -36; k <= 36; k += 8) put('ironDark', CYL, k, 2.4, side * 14 - 7, 0.12, 3.6, 0.12);
+    put('roofDark', BOX, 0, 4.4, side * 14 - 7, 80, 0.3, 5.4);
+  }
+}
+
+export function railway(batch, x0, z0, x1, z1) {
+  const len = Math.hypot(x1 - x0, z1 - z0);
+  const yaw = Math.atan2(x1 - x0, z1 - z0);
+  const put = frame(batch, (x0 + x1) / 2, 0, (z0 + z1) / 2, yaw, 0, 0, 1);
+  put('gravelBed', BOX, 0, -0.3, 0, 9, 1.2, len);
+  for (const lane of [-2, 2]) {
+    for (const r of [-0.75, 0.75]) put('ironDark', BOX, lane + r, 0.42, 0, 0.12, 0.18, len);
+    for (let k = -len / 2; k < len / 2; k += 1.6) put('bench', BOX, lane, 0.3, k, 2.2, 0.12, 0.4);
+  }
+}
+
+export function train(batch, windows, x, y, z, yaw, cars = 3) {
+  const put = frame(batch, x, y, z, yaw, 0, 0, 1);
+  const win = frame(windows, x, y, z, yaw, 0, 0, 1);
+  const L = 17;
+  for (let c = 0; c < cars; c++) {
+    const cz = (c - (cars - 1) / 2) * (L + 0.6);
+    put('trainRed', BOX, 0, 2.4, cz, 3, 3.4, L);
+    put('frameWhite', BOX, 0, 1.4, cz, 3.04, 0.4, L);
+    put('ironDark', BOX, 0, 0.6, cz, 2.6, 0.8, L - 2);
+    put('stoneDark', BOX, 0, 4.25, cz, 2.6, 0.3, L - 0.6);
+    for (const side of [-1, 1]) win('window', BOX, side * 1.52, 2.9, cz, 0.06, 1.1, L - 2.4);
+    for (const end of [-1, 1]) {
+      if ((c === 0 && end < 0) || (c === cars - 1 && end > 0)) {
+        put('trainRed', BOX, 0, 2.2, cz + end * (L / 2 + 0.6), 3, 3, 1.2);
+        win('window', BOX, 0, 3, cz + end * (L / 2 + 1.22), 2.4, 1, 0.06);
+        for (const s of [-1, 1]) put('lampGlass', BALL, s * 0.9, 1.6, cz + end * (L / 2 + 1.22), 0.2, 0.2, 0.1);
+      }
+    }
+  }
+}
+
+export function barn(batch, windows, x, y, z, yaw, rand) {
+  const put = frame(batch, x, y, z, yaw, 0, 0, 1);
+  const win = frame(windows, x, y, z, yaw, 0, 0, 1);
+  put('stoneDark', BOX, 0, -1.5, 0, 12.4, 3.4, 22.4);
+  put('barnWood', BOX, 0, 3.2, 0, 12, 6.4, 22);
+  put('roofDark', GABLE, 0, 6.4, 0, 7, 6, 23);
+  put('door', BOX, 0, 2.4, 11.03, 4.6, 4.8, 0.1);
+  put('plaster', BOX, -16, 3.2, 2, 11, 6.4, 13);
+  put('stoneDark', BOX, -16, -1.5, 2, 11.4, 3.4, 13.4);
+  put(pick(['roof', 'roofBrown'], rand), GABLE, -16, 6.4, 2, 6.2, 6.4, 13.6, 0, Math.PI / 2);
+  for (const k of [-19, -13]) for (const level of [1.8, 4.6]) windowPane(win, 'window', k, level, 8.53, 0.9, 1.2, 0);
+  for (let k = 0; k < 4; k++) put('straw', CYL, 9 + k * 2.6, 0.9, -6 + (k % 2) * 2.8, 1.2, 1.8, 1.2, Math.PI / 2, 0, 0);
+}
+
+export function institute(batch, windows, x, y, z, yaw, rand) {
+  const put = frame(batch, x, y, z, yaw, 0, 0, 1);
+  const win = frame(windows, x, y, z, yaw, 0, 0, 1);
+  const W = 34 + rand() * 16;
+  const D = 14;
+  const floors = 3 + Math.floor(rand() * 2);
+  const H = floors * 3.6;
+  const color = pick(['cream', 'aula', 'plaster', 'apricot'], rand);
+  put('stoneDark', BOX, 0, -2.5, 0, W + 0.6, 6, D + 0.6);
+  put(color, BOX, 0, H / 2, 0, W, H, D);
+  put('stone', BOX, 0, H + 0.2, 0, W + 0.6, 0.4, D + 0.6);
+  put(pick(['roof', 'roofDark'], rand), HIP, 0, H + 0.4, 0, W, 5, D + 0.4);
+  for (const face of [1, -1]) {
+    for (let k = -W / 2 + 2.4; k <= W / 2 - 2.4; k += 2.8) {
+      for (let f = 0; f < floors; f++) windowPane(win, 'window', k, 1.9 + f * 3.6, face * (D / 2 + 0.03), 1.1, 1.8, face > 0 ? 0 : Math.PI);
+    }
+  }
+  put('stone', BOX, 0, 1.6, D / 2 + 0.3, 4, 3.2, 0.6);
+  win('door', ROUND, 0, 0, D / 2 + 0.62, 2, 2.4, 0.12);
+  return { r: W / 2 };
 }

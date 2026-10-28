@@ -6,7 +6,7 @@ import { Batcher, cullChunks, slicer, COLORS, mat, createSky, createCloud, creat
 import { courseSurface, buildHeightfield, groundHit, quayWalls, smooth, noise } from './terrain.js';
 import {
   TOWN_COLORS, PUNT_LENGTH, pick, gabledHouse, hoelderlinTower, burse, collegiateChurch, castle, planeTree, willow, leafyTree, fruitTree,
-  chapel, aula, townHall, bench, lamp, shed, punt, sitter, archBridge,
+  chapel, aula, townHall, bench, lamp, shed, punt, sitter, archBridge, station, railway, train, barn, institute,
 } from './tuebingenDetail.js';
 import { Punts } from './tuebingenHazards.js';
 
@@ -109,6 +109,13 @@ export async function createTuebingen(group, track, fx) {
   const aulaI = Math.round(0.615 * N);
   const aulaAt = track.point(aulaI, -TOWN * (track.hw[aulaI] + 36));
   const chapelAt = { x: -600, z: 140 };
+  const stationI = idxAt(-40);
+  const stationAt = track.point(stationI, -TOWN * (track.hw[stationI] + 150));
+  const stationYaw = faceRiver(stationI, -TOWN);
+  const pondI = idxAt(-4);
+  const pondAt = track.point(pondI, -TOWN * (track.hw[pondI] + 70));
+  const pond = { x: pondAt.x, z: pondAt.z, sx: 24, sz: 13, rot: -track.heading(pondI) };
+  const flats = [{ x: stationAt.x, z: stationAt.z, r: 170 }];
   const hills = [
     { x: castleAt.x, z: castleAt.z, sx: 120, sz: 70, rot: -track.heading(idxAt(245)) + Math.PI / 2, peak: 42, flat: 1.25 },
     { x: 190, z: -165, sx: 85, sz: 75, peak: 34, flat: 1 },
@@ -170,8 +177,11 @@ export async function createTuebingen(group, track, fx) {
     if (e < 0) return y;
     const inside = kind === 'mauer' || kind === 'landing' || kind === 'halde' || kind === 'inner' || (kind === 'ammer' && n.side === TOWN);
     const lift = inside ? smooth(kind === 'mauer' ? 26 : 10, kind === 'mauer' ? 80 : 60, e) : smooth(14, 90, e);
-    const meadow = kind === 'island' ? 0 : (1 + 2.5 * noise(x * 1.7, z * 1.7)) * smooth(6, 40, e);
+    const level = flats.reduce((m, f) => Math.max(m, smooth(f.r + 40, f.r, Math.hypot(x - f.x, z - f.z))), 0);
+    const meadow = kind === 'island' ? 0 : (1 + 2.5 * noise(x * 1.7, z * 1.7)) * smooth(6, 40, e) * (1 - level);
     y = Math.max(y, Math.min(y + meadow, y + 3) + hillHeight(x, z) * lift);
+    const lake = bump(x, z, pond);
+    if (lake > 0.25) y = Math.min(y, BANK - (BANK + 2.5) * smooth(0.25, 0.4, lake));
     for (const pad of pads) {
       const d = Math.hypot(x - pad.x, z - pad.z);
       if (d < pad.r + 14) y += (Math.max(y, pad.y) - y) * smooth(pad.r + 14, pad.r, d);
@@ -211,6 +221,24 @@ export async function createTuebingen(group, track, fx) {
     const mid = (track.hw[m] + routeBank[m]) / 2;
     return Math.abs(lat - mid) < 2.2 && along(m) > 0;
   };
+  const FIELDS = [0x8cc659, 0xf2d43a, 0xe2c56b, 0x5f9e3c, 0xa4815a, 0x79c04f, 0xb7d36a, 0xf2d43a].map((c) => new THREE.Color(c));
+  const hedge = new THREE.Color(0x4f8f3a);
+  const farmland = (x, z) => {
+    const n = probe(x, z);
+    if (n.side === TOWN || n.edge < 45 || zone(n) === 'island' || hillHeight(x, z) > 8) return false;
+    if (flats.some((f) => Math.hypot(x - f.x, z - f.z) < f.r + 30)) return false;
+    return !hills.some((h) => h.vines && bump(x, z, h) > 0.15);
+  };
+  const field = (x, z, color) => {
+    const u = (x * 0.92 - z * 0.39) / 72;
+    const v = (x * 0.39 + z * 0.92) / 46;
+    const fu = Math.floor(u);
+    const fv = Math.floor(v);
+    const id = Math.abs(Math.sin(fu * 12.9898 + fv * 78.233) * 43758.5453) % 1;
+    if (u - fu < 0.04 || v - fv < 0.06) return color.copy(hedge);
+    color.copy(FIELDS[Math.floor(id * FIELDS.length)]);
+    color.multiplyScalar(0.95 + 0.05 * Math.sin((id > 0.5 ? u : v) * 120));
+  };
   const paint = (x, y, z, ny, color) => {
     if (y < -1) return color.copy(shades.bed);
     color.copy(shades.grass).lerp(shades.grassDeep, smooth(0.35, 0.7, noise(x * 2.3, z * 2.3)));
@@ -220,6 +248,8 @@ export async function createTuebingen(group, track, fx) {
       const w = bump(x, z, h);
       if (w > 0.2 && y > 6) color.copy(Math.sin((x * 0.8 + z * 0.35) * 0.9) > 0.1 ? shades.vine : shades.soil);
     }
+    if (farmland(x, z)) field(x, z, color);
+    if (bump(x, z, pond) > 0.2) color.lerp(shades.gravel, smooth(0.2, 0.25, bump(x, z, pond)) * 0.8);
     if (islandPath(x, z)) color.copy(shades.gravel);
     else if (townish(x, z) && y > 2) color.lerp(shades.cobble, 0.75);
     if (ny < 0.55) color.lerp(shades.rock, 0.6);
@@ -242,7 +272,6 @@ export async function createTuebingen(group, track, fx) {
   const rand = mulberry32(1477);
   const batch = new Batcher();
   const windows = new Batcher();
-  const foliage = new Batcher();
   const taken = [];
   const shores = [];
   const free = (x, z, r) => !taken.some((o) => Math.hypot(o.x - x, o.z - z) < o.r + r);
@@ -286,6 +315,28 @@ export async function createTuebingen(group, track, fx) {
     taken.push({ x: p.x, z: p.z, r: 11 });
   }
 
+  {
+    const sy = height(stationAt.x, stationAt.z);
+    station(batch, windows, stationAt.x, sy, stationAt.z, stationYaw);
+    taken.push({ x: stationAt.x, z: stationAt.z, r: 40 });
+    const ax = Math.cos(stationYaw);
+    const az = -Math.sin(stationYaw);
+    const bx = Math.sin(stationYaw);
+    const bz = Math.cos(stationYaw);
+    const rail = (u, w) => ({ x: stationAt.x + ax * u + bx * w, z: stationAt.z + az * u + bz * w });
+    const r0 = rail(-330, -16);
+    const r1 = rail(330, -16);
+    railway(batch, r0.x, r0.z, r1.x, r1.z);
+    for (let u = -330; u <= 330; u += 12) {
+      const q = rail(u, -16);
+      taken.push({ x: q.x, z: q.z, r: 8 });
+    }
+    const tr = rail(8, -14);
+    train(batch, windows, tr.x, sy + 0.5, tr.z, stationYaw + Math.PI / 2, 3);
+    batch.add('stone', LOW_SPHERE, mat(pond.x, -0.2, pond.z, 2.2, 0.6, 2.2));
+    batch.add('foam', LOW_SPHERE, mat(pond.x, 1.6, pond.z, 0.6, 3.2, 0.6));
+    taken.push({ x: pond.x, z: pond.z, r: 26 });
+  }
   const castleYaw = Math.atan2(towerAt.x - castleAt.x, towerAt.z - castleAt.z);
   castle(batch, windows, castleAt.x, pads[0].y, castleAt.z, castleYaw);
   taken.push({ x: castleAt.x, z: castleAt.z, r: 42 });
@@ -347,9 +398,9 @@ export async function createTuebingen(group, track, fx) {
     batch.add('ironDark', LOW_SPHERE, mat(p.x, MAUER + 0.6, p.z, 0.06, 0.6, 0.06));
   }
 
-  for (const [d, e] of [[134, 3.5], [149, 2.5]]) {
+  for (const [d, e] of [[129, 6], [174, 3]]) {
     const p = townPoint(d, e);
-    willow(batch, foliage, p.x, BANK - 0.2, p.z, rand, 1.15);
+    willow(batch, p.x, BANK - 0.2, p.z, rand, 1.05);
     taken.push({ x: p.x, z: p.z, r: 6 });
   }
   for (let d = FRONT_WALL_END + 2; d < LANDING_END - PUNT_LENGTH; d += PUNT_LENGTH + 0.6) {
@@ -392,7 +443,7 @@ export async function createTuebingen(group, track, fx) {
     const w = islandWidth(tip);
     if (w > 4) {
       const p = track.point(tip, track.hw[tip] + w / 2);
-      willow(batch, foliage, p.x, BANK - 0.3, p.z, rand, 1.05);
+      willow(batch, p.x, BANK - 0.3, p.z, rand, 1.05);
     }
   }
 
@@ -457,14 +508,14 @@ export async function createTuebingen(group, track, fx) {
     fn(p);
     taken.push({ x: p.x, z: p.z, r: 16 });
   };
-  scatter(12, 600, bankSpot(0.28, 0.47, 1, 3.5, 7), sparse((p) => willow(batch, foliage, p.x, p.y - 0.2, p.z, rand, 0.85 + rand() * 0.3)));
-  scatter(9, 600, bankSpot(0.28, 0.47, -1, 3.5, 7), sparse((p) => willow(batch, foliage, p.x, p.y - 0.2, p.z, rand, 0.85 + rand() * 0.3)));
+  scatter(12, 600, bankSpot(0.28, 0.47, 1, 3.5, 7), sparse((p) => willow(batch, p.x, p.y - 0.2, p.z, rand, 0.85 + rand() * 0.3)));
+  scatter(9, 600, bankSpot(0.28, 0.47, -1, 3.5, 7), sparse((p) => willow(batch, p.x, p.y - 0.2, p.z, rand, 0.85 + rand() * 0.3)));
   scatter(140, 2000, bankSpot(0.27, 0.48, 1, 12, 160), (p) => fruitTree(batch, p.x, p.y, p.z, rand));
   scatter(70, 1200, bankSpot(0.46, 0.56, -1, 4, 60), (p) => leafyTree(batch, p.x, p.y, p.z, rand, 1.2 + rand() * 0.6));
   scatter(70, 1200, bankSpot(0.46, 0.56, 1, 4, 60), (p) => leafyTree(batch, p.x, p.y, p.z, rand, 1.2 + rand() * 0.6));
   scatter(60, 1200, bankSpot(0.72, 0.8, 1, 4, 80), (p) => leafyTree(batch, p.x, p.y, p.z, rand, 1 + rand() * 0.5));
   scatter(160, 2500, bankSpot(0.78, 1, TOWN, 8, 120), (p) => leafyTree(batch, p.x, p.y, p.z, rand, 1.1 + rand() * 0.5));
-  scatter(26, 900, bankSpot(0.8, 0.98, -TOWN, 14, 90), (p) => {
+  scatter(60, 1500, bankSpot(0.8, 0.98, -TOWN, 14, 80), (p) => {
     shed(batch, p.x, p.y, p.z, track.heading(p.i) + (rand() - 0.5) * 0.3, rand);
     for (let k = 0; k < 3; k++) {
       const a = rand() * Math.PI * 2;
@@ -473,7 +524,7 @@ export async function createTuebingen(group, track, fx) {
     }
     taken.push({ x: p.x, z: p.z, r: 8 });
   });
-  scatter(10, 900, bankSpot(0.8, 1.02, -TOWN, 3.5, 8), sparse((p) => willow(batch, foliage, p.x, p.y - 0.2, p.z, rand, 0.85 + rand() * 0.3)));
+  scatter(10, 900, bankSpot(0.8, 1.02, -TOWN, 3.5, 8), sparse((p) => willow(batch, p.x, p.y - 0.2, p.z, rand, 0.85 + rand() * 0.3)));
   scatter(90, 1400, () => {
     const k = Math.round(route.first + rand() * (route.count - 1));
     const p = track.point(k, track.hw[k] + 3 + rand() * 40);
@@ -490,10 +541,145 @@ export async function createTuebingen(group, track, fx) {
     return { x, y, z };
   }, (p) => leafyTree(batch, p.x, p.y, p.z, rand, 1.3 + rand() * 0.5));
 
+  await tick();
+  const wildBank = (n) => {
+    const kind = zone(n);
+    return kind === 'outer' || (kind === 'inner' && n.side === TOWN);
+  };
+  for (const seg of track.segments) {
+    for (const side of [-1, 1]) {
+      for (let i = seg.start; i <= seg.end; i += 5) {
+        if (rand() < 0.35) continue;
+        const e = 4.5 + rand() * 7;
+        const p = track.point(i, side * (track.hw[i] + e));
+        const n = probe(p.x, p.z);
+        if (n.edge < 3.5 || !wildBank(n) || !free(p.x, p.z, 3)) continue;
+        const y = height(p.x, p.z);
+        const roll = rand();
+        if (roll < 0.07) willow(batch, p.x, y - 0.2, p.z, rand, 0.85 + rand() * 0.25);
+        else if (roll < 0.62) leafyTree(batch, p.x, y, p.z, rand, 0.95 + rand() * 0.5);
+        else {
+          for (let k = 0; k < 3; k++) {
+            const bx = p.x + (rand() - 0.5) * 4;
+            const bz = p.z + (rand() - 0.5) * 4;
+            if (probe(bx, bz).edge > 2.5) batch.add(pick(['hedge', 'leafC', 'leafA', 'leafB'], rand), LOW_SPHERE, mat(bx, height(bx, bz) + 0.6, bz, 1.4 + rand(), 1.1 + rand() * 0.5, 1.4 + rand()));
+          }
+        }
+        taken.push({ x: p.x, z: p.z, r: 2.5 });
+      }
+      await tick();
+    }
+  }
+  const legA = (f) => f > 0.93 || f < 0.29;
+  for (let gx = -300; gx < 380; gx += 15) {
+    for (let gz = 40; gz < 330; gz += 15) {
+      const x = gx + (rand() - 0.5) * 3;
+      const z = gz + (rand() - 0.5) * 3;
+      const n = probe(x, z);
+      if (n.side === TOWN || !legA(n.main / N) || n.edge < 22 || n.edge > 230 || !free(x, z, 6)) continue;
+      if (zone(n) === 'island' || bump(x, z, pond) > 0.1) continue;
+      const y = Math.min(height(x - 5, z - 5), height(x + 5, z + 5), height(x - 5, z + 5), height(x + 5, z - 5));
+      const yaw = track.heading(n.main) + (rand() < 0.5 ? 0 : Math.PI / 2) + (rand() - 0.5) * 0.1;
+      if (rand() < 0.12) {
+        const { r } = institute(batch, windows, x, y, z, yaw, rand);
+        taken.push({ x, z, r: r * 0.8 });
+      } else {
+        gabledHouse(batch, windows, x, y, z, yaw, 9 + rand() * 3, 10 + rand() * 2, 3 + Math.floor(rand() * 2), rand, { plinth: 6, door: rand() < 0.6 });
+        taken.push({ x, z, r: 6 });
+      }
+      if (rand() < 0.4) {
+        const tx = x + (rand() - 0.5) * 12;
+        const tz = z + (rand() - 0.5) * 12;
+        if (free(tx, tz, 2.5)) leafyTree(batch, tx, height(tx, tz), tz, rand, 0.9 + rand() * 0.4);
+      }
+    }
+    if (gx % 60 === 0) await tick();
+  }
+  for (let k = 0; k < 14; k++) {
+    const a = (k / 14) * Math.PI * 2;
+    const x = pond.x + Math.cos(a) * 30;
+    const z = pond.z + Math.sin(a) * 19;
+    if (free(x, z, 3)) leafyTree(batch, x, height(x, z), z, rand, 1.1 + rand() * 0.4);
+  }
+  scatter(16, 900, bankSpot(0.27, 0.48, -TOWN, 16, 70), (p) => {
+    const yaw = track.heading(p.i);
+    const ca = Math.cos(yaw);
+    const sa = Math.sin(yaw);
+    const rows = 3 + Math.floor(rand() * 3);
+    const cols = 4 + Math.floor(rand() * 4);
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const u = (c - cols / 2) * 7.5;
+        const w = r * 7.5;
+        const x = p.x + ca * u + sa * w;
+        const z = p.z - sa * u + ca * w;
+        if (probe(x, z).edge > 12 && free(x, z, 2.5)) fruitTree(batch, x, height(x, z), z, rand);
+      }
+    }
+    taken.push({ x: p.x, z: p.z, r: 10 });
+  });
+  scatter(10, 900, bankSpot(0.27, 0.48, -TOWN, 40, 140), (p) => {
+    const yaw = track.heading(p.i) + (rand() < 0.5 ? 0 : Math.PI / 2);
+    for (let k = 0; k < 9; k++) {
+      const x = p.x + Math.sin(yaw) * k * 6;
+      const z = p.z + Math.cos(yaw) * k * 6;
+      if (probe(x, z).edge > 12 && free(x, z, 2.5)) leafyTree(batch, x, height(x, z), z, rand, 1 + rand() * 0.4);
+    }
+  });
+  scatter(5, 600, bankSpot(0.29, 0.47, -TOWN, 55, 170), (p) => {
+    if (!farmland(p.x, p.z)) return false;
+    barn(batch, windows, p.x, p.y, p.z, track.heading(p.i) + (rand() - 0.5) * 0.4, rand);
+    taken.push({ x: p.x, z: p.z, r: 22 });
+    for (let r = 0; r < 4; r++) {
+      for (let c = 0; c < 6; c++) {
+        const x = p.x + 26 + c * 7 + (rand() - 0.5);
+        const z = p.z - 12 + r * 7 + (rand() - 0.5);
+        if (free(x, z, 2)) fruitTree(batch, x, height(x, z), z, rand);
+      }
+    }
+  });
+  {
+    const vi = Math.round(0.4 * N);
+    const v = track.point(vi, -TOWN * (track.hw[vi] + 120));
+    const vy = height(v.x, v.z);
+    chapel(batch, windows, v.x, vy, v.z, track.heading(vi));
+    taken.push({ x: v.x, z: v.z, r: 12 });
+    for (let k = 0; k < 16; k++) {
+      const a = (k / 16) * Math.PI * 2 + rand() * 0.3;
+      const d = 20 + rand() * 22;
+      const x = v.x + Math.cos(a) * d;
+      const z = v.z + Math.sin(a) * d;
+      if (!free(x, z, 6) || probe(x, z).edge < 20) continue;
+      const y = Math.min(height(x - 4, z - 4), height(x + 4, z + 4), height(x - 4, z + 4), height(x + 4, z - 4));
+      gabledHouse(batch, windows, x, y, z, Math.atan2(v.x - x, v.z - z), 8 + rand() * 3, 10 + rand() * 2, 2 + Math.floor(rand() * 2), rand, { timbered: rand() < 0.6, plinth: 6 });
+      taken.push({ x, z, r: 6 });
+    }
+  }
+  scatter(7, 900, bankSpot(0.5, 0.78, -TOWN, 45, 110), (p) => {
+    const { r } = institute(batch, windows, p.x, p.y - 0.5, p.z, faceRiver(p.i, -TOWN), rand);
+    taken.push({ x: p.x, z: p.z, r: r * 0.8 });
+  });
+  scatter(70, 1500, bankSpot(0.47, 0.8, -TOWN, 60, 220), (p) => {
+    if (p.y > 45) return false;
+    const y = Math.min(height(p.x - 4, p.z - 4), height(p.x + 4, p.z + 4), height(p.x - 4, p.z + 4), height(p.x + 4, p.z - 4));
+    gabledHouse(batch, windows, p.x, y, p.z, track.heading(p.i) + (rand() < 0.5 ? 0 : Math.PI / 2), 9 + rand() * 3, 10 + rand() * 2, 3, rand, { plinth: 8 });
+    taken.push({ x: p.x, z: p.z, r: 6 });
+  });
+  scatter(40, 1500, bankSpot(0.78, 0.99, TOWN, 16, 90), (p) => {
+    if (p.y > 40) return false;
+    const y = Math.min(height(p.x - 5, p.z - 5), height(p.x + 5, p.z + 5), height(p.x - 5, p.z + 5), height(p.x + 5, p.z - 5));
+    gabledHouse(batch, windows, p.x, y, p.z, faceRiver(p.i, TOWN) + (rand() - 0.5) * 0.4, 11 + rand() * 3, 11 + rand() * 2, 2 + Math.floor(rand() * 2), rand, { color: pick(['plaster', 'cream', 'yellow', 'apricot', 'sky'], rand), plinth: 8 });
+    taken.push({ x: p.x, z: p.z, r: 7.5 });
+  });
+  scatter(40, 1500, bankSpot(0.79, 0.99, -TOWN, 90, 200), (p) => {
+    const y = Math.min(height(p.x - 4, p.z - 4), height(p.x + 4, p.z + 4), height(p.x - 4, p.z + 4), height(p.x + 4, p.z - 4));
+    gabledHouse(batch, windows, p.x, y, p.z, track.heading(p.i) + (rand() < 0.5 ? 0 : Math.PI / 2), 9 + rand() * 3, 10 + rand() * 2, 2 + Math.floor(rand() * 2), rand, { plinth: 6 });
+    taken.push({ x: p.x, z: p.z, r: 6 });
+  });
+
   const scenery = new THREE.Group();
   const chunks = await batch.buildAsync(scenery, 0.1, COLORS_ALL, undefined, tick);
   const glass = await windows.buildAsync(scenery, 0, COLORS_ALL, undefined, tick);
-  const leaves = await foliage.buildAsync(scenery, 0, COLORS_ALL, undefined, tick);
   group.add(scenery);
 
   const laneLoop = (from, to, a, b) => {
@@ -553,7 +739,6 @@ export async function createTuebingen(group, track, fx) {
       water.update(t);
       cullChunks(chunks, camera, fog.far);
       cullChunks(glass, camera, fog.far * 0.6);
-      cullChunks(leaves, camera, fog.far);
       sky.position.copy(camera.position);
       hazards.animate(t, dt);
       for (const cloud of clouds) {
