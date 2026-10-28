@@ -117,6 +117,12 @@ const BUILDERS = {
   tuebingen: () => import('./tuebingen.js').then((m) => m.createTuebingen),
 };
 
+const ARENA_BUILDERS = {
+  fjord: () => import('./arenaAlps.js').then((m) => m.createAlpineArena),
+  lagoon: () => import('./arenaJungle.js').then((m) => m.createJungleArena),
+  harbor: () => import('./arenaHarbor.js').then((m) => m.createHarborArena),
+};
+
 const ARENA_PREFIX = 'ctf:';
 const isArena = (key) => key.startsWith(ARENA_PREFIX);
 const mapOf = (key) => (isArena(key) ? ARENAS[key.slice(ARENA_PREFIX.length)] : MAPS[key]);
@@ -129,7 +135,8 @@ function prepareVenue(key) {
     group.matrixWorldAutoUpdate = false;
     const map = mapOf(key);
     const track = createTrack(map);
-    const world = BUILDERS[map.id] ? await (await BUILDERS[map.id]())(group, track, fx) : createWorld(group, track);
+    const builder = isArena(key) ? ARENA_BUILDERS[map.id] : BUILDERS[map.id];
+    const world = builder ? await (await builder())(group, track, fx) : createWorld(group, track);
     scene.add(group);
     venues[key] = { track, world, group };
     return venues[key];

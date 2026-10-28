@@ -673,10 +673,11 @@ export class Hud {
       ctx.stroke();
       ctx.fill();
       ctx.fillStyle = '#0E2A47';
-      for (const [x, z, r] of arena.islands) {
+      const shapes = arena.obstacles ?? arena.islands.map(([x, z, r]) => [x, z, r, r, 0]);
+      for (const [x, z, rx, rz, rot] of shapes) {
         const [ix, iy] = this.toMap(x, z);
         ctx.beginPath();
-        ctx.arc(ix, iy, Math.max(2.5, r * this.mapScale), 0, Math.PI * 2);
+        ctx.ellipse(ix, iy, Math.max(2.5, rx * this.mapScale), Math.max(2.5, rz * this.mapScale), -rot, 0, Math.PI * 2);
         ctx.fill();
       }
     } else {

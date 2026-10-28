@@ -10,9 +10,9 @@ import { DOCK_COLORS, GLOW_COLORS, CONTAINER, Decals, containerStack, quayCrane,
 const COLORS_ALL = { ...COLORS, ...DOCK_COLORS, ...GLOW_COLORS };
 const QUAY_TOP = 2.2;
 const WALK = 5;
-const SKY_TOP = 0x04061a;
-const SKY_HORIZON = 0x1b1530;
-const HAZE = 0x0f0f1e;
+export const SKY_TOP = 0x04061a;
+export const SKY_HORIZON = 0x1b1530;
+export const HAZE = 0x0f0f1e;
 
 const BEAM_VERT = /* glsl */ `
   varying float vAlong;
@@ -112,12 +112,12 @@ const CAP = new THREE.BoxGeometry(1, 1, 1);
 const LAMP = new THREE.SphereGeometry(1, 10, 8);
 const BEAM = new THREE.ConeGeometry(1, 1, 18, 1, true).translate(0, -0.5, 0);
 const POOL = new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2);
-const WARM = new THREE.Color(0xffc27a);
-const COOL = new THREE.Color(0xbcd4ff);
+export const WARM = new THREE.Color(0xffc27a);
+export const COOL = new THREE.Color(0xbcd4ff);
 const SEARCH = new THREE.Color(0xe6f0ff);
 const UP = new THREE.Vector3(0, 1, 0);
 
-class Lights {
+export class Lights {
   constructor() {
     this.beams = [];
     this.pools = [];
@@ -217,7 +217,7 @@ function quayWalls(track, landAt) {
   return new THREE.Mesh(geometry, toon(0xffffff, { vertexColors: true, side: THREE.DoubleSide }));
 }
 
-function starfield(rand) {
+export function starfield(rand) {
   const positions = [];
   for (let k = 0; k < 420; k++) {
     const a = rand() * Math.PI * 2;
@@ -230,7 +230,7 @@ function starfield(rand) {
   return new THREE.Points(geometry, new THREE.PointsMaterial({ color: 0xdfe6ff, size: 1.6, sizeAttenuation: false, fog: false, transparent: true, opacity: 0.8 }));
 }
 
-function unlit(group) {
+export function unlit(group) {
   const flat = new THREE.MeshBasicMaterial();
   const painted = new THREE.MeshBasicMaterial({ vertexColors: true });
   group.traverse((o) => {

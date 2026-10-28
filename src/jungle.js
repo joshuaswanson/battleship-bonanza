@@ -9,9 +9,9 @@ import { Batcher, cullChunks, slicer, COLORS, mat, CONE, ROCK, addPalm, createSk
 const CELL = 3;
 const MARGIN = 340;
 const RIVER_AMP = 0.4;
-const SKY_GREEN = 0xd2f2dc;
+export const SKY_GREEN = 0xd2f2dc;
 
-const JUNGLE_COLORS = {
+export const JUNGLE_COLORS = {
   ...COLORS,
   bark: 0x7a5230,
   barkLight: 0x9c7046,
@@ -812,7 +812,7 @@ const PLINTH = new THREE.CylinderGeometry(1, 1.1, 1, 10);
 
 const TIKI_SCALE = 3;
 
-function tikiHead(batch, x, y, z, yaw, rand, { snarl, crown }) {
+export function tikiHead(batch, x, y, z, yaw, rand, { snarl, crown }) {
   const put = frame(batch, x, y, z, yaw, 0, 0, TIKI_SCALE);
   const V = (a, b, c) => new THREE.Vector3(a, b, c);
   put('tikiWood', HEAD, 0, -1.2, 0, 3.3, 10.4, 2.9);
@@ -1174,7 +1174,7 @@ function tree(batch, x, y, z, rand, { height, girth, river, reach, branches, lay
   return { top, ends };
 }
 
-function addGiant(batch, x, y, z, rand, scale = 1, river = null) {
+export function addGiant(batch, x, y, z, rand, scale = 1, river = null) {
   const height = (19 + rand() * 12) * scale;
   const girth = 1.05 + rand() * 0.4;
   const fins = 3 + Math.floor(rand() * 2);
@@ -1186,12 +1186,12 @@ function addGiant(batch, x, y, z, rand, scale = 1, river = null) {
   tree(batch, x, y, z, rand, { height, girth, river, reach: 4.5 + rand() * 2.5, branches: 3 + Math.floor(rand() * 2), layers: 2 });
 }
 
-function addBroadleaf(batch, x, y, z, rand, tall = 1, river = null) {
+export function addBroadleaf(batch, x, y, z, rand, tall = 1, river = null) {
   const height = (8 + rand() * 7) * tall;
   tree(batch, x, y, z, rand, { height, girth: 0.45 + height * 0.02, river, reach: 2.6 + rand() * 1.8, branches: 2 + Math.floor(rand() * 2), layers: 1 });
 }
 
-function addBanana(batch, x, y, z, rand, big = false) {
+export function addBanana(batch, x, y, z, rand, big = false) {
   const leaves = 5 + Math.floor(rand() * 4);
   const size = (1.1 + rand() * 1.2) * (big ? 1.8 : 1);
   const stem = (1 + rand() * 1.6) * (big ? 1.4 : 1);
@@ -1248,7 +1248,7 @@ function leafAt(batch, key, shape, x, y, z, length, up, yaw) {
   batch.add(key, shape, tilted(x, y, z, length, length, length, -up, yaw));
 }
 
-function addBush(batch, x, y, z, rand, out = null) {
+export function addBush(batch, x, y, z, rand, out = null) {
   const leaves = 9 + Math.floor(rand() * 7);
   const size = 1.4 + rand() * 1.3;
   const key = SHRUB_KEYS[Math.floor(rand() * SHRUB_KEYS.length)];
@@ -1272,7 +1272,7 @@ function addReeds(batch, x, y, z, rand, out) {
   }
 }
 
-function addFern(batch, x, y, z, rand) {
+export function addFern(batch, x, y, z, rand) {
   const fronds = 8 + Math.floor(rand() * 5);
   const size = 2 + rand() * 1.6;
   for (let i = 0; i < fronds; i++) {

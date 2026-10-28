@@ -8,7 +8,7 @@ import { Chopper } from './chop.js';
 import { alpineGround } from './groundShader.js';
 import { LANDMARK_COLORS, castle, coveredBridge, waterTower, buildSteamer, chalet, lakeDock } from './alpsLandmarks.js';
 
-const ALPS_COLORS = {
+export const ALPS_COLORS = {
   ...COLORS,
   ...FLORA_COLORS,
   ...LANDMARK_COLORS,
@@ -57,7 +57,7 @@ function placer(batch) {
   };
 }
 
-function church(batch, x, y, z, yaw) {
+export function church(batch, x, y, z, yaw) {
   const put = placer(batch);
   const o = new THREE.Vector3(x, y, z);
   put('stoneDark', BOX, o, yaw, 0, -1.5, -4, 10, 3, 22);
