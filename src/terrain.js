@@ -343,3 +343,50 @@ export function groundHit(height, p) {
   const gz = (height(p.x, p.z + e) - height(p.x, p.z - e)) / (2 * e);
   return new THREE.Vector3(-gx, 1, -gz).normalize();
 }
+
+export function quayWalls(track, landAt, { top, walk, stone: stoneColor, algae: algaeColor, paving: pavingColor, bottom = -3.36, line = 0.34 }) {
+  const positions = [];
+  const colors = [];
+  const stone = new THREE.Color(stoneColor);
+  const algae = new THREE.Color(algaeColor);
+  const paving = new THREE.Color(pavingColor);
+  const quad = (a, b, c, d, color) => {
+    for (const v of [a, b, c, a, c, d]) {
+      positions.push(v.x, v.y, v.z);
+      colors.push(color.r, color.g, color.b);
+    }
+  };
+  const P = (i, lat, y) => {
+    const p = track.point(i, lat);
+    return new THREE.Vector3(p.x, y, p.z);
+  };
+  const within = (seg, p) => {
+    for (let i = seg.start; i <= seg.end; i += 2) {
+      if (Math.hypot(p.x - track.px[i], p.z - track.pz[i]) < track.hw[i] - 0.56) return true;
+    }
+    return false;
+  };
+  const open = (seg, i, side) => {
+    const p = track.point(i, side * track.hw[i]);
+    return track.segments.some((other) => other !== seg && within(other, p));
+  };
+  for (const seg of track.segments) for (const side of [-1, 1]) {
+    for (let i = seg.start; i <= seg.end; i++) {
+      const j = seg.ring ? (i + 1) % track.N : track.next[i];
+      if (!seg.ring && i === seg.end) continue;
+      if (!landAt(i, side) || !landAt(j, side) || open(seg, i, side) || open(seg, j, side)) continue;
+      const li = side * track.hw[i];
+      const lj = side * track.hw[j];
+      const ri = side * (track.hw[i] + walk);
+      const rj = side * (track.hw[j] + walk);
+      quad(P(i, li, bottom), P(j, lj, bottom), P(j, lj, line), P(i, li, line), algae);
+      quad(P(i, li, line), P(j, lj, line), P(j, lj, top), P(i, li, top), stone);
+      quad(P(i, li, top), P(j, lj, top), P(j, rj, top), P(i, ri, top), paving);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  geometry.computeVertexNormals();
+  return new THREE.Mesh(geometry, toon(0xffffff, { vertexColors: true, side: THREE.DoubleSide }));
+}

@@ -3,7 +3,7 @@ import { Collider } from './collider.js';
 import { createWater } from './water.js';
 import { toon, glow, mulberry32 } from './toon.js';
 import { Batcher, cullChunks, slicer, COLORS, mat, createSky, createCloud, createArch, SUN_DIR } from './world.js';
-import { courseSurface, buildHeightfield, courseBuoys, noise } from './terrain.js';
+import { courseSurface, buildHeightfield, courseBuoys, noise, quayWalls } from './terrain.js';
 import { Laundry, LINE_HEIGHT, LINE_POST } from './veniceHazards.js';
 import { DETAIL_COLORS, building, archBridge, gondola, pole, streetLamp, dogesPalace, campanile } from './veniceDetail.js';
 
@@ -155,53 +155,6 @@ function sanGiorgio(batch, x, z) {
   for (let k = 0; k < 6; k++) batch.add(FACADES[k], BOX, mat(x - 29.12 + k * 6.72, WALL_TOP + 5.6, z - 22.4 + (k % 2) * 3.36, 6.27, 11.2 + (k % 3) * 2.24, 8.96));
 }
 
-function canalWalls(track, landAt) {
-  const positions = [];
-  const colors = [];
-  const stone = new THREE.Color(0xefe8d8);
-  const algae = new THREE.Color(0x4c7a5a);
-  const paving = new THREE.Color(VENICE_COLORS.quay);
-  const quad = (a, b, c, d, color) => {
-    for (const v of [a, b, c, a, c, d]) {
-      positions.push(v.x, v.y, v.z);
-      colors.push(color.r, color.g, color.b);
-    }
-  };
-  const P = (i, lat, y) => {
-    const p = track.point(i, lat);
-    return new THREE.Vector3(p.x, y, p.z);
-  };
-  const within = (seg, p) => {
-    for (let i = seg.start; i <= seg.end; i += 2) {
-      if (Math.hypot(p.x - track.px[i], p.z - track.pz[i]) < track.hw[i] - 0.56) return true;
-    }
-    return false;
-  };
-  const open = (seg, i, side) => {
-    const p = track.point(i, side * track.hw[i]);
-    return track.segments.some((other) => other !== seg && within(other, p));
-  };
-  for (const seg of track.segments) for (const side of [-1, 1]) {
-    for (let i = seg.start; i <= seg.end; i++) {
-      const j = seg.ring ? (i + 1) % track.N : track.next[i];
-      if (!seg.ring && i === seg.end) continue;
-      if (!landAt(i, side) || !landAt(j, side) || open(seg, i, side) || open(seg, j, side)) continue;
-      const li = side * track.hw[i];
-      const lj = side * track.hw[j];
-      const ri = side * (track.hw[i] + WALK);
-      const rj = side * (track.hw[j] + WALK);
-      quad(P(i, li, -3.36), P(j, lj, -3.36), P(j, lj, 0.34), P(i, li, 0.34), algae);
-      quad(P(i, li, 0.34), P(j, lj, 0.34), P(j, lj, WALL_TOP), P(i, li, WALL_TOP), stone);
-      quad(P(i, li, WALL_TOP), P(j, lj, WALL_TOP), P(j, rj, WALL_TOP), P(i, ri, WALL_TOP), paving);
-    }
-  }
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-  geometry.computeVertexNormals();
-  return new THREE.Mesh(geometry, toon(0xffffff, { vertexColors: true, side: THREE.DoubleSide }));
-}
-
 export async function createVenice(group, track, fx) {
   const tick = slicer();
   const fog = new THREE.Fog(0xe6f0f2, 420, 950);
@@ -232,7 +185,7 @@ export async function createVenice(group, track, fx) {
     const p = track.point(i, side * (track.hw[i] + WALK + 1.12));
     return dry(p.x, p.z);
   };
-  group.add(canalWalls(track, landAt));
+  group.add(quayWalls(track, landAt, { top: WALL_TOP, walk: WALK, stone: 0xefe8d8, algae: 0x4c7a5a, paving: VENICE_COLORS.quay }));
 
   const water = createWater({ deep: 0x1d8a84, shallow: 0x52c9b0, amp: 1 });
   group.add(water.mesh);
