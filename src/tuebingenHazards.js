@@ -24,7 +24,7 @@ export class Punts {
     this.punts = lanes.map((lane, k) => {
       const mesh = new THREE.Group();
       const hull = new Batcher();
-      punt(hull, 0, 0, 0, 0, rand, { crew: 6 + Math.floor(rand() * 4), poler: false });
+      punt(hull, 0, 0, 0, 0, rand, { poler: false });
       hull.build(mesh, 0.05, TOWN_COLORS);
       const poler = new THREE.Group();
       const figure = new Batcher();

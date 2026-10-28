@@ -61,6 +61,7 @@ export const TOWN_COLORS = {
   leafC: 0x3e8a40,
   leafD: 0x84c25a,
   willow: 0xa6cc5c,
+  willowStrand: 0xa6cc5c,
   willowDark: 0x8ab94c,
   planeBark: 0xece6d2,
   planePatch: 0xb9b88f,
@@ -68,6 +69,8 @@ export const TOWN_COLORS = {
   puntWood: 0xa0683a,
   puntDark: 0x6b4226,
   puntSeat: 0xc98d55,
+  puntFloor: 0xd9a96e,
+  tarp: 0x2f5f8f,
   skinA: 0xf2c7a5,
   skinB: 0xd9a07a,
   skinC: 0x9c6a4a,
@@ -423,53 +426,95 @@ export function planeTree(batch, x, y, z, rand, s = 1) {
   return { height: (h + 9) * s };
 }
 
-function cascadeGeometry(seed, [light, mid, dark]) {
+const CROWN_TOP = 0.66;
+const CROWN_RISE = 0.3;
+const CROWN_REACH = 0.8;
+
+function lumpGeometry(seed, [light, mid, dark]) {
   const rand = mulberry32(seed);
-  const SEG = 40;
-  const DOME = 3;
-  const RINGS = 10;
-  const shoulder = (0.85 * Math.PI) / 2;
-  const hem = Array.from({ length: SEG }, () => 0.04 + rand() * 0.24);
-  const phase = rand() * 6;
-  const positions = [0, 1, 0];
+  const geometry = new THREE.SphereGeometry(1, 20, 12);
+  const pos = geometry.attributes.position;
+  const phase = Array.from({ length: 4 }, () => rand() * 6);
   const top = new THREE.Color(light);
   const body = new THREE.Color(mid);
   const under = new THREE.Color(dark);
   const c = new THREE.Color();
-  const colors = [...top.toArray()];
-  for (let r = 1; r <= RINGS; r++) {
-    for (let k = 0; k < SEG; k++) {
-      const a = (k / SEG) * Math.PI * 2;
-      let y;
-      let rad;
-      if (r <= DOME) {
-        const phi = (r / DOME) * shoulder;
-        y = 0.62 + 0.38 * Math.cos(phi);
-        rad = Math.sin(phi);
-      } else {
-        const t = (r - DOME) / (RINGS - DOME);
-        y = 0.62 + 0.38 * Math.cos(shoulder) - (0.62 + 0.38 * Math.cos(shoulder) - hem[k]) * t;
-        rad = Math.sin(shoulder) + 0.12 * t;
+  const colors = [];
+  for (let k = 0; k < pos.count; k++) {
+    const x = pos.getX(k);
+    const y = pos.getY(k);
+    const z = pos.getZ(k);
+    const lump = 1 + 0.09 * Math.sin(x * 4.5 + phase[0]) * Math.sin(z * 4.5 + phase[1]) + 0.06 * Math.sin(y * 6 + x * 3 + phase[2]) + 0.04 * Math.sin(z * 11 + phase[3]);
+    pos.setXYZ(k, x * lump, y * lump, z * lump);
+    const t = (y + 1) / 2;
+    c.copy(under).lerp(body, Math.min(1, t * 1.6)).lerp(top, Math.max(0, (t - 0.55) / 0.45) * 0.85);
+    colors.push(c.r, c.g, c.b);
+  }
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function strandsGeometry(seed, [light, mid, dark]) {
+  const rand = mulberry32(seed);
+  const positions = [];
+  const colors = [];
+  const index = [];
+  const tipColor = new THREE.Color(light);
+  const body = new THREE.Color(mid);
+  const shade = new THREE.Color(dark);
+  const base = new THREE.Color();
+  const c = new THREE.Color();
+  const EDGE = 1.42;
+  const strand = (a, phi, inset, tip, bow, width, tone) => {
+    const path = [phi, (phi + EDGE) / 2].map((p) => [CROWN_REACH * Math.sin(p) * inset * 1.03, CROWN_TOP + CROWN_RISE * Math.cos(p), 0]);
+    const re = CROWN_REACH * Math.sin(EDGE) * inset * 1.03;
+    const ye = CROWN_TOP + CROWN_RISE * Math.cos(EDGE);
+    for (let r = 0; r < 4; r++) {
+      const t = r / 3;
+      path.push([re + bow * (1 - (1 - t) ** 3), ye - (ye - tip) * t ** 1.1, t]);
+    }
+    const sa = Math.sin(a);
+    const ca = Math.cos(a);
+    const first = positions.length / 3;
+    base.copy(body).lerp(tipColor, tone);
+    path.forEach(([rad, y, t], r) => {
+      const w = width * (1 - 0.7 * (r / (path.length - 1)));
+      const sway = 0.012 * Math.sin(t * 5 + a * 7);
+      const cx = sa * rad + ca * sway;
+      const cz = ca * rad - sa * sway;
+      for (let s = 0; s < 3; s++) {
+        const q = a + (s / 3) * Math.PI * 2;
+        positions.push(cx + Math.sin(q) * w, y, cz + Math.cos(q) * w);
       }
-      const depth = r / RINGS;
-      rad *= 1 + (0.07 * Math.sin(a * 13 + phase) + 0.035 * Math.sin(a * 31 + phase * 2)) * depth;
-      positions.push(Math.sin(a) * rad, y, Math.cos(a) * rad);
-      const ridge = 0.5 + 0.5 * Math.sin(a * 13 + phase);
-      c.copy(top).lerp(body, Math.min(1, depth * 1.4)).lerp(under, depth * depth * 0.35 * (1 - ridge));
-      colors.push(c.r, c.g, c.b);
+      if (r < 2) c.copy(base).lerp(tipColor, 0.4);
+      else c.copy(shade).lerp(base, Math.min(1, 0.45 + t * 1.2)).lerp(tipColor, t * t * 0.3 * inset);
+      for (let s = 0; s < 3; s++) colors.push(c.r, c.g, c.b);
+    });
+    for (let r = 0; r < path.length - 1; r++) {
+      for (let s = 0; s < 3; s++) {
+        const a0 = first + r * 3 + s;
+        const a1 = first + r * 3 + ((s + 1) % 3);
+        index.push(a0, a0 + 3, a1 + 3, a0, a1 + 3, a1);
+      }
+    }
+    const end = first + (path.length - 1) * 3;
+    index.push(end, end + 2, end + 1);
+  };
+  const clumps = 64;
+  for (let q = 0; q < clumps; q++) {
+    const a = (q / clumps) * Math.PI * 2 + (rand() - 0.5) * 0.08;
+    const phi = 0.45 + rand() * 0.75;
+    const reach = 0.02 + rand() * 0.26;
+    const tone = rand();
+    const count = 3 + Math.floor(rand() * 2);
+    for (let k = 0; k < count; k++) {
+      strand(a + (rand() - 0.5) * 0.09, phi + (rand() - 0.5) * 0.2, 1, reach + rand() * 0.1, 0.05 + rand() * 0.08, 0.03 + rand() * 0.012, tone * 0.7 + rand() * 0.3);
     }
   }
-  const capY = hem.reduce((sum, h) => sum + h, 0) / SEG + 0.1;
-  positions.push(0, capY, 0);
-  colors.push(...under.toArray());
-  const index = [];
-  const at = (r, k) => 1 + (r - 1) * SEG + (k % SEG);
-  for (let k = 0; k < SEG; k++) index.push(0, at(1, k), at(1, k + 1));
-  for (let r = 1; r < RINGS; r++) {
-    for (let k = 0; k < SEG; k++) index.push(at(r, k), at(r + 1, k), at(r + 1, k + 1), at(r, k), at(r + 1, k + 1), at(r, k + 1));
+  for (let q = 0; q < 30; q++) {
+    strand(rand() * Math.PI * 2, 0.5 + rand() * 0.5, 0.8, 0.12 + rand() * 0.25, 0.04, 0.034, rand() * 0.3);
   }
-  const cap = positions.length / 3 - 1;
-  for (let k = 0; k < SEG; k++) index.push(cap, at(RINGS, k + 1), at(RINGS, k));
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
@@ -478,30 +523,37 @@ function cascadeGeometry(seed, [light, mid, dark]) {
   return geometry;
 }
 
-const CASCADES = [
-  cascadeGeometry(11, [0xc4e070, 0x93c04e, 0x4f7d2c]),
-  cascadeGeometry(23, [0xb5d862, 0x86b647, 0x4a7629]),
-  cascadeGeometry(37, [0xd0e67e, 0x9cc755, 0x56852f]),
+const WILLOW_GREENS = [
+  [0xd4ea84, 0x9cc955, 0x4b7a2a],
+  [0xc8e275, 0x8fbd4b, 0x46732a],
+  [0xdcec8c, 0xa6cf5c, 0x55852f],
 ];
+const LUMPS = WILLOW_GREENS.map((greens, k) => lumpGeometry(11 + k * 13, greens));
+const STRANDS = WILLOW_GREENS.map((greens, k) => strandsGeometry(17 + k * 19, greens));
 
 export function willow(batch, x, y, z, rand, s = 1) {
   const put = frame(batch, x, y, z, rand() * 6.3, (rand() - 0.5) * 0.1, (rand() - 0.5) * 0.1, s);
-  put('bark', TRUNK, 0, -0.5, 0, 0.9, 5.5, 0.9);
-  for (let k = 0; k < 3; k++) {
-    const a = (k / 3) * Math.PI * 2 + rand();
-    put('bark', TRUNK, 0, 4.4, 0, 0.4, 5, 0.4, Math.cos(a) * 0.65, 0, -Math.sin(a) * 0.65);
-  }
-  const R = 5.4 + rand() * 1.2;
+  const R = 5.6 + rand() * 1.2;
   const top = 12 + rand() * 1.5;
-  put('willow', pick(CASCADES, rand), 0, 0.6, 0, R, top - 0.6, R);
-  const lobes = 3 + Math.floor(rand() * 2);
-  for (let k = 0; k < lobes; k++) {
-    const a = (k / lobes) * Math.PI * 2 + rand() * 0.8;
-    const d = R * (0.45 + rand() * 0.2);
-    const r = R * (0.5 + rand() * 0.15);
-    const h = (top - 0.6) * (0.68 + rand() * 0.18);
-    put('willow', pick(CASCADES, rand), Math.sin(a) * d, 0.4 + rand() * 0.6, Math.cos(a) * d, r, h, r, 0, rand() * 6);
+  const crownY = top * CROWN_TOP;
+  put('bark', TRUNK, 0, -0.5, 0, 0.95, crownY * 0.42, 0.95);
+  const limbs = 4 + Math.floor(rand() * 2);
+  for (let k = 0; k < limbs; k++) {
+    const a = (k / limbs) * Math.PI * 2 + rand() * 0.6;
+    const lean = 0.55 + rand() * 0.35;
+    put('bark', TRUNK, 0, crownY * 0.36, 0, 0.38, crownY * 0.75, 0.38, Math.cos(a) * lean, 0, -Math.sin(a) * lean);
   }
+  const shade = pick(LUMPS, rand);
+  put('willow', shade, 0, crownY * 0.82, 0, R * 0.62, top * 0.28, R * 0.62);
+  put('willow', pick(LUMPS, rand), 0, crownY + top * 0.08, 0, R * CROWN_REACH * 0.92, top * CROWN_RISE * 0.95, R * CROWN_REACH * 0.92, 0, rand() * 6);
+  const lumps = 5 + Math.floor(rand() * 3);
+  for (let k = 0; k < lumps; k++) {
+    const a = (k / lumps) * Math.PI * 2 + rand() * 0.5;
+    const d = R * (0.36 + rand() * 0.2);
+    const r = R * (0.3 + rand() * 0.12);
+    put('willow', pick(LUMPS, rand), Math.sin(a) * d, crownY + top * (0.12 + rand() * 0.1), Math.cos(a) * d, r, r * 0.75, r, 0, rand() * 6);
+  }
+  put('willowStrand', pick(STRANDS, rand), 0, 0, 0, R, top, R, 0, rand() * 6);
   return { height: (top + 0.5) * s };
 }
 
@@ -632,58 +684,82 @@ export function shed(batch, x, y, z, yaw, rand) {
   put('frameWhite', BOX, -0.8, 1.4, 1.31, 1, 0.9, 0.04);
 }
 
-function person(put, x, y, z, ry, rand, { standing = false } = {}) {
+function poler(put, x, y, z, rand) {
   const shirt = pick(SHIRTS, rand);
   const skin = pick(SKINS, rand);
-  if (standing) {
-    for (const s of [-1, 1]) put('trousers', CYL, x + s * 0.17, y + 0.55, z, 0.15, 1.1, 0.15);
-    put(shirt, CYL, x, y + 1.55, z, 0.34, 1, 0.26, 0, ry);
-    put(skin, BALL, x, y + 2.35, z, 0.3, 0.32, 0.3);
-    put(rand() < 0.5 ? 'hair' : 'hairBlond', BALL, x, y + 2.45, z - 0.04, 0.31, 0.24, 0.31);
-    put('straw', CYL, x, y + 2.62, z, 0.5, 0.05, 0.5);
-    put('straw', CYL, x, y + 2.72, z, 0.3, 0.2, 0.3);
-    put('hatBand', CYL, x, y + 2.66, z, 0.31, 0.07, 0.31);
-    return;
-  }
-  put(shirt, CYL, x, y + 0.55, z, 0.3, 0.8, 0.24, 0, ry);
-  put(skin, BALL, x, y + 1.22, z, 0.28, 0.3, 0.28);
-  if (rand() < 0.35) {
-    put('straw', CYL, x, y + 1.42, z, 0.46, 0.05, 0.46);
-    put('straw', CYL, x, y + 1.52, z, 0.28, 0.2, 0.28);
-    put('hatBand', CYL, x, y + 1.46, z, 0.29, 0.07, 0.29);
-  } else put(rand() < 0.5 ? 'hair' : 'hairBlond', BALL, x, y + 1.32, z, 0.29, 0.22, 0.29);
-  for (const s of [-1, 1]) put(skin, BOX, x + Math.cos(ry) * s * 0.33, y + 0.75, z - Math.sin(ry) * s * 0.33, 0.12, 0.5, 0.12);
+  for (const s of [-1, 1]) put('trousers', CYL, x + s * 0.17, y + 0.55, z, 0.15, 1.1, 0.15);
+  put(shirt, CYL, x, y + 1.55, z, 0.34, 1, 0.26);
+  put(skin, BALL, x, y + 2.35, z, 0.3, 0.32, 0.3);
+  put(rand() < 0.5 ? 'hair' : 'hairBlond', BALL, x, y + 2.45, z - 0.04, 0.31, 0.24, 0.31);
+  put('straw', CYL, x, y + 2.62, z, 0.5, 0.05, 0.5);
+  put('straw', CYL, x, y + 2.72, z, 0.3, 0.2, 0.3);
+  put('hatBand', CYL, x, y + 2.66, z, 0.31, 0.07, 0.31);
 }
 
 export const PUNT_LENGTH = 13;
 export const PUNT_WIDTH = 2.6;
+const PUNT_RAKE = 1.4;
+const PUNT_KEEL = -0.3;
+const PUNT_RIM = 0.78;
+const PUNT_DECK = 1.5;
+const PUNT_STRIPES = ['shutterGreen', 'shutterRed', 'shutterBlue', 'ochre', 'frameWhite', 'clockBlue'];
+const CUSHIONS = ['shutterRed', 'shutterGreen', 'shutterBlue', 'ochre', 'frameWhite', 'flowerC'];
+const HULL_SIDE = new THREE.ExtrudeGeometry(
+  new THREE.Shape([[-PUNT_LENGTH / 2 + PUNT_RAKE, PUNT_KEEL], [PUNT_LENGTH / 2 - PUNT_RAKE, PUNT_KEEL], [PUNT_LENGTH / 2, PUNT_RIM], [-PUNT_LENGTH / 2, PUNT_RIM]].map(([u, v]) => new THREE.Vector2(u, v))),
+  { depth: 1, bevelEnabled: false },
+).translate(0, 0, -0.5).rotateY(Math.PI / 2);
+const PENNANT = new THREE.ExtrudeGeometry(new THREE.Shape([new THREE.Vector2(0, 0), new THREE.Vector2(0, 1), new THREE.Vector2(1, 0.5)]), { depth: 1, bevelEnabled: false }).translate(0, 0, -0.5).rotateY(Math.PI / 2);
 
-export function punt(batch, x, y, z, yaw, rand, { crew = 6, poler = true } = {}) {
+export function punt(batch, x, y, z, yaw, rand, { poler: standing = true, cover = false } = {}) {
   const put = frame(batch, x, y, z, yaw, 0, 0, 1);
   const L = PUNT_LENGTH;
   const W = PUNT_WIDTH;
-  put('puntDark', BOX, 0, -0.1, 0, W - 0.2, 0.5, L - 0.4);
+  const flat = L - PUNT_RAKE * 2;
+  const rake = Math.atan2(PUNT_RIM - PUNT_KEEL, PUNT_RAKE);
+  const slope = Math.hypot(PUNT_RIM - PUNT_KEEL, PUNT_RAKE);
+  const stripe = pick(PUNT_STRIPES, rand);
+  put('puntDark', BOX, 0, PUNT_KEEL + 0.07, 0, W - 0.2, 0.14, flat);
+  put('puntFloor', BOX, 0, PUNT_KEEL + 0.16, 0, W - 0.5, 0.06, flat - 0.4);
   for (const s of [-1, 1]) {
-    put('puntWood', BOX, s * (W / 2 - 0.08), 0.35, 0, 0.16, 0.9, L);
-    put('puntDark', BOX, s * (W / 2 - 0.02), 0.82, 0, 0.22, 0.12, L + 0.1);
-    put('puntSeat', BOX, s * (W / 2 - 0.4), 0.45, 0.4, 0.5, 0.12, L - 4.2);
-    put('puntWood', BOX, 0, 0.35, s * (L / 2 - 0.08), W, 0.9, 0.16);
-    put('puntDark', BOX, 0, 0.82, s * (L / 2 - 0.02), W + 0.1, 0.12, 0.22);
+    put('puntWood', HULL_SIDE, s * (W / 2 - 0.07), 0, 0, 0.14, 1, 1);
+    put(stripe, BOX, s * (W / 2 + 0.005), 0.46, 0, 0.03, 0.2, L - 0.55);
+    put('puntDark', BOX, s * (W / 2 + 0.005), 0.22, 0, 0.03, 0.06, L - 0.95);
+    put('puntDark', BOX, s * (W / 2 - 0.05), PUNT_RIM + 0.05, 0, 0.26, 0.1, L + 0.06);
+    put('puntWood', BOX, 0, (PUNT_KEEL + PUNT_RIM) / 2, s * (L / 2 - PUNT_RAKE / 2), W - 0.12, 0.12, slope, -s * rake);
+    put('puntSeat', BOX, 0, PUNT_RIM - 0.02, s * (L / 2 - PUNT_DECK / 2), W - 0.14, 0.1, PUNT_DECK);
+    put('puntDark', BOX, 0, PUNT_RIM + 0.04, s * (L / 2 - PUNT_DECK), W - 0.14, 0.08, 0.12);
+    put('puntDark', BOX, 0, PUNT_RIM - 0.02, s * (L / 2 + 0.02), W + 0.04, 0.14, 0.12);
+    for (let r = -flat / 2 + 0.6; r < flat / 2 - 0.3; r += 1.1) put('puntDark', BOX, s * (W / 2 - 0.17), 0.2, r, 0.06, 0.95, 0.1);
+    const seat = L - PUNT_DECK * 2 - 0.5;
+    put('puntSeat', BOX, s * (W / 2 - 0.45), 0.3, 0, 0.5, 0.1, seat);
+    put('puntDark', BOX, s * (W / 2 - 0.45), 0.08, 0, 0.42, 0.36, 0.1);
+    put('puntSeat', BOX, s * (W / 2 - 0.22), 0.62, 0, 0.07, 0.42, seat, 0, 0, s * 0.18);
+    if (!cover) {
+      for (let c = -seat / 2 + 0.75; c < seat / 2 - 0.6; c += 1.3) {
+        if (rand() < 0.35) continue;
+        put(pick(CUSHIONS, rand), BOX, s * (W / 2 - 0.47), 0.4, c, 0.42, 0.1, 1.05);
+      }
+    }
   }
-  put('puntSeat', BOX, 0, 0.42, -L / 2 + 1, W - 0.3, 0.12, 1.8);
-  put('puntSeat', BOX, 0, 0.42, L / 2 - 0.9, W - 0.3, 0.12, 1.4);
-  const seats = Math.min(crew, 10);
-  for (let k = 0; k < seats; k++) {
-    const s = k % 2 ? 1 : -1;
-    const lz = -2.6 + Math.floor(k / 2) * 1.5;
-    person(put, s * (W / 2 - 0.4), 0.45, lz, s > 0 ? -Math.PI / 2 : Math.PI / 2, rand);
+  if (cover) {
+    const span = L - PUNT_DECK * 2 + 0.2;
+    put('tarp', BOX, 0, PUNT_RIM + 0.12, 0, W + 0.08, 0.1, span);
+    put('tarp', CYL, 0, PUNT_RIM + 0.16, 0, 0.5, span, 0.12, Math.PI / 2);
+    for (let c = -span / 2 + 1; c < span / 2; c += 2) put('ironDark', BOX, 0, PUNT_RIM + 0.12, c, W + 0.14, 0.04, 0.06);
+  } else {
+    put('puntDark', BOX, 0, 0.62, 0.3, 0.6, 0.06, 2.6);
+    for (const c of [-0.8, 1.4]) put('puntDark', BOX, 0, 0.22, c, 0.1, 0.8, 0.1);
+    for (let k = 0; k < 3; k++) put(pick(['shutterGreen', 'ochre', 'frameWhite'], rand), CYL, (rand() - 0.5) * 0.3, 0.8, -0.4 + k * 0.7 + rand() * 0.2, 0.07, 0.32, 0.07);
+    put('straw', BOX, 0.05, 0.76, 1.3, 0.42, 0.28, 0.5);
   }
-  if (poler) puntPoler(batch, rand, put);
+  put('ironDark', CYL, 0, PUNT_RIM + 0.85, L / 2 - 0.45, 0.04, 1.6, 0.04);
+  put(stripe === 'frameWhite' ? 'shutterRed' : stripe, PENNANT, 0, PUNT_RIM + 1.15, L / 2 - 0.45, 0.02, 0.45, 0.8);
+  if (standing) puntPoler(batch, rand, put);
 }
 
 export function puntPoler(batch, rand, put = frame(batch, 0, 0, 0, 0, 0, 0, 1)) {
-  person(put, 0, 0.48, -PUNT_LENGTH / 2 + 1, 0, rand, { standing: true });
-  put('poleWood', CYL, 0.5, 1.4, -PUNT_LENGTH / 2 - 0.6, 0.07, 8, 0.07, 0.42, 0, -0.08);
+  poler(put, 0, PUNT_RIM + 0.04, -PUNT_LENGTH / 2 + 0.8, rand);
+  put('poleWood', CYL, 0.5, 1.6, -PUNT_LENGTH / 2 - 0.6, 0.07, 8, 0.07, 0.42, 0, -0.08);
 }
 
 export function swimmer(batch, rand) {
@@ -692,13 +768,6 @@ export function swimmer(batch, rand) {
   put('straw', CYL, 0.5, 0.05, 0.3, 0.5, 0.05, 0.5, 0.2, 0, 0.1);
   put('hatBand', CYL, 0.5, 0.1, 0.3, 0.31, 0.07, 0.31, 0.2, 0, 0.1);
   for (const s of [-1, 1]) put(pick(SKINS, rand), BOX, s * 0.45, 0.55, 0, 0.12, 0.6, 0.12, 0, 0, -s * 0.4);
-}
-
-export function sitter(batch, x, y, z, yaw, rand) {
-  const put = frame(batch, x, y, z, yaw, 0, 0, 1);
-  person(put, 0, 0, 0, 0, rand);
-  for (const s of [-1, 1]) put('trousers', BOX, s * 0.16, 0.02, 0.35, 0.18, 0.18, 0.7);
-  for (const s of [-1, 1]) put('trousers', BOX, s * 0.16, -0.38, 0.68, 0.17, 0.8, 0.17);
 }
 
 function flowerBox(put, x0, x1, y, z, face, rand) {
@@ -872,4 +941,117 @@ export function institute(batch, windows, x, y, z, yaw, rand) {
   put('stone', BOX, 0, 1.6, D / 2 + 0.3, 4, 3.2, 0.6);
   win('door', ROUND, 0, 0, D / 2 + 0.62, 2, 2.4, 0.12);
   return { r: W / 2 };
+}
+
+const CANOES = ['shutterRed', 'ochre', 'shutterGreen', 'clockBlue', 'frameWhite', 'flowerD'];
+const UMBRELLAS = ['shutterRed', 'frameWhite', 'shutterGreen', 'ochre', 'clockBlue'];
+
+export function canoeRack(batch, x, y, z, yaw, rand) {
+  const put = frame(batch, x, y, z, yaw, 0, 0, 1);
+  for (const s of [-1.8, 1.8]) {
+    for (const k of [-0.6, 0.6]) put('puntDark', BOX, k, 0.9, s, 0.12, 1.8, 0.12);
+    for (const level of [0.8, 1.5]) put('puntDark', BOX, 0, level, s, 1.5, 0.1, 0.12);
+  }
+  for (const level of [0.8, 1.5]) {
+    for (const k of [-0.35, 0.35]) if (rand() < 0.85) put(pick(CANOES, rand), BALL, k, level + 0.18, 0, 0.34, 0.2, 3, Math.PI);
+  }
+  for (let k = 0; k < 2; k++) if (rand() < 0.7) put(pick(CANOES, rand), BALL, 2.2 + k * 1.1, 0.2, (rand() - 0.5) * 1.5, 0.42, 0.24, 2.6, 0, (rand() - 0.5) * 0.4);
+}
+
+export function boathouse(batch, windows, x, y, z, yaw, rand) {
+  const put = frame(batch, x, y, z, yaw, 0, 0, 1);
+  const win = frame(windows, x, y, z, yaw, 0, 0, 1);
+  const W = 9 + rand() * 3;
+  const D = 11;
+  const wood = pick(['barnWood', 'shed', 'shedC', 'puntWood'], rand);
+  put('stoneDark', BOX, 0, -1.2, 0, W + 0.4, 2.8, D + 0.4);
+  put(wood, BOX, 0, 2.1, 0, W, 4.2, D);
+  for (let k = -W / 2 + 0.6; k < W / 2; k += 1.2) put('puntDark', BOX, k, 2.1, D / 2 + 0.03, 0.08, 4.2, 0.06);
+  put(pick(['roofDark', 'roof', 'slate'], rand), GABLE, 0, 4.2, 0, W / 2 + 0.6, 2.8, D + 0.8);
+  for (const k of [-W / 4, W / 4]) put('door', BOX, k, 1.4, D / 2 + 0.06, W / 2 - 1, 2.8, 0.08);
+  put('frameWhite', BOX, 0, 5.1, D / 2 + 0.4, 2.4, 0.7, 0.1);
+  put(pick(CANOES, rand), BOX, 0, 5.1, D / 2 + 0.46, 2.2, 0.16, 0.06);
+  for (const s of [-1, 1]) windowPane(win, 'window', s * (W / 2 + 0.02), 2.4, 2, 0.9, 1.1, s * Math.PI / 2);
+  put('puntSeat', BOX, 0, 0.12, D / 2 + 1.6, W + 2, 0.18, 3);
+  const side = (rand() < 0.5 ? -1 : 1) * (W / 2 + 3);
+  canoeRack(batch, x + Math.cos(yaw) * side, y, z - Math.sin(yaw) * side, yaw, rand);
+  return { r: W / 2 + 4 };
+}
+
+export function cafe(batch, x, y, z, yaw, rand) {
+  const put = frame(batch, x, y, z, yaw, 0, 0, 1);
+  const stripe = pick(['shutterRed', 'shutterGreen', 'shutterBlue'], rand);
+  put('stoneDark', BOX, 0, -0.6, -3, 4.6, 1.4, 3.6);
+  put(pick(['plaster', 'cream', 'mint', 'sky'], rand), BOX, 0, 1.3, -3, 4.2, 2.6, 3.2);
+  put('roofDark', BOX, 0, 2.75, -3, 4.8, 0.3, 3.8);
+  put('window', BOX, 0, 1.5, -1.38, 2.8, 1.1, 0.06);
+  put('frameWhite', BOX, 0, 0.9, -1.2, 3.2, 0.12, 0.5);
+  for (let k = 0; k < 5; k++) put(k % 2 ? 'frameWhite' : stripe, BOX, -1.9 + k * 0.95, 2.45, -0.9, 0.95, 0.08, 1.4, -0.35, 0, 0);
+  put('puntSeat', BOX, 0, 0.06, 2.4, 9, 0.12, 6);
+  for (let k = 0; k < 4; k++) {
+    const tx = -3 + (k % 2) * 6 + (rand() - 0.5);
+    const tz = 1 + Math.floor(k / 2) * 3 + (rand() - 0.5) * 0.6;
+    put('frameWhite', CYL, tx, 0.85, tz, 0.55, 0.06, 0.55);
+    put('ironDark', CYL, tx, 0.45, tz, 0.06, 0.8, 0.06);
+    put('ironDark', CYL, tx, 1.6, tz, 0.04, 2.6, 0.04);
+    put(pick(UMBRELLAS, rand), OCT_CONE, tx, 3.1, tz, 1.5, 0.6, 1.5);
+    for (const s of [-1, 1]) put('ironDark', BOX, tx + s * 0.8, 0.45, tz, 0.4, 0.06, 0.4);
+  }
+  for (let k = 0; k < 3; k++) put(pick(FLOWERS, rand), BUD, -4 + k * 4, 0.45, 5.2, 0.6, 0.4, 0.6);
+  return { r: 6 };
+}
+
+export function hayBales(batch, x, y, z, rand) {
+  const put = frame(batch, x, y, z, rand() * 6.3, 0, 0, 1);
+  const count = 2 + Math.floor(rand() * 4);
+  for (let k = 0; k < count; k++) {
+    const a = rand() * Math.PI * 2;
+    put('straw', CYL, Math.cos(a) * k * 1.4, 0.8, Math.sin(a) * k * 1.4, 0.85, 1.3, 0.85, Math.PI / 2, 0, rand() * 3);
+  }
+  if (count > 3) put('straw', CYL, 0.6, 2.25, 0.4, 0.85, 1.3, 0.85, Math.PI / 2, 0, 0.4);
+}
+
+export function reeds(batch, x, y, z, rand) {
+  const put = frame(batch, x, y, z, rand() * 6.3, 0, 0, 1);
+  for (let k = 0; k < 9; k++) {
+    const a = rand() * Math.PI * 2;
+    const d = rand() * 1.8;
+    const h = 2 + rand() * 1.4;
+    const lean = (rand() - 0.5) * 0.25;
+    put(pick(['leafB', 'trail', 'leafD'], rand), CONE, Math.cos(a) * d, h / 2 - 0.2, Math.sin(a) * d, 0.32, h, 0.32, lean, rand() * 3, lean);
+    if (rand() < 0.4) put('bark', CYL, Math.cos(a) * d, h * 0.8, Math.sin(a) * d, 0.13, 0.55, 0.13, lean, 0, lean);
+  }
+}
+
+export function tents(batch, x, y, z, yaw, rand) {
+  const put = frame(batch, x, y, z, yaw, 0, 0, 1);
+  const count = 2 + Math.floor(rand() * 3);
+  for (let k = 0; k < count; k++) {
+    const tx = (k - (count - 1) / 2) * 4.6 + (rand() - 0.5);
+    const tz = (rand() - 0.5) * 3;
+    put(pick(['flowerD', 'shutterGreen', 'clockBlue', 'ochre', 'shutterRed'], rand), GABLE, tx, 0, tz, 1.6, 2.1, 3.2, 0, rand() * 0.6);
+  }
+  put('stoneDark', CYL, 0, 0.1, 3, 0.7, 0.2, 0.7);
+  put('bark', BOX, 0, 0.3, 3, 0.9, 0.16, 0.16, 0, 0.6);
+  put('bark', BOX, 0, 0.3, 3, 0.9, 0.16, 0.16, 0, -0.6);
+  return { r: count * 2 + 2 };
+}
+
+export function playground(batch, x, y, z, yaw, rand) {
+  const put = frame(batch, x, y, z, yaw, 0, 0, 1);
+  put('gravelBed', BOX, 0, 0.02, 0, 10, 0.1, 7);
+  for (const s of [-1.6, 1.6]) {
+    for (const k of [-0.9, 0.9]) put('shutterBlue', CYL, s, 1.4, k, 0.09, 3, 0.09, k > 0 ? -0.3 : 0.3);
+  }
+  put('shutterBlue', CYL, 0, 2.8, 0, 0.09, 3.4, 0.09, 0, 0, Math.PI / 2);
+  for (const s of [-0.8, 0.8]) {
+    put('ironDark', CYL, s, 1.9, 0, 0.02, 1.8, 0.02);
+    put(pick(CANOES, rand), BOX, s, 1, 0, 0.6, 0.08, 0.3);
+  }
+  put('shutterRed', BOX, 3.2, 1.2, -1, 1.2, 0.1, 1.2);
+  for (const sx of [2.7, 3.7]) for (const sz of [-1.5, -0.5]) put('puntDark', BOX, sx, 0.6, sz, 0.1, 1.2, 0.1);
+  put('ochre', BOX, 3.2, 0.62, 0.4, 0.8, 0.08, 2.6, 0.5);
+  put('flowerB', BOX, -3.4, 0.25, 2, 2.2, 0.4, 2.2);
+  put('straw', BOX, -3.4, 0.4, 2, 1.8, 0.1, 1.8);
+  return { r: 6 };
 }
