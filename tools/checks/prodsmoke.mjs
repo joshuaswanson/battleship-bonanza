@@ -3,7 +3,7 @@ import { launch, wait, check } from '../lib.mjs';
 const click = (page, sel) => page.evaluate((sel) => document.querySelector(sel).click(), sel);
 const settled = (page, id) => page.waitForFunction((id) => !document.getElementById(id).classList.contains('hidden') && !document.getElementById('wipe').classList.contains('on'), { polling: 100, timeout: 240000 }, id);
 
-for (const map of (process.argv[2] ?? 'bay,jungle,alps,venice,midway,canyon,docks').split(',')) {
+for (const map of (process.argv[2] ?? 'bay,jungle,alps,venice,midway,canyon,docks,tuebingen').split(',')) {
   const { browser, page } = await launch();
   await click(page, '#btn-play');
   await settled(page, 'screen-loadout');
