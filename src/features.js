@@ -184,7 +184,7 @@ export class TrackFeatures {
           this.fx.ring(c.x, b.waterY + 0.3, c.z, 0xffd23f, 2, 8, 0.4);
           this.fx.sparkBurst(c.x, c.y, c.z, 0xffd23f, 14);
           this.sfx.play('boost', b.pos);
-          if (b.isPlayer) race.emit('boost');
+          if (b.isPlayer) race.emit('boost', {}, b);
         } else {
           if (along < 0 || along > RAMP_L / 2 + 1 || Math.abs(side) > RAMP_W / 2 + 0.6 || speed < fast(8)) continue;
           f.used.set(b, race.time + 2);
@@ -195,7 +195,7 @@ export class TrackFeatures {
           b.speed += fast(6);
           this.fx.splash(b.pos.x, b.waterY, b.pos.z, 0.8);
           this.sfx.play('whoosh', b.pos);
-          if (b.isPlayer) race.emit('ramp');
+          if (b.isPlayer) race.emit('ramp', {}, b);
         }
       }
     }

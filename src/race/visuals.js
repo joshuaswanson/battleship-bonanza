@@ -73,26 +73,12 @@ export const methods = {
     const jetOn = !!b.air?.jet;
     for (const flame of flames) {
       flame.visible = jetOn;
-      if (jetOn) {
-        flame.scale.set(0.32 + Math.random() * 0.1, 1.6 + Math.random() * 0.8, 0.32 + Math.random() * 0.1);
-        const p = flame.getWorldPosition(new THREE.Vector3());
-        this.fx.flame(p.x - fx * 0.6, p.y, p.z - fz * 0.6, -fx * 10, -1, -fz * 10);
-      }
+      if (jetOn) flame.scale.set(0.32 + Math.random() * 0.1, 1.6 + Math.random() * 0.8, 0.32 + Math.random() * 0.1);
     }
 
     for (const sp of spinners) sp.mesh.rotation[sp.axis] += sp.speed * dt;
     flag.rotation.y = Math.sin(t * 9 + b.index) * 0.25 - b.steerVis * 0.3;
-
-    if (b.alive && !b.air && Math.abs(b.speed) > 5 && isWater(b.pos.x, b.pos.z)) {
-      b.wakeTimer -= dt;
-      if (b.wakeTimer <= 0) {
-        b.wakeTimer = 0.07;
-        const sx = -lx;
-        const sz = -lz;
-        this.fx.wake(b.pos.x - fx * (HULL_L - 0.3), w + 0.1, b.pos.z - fz * (HULL_L - 0.3), sx, sz, Math.abs(b.speed));
-        this.fx.spray(b.pos.x, w + 0.3, b.pos.z, fx, fz, sx, sz, Math.abs(b.speed), b.steerVis);
-      }
-    }
+    this.boatTrail(b, dt);
 
     const h = b.yOffset;
     const shadowSize = (b.alive ? 10.5 : 0) / (1 + h * 0.1);
@@ -100,5 +86,25 @@ export const methods = {
     b.shadow.scale.set(shadowSize * 0.5, 1, shadowSize);
     b.shadow.rotation.y = b.heading;
     b.shadow.material.opacity = 1 / (1 + h * 0.15);
+  },
+
+  boatTrail(b, dt) {
+    const fx = Math.sin(b.heading);
+    const fz = Math.cos(b.heading);
+    for (const flame of b.model.flames) {
+      if (!flame.visible) continue;
+      const p = flame.getWorldPosition(new THREE.Vector3());
+      this.fx.flame(p.x - fx * 0.6, p.y, p.z - fz * 0.6, -fx * 10, -1, -fz * 10);
+    }
+    if (b.alive && !b.air && Math.abs(b.speed) > 5 && isWater(b.pos.x, b.pos.z)) {
+      b.wakeTimer -= dt;
+      if (b.wakeTimer <= 0) {
+        b.wakeTimer = 0.07;
+        const sx = -Math.cos(b.heading);
+        const sz = Math.sin(b.heading);
+        this.fx.wake(b.pos.x - fx * (HULL_L - 0.3), b.waterY + 0.1, b.pos.z - fz * (HULL_L - 0.3), sx, sz, Math.abs(b.speed));
+        this.fx.spray(b.pos.x, b.waterY + 0.3, b.pos.z, fx, fz, sx, sz, Math.abs(b.speed), b.steerVis);
+      }
+    }
   },
 };

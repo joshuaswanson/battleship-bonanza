@@ -27,6 +27,8 @@ import { logoSvg, layoutLogoText } from './logo.js';
 import { TitleBoat } from './titleBoat.js';
 import { ITEMS, ITEM_IDS } from './items.js';
 import { arrange, charClock } from './boatModel.js';
+import { Session, CODE_LENGTH } from './net.js';
+import { Streamer, Mirror } from './netRace.js';
 
 const $ = (id) => document.getElementById(id);
 for (const el of document.querySelectorAll('[data-logo]')) {
@@ -224,6 +226,40 @@ function makeTeams(player) {
   return makeDefs(player).map((def) => ({ ...def, team: def.isPlayer || allies++ < 2 ? 0 : 1 }));
 }
 
+const HUMAN_SLOTS = [3, 2, 4, 1, 5, 0];
+function onlineDefs(players, ctf) {
+  const used = new Set();
+  const paints = PAINTS.map((p) => p.value);
+  const humans = players.map((h) => {
+    const color = used.has(h.color) ? paints.find((c) => !used.has(c)) : h.color;
+    used.add(color);
+    return { ...h, color };
+  });
+  const names = shuffle(t('aiNames'));
+  const colors = shuffle(paints.filter((c) => !used.has(c)));
+  const loadouts = dealLoadouts(6 - humans.length, setup.items);
+  const defs = Array(6);
+  humans.forEach((h, k) => {
+    defs[HUMAN_SLOTS[k]] = { name: h.name, color: h.color, items: [...h.items], isPlayer: true, peer: h.peer, team: ctf ? k % 2 : undefined };
+  });
+  const size = [0, 0];
+  for (const d of defs) if (d && ctf) size[d.team]++;
+  for (let i = 0; i < 6; i++) {
+    if (defs[i]) continue;
+    const team = ctf ? (size[0] <= size[1] ? 0 : 1) : undefined;
+    if (ctf) size[team]++;
+    defs[i] = { name: names.pop(), color: colors.pop() ?? paints[i], items: loadouts.pop(), team };
+  }
+  return defs;
+}
+
+const cleanName = (name) => String(name ?? '').replace(/[<>&"'`]/g, '').trim().slice(0, 16) || 'Sailor';
+const cleanBoat = (p) => ({
+  name: cleanName(p?.name),
+  color: PAINTS.some((x) => x.value === p?.color) ? p.color : PAINTS[0].value,
+  items: Array.isArray(p?.items) && p.items.length === 2 && p.items.every((id) => ITEMS[id]) ? arrange(p.items) : ['machinegun', 'jetpack'],
+});
+
 let mode = 'title';
 let race = null;
 let resultsTimer = 0;
@@ -233,7 +269,14 @@ const HURT_SHAKE = { bullet: 0.25, laser: 0.3, reflect: 0.3, saw: 0.5, flame: 0,
 let recorder = null;
 let replay = null;
 
-function newRace(attract, map = pickMap(attract)) {
+const session = new Session();
+const online = { players: [], remote: new Map(), peerBoat: new Map(), streamer: null, mirror: null, waiting: null, error: '', sent: 0, presses: [0, 0] };
+
+function newRace(attract, map = pickMap(attract), given = null, guest = false) {
+  online.streamer?.detach();
+  online.streamer = null;
+  online.mirror?.dispose();
+  online.mirror = null;
   recorder?.detach();
   recorder = null;
   replay = null;
@@ -243,9 +286,11 @@ function newRace(attract, map = pickMap(attract)) {
   useVenue(map);
   current.world.chopper?.reset();
   const ctf = isArena(map) ? new CaptureTheFlag({ scene, track: current.track }) : null;
-  const defs = ctf ? makeTeams(setup) : makeDefs(attract ? null : setup);
+  const defs = given ?? (ctf ? makeTeams(setup) : makeDefs(attract ? null : setup));
   race = new Race({ scene, track: current.track, fx, sfx: attract ? SILENT : sfx, shores: current.world.shores, solid: current.world.solid, raycast: current.world.raycast ?? null, chopper: current.world.chopper ?? null, hazards: current.world.hazards ?? null, mode: ctf, defs, attract });
-  if (!attract) recorder = new Recorder(race, fx);
+  if (guest) online.mirror = new Mirror(race, fx, sfx);
+  else if (!attract) recorder = new Recorder(race, fx);
+  if (given && !guest) online.streamer = new Streamer(race, fx, current.world);
   cam.snap = true;
 }
 
@@ -275,13 +320,14 @@ function endReplay() {
   $('btn-replay').focus();
 }
 
-const screens = ['screen-title', 'screen-howto', 'screen-settings', 'screen-credits', 'screen-loadout', 'screen-modes', 'screen-maps', 'screen-pause', 'screen-results'];
+const screens = ['screen-title', 'screen-howto', 'screen-settings', 'screen-credits', 'screen-loadout', 'screen-modes', 'screen-maps', 'screen-lobby', 'screen-pause', 'screen-results'];
 function showScreen(id) {
   for (const s of screens) $(s).classList.toggle('hidden', s !== id);
   loadout.active = false;
 }
 
 function goTitle() {
+  leaveRoom();
   sfx.playMusic('menu');
   mode = 'title';
   newRace(true);
@@ -356,10 +402,12 @@ function renderMaps() {
 
 function goModes() {
   if (!setup.items.every(Boolean)) return;
+  if (session.role === 'guest') return goLobby();
   setup.mode ??= 'race';
   saveSetup();
   mode = 'modes';
   showScreen('screen-modes');
+  renderOnlineButton();
   renderModes();
   document.querySelector(`.mode-card[data-mode="${setup.mode}"]`)?.focus();
 }
@@ -375,6 +423,8 @@ function goMaps() {
 
 async function startRace() {
   if (!setup.items.every(Boolean)) return;
+  if (session.role === 'host') return startOnline();
+  if (session.role === 'guest') return;
   sfx.unlock();
   sfx.playMusic(null);
   sfx.nextRaceSong();
@@ -413,6 +463,7 @@ async function showLoading(key, ready) {
 
 function pause(on) {
   if (on && mode === 'race') {
+    $('btn-restart').classList.toggle('hidden', session.active);
     mode = 'paused';
     sfx.duckMusic(true);
     showScreen('screen-pause');
@@ -427,6 +478,7 @@ function pause(on) {
 
 function showResults() {
   mode = 'results';
+  $('btn-replay').classList.toggle('hidden', session.role === 'guest');
   showScreen('screen-results');
   renderResults(race);
   $('btn-continue').focus();
@@ -531,10 +583,16 @@ $('btn-settings-close').addEventListener('click', () => {
 });
 $('btn-resume').addEventListener('click', () => pause(false));
 $('btn-restart').addEventListener('click', startRace);
-$('btn-quit').addEventListener('click', goLoadout);
+$('btn-quit').addEventListener('click', () => {
+  quitOnlineRace();
+  goLoadout();
+});
 $('btn-menu').addEventListener('click', goTitle);
 $('btn-pause').addEventListener('click', () => pause(true));
-$('btn-continue').addEventListener('click', () => wipe(goLoadout));
+$('btn-continue').addEventListener('click', () => {
+  if (session.role === 'host') session.send({ t: 'lobbyBack' });
+  wipe(session.active ? goLobby : goLoadout);
+});
 $('btn-replay').addEventListener('click', () => wipe(startReplay));
 $('btn-replay-exit').addEventListener('click', () => wipe(endReplay));
 function unlockAudio() {
@@ -543,6 +601,260 @@ function unlockAudio() {
 }
 addEventListener('pointerdown', unlockAudio, { once: true });
 addEventListener('keydown', unlockAudio, { once: true });
+
+const READY_TIMEOUT = 60000;
+const INPUT_RATE = 1 / 30;
+const profile = () => cleanBoat(setup);
+const hexColor = (c) => `#${c.toString(16).padStart(6, '0')}`;
+
+function remoteControls() {
+  for (const c of online.remote.values()) {
+    c.use0 = c.pending0 > 0;
+    c.use1 = c.pending1 > 0;
+    if (c.use0) c.pending0--;
+    if (c.use1) c.pending1--;
+  }
+  return online.remote;
+}
+
+function sendInput(input, now) {
+  if (!input) return;
+  if (input.use0) online.presses[0]++;
+  if (input.use1) online.presses[1]++;
+  if (now - online.sent < INPUT_RATE * 1000) return;
+  online.sent = now;
+  session.send({ t: 'in', throttle: input.throttle, steer: input.steer, hold0: !!input.hold0, hold1: !!input.hold1, use0: online.presses[0], use1: online.presses[1] });
+  online.presses = [0, 0];
+}
+
+function lobbyPlayers() {
+  return online.players.map((p) => ({ name: p.name, color: p.color, host: !p.peer }));
+}
+
+function shareLobby() {
+  if (session.role !== 'host') return;
+  const players = lobbyPlayers();
+  for (const peer of session.guests.keys()) session.send({ t: 'lobby', players, you: online.players.findIndex((p) => p.peer === peer) }, peer);
+  if (mode === 'lobby') renderLobby();
+}
+
+function renderOnlineButton() {
+  $('btn-online').textContent = session.role === 'host' ? t('roomTag', { code: session.code }) : t('online');
+}
+
+function renderLobby(error = online.error) {
+  online.error = error;
+  const inRoom = session.active;
+  $('lobby-start').classList.toggle('hidden', inRoom);
+  $('lobby-room').classList.toggle('hidden', !inRoom);
+  $('lobby-error').textContent = error ? t(error) : '';
+  $('join-code').placeholder = t('roomCode');
+  if (!inRoom) return;
+  $('lobby-code').textContent = session.code;
+  const list = $('lobby-players');
+  list.replaceChildren(...online.players.map((p, i) => {
+    const li = document.createElement('li');
+    const dot = document.createElement('span');
+    dot.className = 'st-dot';
+    dot.style.setProperty('--paint', hexColor(p.color));
+    const name = document.createElement('span');
+    name.textContent = p.name;
+    const tag = document.createElement('em');
+    tag.textContent = [p.host || !p.peer && session.role === 'host' ? t('hostTag') : '', i === online.you ? t('youTag') : ''].filter(Boolean).join(', ');
+    li.append(dot, name, tag);
+    return li;
+  }));
+  $('lobby-note').textContent = t(session.role === 'host' ? 'shareCode' : 'waitingHost');
+  $('btn-lobby-go').classList.toggle('hidden', session.role !== 'host');
+}
+
+function goLobby(error = '') {
+  hints.stop();
+  if (!race?.attract) newRace(true);
+  sfx.playMusic('menu');
+  sfx.duckMusic(false);
+  mode = 'lobby';
+  hud.show(false);
+  showScreen('screen-lobby');
+  renderLobby(error);
+  (session.active ? $(session.role === 'host' ? 'btn-lobby-go' : 'btn-lobby-back') : $('btn-host')).focus();
+}
+
+function leaveRoom() {
+  if (!session.active) return;
+  session.leave();
+  online.players = [];
+  online.remote.clear();
+  online.peerBoat.clear();
+  online.waiting = null;
+}
+
+function quitOnlineRace() {
+  if (session.role === 'host') session.send({ t: 'lobbyBack' });
+  else if (session.role === 'guest') leaveRoom();
+}
+
+async function startOnline() {
+  sfx.unlock();
+  sfx.playMusic(null);
+  sfx.nextRaceSong();
+  sfx.duckMusic(false);
+  saveSetup();
+  const map = pickMap(false);
+  const defs = onlineDefs(online.players, isArena(map));
+  const guests = [...session.guests.keys()].filter((peer) => defs.some((d) => d.peer === peer));
+  online.waiting = new Set(guests);
+  defs.forEach((d, i) => {
+    if (!d.peer) return;
+    session.send({ t: 'start', key: map, you: i, defs: defs.map(({ peer, ...rest }) => rest) }, d.peer);
+  });
+  const ready = new Promise((resolve) => {
+    online.ready = resolve;
+    if (!online.waiting.size) resolve();
+    setTimeout(resolve, READY_TIMEOUT);
+  });
+  const loadAndWait = (async () => {
+    await prepareVenue(map);
+    $('loading-title').textContent = t('online');
+    $('loading-blurb').textContent = t('waitingFriends');
+    await ready;
+  })();
+  await showLoading(map, loadAndWait);
+  online.remote.clear();
+  online.peerBoat.clear();
+  const local = defs.map((d) => ({ ...d, local: d.isPlayer && !d.peer }));
+  newRace(false, map, local);
+  local.forEach((d, i) => {
+    if (!d.peer) return;
+    online.peerBoat.set(d.peer, i);
+    online.remote.set(i, { throttle: 0, steer: 0, hold0: false, hold1: false, pending0: 0, pending1: 0, use0: false, use1: false });
+    if (!session.guests.has(d.peer)) race.boats[i].isPlayer = false;
+  });
+  for (const id of Object.keys(venues)) if (id !== 'bay' && id !== map) disposeVenue(id);
+  enterRace();
+}
+
+async function guestStart(msg) {
+  const key = String(msg.key);
+  if (!mapOf(key) || !Array.isArray(msg.defs) || msg.defs.length !== 6) return;
+  const defs = msg.defs.map((d, i) => ({ ...cleanBoat(d), isPlayer: !!d.isPlayer, local: i === msg.you, team: d.team === 0 || d.team === 1 ? d.team : undefined }));
+  hints.stop();
+  sfx.unlock();
+  sfx.playMusic(null);
+  sfx.nextRaceSong();
+  sfx.duckMusic(false);
+  if (venues[key]) await prepareVenue(key);
+  else await showLoading(key, prepareVenue(key));
+  if (session.role !== 'guest') return;
+  newRace(false, key, defs, true);
+  for (const id of Object.keys(venues)) if (id !== 'bay' && id !== key) disposeVenue(id);
+  enterRace();
+  session.send({ t: 'ready' });
+}
+
+function enterRace() {
+  mode = 'race';
+  resultsTimer = 0;
+  hud.setup(race);
+  hints.start(race, touchOnly);
+  hud.show(true);
+  showScreen(null);
+  document.activeElement?.blur();
+}
+
+session.on('leave', (peer) => {
+  online.players = online.players.filter((p) => p.peer !== peer);
+  online.waiting?.delete(peer);
+  if (online.waiting && !online.waiting.size) online.ready?.();
+  const i = online.peerBoat.get(peer);
+  if (i !== undefined && race?.boats[i]) race.boats[i].isPlayer = false;
+  online.remote.delete(i);
+  online.peerBoat.delete(peer);
+  shareLobby();
+});
+session.on('message', (msg, peer) => {
+  if (!msg || typeof msg !== 'object') return;
+  if (session.role === 'host') {
+    if (msg.t === 'hello' && !online.players.some((p) => p.peer === peer)) {
+      online.players.push({ ...cleanBoat(msg), peer });
+      shareLobby();
+    } else if (msg.t === 'in') {
+      const c = online.remote.get(online.peerBoat.get(peer));
+      if (!c) return;
+      c.throttle = Math.max(-1, Math.min(1, Number(msg.throttle) || 0));
+      c.steer = Math.max(-1, Math.min(1, Number(msg.steer) || 0));
+      c.hold0 = !!msg.hold0;
+      c.hold1 = !!msg.hold1;
+      c.pending0 = Math.min(3, c.pending0 + (Number(msg.use0) || 0));
+      c.pending1 = Math.min(3, c.pending1 + (Number(msg.use1) || 0));
+    } else if (msg.t === 'ready') {
+      online.waiting?.delete(peer);
+      if (online.waiting && !online.waiting.size) online.ready?.();
+    }
+    return;
+  }
+  if (msg.t === 'lobby' && Array.isArray(msg.players)) {
+    online.players = msg.players.map((p) => ({ ...cleanBoat(p), host: !!p.host }));
+    online.you = msg.you;
+    if (mode === 'lobby') renderLobby();
+  } else if (msg.t === 'full') {
+    leaveRoom();
+    renderLobby('roomFull');
+  } else if (msg.t === 'start') {
+    guestStart(msg);
+  } else if (msg.t === 'frame') {
+    online.mirror?.push(msg);
+  } else if (msg.t === 'lobbyBack') {
+    if (mode !== 'lobby') wipe(goLobby);
+  }
+});
+session.on('lost', () => {
+  const racing = mode !== 'lobby';
+  leaveRoom();
+  if (racing) wipe(() => goLobby('hostLeft'));
+  else renderLobby('hostLeft');
+});
+
+$('btn-online').addEventListener('click', () => wipe(goLobby));
+$('btn-lobby-back').addEventListener('click', () => {
+  leaveRoom();
+  wipe(goModes);
+});
+$('btn-lobby-go').addEventListener('click', () => {
+  setup.mode ??= 'race';
+  wipe(goModes);
+});
+$('btn-host').addEventListener('click', async () => {
+  if (session.active) return;
+  $('lobby-error').textContent = t('connecting');
+  try {
+    await session.hostRoom();
+    online.players = [{ ...profile(), peer: null }];
+    online.you = 0;
+    renderLobby('');
+    $('btn-lobby-go').focus();
+  } catch {
+    renderLobby('connectFailed');
+  }
+});
+async function joinRoom() {
+  if (session.active) return;
+  const code = $('join-code').value.trim().toUpperCase();
+  if (code.length !== CODE_LENGTH) return renderLobby('roomNotFound');
+  $('lobby-error').textContent = t('connecting');
+  try {
+    await session.joinRoom(code);
+    session.send({ t: 'hello', ...profile() });
+    online.players = [];
+    renderLobby('');
+  } catch (err) {
+    renderLobby(err?.type === 'peer-unavailable' ? 'roomNotFound' : 'connectFailed');
+  }
+}
+$('btn-join').addEventListener('click', joinRoom);
+$('join-code').addEventListener('keydown', (e) => {
+  if (e.code === 'Enter') joinRoom();
+});
 
 const cam = new Director(camera);
 
@@ -571,10 +883,25 @@ function updateSawSound() {
   sfx.setFlame(flame);
 }
 
+function worldEvent(e) {
+  const near = Math.max(0, 1 - e.pos.distanceTo(camera.position) / 320);
+  if (near <= 0) return;
+  if (mode === 'race' || mode === 'replay' || mode === 'results') sfx.play(e.type === 'boom' ? 'mineBoom' : 'splash', e.pos);
+  if (e.type === 'boom' && mode !== 'paused') cam.bump(e.power * near * near);
+}
+
 function handleEvents() {
   for (const e of race.events) {
     if (race.attract) continue;
+    if (e.to && e.to !== race.player) continue;
+    if (e.type === 'worldEvent') {
+      worldEvent({ type: e.kind, pos: e.pos, power: e.power });
+      continue;
+    }
     hud.handle(e);
+    if (e.type === 'nope') sfx.play('nope');
+    if (e.type === 'finish') sfx.play('finish');
+    if (e.type === 'lap' || e.type === 'finalLap') sfx.play('lap');
     if (e.type === 'hurt') cam.bump(HURT_SHAKE[e.kind] ?? 1.2);
     if (e.type === 'ko') cam.shake = 1.6;
     if (e.type === 'lockShake') cam.bump(e.amount);
@@ -602,36 +929,36 @@ function frame(now) {
     else if (mode === 'replay') endReplay();
   }
 
-  if (mode !== 'paused') {
+  const shared = !!(online.streamer || online.mirror);
+  if (mode !== 'paused' || shared) {
     time += dt;
     charClock.value = time;
     const playerInput = mode === 'race' || mode === 'results'
       ? { throttle: state.throttle, steer: state.steer, use0: pressed.has('item0'), use1: pressed.has('item1'), hold0: state.hold0, hold1: state.hold1 }
-      : null;
+      : mode === 'paused' ? { throttle: 0, steer: 0, use0: false, use1: false, hold0: false, hold1: false } : null;
     const steps = import.meta.env.DEV ? (window.__bb?.steps ?? 1) : 1;
     if (mode === 'replay') {
       for (let i = 0; i < steps; i++) replay.step(dt);
       if (replay.done) endReplay();
+    } else if (online.mirror) {
+      online.mirror.step(dt, (e) => race.events.push(e));
+      sendInput(playerInput, now);
     } else if (!race.frozen) {
       for (let i = 0; i < steps; i++) {
-        race.update(dt, time + (i * dt), import.meta.env.DEV && window.__bb?.autopilot ? null : playerInput);
+        race.update(dt, time + (i * dt), import.meta.env.DEV && window.__bb?.autopilot ? null : playerInput, online.streamer ? remoteControls() : null);
         recorder?.capture();
+        online.streamer?.collect();
       }
       time += (steps - 1) * dt;
+      const packet = online.streamer?.frame();
+      if (packet) session.send(packet);
     }
     handleEvents();
     if (mode === 'race') hints.update(dt, race, state, pressed);
     fx.update(dt);
     current.world.update(time, dt, camera);
     race.mode?.animate(time);
-    if (current.world.events?.length) {
-      for (const e of current.world.events.splice(0)) {
-        const near = Math.max(0, 1 - e.pos.distanceTo(camera.position) / 320);
-        if (near <= 0) continue;
-        if (mode === 'race' || mode === 'replay' || mode === 'results') sfx.play(e.type === 'boom' ? 'mineBoom' : 'splash', e.pos);
-        if (e.type === 'boom' && mode !== 'paused') cam.bump(e.power * near * near);
-      }
-    }
+    if (current.world.events?.length) for (const e of current.world.events.splice(0)) worldEvent(e);
     if (resultsTimer > 0) {
       resultsTimer -= dt;
       if (resultsTimer <= 0 && mode === 'race') showResults();
@@ -694,6 +1021,8 @@ if (import.meta.env.DEV) {
     get world() {
       return current.world;
     },
+    session,
+    online,
     get venueGroup() {
       return current.group;
     },

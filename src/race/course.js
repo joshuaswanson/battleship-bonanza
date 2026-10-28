@@ -8,13 +8,13 @@ export const methods = {
     const t = this.track;
     const level = t.level(s);
     const before = b.surfaceLevel ?? level;
-    if (level - before > 10 && b.isPlayer) this.emit('warp', { dy: level - before });
+    if (level - before > 10 && b.isPlayer) this.emit('warp', { dy: level - before }, b);
     if (before - level > 2) {
       let vy = 3;
       if (b.air?.fall) vy = b.air.vy;
       else if (b.air) vy = (b.air.peak * 4 * (1 - (2 * b.air.t) / b.air.dur)) / b.air.dur;
       b.air = { fall: true, y: before + b.yOffset, vy };
-      if (b.isPlayer && before - level > 8) this.emit('falls');
+      if (b.isPlayer && before - level > 8) this.emit('falls', {}, b);
     }
     b.surfaceLevel = level;
     const sinceExit = b.riverS == null ? Infinity : t.ahead(t.river.tunnelOut, s);

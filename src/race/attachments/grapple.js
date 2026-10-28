@@ -6,9 +6,9 @@ import { t as tr } from '../../i18n.js';
 import { toon } from '../../toon.js';
 import { HOOK_SPEED } from '../shared.js';
 
-const ROPE_GEOMETRY = new THREE.CylinderGeometry(0.07, 0.07, 1, 6, 1, true).rotateX(Math.PI / 2).translate(0, 0, 0.5);
-const ROPE_MATERIAL = toon(0x34465e);
-const ROPE_POINTS = 16;
+export const ROPE_GEOMETRY = new THREE.CylinderGeometry(0.07, 0.07, 1, 6, 1, true).rotateX(Math.PI / 2).translate(0, 0, 0.5);
+export const ROPE_MATERIAL = toon(0x34465e);
+export const ROPE_POINTS = 16;
 const GRAVITY = new THREE.Vector3(0, -30, 0);
 
 export const methods = {
@@ -113,7 +113,7 @@ export const methods = {
             this.fx.sparkBurst(cut.x, cut.y, cut.z, 0xffe066, 18);
             this.sfx.play('tink', cut);
             this.sfx.play('saw', cut);
-            if (o.isPlayer) this.emit('warning', { text: tr('hookCut') });
+            if (o.isPlayer) this.emit('warning', { text: tr('hookCut') }, o);
             this.slacken(h, from, dt);
             return true;
           }
@@ -122,7 +122,7 @@ export const methods = {
             h.time = 3;
             this.sfx.play('hookCatch', h.target.pos);
             this.sfx.play('winch', o.pos);
-            if (o.isPlayer) this.emit('feed', { text: tr('youHooked', { name: h.target.name }), item: 'grapple', player: true });
+            if (o.isPlayer) this.emit('feed', { text: tr('youHooked', { name: h.target.name }), item: 'grapple', player: true }, o);
           }
         } else {
           h.pos.addScaledVector(h.dir, HOOK_SPEED * dt);
@@ -224,6 +224,6 @@ export const actions = {
       rope,
     });
     this.sfx.play('hook', b.pos);
-    if (target?.isPlayer) this.emit('warning', { text: tr('hookIncoming') });
+    if (target?.isPlayer) this.emit('warning', { text: tr('hookIncoming') }, target);
   },
 };

@@ -533,7 +533,7 @@ export class DockHazards {
       const source = owner && owner.alive !== undefined ? owner : o;
       const push = 10 * near / Math.max(dist, 0.5);
       race.damage(o, 14 + 18 * near, source, source === o ? 'drum' : 'mine', { knockX: dx * push, knockZ: dz * push, spin: 0.9, launch: 0.6 + near * 0.5 });
-      if (o.isPlayer) race.emit('lockShake', { amount: 1.4 * near + 0.4 });
+      if (o.isPlayer) race.emit('lockShake', { amount: 1.4 * near + 0.4 }, o);
     }
   }
 
@@ -572,7 +572,7 @@ export class DockHazards {
       const p = b.center();
       race.fx.sparkBurst(p.x, p.y + 1, p.z, 0xffe066, 16);
       race.sfx.play('clank', b.pos);
-      if (b.isPlayer) race.emit('lockShake', { amount: 1 });
+      if (b.isPlayer) race.emit('lockShake', { amount: 1 }, b);
     }
   }
 
@@ -612,7 +612,7 @@ export class DockHazards {
       const p = b.center();
       race.fx.sparkBurst(p.x, p.y + 2, p.z, 0xffffff, 18);
       race.sfx.play('clank', b.pos);
-      if (b.isPlayer) race.emit('lockShake', { amount: 1.3 });
+      if (b.isPlayer) race.emit('lockShake', { amount: 1.3 }, b);
     }
   }
 }

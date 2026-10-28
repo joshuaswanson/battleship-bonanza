@@ -178,7 +178,7 @@ export class Laundry {
     const p = b.center();
     race.fx.sparkBurst(p.x, p.y + 1.5, p.z, CLOTHS[sheet.color], 14);
     race.sfx.play('pop', b.pos);
-    if (b.isPlayer) race.emit('laundry');
+    if (b.isPlayer) race.emit('laundry', {}, b);
   }
 
   animate(worldTime, dt) {

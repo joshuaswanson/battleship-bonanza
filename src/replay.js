@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 
 const RATE = 1 / 30;
-const STRIDE = 11;
+export const STRIDE = 11;
 const EMIT = 16;
 const EMIT_CHUNK = 4096;
 
-function boatNodes(b) {
+export function boatNodes(b) {
   const m = b.model;
   const nodes = [
     m.root,
@@ -35,7 +35,7 @@ function boatNodes(b) {
   return [...new Set(nodes.filter(Boolean))];
 }
 
-function boatMaterials(b) {
+export function boatMaterials(b) {
   const m = b.model;
   const list = [
     { mat: m.materials, key: 'emissiveIntensity' },
@@ -48,13 +48,13 @@ function boatMaterials(b) {
   return list;
 }
 
-const readMat = ({ mat, key }) => (Array.isArray(mat) ? mat[0]?.[key] ?? 0 : mat[key]);
-const writeMat = ({ mat, key }, v) => {
+export const readMat = ({ mat, key }) => (Array.isArray(mat) ? mat[0]?.[key] ?? 0 : mat[key]);
+export const writeMat = ({ mat, key }, v) => {
   if (Array.isArray(mat)) for (const x of mat) x[key] = v;
   else mat[key] = v;
 };
 
-function writeNode(out, o, node) {
+export function writeNode(out, o, node) {
   out[o] = node.position.x;
   out[o + 1] = node.position.y;
   out[o + 2] = node.position.z;
@@ -70,7 +70,7 @@ function writeNode(out, o, node) {
 
 const qa = new THREE.Quaternion();
 const qb = new THREE.Quaternion();
-function readNode(node, a, b, o, k) {
+export function readNode(node, a, b, o, k) {
   const lerp = (i) => a[o + i] + (b[o + i] - a[o + i]) * k;
   node.position.set(lerp(0), lerp(1), lerp(2));
   qa.set(a[o + 3], a[o + 4], a[o + 5], a[o + 6]);

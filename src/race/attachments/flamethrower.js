@@ -74,7 +74,7 @@ export const methods = {
     for (let i = 0; i < 4; i++) this.fx.sparkBurst(c.x, c.y + 1, c.z, i % 2 ? 0xffd23f : 0xff5a3a, 20);
     this.sfx.play('boom', b.pos);
     this.sfx.play('boom', b.pos);
-    if (this.player && Math.hypot(this.player.pos.x - c.x, this.player.pos.z - c.z) < 120) this.emit('blast');
+    for (const o of this.boats) if (o.isPlayer && Math.hypot(o.pos.x - c.x, o.pos.z - c.z) < 120) this.emit('blast', {}, o);
     for (const o of this.boats) {
       if (o === b || !o.alive || this.allied(b, o)) continue;
       const dx = o.pos.x - b.pos.x;

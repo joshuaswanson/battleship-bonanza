@@ -56,7 +56,7 @@ export function renderResults(race) {
       const time = ctf ? String(b.stats.captures) : b.finished ? formatTime(b.finishTime) : t('lapN', { n: b.lap });
       const place = ctf ? `<i class="st-team" style="background:${hex(TEAMS[b.team].color)}"></i>` : ordinal(b.place);
       const items = (badges.get(b) ?? []).map((k) => `<em class="badge badge-${k}">${BADGE_ICONS[k]}${t(BADGE_KEYS[k])}</em>`).join('');
-      return `<li class="${b.isPlayer ? 'me' : ''}">
+      return `<li class="${b === race.player ? 'me' : ''}">
         <span class="st-place">${place}</span>
         <span class="st-dot" style="--paint:#${b.color.toString(16).padStart(6, '0')}"></span>
         <span class="st-name">${b.name}<span class="badges">${items}</span></span>

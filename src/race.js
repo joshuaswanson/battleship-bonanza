@@ -50,7 +50,7 @@ export class Race {
     this.attract = attract;
     this.laps = attract || mode ? Infinity : laps;
     this.boats = defs.map((def, i) => new Boat(def, i, scene));
-    this.player = this.boats.find((b) => b.isPlayer) ?? null;
+    this.player = this.boats.find((b) => b.isLocal) ?? this.boats.find((b) => b.isPlayer) ?? null;
     this.bullets = [];
     this.missiles = [];
     this.mines = [];
@@ -99,11 +99,11 @@ export class Race {
     });
   }
 
-  emit(type, data = {}) {
-    this.events.push({ type, ...data });
+  emit(type, data = {}, to = null) {
+    this.events.push({ type, ...data, to });
   }
 
-  update(dt, time, input) {
+  update(dt, time, input, remote = null) {
     this.time = time;
 
     if (this.state === 'countdown') {
@@ -124,12 +124,13 @@ export class Race {
     }
 
     for (const b of this.boats) {
-      if (b.isPlayer && !b.finished && input) {
-        b.control.throttle = input.throttle;
-        b.control.steer = input.steer;
-        if (input.use0) this.useItem(b, 0);
-        if (input.use1) this.useItem(b, 1);
-        for (const id of HOLD_IDS) b.heat[id].trigger = (input.hold0 && b.items[0] === id) || (input.hold1 && b.items[1] === id);
+      const control = b === this.player ? input : remote?.get(b.index);
+      if (b.isPlayer && !b.finished && control) {
+        b.control.throttle = control.throttle;
+        b.control.steer = control.steer;
+        if (control.use0) this.useItem(b, 0);
+        if (control.use1) this.useItem(b, 1);
+        for (const id of HOLD_IDS) b.heat[id].trigger = (control.hold0 && b.items[0] === id) || (control.hold1 && b.items[1] === id);
       } else if (b.alive) {
         driveAI(this, b, dt);
       }
@@ -238,7 +239,7 @@ export class Race {
         this.fx.splash(b.pos.x, b.waterY, b.pos.z, 2.2);
         this.fx.splash(b.pos.x + Math.sin(b.heading) * 4, b.waterY, b.pos.z + Math.cos(b.heading) * 4, 1.2);
         this.sfx.play('splash', b.pos);
-        if (b.isPlayer) this.emit('lockShake', { amount: 1.2 });
+        if (b.isPlayer) this.emit('lockShake', { amount: 1.2 }, b);
       }
     } else if (b.air) {
       b.air.t += dt;
@@ -355,7 +356,7 @@ export class Race {
     b.bump(6);
     for (let k = 0; k < 8; k++) this.fx.puffs.emit(b.pos.x + (Math.random() - 0.5) * 4, p.y + 0.5, b.pos.z + (Math.random() - 0.5) * 4, (Math.random() - 0.5) * 6, 2 + Math.random() * 3, (Math.random() - 0.5) * 6, 1 + Math.random(), 0.9, 0xc9a27a, 2, 1.5, 0);
     this.sfx.play('boing', b.pos);
-    if (b.isPlayer) this.emit('lockShake', { amount: 0.8 });
+    if (b.isPlayer) this.emit('lockShake', { amount: 0.8 }, b);
   }
 
   respawnSpot(b) {
@@ -480,7 +481,7 @@ export class Race {
       source.stats.byItem[item] = (source.stats.byItem[item] ?? 0) + amount;
       source.stats.top = Math.max(source.stats.top, source.stats.dealt);
     }
-    if (source.isPlayer && source !== target) this.emit('dmg', { target, amount });
+    if (source.isPlayer && source !== target) this.emit('dmg', { target, amount }, source);
     if (kind !== 'fire') target.flash = 1;
     const light = kind === 'bullet' || kind === 'flame' || kind === 'fire';
     target.bump(light ? 1.5 : 5);
@@ -496,7 +497,7 @@ export class Race {
     if (stun) target.stun = Math.max(target.stun, stun);
     if (launch && !target.air) target.air = { t: 0, dur: launch, peak: launch * 6, jet: false };
     if (kind !== 'flame' && kind !== 'fire') this.sfx.play('hit', target.pos);
-    if (target.isPlayer) this.emit('hurt', { amount, kind, source: source.name });
+    if (target.isPlayer) this.emit('hurt', { amount, kind, source: source.name }, target);
     if (target.hp <= 0) this.knockOut(target, source, kind);
     return true;
   }
@@ -579,8 +580,8 @@ export class Race {
       this.fx.explosion(c.x, c.y, c.z, 0.8);
       this.sfx.play('pop', b.pos);
     }
-    this.emit('feed', { kind, item: KIND_ITEM[kind], killer: source, victim: b, player: b.isPlayer || source.isPlayer });
-    if (b.isPlayer) this.emit('ko', { source: source.name });
+    this.emit('feed', { kind, item: KIND_ITEM[kind], killer: source, victim: b });
+    if (b.isPlayer) this.emit('ko', { source: source.name }, b);
   }
 
   useItem(b, slot) {
@@ -588,12 +589,12 @@ export class Race {
     const item = ITEMS[id];
     if (!item || item.passive || item.hold || this.state !== 'racing' || !b.alive) return false;
     if (b.disabled > 0 && item.group === 'weapons') {
-      if (b.isPlayer) this.sfx.play('nope');
+      if (b.isPlayer) this.emit('nope', {}, b);
       return false;
     }
     const charge = b.charges[slot];
     if (b.cooldowns[slot] > 0 || (charge && charge.left <= 0)) {
-      if (b.isPlayer && !(charge && b.cooldowns[slot] > 0)) this.sfx.play('nope');
+      if (b.isPlayer && !(charge && b.cooldowns[slot] > 0)) this.emit('nope', {}, b);
       return false;
     }
     if (this.actions[id].call(this, b) === false) return false;
@@ -609,7 +610,7 @@ export class Race {
     const result = step(heat, b.model, dt, this.time);
     if (result.overheatedNow) {
       this.sfx.play('overheat', b.pos);
-      if (b.isPlayer) this.emit('warning', { text: tr('overheatedWarn') });
+      if (b.isPlayer) this.emit('warning', { text: tr('overheatedWarn') }, b);
     }
     if (heat.overheated && Math.random() < 0.4) {
       const p = mount.getWorldPosition(new THREE.Vector3());
@@ -632,16 +633,10 @@ export class Race {
         b.finished = true;
         b.finishTime = this.clock;
         b.finishOrder = ++this.finishCount;
-        if (b.isPlayer) {
-          this.emit('finish', { place: this.finishCount });
-          this.sfx.play('finish');
-        }
+        if (b.isPlayer) this.emit('finish', { place: this.finishCount }, b);
       }
       const lap = clamp(Math.floor(b.dist / L) + 1, 1, this.laps);
-      if (b.isPlayer && lap > b.lap && !b.finished) {
-        this.emit(lap === this.laps ? 'finalLap' : 'lap', { lap });
-        this.sfx.play('lap');
-      }
+      if (b.isPlayer && lap > b.lap && !b.finished) this.emit(lap === this.laps ? 'finalLap' : 'lap', { lap }, b);
       b.lap = lap;
     }
     this.order = [...this.boats].sort((a, b) => {

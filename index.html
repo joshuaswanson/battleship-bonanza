@@ -111,6 +111,7 @@
           <header class="maps-head">
             <button id="btn-modes-back" class="btn btn-small" data-i18n="back">Back</button>
             <h2 class="maps-title" data-i18n="pickMode">Pick a mode</h2>
+            <button id="btn-online" class="btn btn-small btn-online" data-i18n="online">Play online</button>
           </header>
           <div class="mode-cards">
             <button class="map-card mode-card" data-mode="race" style="--i:0">
@@ -122,6 +123,28 @@
               <div class="map-text"><h3 data-i18n="modeCtf">Capture the flag</h3><p data-i18n="modeCtfBlurb">Steal their flag, bring it home, try not to sink.</p></div>
             </button>
           </div>
+        </div>
+      </section>
+
+      <section id="screen-lobby" class="screen screen-dim hidden">
+        <div class="panel lobby">
+          <h2 data-i18n="online">Play online</h2>
+          <div id="lobby-start" class="stack">
+            <button id="btn-host" class="btn btn-big" data-i18n="hostRoom">Host a room</button>
+            <div class="lobby-join">
+              <input id="join-code" maxlength="4" autocomplete="off" spellcheck="false" data-i18n-label="roomCode" />
+              <button id="btn-join" class="btn" data-i18n="joinRoom">Join</button>
+            </div>
+          </div>
+          <div id="lobby-room" class="stack hidden">
+            <p class="lobby-label" data-i18n="roomCode">Room code</p>
+            <p class="lobby-code" id="lobby-code"></p>
+            <ul class="lobby-players" id="lobby-players"></ul>
+            <p class="lobby-note" id="lobby-note"></p>
+            <button id="btn-lobby-go" class="btn btn-big" data-i18n="pickCourse">Pick a course</button>
+          </div>
+          <p class="lobby-error" id="lobby-error" role="alert"></p>
+          <button id="btn-lobby-back" class="btn" data-i18n="back">Back</button>
         </div>
       </section>
 

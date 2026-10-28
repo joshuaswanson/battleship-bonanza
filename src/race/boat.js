@@ -29,6 +29,7 @@ export class Boat {
     this.color = def.color;
     this.items = def.items;
     this.isPlayer = !!def.isPlayer;
+    this.isLocal = !!def.local;
     this.team = def.team ?? null;
     this.flag = null;
     this.model = buildBoat(def.color, def.items);

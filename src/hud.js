@@ -177,7 +177,8 @@ export class Hud {
     } else {
       li.innerHTML = `${icon}<span class="feed-text">${t(`feed_${e.kind}`, { a: tag(e.killer), b: tag(e.victim) })}</span>`;
     }
-    if (e.player) li.classList.add('mine');
+    const player = this.race.player;
+    if (e.killer ? e.killer === player || e.victim === player : e.player) li.classList.add('mine');
     this.feed.prepend(li);
     while (this.feed.children.length > 4) this.feed.lastChild.remove();
     setTimeout(() => li.classList.add('fade'), 4000);
@@ -433,7 +434,7 @@ export class Hud {
       const v = this.projected.set(b.pos.x, b.pos.y + 3.6, b.pos.z);
       const dist = v.distanceTo(camera.position);
       v.project(camera);
-      const visible = !b.isPlayer && b.alive && !b.finished && v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1 && dist < 170;
+      const visible = b !== race.player && b.alive && !b.finished && v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1 && dist < 170;
       if (visible !== bar.shown) {
         bar.el.style.display = visible ? 'flex' : 'none';
         bar.shown = visible;
@@ -470,7 +471,7 @@ export class Hud {
       this.lockBeep = Math.max(0.06, 0.5 - urgency * 0.44);
       this.sfx.play(urgency > 0.8 ? 'lockHigh' : 'lock');
     }
-    if (urgency > 0.5) race.emit('lockShake', { amount: (urgency - 0.5) * 0.5 });
+    if (urgency > 0.5) race.emit('lockShake', { amount: (urgency - 0.5) * 0.5 }, race.player);
 
     const v = this.projected.copy(nearest.m.pos).project(camera);
     let x = v.x;
@@ -588,15 +589,16 @@ export class Hud {
     }
     ctx.clearRect(0, 0, w, w);
     ctx.drawImage(this.mapBase, 0, 0);
-    const sorted = [...race.boats].sort((a, b) => (a.isPlayer ? 1 : 0) - (b.isPlayer ? 1 : 0));
+    const me = race.player;
+    const sorted = [...race.boats].sort((a, b) => (a === me ? 1 : 0) - (b === me ? 1 : 0));
     for (const b of sorted) {
-      if (!b.isPlayer && b.has('camo')) continue;
+      if (b !== me && b.has('camo')) continue;
       const [x, y] = this.toMap(b.pos.x, b.pos.z);
       ctx.globalAlpha = b.alive ? 1 : 0.4;
       ctx.fillStyle = hex(race.mode ? TEAMS[b.team].color : b.color);
       ctx.strokeStyle = '#0E2A47';
       ctx.lineWidth = 2.5;
-      if (b.isPlayer) {
+      if (b === me) {
         ctx.save();
         ctx.translate(x, y);
         ctx.rotate(-b.heading);
