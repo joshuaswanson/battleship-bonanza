@@ -90,7 +90,7 @@ export class Punts {
     for (const p of this.punts) {
       if (this.clock === null) this.pose(p, time);
       p.roll *= Math.exp(-2.5 * dt);
-      const y = waveHeight(p.x, p.z, time) - 0.15;
+      const y = waveHeight(p.x, p.z, time) + 0.04;
       p.mesh.position.set(p.x, y, p.z);
       p.mesh.rotation.set(Math.sin(time * 1.3 + p.phase * 9) * 0.02, p.yaw, p.roll * Math.cos(time * 7) + Math.sin(time * 1.7 + p.phase * 5) * 0.02, 'YXZ');
     }

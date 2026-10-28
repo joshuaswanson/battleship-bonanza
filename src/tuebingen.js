@@ -5,7 +5,7 @@ import { mulberry32 } from './toon.js';
 import { Batcher, cullChunks, slicer, COLORS, mat, createSky, createCloud, createArch, SUN_DIR, LOW_SPHERE } from './world.js';
 import { courseSurface, buildHeightfield, groundHit, quayWalls, smooth, noise } from './terrain.js';
 import {
-  TOWN_COLORS, PUNT_LENGTH, pick, gabledHouse, hoelderlinTower, burse, collegiateChurch, castle, planeTree, willow, leafyTree, fruitTree,
+  TOWN_COLORS, PUNT_LENGTH, PUNT_WIDTH, pick, gabledHouse, hoelderlinTower, burse, collegiateChurch, castle, planeTree, willow, WillowGrove, leafyTree, fruitTree,
   chapel, aula, townHall, bench, lamp, shed, punt, archBridge, boathouse, cafe, canoeRack, hayBales, reeds, tents, playground, station, railway, train, barn, institute,
 } from './tuebingenDetail.js';
 import { Punts } from './tuebingenHazards.js';
@@ -61,7 +61,7 @@ export async function createTuebingen(group, track, fx) {
   const N = track.N;
   const route = track.routes[0];
   const fOf = (i) => track.mainIndex(i) / N;
-  const surface = await courseSurface(track, tick, { margin: 330, amp: () => 0.25 });
+  const surface = await courseSurface(track, tick, { margin: 330, amp: () => 0.12 });
   const near = { idx: 0, edge: 0, side: 1, main: 0 };
   const probe = (x, z) => {
     const s = surface.sample(x, z);
@@ -266,12 +266,13 @@ export async function createTuebingen(group, track, fx) {
   group.add(quayWalls(track, wallAt('halde'), { top: HALDE, walk: 3, ...sandstone, bottom: DEEP, line: 0.4 }));
   group.add(quayWalls(track, wallAt('ammer'), { top: AMMER_WALL, walk: 2, ...sandstone, bottom: DEEP, line: 0.4 }));
 
-  const water = createWater({ deep: 0x2a7a68, shallow: 0x5cb594, amp: 0.5 });
+  const water = createWater({ deep: 0x2a7a68, shallow: 0x5cb594, amp: 0.12 });
   group.add(water.mesh);
 
   const rand = mulberry32(1477);
   const batch = new Batcher();
   const windows = new Batcher();
+  const grove = new WillowGrove();
   const taken = [];
   const shores = [];
   const free = (x, z, r) => !taken.some((o) => Math.hypot(o.x - x, o.z - z) < o.r + r);
@@ -394,17 +395,17 @@ export async function createTuebingen(group, track, fx) {
     batch.add('ironDark', LOW_SPHERE, mat(p.x, MAUER + 0.6, p.z, 0.06, 0.6, 0.06));
   }
 
-  for (const [d, e] of [[129, 6], [174, 3]]) {
+  for (const [d, e] of [[129, 8.5], [174, 6]]) {
     const p = townPoint(d, e);
-    willow(batch, p.x, BANK - 0.2, p.z, rand, 1.05);
+    willow(batch, grove, p.x, BANK - 0.2, p.z, rand, 1.25);
     taken.push({ x: p.x, z: p.z, r: 6 });
   }
   for (let d = FRONT_WALL_END + 2; d < LANDING_END - PUNT_LENGTH; d += PUNT_LENGTH + 0.6) {
     const i = idxAt(d + PUNT_LENGTH / 2);
-    for (const lat of [1.6, 4.4]) {
+    for (const lat of [1.3, 3.5]) {
       const p = track.point(i, TOWN * (track.hw[i] - lat));
-      punt(batch, p.x, -0.15, p.z, track.heading(i) + (rand() - 0.5) * 0.08, rand, { cover: rand() < 0.35 });
-      shores.push({ x: p.x, z: p.z, rx: 1.4, rz: PUNT_LENGTH / 2, rot: track.heading(i), top: 1.6 });
+      punt(batch, p.x, 0.04, p.z, track.heading(i) + (rand() - 0.5) * 0.06, rand);
+      shores.push({ x: p.x, z: p.z, rx: PUNT_WIDTH / 2 + 0.1, rz: PUNT_LENGTH / 2, rot: track.heading(i), top: 1.6 });
     }
   }
 
@@ -439,7 +440,7 @@ export async function createTuebingen(group, track, fx) {
     const w = islandWidth(tip);
     if (w > 4) {
       const p = track.point(tip, track.hw[tip] + w / 2);
-      willow(batch, p.x, BANK - 0.3, p.z, rand, 1.05);
+      willow(batch, grove, p.x, BANK - 0.3, p.z, rand, 1.05);
     }
   }
 
@@ -504,8 +505,8 @@ export async function createTuebingen(group, track, fx) {
     fn(p);
     taken.push({ x: p.x, z: p.z, r: 9 });
   };
-  scatter(12, 600, bankSpot(0.28, 0.47, 1, 3.5, 7), sparse((p) => willow(batch, p.x, p.y - 0.2, p.z, rand, 0.85 + rand() * 0.3)));
-  scatter(9, 600, bankSpot(0.28, 0.47, -1, 3.5, 7), sparse((p) => willow(batch, p.x, p.y - 0.2, p.z, rand, 0.85 + rand() * 0.3)));
+  scatter(12, 600, bankSpot(0.28, 0.47, 1, 3.5, 7), sparse((p) => willow(batch, grove, p.x, p.y - 0.2, p.z, rand, 0.85 + rand() * 0.3)));
+  scatter(9, 600, bankSpot(0.28, 0.47, -1, 3.5, 7), sparse((p) => willow(batch, grove, p.x, p.y - 0.2, p.z, rand, 0.85 + rand() * 0.3)));
   scatter(140, 2000, bankSpot(0.27, 0.48, 1, 12, 160), (p) => fruitTree(batch, p.x, p.y, p.z, rand));
   scatter(70, 1200, bankSpot(0.46, 0.56, -1, 4, 60), (p) => leafyTree(batch, p.x, p.y, p.z, rand, 1.2 + rand() * 0.6));
   scatter(70, 1200, bankSpot(0.46, 0.56, 1, 4, 60), (p) => leafyTree(batch, p.x, p.y, p.z, rand, 1.2 + rand() * 0.6));
@@ -520,7 +521,7 @@ export async function createTuebingen(group, track, fx) {
     }
     taken.push({ x: p.x, z: p.z, r: 8 });
   });
-  scatter(10, 900, bankSpot(0.8, 1.02, -TOWN, 3.5, 8), sparse((p) => willow(batch, p.x, p.y - 0.2, p.z, rand, 0.85 + rand() * 0.3)));
+  scatter(10, 900, bankSpot(0.8, 1.02, -TOWN, 3.5, 8), sparse((p) => willow(batch, grove, p.x, p.y - 0.2, p.z, rand, 0.85 + rand() * 0.3)));
   scatter(90, 1400, () => {
     const k = Math.round(route.first + rand() * (route.count - 1));
     const p = track.point(k, track.hw[k] + 3 + rand() * 40);
@@ -552,7 +553,7 @@ export async function createTuebingen(group, track, fx) {
         if (n.edge < 3.5 || !wildBank(n) || !free(p.x, p.z, 3)) continue;
         const y = height(p.x, p.z);
         const roll = rand();
-        if (roll < 0.07) willow(batch, p.x, y - 0.2, p.z, rand, 0.85 + rand() * 0.25);
+        if (roll < 0.07) willow(batch, grove, p.x, y - 0.2, p.z, rand, 0.85 + rand() * 0.25);
         else if (roll < 0.62) leafyTree(batch, p.x, y, p.z, rand, 0.95 + rand() * 0.5);
         else {
           for (let k = 0; k < 3; k++) {
@@ -744,6 +745,7 @@ export async function createTuebingen(group, track, fx) {
   const scenery = new THREE.Group();
   const chunks = await batch.buildAsync(scenery, 0.1, COLORS_ALL, undefined, tick);
   const glass = await windows.buildAsync(scenery, 0, COLORS_ALL, undefined, tick);
+  const willows = grove.build(scenery);
   group.add(scenery);
 
   const laneLoop = (from, to, a, b) => {
@@ -803,6 +805,7 @@ export async function createTuebingen(group, track, fx) {
       water.update(t);
       cullChunks(chunks, camera, fog.far);
       cullChunks(glass, camera, fog.far * 0.6);
+      cullChunks(willows, camera, fog.far * 0.8);
       sky.position.copy(camera.position);
       hazards.animate(t, dt);
       for (const cloud of clouds) {

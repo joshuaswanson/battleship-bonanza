@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { frame } from './alpine.js';
 import { GOTHIC, ROUND } from './veniceDetail.js';
-import { mulberry32 } from './toon.js';
+import { mulberry32, toon } from './toon.js';
 
 export const TOWN_COLORS = {
   plaster: 0xf7f3ea,
@@ -61,14 +61,15 @@ export const TOWN_COLORS = {
   leafC: 0x3e8a40,
   leafD: 0x84c25a,
   willow: 0xa6cc5c,
-  willowStrand: 0xa6cc5c,
+  willowCore: 0x5d8a33,
   willowDark: 0x8ab94c,
   planeBark: 0xece6d2,
   planePatch: 0xb9b88f,
   bark: 0x6e4a2e,
   puntWood: 0xa0683a,
+  puntHull: 0x6b4126,
   puntDark: 0x6b4226,
-  puntSeat: 0xc98d55,
+  puntSeat: 0xb07848,
   puntFloor: 0xd9a96e,
   tarp: 0x2f5f8f,
   shirtA: 0xe84a5f,
@@ -413,95 +414,55 @@ export function planeTree(batch, x, y, z, rand, s = 1) {
   return { height: (h + 9) * s };
 }
 
-const CROWN_TOP = 0.66;
-const CROWN_RISE = 0.3;
-const CROWN_REACH = 0.8;
+const smoothstep = (a, b, x) => {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
 
-function lumpGeometry(seed, [light, mid, dark]) {
+function bellPoint(t, a, hem, flute) {
+  const DOME = 0.28;
+  let y;
+  let rad;
+  if (t <= 0.3) {
+    const phi = (t / 0.3) * Math.PI * 0.46;
+    y = 1 - (DOME * (1 - Math.cos(phi))) / (1 - Math.cos(Math.PI * 0.46));
+    rad = Math.sin(phi) / Math.sin(Math.PI * 0.46);
+  } else {
+    const u = (t - 0.3) / 0.7;
+    y = 1 - DOME - (1 - DOME - hem) * u;
+    rad = 1 + 0.14 * u;
+  }
+  rad *= 1 + flute * smoothstep(0.12, 0.6, t);
+  return [Math.sin(a) * rad, y, Math.cos(a) * rad];
+}
+
+function coreGeometry(seed, [mid, dark]) {
   const rand = mulberry32(seed);
-  const geometry = new THREE.SphereGeometry(1, 20, 12);
-  const pos = geometry.attributes.position;
-  const phase = Array.from({ length: 4 }, () => rand() * 6);
-  const top = new THREE.Color(light);
+  const SEG = 20;
+  const RINGS = 6;
   const body = new THREE.Color(mid);
   const under = new THREE.Color(dark);
   const c = new THREE.Color();
-  const colors = [];
-  for (let k = 0; k < pos.count; k++) {
-    const x = pos.getX(k);
-    const y = pos.getY(k);
-    const z = pos.getZ(k);
-    const lump = 1 + 0.09 * Math.sin(x * 4.5 + phase[0]) * Math.sin(z * 4.5 + phase[1]) + 0.06 * Math.sin(y * 6 + x * 3 + phase[2]) + 0.04 * Math.sin(z * 11 + phase[3]);
-    pos.setXYZ(k, x * lump, y * lump, z * lump);
-    const t = (y + 1) / 2;
-    c.copy(under).lerp(body, Math.min(1, t * 1.6)).lerp(top, Math.max(0, (t - 0.55) / 0.45) * 0.85);
-    colors.push(c.r, c.g, c.b);
+  const positions = [0, 1, 0];
+  const colors = [...body.toArray()];
+  const hem = Array.from({ length: SEG }, () => 0.08 + rand() * 0.12);
+  for (let r = 1; r <= RINGS; r++) {
+    const t = r / RINGS;
+    for (let k = 0; k < SEG; k++) {
+      const a = (k / SEG) * Math.PI * 2;
+      positions.push(...bellPoint(t, a, hem[k], 0.08 * Math.sin(a * 5 + seed)));
+      c.copy(body).lerp(under, smoothstep(0.2, 1, t));
+      colors.push(c.r, c.g, c.b);
+    }
   }
-  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-  geometry.computeVertexNormals();
-  return geometry;
-}
-
-function strandsGeometry(seed, [light, mid, dark]) {
-  const rand = mulberry32(seed);
-  const positions = [];
-  const colors = [];
+  positions.push(0, 0.2, 0);
+  colors.push(...under.toArray());
   const index = [];
-  const tipColor = new THREE.Color(light);
-  const body = new THREE.Color(mid);
-  const shade = new THREE.Color(dark);
-  const base = new THREE.Color();
-  const c = new THREE.Color();
-  const EDGE = 1.42;
-  const strand = (a, phi, inset, tip, bow, width, tone) => {
-    const path = [phi, (phi + EDGE) / 2].map((p) => [CROWN_REACH * Math.sin(p) * inset * 1.03, CROWN_TOP + CROWN_RISE * Math.cos(p), 0]);
-    const re = CROWN_REACH * Math.sin(EDGE) * inset * 1.03;
-    const ye = CROWN_TOP + CROWN_RISE * Math.cos(EDGE);
-    for (let r = 0; r < 4; r++) {
-      const t = r / 3;
-      path.push([re + bow * (1 - (1 - t) ** 3), ye - (ye - tip) * t ** 1.1, t]);
-    }
-    const sa = Math.sin(a);
-    const ca = Math.cos(a);
-    const first = positions.length / 3;
-    base.copy(body).lerp(tipColor, tone);
-    path.forEach(([rad, y, t], r) => {
-      const w = width * (1 - 0.7 * (r / (path.length - 1)));
-      const sway = 0.012 * Math.sin(t * 5 + a * 7);
-      const cx = sa * rad + ca * sway;
-      const cz = ca * rad - sa * sway;
-      for (let s = 0; s < 3; s++) {
-        const q = a + (s / 3) * Math.PI * 2;
-        positions.push(cx + Math.sin(q) * w, y, cz + Math.cos(q) * w);
-      }
-      if (r < 2) c.copy(base).lerp(tipColor, 0.4);
-      else c.copy(shade).lerp(base, Math.min(1, 0.45 + t * 1.2)).lerp(tipColor, t * t * 0.3 * inset);
-      for (let s = 0; s < 3; s++) colors.push(c.r, c.g, c.b);
-    });
-    for (let r = 0; r < path.length - 1; r++) {
-      for (let s = 0; s < 3; s++) {
-        const a0 = first + r * 3 + s;
-        const a1 = first + r * 3 + ((s + 1) % 3);
-        index.push(a0, a0 + 3, a1 + 3, a0, a1 + 3, a1);
-      }
-    }
-    const end = first + (path.length - 1) * 3;
-    index.push(end, end + 2, end + 1);
-  };
-  const clumps = 64;
-  for (let q = 0; q < clumps; q++) {
-    const a = (q / clumps) * Math.PI * 2 + (rand() - 0.5) * 0.08;
-    const phi = 0.45 + rand() * 0.75;
-    const reach = 0.02 + rand() * 0.26;
-    const tone = rand();
-    const count = 3 + Math.floor(rand() * 2);
-    for (let k = 0; k < count; k++) {
-      strand(a + (rand() - 0.5) * 0.09, phi + (rand() - 0.5) * 0.2, 1, reach + rand() * 0.1, 0.05 + rand() * 0.08, 0.03 + rand() * 0.012, tone * 0.7 + rand() * 0.3);
-    }
-  }
-  for (let q = 0; q < 30; q++) {
-    strand(rand() * Math.PI * 2, 0.5 + rand() * 0.5, 0.8, 0.12 + rand() * 0.25, 0.04, 0.034, rand() * 0.3);
-  }
+  const at = (r, k) => 1 + (r - 1) * SEG + (k % SEG);
+  for (let k = 0; k < SEG; k++) index.push(0, at(1, k), at(1, k + 1));
+  for (let r = 1; r < RINGS; r++) for (let k = 0; k < SEG; k++) index.push(at(r, k), at(r + 1, k), at(r + 1, k + 1), at(r, k), at(r + 1, k + 1), at(r, k + 1));
+  const cap = positions.length / 3 - 1;
+  for (let k = 0; k < SEG; k++) index.push(cap, at(RINGS, k + 1), at(RINGS, k));
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
@@ -510,38 +471,176 @@ function strandsGeometry(seed, [light, mid, dark]) {
   return geometry;
 }
 
-const WILLOW_GREENS = [
-  [0xd4ea84, 0x9cc955, 0x4b7a2a],
-  [0xc8e275, 0x8fbd4b, 0x46732a],
-  [0xdcec8c, 0xa6cf5c, 0x55852f],
-];
-const LUMPS = WILLOW_GREENS.map((greens, k) => lumpGeometry(11 + k * 13, greens));
-const STRANDS = WILLOW_GREENS.map((greens, k) => strandsGeometry(17 + k * 19, greens));
+function shellGeometry(seed) {
+  const rand = mulberry32(seed);
+  const SEG = 32;
+  const RINGS = 10;
+  const WRAP = 3;
+  const phase = rand() * 6;
+  const positions = [];
+  const uvs = [];
+  const index = [];
+  for (let r = 0; r <= RINGS; r++) {
+    const t = Math.max(0.02, r / RINGS);
+    for (let k = 0; k <= SEG; k++) {
+      const a = (k / SEG) * Math.PI * 2;
+      positions.push(...bellPoint(t, a, 0, 0.07 * Math.sin(a * 7 + phase) + 0.04 * Math.sin(a * 17 + phase * 2)));
+      uvs.push((k / SEG) * WRAP, 1 - t);
+    }
+  }
+  const row = SEG + 1;
+  for (let r = 0; r < RINGS; r++) {
+    for (let k = 0; k < SEG; k++) {
+      const i = r * row + k;
+      index.push(i, i + row, i + row + 1, i, i + row + 1, i + 1);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(index);
+  geometry.computeVertexNormals();
+  return geometry;
+}
 
-export function willow(batch, x, y, z, rand, s = 1) {
-  const put = frame(batch, x, y, z, rand() * 6.3, (rand() - 0.5) * 0.1, (rand() - 0.5) * 0.1, s);
-  const R = 5.6 + rand() * 1.2;
-  const top = 12 + rand() * 1.5;
-  const crownY = top * CROWN_TOP;
-  put('bark', TRUNK, 0, -0.5, 0, 0.95, crownY * 0.42, 0.95);
-  const limbs = 4 + Math.floor(rand() * 2);
-  for (let k = 0; k < limbs; k++) {
-    const a = (k / limbs) * Math.PI * 2 + rand() * 0.6;
-    const lean = 0.55 + rand() * 0.35;
-    put('bark', TRUNK, 0, crownY * 0.36, 0, 0.38, crownY * 0.75, 0.38, Math.cos(a) * lean, 0, -Math.sin(a) * lean);
+function strandTexture() {
+  const S = 512;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = S;
+  const ctx = canvas.getContext('2d');
+  const rand = mulberry32(4242);
+  const greens = ['#cfe67c', '#b9da68', '#a3cc58', '#8fbd4c', '#7aab41', '#dcee90', '#6e9f3a'];
+  ctx.fillStyle = '#9cc855';
+  ctx.fillRect(0, 0, S, S * 0.1);
+  for (let k = 0; k < 900; k++) {
+    ctx.fillStyle = greens[Math.floor(rand() * greens.length)];
+    const x = rand() * S;
+    const y = rand() * S * 0.16;
+    ctx.beginPath();
+    ctx.ellipse(x, y, 4 + rand() * 6, 3 + rand() * 4, rand() * 3, 0, Math.PI * 2);
+    ctx.fill();
   }
-  const shade = pick(LUMPS, rand);
-  put('willow', shade, 0, crownY * 0.82, 0, R * 0.62, top * 0.28, R * 0.62);
-  put('willow', pick(LUMPS, rand), 0, crownY + top * 0.08, 0, R * CROWN_REACH * 0.92, top * CROWN_RISE * 0.95, R * CROWN_REACH * 0.92, 0, rand() * 6);
-  const lumps = 5 + Math.floor(rand() * 3);
-  for (let k = 0; k < lumps; k++) {
-    const a = (k / lumps) * Math.PI * 2 + rand() * 0.5;
-    const d = R * (0.36 + rand() * 0.2);
-    const r = R * (0.3 + rand() * 0.12);
-    put('willow', pick(LUMPS, rand), Math.sin(a) * d, crownY + top * (0.12 + rand() * 0.1), Math.cos(a) * d, r, r * 0.75, r, 0, rand() * 6);
+  const strands = 170;
+  for (let k = 0; k < strands; k++) {
+    const x0 = (k / strands) * S + (rand() - 0.5) * 4;
+    const y0 = rand() * S * 0.12;
+    const y1 = S * (0.62 + rand() * 0.37);
+    const sway = (rand() - 0.5) * 10;
+    const color = greens[Math.floor(rand() * greens.length)];
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = 1.6 + rand() * 1.4;
+    ctx.beginPath();
+    for (let y = y0; y <= y1; y += 4) {
+      const u = (y - y0) / (y1 - y0);
+      const x = x0 + sway * u * u;
+      if (y === y0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    for (let y = y0 + 3; y < y1 - 2; y += 4 + rand() * 3) {
+      const u = (y - y0) / (y1 - y0);
+      const x = x0 + sway * u * u;
+      const side = rand() < 0.5 ? -1 : 1;
+      ctx.beginPath();
+      ctx.ellipse(x + side * 1.6, y, 1.5 + rand() * 0.8, 3.6 + rand() * 2, side * 0.35, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
-  put('willowStrand', pick(STRANDS, rand), 0, 0, 0, R, top, R, 0, rand() * 6);
-  return { height: (top + 0.5) * s };
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
+  return texture;
+}
+
+const CORES = [
+  [0x6f9a3a, 0x3d6624],
+  [0x668f36, 0x375e21],
+].map((greens, k) => coreGeometry(71 + k * 13, greens));
+const SHELLS = [shellGeometry(5), shellGeometry(9)];
+const TIER_TINT = [1.05, 0.93, 0.82];
+
+export class WillowGrove {
+  constructor() {
+    this.items = [];
+  }
+
+  add(matrix, variant, tint) {
+    this.items.push({ matrix, variant, tint, x: matrix.elements[12], z: matrix.elements[14] });
+  }
+
+  build(parent, size = 220) {
+    const material = toon(0xffffff, { map: strandTexture(), alphaTest: 0.5, alphaToCoverage: true, side: THREE.DoubleSide });
+    const cells = new Map();
+    for (const item of this.items) {
+      const id = `${Math.floor(item.x / size)},${Math.floor(item.z / size)}`;
+      if (!cells.has(id)) cells.set(id, []);
+      cells.get(id).push(item);
+    }
+    const chunks = [];
+    const tint = new THREE.Color();
+    for (const [id, items] of cells) {
+      const group = new THREE.Group();
+      const [cx, cz] = id.split(',').map((n) => (Number(n) + 0.5) * size);
+      let radius = 0;
+      SHELLS.forEach((geometry, variant) => {
+        const list = items.filter((item) => item.variant === variant);
+        if (!list.length) return;
+        const mesh = new THREE.InstancedMesh(geometry, material, list.length);
+        list.forEach((item, k) => {
+          mesh.setMatrixAt(k, item.matrix);
+          mesh.setColorAt(k, tint.setScalar(item.tint));
+          radius = Math.max(radius, Math.hypot(item.x - cx, item.z - cz) + 12);
+        });
+        mesh.computeBoundingSphere();
+        group.add(mesh);
+      });
+      parent.add(group);
+      chunks.push({ group, x: cx, z: cz, radius });
+    }
+    return chunks;
+  }
+}
+
+export function willow(batch, grove, x, y, z, rand, s = 1) {
+  const yaw = rand() * 6.3;
+  const put = frame(batch, x, y, z, yaw, 0, 0, s);
+  const shell = frame({ add: (variant, geometry, matrix) => grove.add(matrix, variant.v, variant.tint) }, x, y, z, yaw, 0, 0, s);
+  const H = 15 + rand() * 3;
+  const R = 5.6 + rand() * 1.1;
+  put('bark', TRUNK, 0, -0.5, 0, 1, H * 0.45, 1);
+  for (let k = 0; k < 3; k++) {
+    const a = (k / 3) * Math.PI * 2 + rand();
+    put('bark', TRUNK, 0, H * 0.3, 0, 0.45, H * 0.45, 0.45, Math.cos(a) * 0.45, 0, -Math.sin(a) * 0.45);
+  }
+  const cascade = (d, a, topY, height, radius, level) => {
+    const lean = 0.04 + rand() * 0.08;
+    const lx = Math.sin(a) * d;
+    const lz = Math.cos(a) * d;
+    const spin = rand() * 6;
+    const tilt = [Math.cos(a) * lean, spin, -Math.sin(a) * lean];
+    put('willowCore', pick(CORES, rand), lx, topY - height * 0.97, lz, radius * 0.72, height * 0.9, radius * 0.72, ...tilt);
+    const tint = TIER_TINT[level] * (0.94 + rand() * 0.12);
+    shell({ v: Math.floor(rand() * SHELLS.length), tint: tint * 0.78 }, null, lx, topY - height, lz, radius * 0.86, height * 0.97, radius * 0.86, tilt[0], spin + 1.3, tilt[2]);
+    shell({ v: Math.floor(rand() * SHELLS.length), tint }, null, lx, topY - height, lz, radius, height, radius, ...tilt);
+  };
+  const tiers = [
+    { count: 3, d: [0, 0.25], top: [0.92, 1], height: 0.44, radius: [0.4, 0.48] },
+    { count: 5 + Math.floor(rand() * 2), d: [0.4, 0.55], top: [0.68, 0.8], height: 0.64, radius: [0.36, 0.44] },
+    { count: 6 + Math.floor(rand() * 3), d: [0.6, 0.74], top: [0.4, 0.52], height: 0.5, radius: [0.32, 0.4] },
+  ];
+  tiers.forEach((tier, level) => {
+    const spin = rand() * Math.PI * 2;
+    for (let k = 0; k < tier.count; k++) {
+      const a = spin + (k / tier.count) * Math.PI * 2 + (rand() - 0.5) * 0.5;
+      const d = R * (tier.d[0] + rand() * (tier.d[1] - tier.d[0]));
+      const topY = H * (tier.top[0] + rand() * (tier.top[1] - tier.top[0]));
+      const height = level === 2 ? topY + 0.4 : H * tier.height * (0.9 + rand() * 0.2);
+      cascade(d, a, topY, height, R * (tier.radius[0] + rand() * (tier.radius[1] - tier.radius[0])), level);
+    }
+  });
+  return { height: H * s };
 }
 
 export function leafyTree(batch, x, y, z, rand, s = 1) {
@@ -671,64 +770,133 @@ export function shed(batch, x, y, z, yaw, rand) {
   put('frameWhite', BOX, -0.8, 1.4, 1.31, 1, 0.9, 0.04);
 }
 
-export const PUNT_LENGTH = 13;
-export const PUNT_WIDTH = 2.6;
-const PUNT_RAKE = 1.4;
-const PUNT_KEEL = -0.3;
-const PUNT_RIM = 0.78;
-const PUNT_DECK = 1.5;
-const PUNT_STRIPES = ['shutterGreen', 'shutterRed', 'shutterBlue', 'ochre', 'frameWhite', 'clockBlue'];
-const CUSHIONS = ['shutterRed', 'shutterGreen', 'shutterBlue', 'ochre', 'frameWhite', 'flowerC'];
-const HULL_SIDE = new THREE.ExtrudeGeometry(
-  new THREE.Shape([[-PUNT_LENGTH / 2 + PUNT_RAKE, PUNT_KEEL], [PUNT_LENGTH / 2 - PUNT_RAKE, PUNT_KEEL], [PUNT_LENGTH / 2, PUNT_RIM], [-PUNT_LENGTH / 2, PUNT_RIM]].map(([u, v]) => new THREE.Vector2(u, v))),
-  { depth: 1, bevelEnabled: false },
-).translate(0, 0, -0.5).rotateY(Math.PI / 2);
-const PENNANT = new THREE.ExtrudeGeometry(new THREE.Shape([new THREE.Vector2(0, 0), new THREE.Vector2(0, 1), new THREE.Vector2(1, 0.5)]), { depth: 1, bevelEnabled: false }).translate(0, 0, -0.5).rotateY(Math.PI / 2);
+export const PUNT_LENGTH = 12;
+export const PUNT_WIDTH = 1.9;
+const PUNT_SKIN = 0.06;
+const PUNT_ROWS = 4;
+const PUNT_SECTIONS = 36;
+const puntHalf = (u) => (PUNT_WIDTH / 2) * (1 - 0.4 * Math.abs(u) ** 2.4);
+const puntRim = (u) => 0.55 + 0.32 * Math.abs(u) ** 3.2;
+const puntKeel = (u) => -0.25 + 0.55 * smoothstep(0.58, 1, Math.abs(u)) ** 1.3;
+const PUNT_HULLS = [0x341a0c, 0x3d1f0f, 0x2c160a, 0x452512];
+const PUNT_TRIMS = [null, null, 0x2f5d3a, 0x7a2a22, 0x2c3e5c, 0xd8c9a3];
 
-export function punt(batch, x, y, z, yaw, rand, { cover = false } = {}) {
-  const put = frame(batch, x, y, z, yaw, 0, 0, 1);
-  const L = PUNT_LENGTH;
-  const W = PUNT_WIDTH;
-  const flat = L - PUNT_RAKE * 2;
-  const rake = Math.atan2(PUNT_RIM - PUNT_KEEL, PUNT_RAKE);
-  const slope = Math.hypot(PUNT_RIM - PUNT_KEEL, PUNT_RAKE);
-  const stripe = pick(PUNT_STRIPES, rand);
-  put('puntDark', BOX, 0, PUNT_KEEL + 0.07, 0, W - 0.2, 0.14, flat);
-  put('puntFloor', BOX, 0, PUNT_KEEL + 0.16, 0, W - 0.5, 0.06, flat - 0.4);
-  for (const s of [-1, 1]) {
-    put('puntWood', HULL_SIDE, s * (W / 2 - 0.07), 0, 0, 0.14, 1, 1);
-    put(stripe, BOX, s * (W / 2 + 0.005), 0.46, 0, 0.03, 0.2, L - 0.55);
-    put('puntDark', BOX, s * (W / 2 + 0.005), 0.22, 0, 0.03, 0.06, L - 0.95);
-    put('puntDark', BOX, s * (W / 2 - 0.05), PUNT_RIM + 0.05, 0, 0.26, 0.1, L + 0.06);
-    put('puntWood', BOX, 0, (PUNT_KEEL + PUNT_RIM) / 2, s * (L / 2 - PUNT_RAKE / 2), W - 0.12, 0.12, slope, -s * rake);
-    put('puntSeat', BOX, 0, PUNT_RIM - 0.02, s * (L / 2 - PUNT_DECK / 2), W - 0.14, 0.1, PUNT_DECK);
-    put('puntDark', BOX, 0, PUNT_RIM + 0.04, s * (L / 2 - PUNT_DECK), W - 0.14, 0.08, 0.12);
-    put('puntDark', BOX, 0, PUNT_RIM - 0.02, s * (L / 2 + 0.02), W + 0.04, 0.14, 0.12);
-    for (let r = -flat / 2 + 0.6; r < flat / 2 - 0.3; r += 1.1) put('puntDark', BOX, s * (W / 2 - 0.17), 0.2, r, 0.06, 0.95, 0.1);
-    const seat = L - PUNT_DECK * 2 - 0.5;
-    put('puntSeat', BOX, s * (W / 2 - 0.45), 0.3, 0, 0.5, 0.1, seat);
-    put('puntDark', BOX, s * (W / 2 - 0.45), 0.08, 0, 0.42, 0.36, 0.1);
-    put('puntSeat', BOX, s * (W / 2 - 0.22), 0.62, 0, 0.07, 0.42, seat, 0, 0, s * 0.18);
-    if (!cover) {
-      for (let c = -seat / 2 + 0.75; c < seat / 2 - 0.6; c += 1.3) {
-        if (rand() < 0.35) continue;
-        put(pick(CUSHIONS, rand), BOX, s * (W / 2 - 0.47), 0.4, c, 0.42, 0.1, 1.05);
-      }
+function puntGeometry(seed) {
+  const rand = mulberry32(seed);
+  const hull = new THREE.Color(PUNT_HULLS[seed % PUNT_HULLS.length]);
+  const seam = hull.clone().multiplyScalar(0.72);
+  const trimHex = PUNT_TRIMS[Math.floor(rand() * PUNT_TRIMS.length)];
+  const trim = trimHex === null ? hull.clone().multiplyScalar(1.12) : new THREE.Color(trimHex);
+  const bottom = new THREE.Color(0x2c1f16);
+  const inside = new THREE.Color(0x6e4424);
+  const insideDark = new THREE.Color(0x5c381d);
+  const floorA = new THREE.Color(0x553419);
+  const floorB = new THREE.Color(0x472b14);
+  const rail = new THREE.Color(0x2a180d);
+  const positions = [];
+  const colors = [];
+  const tri = (a, b, c, color) => {
+    positions.push(...a, ...b, ...c);
+    for (let k = 0; k < 3; k++) colors.push(color.r, color.g, color.b);
+  };
+  const quad = (a, b, c, d, color, flip = false) => {
+    if (flip) {
+      tri(a, c, b, color);
+      tri(a, d, c, color);
+    } else {
+      tri(a, b, c, color);
+      tri(a, c, d, color);
     }
+  };
+  const us = Array.from({ length: PUNT_SECTIONS + 1 }, (_, k) => {
+    const v = (k / PUNT_SECTIONS) * 2 - 1;
+    return Math.sign(v) * Math.abs(v) ** 0.8;
+  });
+  const section = (u) => {
+    const z = (u * PUNT_LENGTH) / 2;
+    const w = puntHalf(u);
+    const g = puntRim(u);
+    const b = puntKeel(u);
+    const wb = w * 0.8;
+    const outer = [];
+    const inner = [];
+    for (const side of [-1, 1]) {
+      const rows = [];
+      const rowsIn = [];
+      for (let r = 0; r <= PUNT_ROWS; r++) {
+        const s = r / PUNT_ROWS;
+        rows.push([side * (wb + (w - wb) * s), b + (g - b) * s, z]);
+        rowsIn.push([side * (wb + (w - wb) * s - PUNT_SKIN), b + PUNT_SKIN + (g - b - PUNT_SKIN) * s, z]);
+      }
+      outer.push(rows);
+      inner.push(rowsIn);
+    }
+    return { z, w, g, b, outer, inner };
+  };
+  const sections = us.map(section);
+  for (let k = 0; k < PUNT_SECTIONS; k++) {
+    const p = sections[k];
+    const q = sections[k + 1];
+    const plank = (k % 2 ? floorA : floorB);
+    for (const s of [0, 1]) {
+      const flip = s === 0;
+      for (let r = 0; r < PUNT_ROWS; r++) {
+        const color = r === PUNT_ROWS - 1 ? trim : r % 2 ? hull : seam.clone().lerp(hull, 0.6);
+        quad(p.outer[s][r], q.outer[s][r], q.outer[s][r + 1], p.outer[s][r + 1], color, flip);
+        quad(p.inner[s][r], p.inner[s][r + 1], q.inner[s][r + 1], q.inner[s][r], r % 2 ? inside : insideDark, flip);
+      }
+      const top = p.outer[s][PUNT_ROWS];
+      const topQ = q.outer[s][PUNT_ROWS];
+      const lip = (pt, dx, dy) => [pt[0] + (s ? dx : -dx), pt[1] + dy, pt[2]];
+      quad(lip(top, 0.05, -0.12), lip(topQ, 0.05, -0.12), lip(topQ, 0.05, 0.05), lip(top, 0.05, 0.05), rail, flip);
+      quad(lip(top, 0.05, 0.05), lip(topQ, 0.05, 0.05), lip(q.inner[s][PUNT_ROWS], -0.02, 0.05), lip(p.inner[s][PUNT_ROWS], -0.02, 0.05), rail, flip);
+      quad(lip(p.inner[s][PUNT_ROWS], -0.02, 0.05), lip(q.inner[s][PUNT_ROWS], -0.02, 0.05), q.inner[s][PUNT_ROWS], p.inner[s][PUNT_ROWS], rail, flip);
+    }
+    quad(p.outer[0][0], p.outer[1][0], q.outer[1][0], q.outer[0][0], bottom);
+    quad(p.inner[0][0], q.inner[0][0], q.inner[1][0], p.inner[1][0], plank);
   }
-  if (cover) {
-    const span = L - PUNT_DECK * 2 + 0.2;
-    put('tarp', BOX, 0, PUNT_RIM + 0.12, 0, W + 0.08, 0.1, span);
-    put('tarp', CYL, 0, PUNT_RIM + 0.16, 0, 0.5, span, 0.12, Math.PI / 2);
-    for (let c = -span / 2 + 1; c < span / 2; c += 2) put('ironDark', BOX, 0, PUNT_RIM + 0.12, c, W + 0.14, 0.04, 0.06);
-  } else {
-    put('puntDark', BOX, 0, 0.62, 0.3, 0.6, 0.06, 2.6);
-    for (const c of [-0.8, 1.4]) put('puntDark', BOX, 0, 0.22, c, 0.1, 0.8, 0.1);
-    for (let k = 0; k < 3; k++) put(pick(['shutterGreen', 'ochre', 'frameWhite'], rand), CYL, (rand() - 0.5) * 0.3, 0.8, -0.4 + k * 0.7 + rand() * 0.2, 0.07, 0.32, 0.07);
-    put('straw', BOX, 0.05, 0.76, 1.3, 0.42, 0.28, 0.5);
+  for (const [end, dir] of [[sections[0], -1], [sections[PUNT_SECTIONS], 1]]) {
+    const flip = dir < 0;
+    for (let r = 0; r < PUNT_ROWS; r++) {
+      quad(end.outer[0][r], end.outer[0][r + 1], end.outer[1][r + 1], end.outer[1][r], r === PUNT_ROWS - 1 ? trim : hull, flip);
+      quad(end.inner[0][r], end.inner[1][r], end.inner[1][r + 1], end.inner[0][r + 1], inside, flip);
+    }
+    quad(end.outer[0][0], end.outer[1][0], end.inner[1][0], end.inner[0][0], bottom, !flip);
   }
-  put('ironDark', CYL, 0, PUNT_RIM + 0.85, L / 2 - 0.45, 0.04, 1.6, 0.04);
-  put(stripe === 'frameWhite' ? 'shutterRed' : stripe, PENNANT, 0, PUNT_RIM + 1.15, L / 2 - 0.45, 0.02, 0.45, 0.8);
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+const PUNT_GEOMETRIES = Array.from({ length: 6 }, (_, k) => puntGeometry(k + 1));
+
+export function punt(batch, x, y, z, yaw, rand) {
+  const put = frame(batch, x, y, z, yaw, 0, 0, 1);
+  put('puntHull', pick(PUNT_GEOMETRIES, rand), 0, 0, 0, 1, 1, 1);
+  const floor = puntKeel(0) + PUNT_SKIN;
+  const seatY = floor + 0.3;
+  const span = PUNT_LENGTH * 0.62;
+  for (const s of [-1, 1]) {
+    const wall = puntHalf(0) * 0.92 - PUNT_SKIN;
+    put('puntSeat', BOX, s * (wall - 0.2), seatY, 0, 0.36, 0.06, span);
+    for (let k = -2; k <= 2; k++) put('puntDark', BOX, s * (wall - 0.2), floor + 0.15, (k * span) / 5, 0.3, 0.3, 0.06);
+    put('puntSeat', BOX, s * (wall - 0.03), seatY + 0.2, 0, 0.05, 0.3, span, 0, 0, s * 0.22);
+  }
+  for (let k = -5; k <= 5; k++) {
+    const u = k / 6.2;
+    const zz = (u * PUNT_LENGTH) / 2;
+    if (Math.abs(u) < 0.55 && k % 2) continue;
+    const w = puntHalf(u) * 2 - PUNT_SKIN * 2 - 0.1;
+    put('puntDark', BOX, 0, puntKeel(u) + PUNT_SKIN + 0.04, zz, w * 0.82, 0.07, 0.08);
+  }
+  for (const end of [-1, 1]) {
+    const u = end * 0.9;
+    const zz = (u * PUNT_LENGTH) / 2;
+    put('puntFloor', BOX, 0, puntRim(u) - 0.05, zz, puntHalf(u) * 2 - 0.08, 0.07, 1.05);
+  }
+  if (rand() < 0.7) put('poleWood', CYL, 0.35, seatY + 0.08, 0, 0.045, PUNT_LENGTH * 0.62, 0.045, Math.PI / 2, 0, 0);
 }
 
 function flowerBox(put, x0, x1, y, z, face, rand) {
