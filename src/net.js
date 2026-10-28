@@ -122,6 +122,14 @@ export class Session {
     }
   }
 
+  kick(peer, msg) {
+    const conn = this.guests.get(peer);
+    if (!conn) return;
+    this.guests.delete(peer);
+    conn.send(msg);
+    setTimeout(() => conn.close(), 400);
+  }
+
   leave() {
     const peer = this.peer;
     this.reset();

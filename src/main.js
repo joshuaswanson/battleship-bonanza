@@ -610,6 +610,7 @@ addEventListener('pointerdown', unlockAudio, { once: true });
 addEventListener('keydown', unlockAudio, { once: true });
 
 const READY_TIMEOUT = 60000;
+const BUILD = __BUILD__;
 const INPUT_RATE = 1 / 30;
 const profile = () => cleanBoat(setup);
 const hexColor = (c) => `#${c.toString(16).padStart(6, '0')}`;
@@ -641,7 +642,7 @@ function lobbyPlayers() {
 function shareLobby() {
   if (session.role !== 'host') return;
   const players = lobbyPlayers();
-  for (const peer of session.guests.keys()) session.send({ t: 'lobby', players, you: online.players.findIndex((p) => p.peer === peer) }, peer);
+  for (const peer of session.guests.keys()) session.send({ t: 'lobby', players, build: BUILD, you: online.players.findIndex((p) => p.peer === peer) }, peer);
   if (mode === 'lobby') renderLobby();
 }
 
@@ -782,7 +783,9 @@ session.on('leave', (peer) => {
 session.on('message', (msg, peer) => {
   if (!msg || typeof msg !== 'object') return;
   if (session.role === 'host') {
-    if (msg.t === 'hello' && !online.players.some((p) => p.peer === peer)) {
+    if (msg.t === 'hello' && msg.build !== BUILD) {
+      session.kick(peer, { t: 'version' });
+    } else if (msg.t === 'hello' && !online.players.some((p) => p.peer === peer)) {
       online.players.push({ ...cleanBoat(msg), peer });
       shareLobby();
     } else if (msg.t === 'in') {
@@ -800,7 +803,10 @@ session.on('message', (msg, peer) => {
     }
     return;
   }
-  if (msg.t === 'lobby' && Array.isArray(msg.players)) {
+  if (msg.t === 'version' || (msg.t === 'lobby' && msg.build !== BUILD)) {
+    leaveRoom();
+    renderLobby('versionMismatch');
+  } else if (msg.t === 'lobby' && Array.isArray(msg.players)) {
     online.players = msg.players.map((p) => ({ ...cleanBoat(p), host: !!p.host }));
     online.you = msg.you;
     if (mode === 'lobby') renderLobby();
@@ -851,7 +857,7 @@ async function joinRoom() {
   $('lobby-error').textContent = t('connecting');
   try {
     await session.joinRoom(code);
-    session.send({ t: 'hello', ...profile() });
+    session.send({ t: 'hello', build: BUILD, ...profile() });
     online.players = [];
     renderLobby('');
   } catch (err) {
