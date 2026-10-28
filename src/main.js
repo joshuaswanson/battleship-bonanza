@@ -9,7 +9,7 @@ import { createTrack } from './track.js';
 import { createWorld, buildBudget } from './world.js';
 import { MAPS } from './maps.js';
 import { ARENAS } from './arenas.js';
-import { CaptureTheFlag } from './ctf.js';
+import { CaptureTheFlag, TEAMS } from './ctf.js';
 import { Recorder, Replay } from './replay.js';
 import { Hints } from './hints.js';
 import { Director } from './director.js';
@@ -293,7 +293,8 @@ function newRace(attract, map = pickMap(attract), given = null, guest = false) {
   useVenue(map);
   current.world.chopper?.reset();
   const ctf = isArena(map) ? new CaptureTheFlag({ scene, track: current.track }) : null;
-  const defs = given ?? (ctf ? makeTeams(setup) : makeDefs(attract ? null : setup));
+  const dealt = given ?? (ctf ? makeTeams(setup) : makeDefs(attract ? null : setup));
+  const defs = ctf ? dealt.map((def) => ({ ...def, color: TEAMS[def.team].color })) : dealt;
   race = new Race({ scene, track: current.track, fx, sfx: attract ? SILENT : sfx, shores: current.world.shores, solid: current.world.solid, raycast: current.world.raycast ?? null, chopper: current.world.chopper ?? null, hazards: current.world.hazards ?? null, mode: ctf, defs, attract });
   if (guest) online.mirror = new Mirror(race, fx, sfx);
   else if (!attract) recorder = new Recorder(race, fx);

@@ -34,6 +34,10 @@ export function formatTime(seconds) {
 
 const $ = (id) => document.getElementById(id);
 
+const MARK_ICONS = {
+  flag: '<svg viewBox="0 0 24 24"><path d="M7 3v18" stroke="#0E2A47" stroke-width="2.6" stroke-linecap="round"/><path d="M8 4h11l-3.2 4.2L19 12.5H8z" fill="#fff" stroke="#0E2A47" stroke-width="2" stroke-linejoin="round"/></svg>',
+  base: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none" stroke="#fff" stroke-width="3.2"/><circle cx="12" cy="12" r="3.2" fill="#fff"/></svg>',
+};
 const SEEK_TIME = 0.8;
 const TARGETING = {
   missiles: { range: 180, minDot: -1, filter: (o) => !o.has('camo') },
@@ -46,6 +50,8 @@ export class Hud {
     this.lockVignette = $('lock-vignette');
     this.burnVignette = $('burn-vignette');
     this.lockArrow = $('lock-arrow');
+    this.marksEl = $('hud-marks');
+    this.marks = [];
     this.lockPhase = 0;
     this.lockBeep = 0;
     this.root = $('hud');
@@ -110,6 +116,7 @@ export class Hud {
     setText(this.warn, '');
     this.of.textContent = t('of', { n: race.boats.length });
     this.root.classList.toggle('ctf', !!race.mode);
+    this.buildMarks(race);
     this.lastScore = '';
     this.slotsEl.innerHTML = `<div class="ability hull-row">
           <i class="hull-dot"></i>
@@ -271,7 +278,10 @@ export class Hud {
   update(race, camera, dt) {
     const p = race.player;
     if (!p) return;
-    if (race.mode) this.updateScore(race.mode);
+    if (race.mode) {
+      this.updateScore(race.mode);
+      this.updateMarks(race, camera);
+    }
     else {
       if (p.place !== this.lastPlace) {
         this.place.textContent = ordinal(p.place);
@@ -448,6 +458,64 @@ export class Hud {
       setWidth(bar.fill, hp);
       setLevel(bar.fill, hp);
     });
+  }
+
+  buildMarks(race) {
+    this.marksEl.innerHTML = '';
+    this.marks = [];
+    if (!race.mode) return;
+    const me = race.player.team;
+    for (const [kind, team] of [['flag', 1 - me], ['flag', me], ['base', me], ['base', 1 - me]]) {
+      const el = document.createElement('div');
+      el.className = `mark mark-${kind}${team === me ? ' mine' : ''}`;
+      el.style.setProperty('--team', hex(TEAMS[team].color));
+      el.innerHTML = `<i class="mark-arrow"></i><span class="mark-icon">${MARK_ICONS[kind]}</span><em class="mark-dist"></em>`;
+      this.marksEl.append(el);
+      this.marks.push({ el, kind, team, dist: el.querySelector('.mark-dist'), arrow: el.querySelector('.mark-arrow'), shown: '' });
+    }
+  }
+
+  updateMarks(race, camera) {
+    const ctf = race.mode;
+    const me = race.player;
+    const w = innerWidth;
+    const h = innerHeight;
+    for (const mark of this.marks) {
+      const flag = ctf.flags[mark.team];
+      const base = ctf.bases[mark.team];
+      let x = base.x;
+      let z = base.z;
+      let visible = !race.attract && race.state === 'racing';
+      if (mark.kind === 'flag') {
+        if (flag.state === 'carried' && flag.carrier) ({ x, z } = flag.carrier.pos);
+        else ({ x, z } = flag);
+        if (flag.carrier === me) visible = false;
+      } else if (flag.state === 'home') visible = false;
+      mark.el.classList.toggle('on', visible);
+      if (!visible) continue;
+      mark.el.classList.toggle('alert', mark.kind === 'flag' && flag.state !== 'home');
+      const v = this.projected.set(x, 7, z).project(camera);
+      const behind = v.z > 1;
+      const inside = !behind && Math.abs(v.x) < 0.9 && Math.abs(v.y) < 0.86;
+      const meters = String(Math.round(Math.hypot(x - me.pos.x, z - me.pos.z)));
+      if (mark.shown !== meters) {
+        mark.dist.textContent = `${meters} m`;
+        mark.shown = meters;
+      }
+      mark.el.classList.toggle('edge', !inside);
+      if (inside) {
+        mark.el.style.transform = `translate(${(v.x * 0.5 + 0.5) * w}px, ${(-v.y * 0.5 + 0.5) * h}px)`;
+        continue;
+      }
+      let sx = behind ? -v.x : v.x;
+      let sy = behind ? -v.y : v.y;
+      if (Math.abs(sx) < 0.02 && Math.abs(sy) < 0.02) sy = -1;
+      const angle = Math.atan2(-sy * h, sx * w);
+      const px = w / 2 + Math.cos(angle) * w * 0.45;
+      const py = h * 0.45 + Math.sin(angle) * h * 0.34;
+      mark.el.style.transform = `translate(${px}px, ${py}px)`;
+      mark.arrow.style.transform = `rotate(${angle}rad)`;
+    }
   }
 
   updateLock(race, camera, dt) {
