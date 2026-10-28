@@ -537,9 +537,11 @@ export function coveredBridge(batch, track, idx, height) {
     const bottom = Math.min(ground(end * half), foot) - 1.5;
     const [u0, u1] = span(0, run);
     const [top0, top1] = tops(deck + 0.25, foot + 0.3);
-    put('masonry', rampGeometry(0, 6.4, u0, u1, top0 - 0.3, top1 - 0.3, bottom), 0, 0, 0, 1, 1, 1);
+    const [m0, m1] = span(0, run + 0.08);
+    const [e0, e1] = span(0, run + 0.16);
+    put('masonry', rampGeometry(0, 6.4, m0, m1, top0 - 0.3, top1 - 0.3, bottom), 0, 0, 0, 1, 1, 1);
     put('timber', rampGeometry(0, 5.4, u0, u1, top0, top1, Math.min(top0, top1) - 0.6), 0, 0, 0, 1, 1, 1);
-    for (const side of [-1, 1]) put('masonryDark', rampGeometry(side * 2.95, 0.5, u0, u1, top0 + 0.6, top1 + 0.6, bottom), 0, 0, 0, 1, 1, 1);
+    for (const side of [-1, 1]) put('masonryDark', rampGeometry(side * 3.02, 0.5, e0, e1, top0 + 0.6, top1 + 0.6, bottom), 0, 0, 0, 1, 1, 1);
     const points = [];
     for (let d = run - 1; d < run + TRAIL; d += 2) {
       const [a, b] = span(d, d + 2.2);
