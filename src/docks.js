@@ -250,11 +250,11 @@ export async function createDocks(group, track, fx) {
   moon.lookAt(0, 0, 0);
   sky.add(moon);
   group.add(sky);
-  group.add(new THREE.HemisphereLight(0x6a7cc4, 0x1c1a24, 0.25));
-  const sun = new THREE.DirectionalLight(0xffb37a, 0.35);
+  group.add(new THREE.HemisphereLight(0x6a7cc4, 0x1c1a24, 0.5));
+  const sun = new THREE.DirectionalLight(0xffb37a, 0.55);
   sun.position.set(-60, 45, 80);
   group.add(sun);
-  const moonLight = new THREE.DirectionalLight(0x9db4ff, 0.3);
+  const moonLight = new THREE.DirectionalLight(0x9db4ff, 0.5);
   moonLight.position.set(-40, 80, -60);
   group.add(moonLight);
 
@@ -276,7 +276,7 @@ export async function createDocks(group, track, fx) {
   };
   group.add(quayWalls(track, landAt));
 
-  const water = createWater({ deep: 0x0a0e0b, shallow: 0x1b2214, foam: 0x4a4834, amp: 0.8 });
+  const water = createWater({ deep: 0x10161a, shallow: 0x232d1d, foam: 0x4a4834, amp: 0.8 });
   group.add(water.mesh);
 
   const batch = new Batcher();
