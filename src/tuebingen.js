@@ -403,7 +403,7 @@ export async function createTuebingen(group, track, fx) {
     const i = idxAt(d + PUNT_LENGTH / 2);
     for (const lat of [1.6, 4.4]) {
       const p = track.point(i, TOWN * (track.hw[i] - lat));
-      punt(batch, p.x, -0.15, p.z, track.heading(i) + (rand() - 0.5) * 0.08, rand, { poler: false, cover: rand() < 0.35 });
+      punt(batch, p.x, -0.15, p.z, track.heading(i) + (rand() - 0.5) * 0.08, rand, { cover: rand() < 0.35 });
       shores.push({ x: p.x, z: p.z, rx: 1.4, rz: PUNT_LENGTH / 2, rot: track.heading(i), top: 1.6 });
     }
   }

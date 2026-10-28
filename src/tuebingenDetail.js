@@ -71,20 +71,9 @@ export const TOWN_COLORS = {
   puntSeat: 0xc98d55,
   puntFloor: 0xd9a96e,
   tarp: 0x2f5f8f,
-  skinA: 0xf2c7a5,
-  skinB: 0xd9a07a,
-  skinC: 0x9c6a4a,
   shirtA: 0xe84a5f,
   shirtB: 0x3d8bd9,
-  shirtC: 0xffd23f,
-  shirtD: 0x5cc26a,
-  shirtE: 0xffffff,
-  shirtF: 0xa86be0,
-  trousers: 0x2f3c5a,
-  hair: 0x4a3222,
-  hairBlond: 0xe9c46a,
   straw: 0xf0d68a,
-  hatBand: 0xc8443a,
   poleWood: 0xd1ad72,
   ironDark: 0x2a2f36,
   lampGlass: 0xfff1b0,
@@ -101,8 +90,6 @@ export const TOWN_COLORS = {
 };
 
 const FACADES = ['cream', 'ochre', 'yellow', 'pink', 'salmon', 'mint', 'sky', 'lilac', 'apricot', 'plaster'];
-const SHIRTS = ['shirtA', 'shirtB', 'shirtC', 'shirtD', 'shirtE', 'shirtF'];
-const SKINS = ['skinA', 'skinA', 'skinB', 'skinC'];
 
 const BOX = new THREE.BoxGeometry(1, 1, 1);
 const CYL = new THREE.CylinderGeometry(1, 1, 1, 12);
@@ -684,18 +671,6 @@ export function shed(batch, x, y, z, yaw, rand) {
   put('frameWhite', BOX, -0.8, 1.4, 1.31, 1, 0.9, 0.04);
 }
 
-function poler(put, x, y, z, rand) {
-  const shirt = pick(SHIRTS, rand);
-  const skin = pick(SKINS, rand);
-  for (const s of [-1, 1]) put('trousers', CYL, x + s * 0.17, y + 0.55, z, 0.15, 1.1, 0.15);
-  put(shirt, CYL, x, y + 1.55, z, 0.34, 1, 0.26);
-  put(skin, BALL, x, y + 2.35, z, 0.3, 0.32, 0.3);
-  put(rand() < 0.5 ? 'hair' : 'hairBlond', BALL, x, y + 2.45, z - 0.04, 0.31, 0.24, 0.31);
-  put('straw', CYL, x, y + 2.62, z, 0.5, 0.05, 0.5);
-  put('straw', CYL, x, y + 2.72, z, 0.3, 0.2, 0.3);
-  put('hatBand', CYL, x, y + 2.66, z, 0.31, 0.07, 0.31);
-}
-
 export const PUNT_LENGTH = 13;
 export const PUNT_WIDTH = 2.6;
 const PUNT_RAKE = 1.4;
@@ -710,7 +685,7 @@ const HULL_SIDE = new THREE.ExtrudeGeometry(
 ).translate(0, 0, -0.5).rotateY(Math.PI / 2);
 const PENNANT = new THREE.ExtrudeGeometry(new THREE.Shape([new THREE.Vector2(0, 0), new THREE.Vector2(0, 1), new THREE.Vector2(1, 0.5)]), { depth: 1, bevelEnabled: false }).translate(0, 0, -0.5).rotateY(Math.PI / 2);
 
-export function punt(batch, x, y, z, yaw, rand, { poler: standing = true, cover = false } = {}) {
+export function punt(batch, x, y, z, yaw, rand, { cover = false } = {}) {
   const put = frame(batch, x, y, z, yaw, 0, 0, 1);
   const L = PUNT_LENGTH;
   const W = PUNT_WIDTH;
@@ -754,20 +729,6 @@ export function punt(batch, x, y, z, yaw, rand, { poler: standing = true, cover 
   }
   put('ironDark', CYL, 0, PUNT_RIM + 0.85, L / 2 - 0.45, 0.04, 1.6, 0.04);
   put(stripe === 'frameWhite' ? 'shutterRed' : stripe, PENNANT, 0, PUNT_RIM + 1.15, L / 2 - 0.45, 0.02, 0.45, 0.8);
-  if (standing) puntPoler(batch, rand, put);
-}
-
-export function puntPoler(batch, rand, put = frame(batch, 0, 0, 0, 0, 0, 0, 1)) {
-  poler(put, 0, PUNT_RIM + 0.04, -PUNT_LENGTH / 2 + 0.8, rand);
-  put('poleWood', CYL, 0.5, 1.6, -PUNT_LENGTH / 2 - 0.6, 0.07, 8, 0.07, 0.42, 0, -0.08);
-}
-
-export function swimmer(batch, rand) {
-  const put = frame(batch, 0, 0, 0, 0, 0, 0, 1);
-  put(pick(SKINS, rand), BALL, 0, 0.15, 0, 0.32, 0.34, 0.32);
-  put('straw', CYL, 0.5, 0.05, 0.3, 0.5, 0.05, 0.5, 0.2, 0, 0.1);
-  put('hatBand', CYL, 0.5, 0.1, 0.3, 0.31, 0.07, 0.31, 0.2, 0, 0.1);
-  for (const s of [-1, 1]) put(pick(SKINS, rand), BOX, s * 0.45, 0.55, 0, 0.12, 0.6, 0.12, 0, 0, -s * 0.4);
 }
 
 function flowerBox(put, x0, x1, y, z, face, rand) {
