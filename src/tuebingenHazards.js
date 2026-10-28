@@ -4,42 +4,51 @@ import { waveHeight } from './water.js';
 import { TOWN_COLORS, PUNT_LENGTH, PUNT_WIDTH, punt } from './tuebingenDetail.js';
 
 const SPEED = 3.2;
-const TOP = 2.8;
 const REACH = 2.2;
-const SHOVE = 0.22;
-const SPRING = 0.5;
-const DAMP = 1.1;
-const DRIFT = 9;
+const SHOVE = 0.6;
+const SPRING = 0.45;
+const DAMP = 1.2;
+const DRIFT = 14;
+const HALF_W = PUNT_WIDTH / 2 + 0.1;
+const HALF_L = PUNT_LENGTH / 2;
 const COOLDOWN = 0.6;
 
 export class Punts {
-  constructor({ group, lanes, rand, shores }) {
+  constructor({ group, lanes, parked = [], rand }) {
     this.group = new THREE.Group();
     group.add(this.group);
     this.clock = null;
     this.frozen = false;
     this.obstacles = [];
-    this.punts = lanes.map((lane, k) => {
+    const boat = () => {
       const mesh = new THREE.Group();
       const hull = new Batcher();
       punt(hull, 0, 0, 0, 0, rand);
       hull.build(mesh, 0.05, TOWN_COLORS);
       this.group.add(mesh);
-      const shore = { x: 0, z: -9999, rx: PUNT_WIDTH / 2 + 0.1, rz: PUNT_LENGTH / 2, rot: 0, top: TOP };
-      shores.push(shore);
+      return { mesh, ox: 0, oz: 0, vx: 0, vz: 0, spin: 0, turn: 0, roll: 0, x: 0, z: 0, yaw: 0, hits: new Map() };
+    };
+    const moving = lanes.map((lane, k) => {
       const curve = new THREE.CatmullRomCurve3(lane.points.map(([x, z]) => new THREE.Vector3(x, 0, z)), true, 'centripetal');
-      return { curve, length: curve.getLength(), phase: lane.phase ?? k / lanes.length, mesh, shore, ox: 0, oz: 0, vx: 0, vz: 0, spin: 0, turn: 0, roll: 0, x: 0, z: 0, yaw: 0, hits: new Map() };
+      return { ...boat(), curve, length: curve.getLength(), phase: lane.phase ?? k / lanes.length };
     });
+    const moored = parked.map((spot, k) => ({ ...boat(), spot, phase: k * 0.37 }));
+    this.punts = [...moving, ...moored];
   }
 
   pose(p, time) {
+    if (p.spot) {
+      p.x = p.spot.x + p.ox;
+      p.z = p.spot.z + p.oz;
+      p.yaw = p.spot.yaw + p.spin;
+      return;
+    }
     const u = (((time * SPEED) / p.length + p.phase) % 1 + 1) % 1;
     const at = p.curve.getPointAt(u);
     const dir = p.curve.getTangentAt(u);
     p.x = at.x + p.ox;
     p.z = at.z + p.oz;
     p.yaw = Math.atan2(dir.x, dir.z) + p.spin;
-    Object.assign(p.shore, { x: p.x, z: p.z, rot: p.yaw });
   }
 
   reset() {
@@ -70,7 +79,7 @@ export class Punts {
         const dz = b.pos.z - p.z;
         const lx = dx * c - dz * s;
         const lz = dx * s + dz * c;
-        if (Math.hypot(lx / (p.shore.rx + REACH), lz / (p.shore.rz + REACH)) > 1) continue;
+        if (Math.hypot(lx / (HALF_W + REACH), lz / (HALF_L + REACH)) > 1) continue;
         const speed = Math.abs(b.speed);
         if (speed < 4) continue;
         p.hits.set(b, race.time + COOLDOWN);

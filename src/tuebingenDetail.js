@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { frame } from './alpine.js';
 import { GOTHIC, ROUND } from './veniceDetail.js';
-import { mulberry32, toon } from './toon.js';
+import { mulberry32, toon, INK } from './toon.js';
 
 export const TOWN_COLORS = {
   plaster: 0xf7f3ea,
@@ -473,8 +473,8 @@ function coreGeometry(seed, [mid, dark]) {
 
 function shellGeometry(seed) {
   const rand = mulberry32(seed);
-  const SEG = 32;
-  const RINGS = 10;
+  const SEG = 24;
+  const RINGS = 8;
   const WRAP = 3;
   const phase = rand() * 6;
   const positions = [];
@@ -561,6 +561,49 @@ const CORES = [
 const SHELLS = [shellGeometry(5), shellGeometry(9)];
 const TIER_TINT = [1.05, 0.93, 0.82];
 
+function strandOutline(map, thickness) {
+  const material = new THREE.ShaderMaterial({
+    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uThickness: { value: thickness }, uColor: { value: new THREE.Color(INK) }, map: { value: null } }]),
+    vertexShader: /* glsl */ `
+      uniform float uThickness;
+      varying vec2 vUv;
+      #include <common>
+      #include <fog_pars_vertex>
+      void main() {
+        vUv = uv;
+        vec3 p = position;
+        vec3 n = normal;
+        #ifdef USE_INSTANCING
+          p = (instanceMatrix * vec4(p, 1.0)).xyz;
+          mat3 m = mat3(instanceMatrix);
+          mat3 cofactor = mat3(cross(m[1], m[2]), cross(m[2], m[0]), cross(m[0], m[1]));
+          n = normalize(cofactor * n) * sign(dot(m[0], cofactor[0]));
+        #endif
+        vec4 mvPosition = modelViewMatrix * vec4(p + n * uThickness, 1.0);
+        gl_Position = projectionMatrix * mvPosition;
+        #include <fog_vertex>
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform vec3 uColor;
+      uniform sampler2D map;
+      varying vec2 vUv;
+      #include <common>
+      #include <fog_pars_fragment>
+      void main() {
+        if (texture2D(map, vUv).a < 0.5) discard;
+        gl_FragColor = vec4(uColor, 1.0);
+        #include <colorspace_fragment>
+        #include <fog_fragment>
+      }
+    `,
+    side: THREE.BackSide,
+    fog: true,
+  });
+  material.uniforms.map.value = map;
+  return material;
+}
+
 export class WillowGrove {
   constructor() {
     this.items = [];
@@ -571,7 +614,9 @@ export class WillowGrove {
   }
 
   build(parent, size = 220) {
-    const material = toon(0xffffff, { map: strandTexture(), alphaTest: 0.5, alphaToCoverage: true, side: THREE.DoubleSide });
+    const map = strandTexture();
+    const material = toon(0xffffff, { map, alphaTest: 0.5, alphaToCoverage: true, side: THREE.DoubleSide });
+    const ink = strandOutline(map, 0.09);
     const cells = new Map();
     for (const item of this.items) {
       const id = `${Math.floor(item.x / size)},${Math.floor(item.z / size)}`;
@@ -594,7 +639,11 @@ export class WillowGrove {
           radius = Math.max(radius, Math.hypot(item.x - cx, item.z - cz) + 12);
         });
         mesh.computeBoundingSphere();
-        group.add(mesh);
+        const line = new THREE.InstancedMesh(geometry, ink, list.length);
+        line.instanceMatrix = mesh.instanceMatrix;
+        line.boundingSphere = mesh.boundingSphere;
+        line.userData.outline = true;
+        group.add(mesh, line);
       });
       parent.add(group);
       chunks.push({ group, x: cx, z: cz, radius });
@@ -603,7 +652,7 @@ export class WillowGrove {
   }
 }
 
-export function willow(batch, grove, x, y, z, rand, s = 1) {
+export function willow(batch, grove, x, y, z, rand, s = 1, { lite = false } = {}) {
   const yaw = rand() * 6.3;
   const put = frame(batch, x, y, z, yaw, 0, 0, s);
   const shell = frame({ add: (variant, geometry, matrix) => grove.add(matrix, variant.v, variant.tint) }, x, y, z, yaw, 0, 0, s);
@@ -626,9 +675,9 @@ export function willow(batch, grove, x, y, z, rand, s = 1) {
     shell({ v: Math.floor(rand() * SHELLS.length), tint }, null, lx, topY - height, lz, radius, height, radius, ...tilt);
   };
   const tiers = [
-    { count: 3, d: [0, 0.25], top: [0.92, 1], height: 0.44, radius: [0.4, 0.48] },
-    { count: 5 + Math.floor(rand() * 2), d: [0.4, 0.55], top: [0.68, 0.8], height: 0.64, radius: [0.36, 0.44] },
-    { count: 6 + Math.floor(rand() * 3), d: [0.6, 0.74], top: [0.4, 0.52], height: 0.5, radius: [0.32, 0.4] },
+    { count: lite ? 2 : 3, d: [0, 0.25], top: [0.92, 1], height: 0.44, radius: [0.4, 0.48] },
+    { count: (lite ? 4 : 5) + Math.floor(rand() * 2), d: [0.4, 0.55], top: [0.68, 0.8], height: 0.64, radius: [0.36, 0.44] },
+    { count: (lite ? 5 : 6) + Math.floor(rand() * 3), d: [0.6, 0.74], top: [0.4, 0.52], height: 0.5, radius: [0.32, 0.4] },
   ];
   tiers.forEach((tier, level) => {
     const spin = rand() * Math.PI * 2;
@@ -773,10 +822,11 @@ export function shed(batch, x, y, z, yaw, rand) {
 export const PUNT_LENGTH = 12;
 export const PUNT_WIDTH = 1.9;
 const PUNT_SKIN = 0.06;
+const PUNT_FLOOR = 0.24;
 const PUNT_ROWS = 4;
 const PUNT_SECTIONS = 36;
 const puntHalf = (u) => (PUNT_WIDTH / 2) * (1 - 0.4 * Math.abs(u) ** 2.4);
-const puntRim = (u) => 0.55 + 0.32 * Math.abs(u) ** 3.2;
+const puntRim = (u) => 0.74 + 0.3 * Math.abs(u) ** 3.2;
 const puntKeel = (u) => -0.25 + 0.55 * smoothstep(0.58, 1, Math.abs(u)) ** 1.3;
 const PUNT_HULLS = [0x341a0c, 0x3d1f0f, 0x2c160a, 0x452512];
 const PUNT_TRIMS = [null, null, 0x2f5d3a, 0x7a2a22, 0x2c3e5c, 0xd8c9a3];
@@ -826,7 +876,8 @@ function puntGeometry(seed) {
       for (let r = 0; r <= PUNT_ROWS; r++) {
         const s = r / PUNT_ROWS;
         rows.push([side * (wb + (w - wb) * s), b + (g - b) * s, z]);
-        rowsIn.push([side * (wb + (w - wb) * s - PUNT_SKIN), b + PUNT_SKIN + (g - b - PUNT_SKIN) * s, z]);
+        const floor = Math.max(b + PUNT_SKIN, PUNT_FLOOR);
+        rowsIn.push([side * (wb + (w - wb) * s - PUNT_SKIN), floor + (g - floor) * s, z]);
       }
       outer.push(rows);
       inner.push(rowsIn);
@@ -875,7 +926,7 @@ const PUNT_GEOMETRIES = Array.from({ length: 6 }, (_, k) => puntGeometry(k + 1))
 export function punt(batch, x, y, z, yaw, rand) {
   const put = frame(batch, x, y, z, yaw, 0, 0, 1);
   put('puntHull', pick(PUNT_GEOMETRIES, rand), 0, 0, 0, 1, 1, 1);
-  const floor = puntKeel(0) + PUNT_SKIN;
+  const floor = PUNT_FLOOR;
   const seatY = floor + 0.3;
   const span = PUNT_LENGTH * 0.62;
   for (const s of [-1, 1]) {
@@ -889,7 +940,7 @@ export function punt(batch, x, y, z, yaw, rand) {
     const zz = (u * PUNT_LENGTH) / 2;
     if (Math.abs(u) < 0.55 && k % 2) continue;
     const w = puntHalf(u) * 2 - PUNT_SKIN * 2 - 0.1;
-    put('puntDark', BOX, 0, puntKeel(u) + PUNT_SKIN + 0.04, zz, w * 0.82, 0.07, 0.08);
+    put('puntDark', BOX, 0, Math.max(puntKeel(u) + PUNT_SKIN, PUNT_FLOOR) + 0.04, zz, w * 0.82, 0.07, 0.08);
   }
   for (const end of [-1, 1]) {
     const u = end * 0.9;

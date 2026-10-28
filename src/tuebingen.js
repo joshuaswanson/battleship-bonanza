@@ -5,8 +5,8 @@ import { mulberry32 } from './toon.js';
 import { Batcher, cullChunks, slicer, COLORS, mat, createSky, createCloud, createArch, SUN_DIR, LOW_SPHERE } from './world.js';
 import { courseSurface, buildHeightfield, groundHit, quayWalls, smooth, noise } from './terrain.js';
 import {
-  TOWN_COLORS, PUNT_LENGTH, PUNT_WIDTH, pick, gabledHouse, hoelderlinTower, burse, collegiateChurch, castle, planeTree, willow, WillowGrove, leafyTree, fruitTree,
-  chapel, aula, townHall, bench, lamp, shed, punt, archBridge, boathouse, cafe, canoeRack, hayBales, reeds, tents, playground, station, railway, train, barn, institute,
+  TOWN_COLORS, PUNT_LENGTH, pick, gabledHouse, hoelderlinTower, burse, collegiateChurch, castle, planeTree, willow, WillowGrove, leafyTree, fruitTree,
+  chapel, aula, townHall, bench, lamp, shed, archBridge, boathouse, cafe, canoeRack, hayBales, reeds, tents, playground, station, railway, train, barn, institute,
 } from './tuebingenDetail.js';
 import { Punts } from './tuebingenHazards.js';
 
@@ -400,12 +400,12 @@ export async function createTuebingen(group, track, fx) {
     willow(batch, grove, p.x, BANK - 0.2, p.z, rand, 1.25);
     taken.push({ x: p.x, z: p.z, r: 6 });
   }
+  const moored = [];
   for (let d = FRONT_WALL_END + 2; d < LANDING_END - PUNT_LENGTH; d += PUNT_LENGTH + 0.6) {
     const i = idxAt(d + PUNT_LENGTH / 2);
     for (const lat of [1.3, 3.5]) {
       const p = track.point(i, TOWN * (track.hw[i] - lat));
-      punt(batch, p.x, 0.04, p.z, track.heading(i) + (rand() - 0.5) * 0.06, rand);
-      shores.push({ x: p.x, z: p.z, rx: PUNT_WIDTH / 2 + 0.1, rz: PUNT_LENGTH / 2, rot: track.heading(i), top: 1.6 });
+      moored.push({ x: p.x, z: p.z, yaw: track.heading(i) + (rand() - 0.5) * 0.06 });
     }
   }
 
@@ -742,6 +742,31 @@ export async function createTuebingen(group, track, fx) {
     }
   }
 
+  await tick();
+  const greenStep = Math.max(1, Math.round(3 / track.spacing));
+  for (const seg of track.segments) {
+    for (const side of [-1, 1]) {
+      let nextWillow = 0;
+      for (let i = seg.start; i <= seg.end; i += greenStep) {
+        const p = track.point(i, side * (track.hw[i] + 1.2 + rand() * 1.4));
+        const n = probe(p.x, p.z);
+        if (!wildBank(n) || n.edge < 0.6 || n.edge > 4.5) continue;
+        const y = height(p.x, p.z);
+        if (rand() < 0.6) batch.add(pick(['hedge', 'leafC', 'leafA', 'leafB', 'leafD'], rand), LOW_SPHERE, mat(p.x, y + 0.25, p.z, 1.4 + rand() * 1.1, 0.9 + rand() * 0.6, 1.4 + rand() * 1.1));
+        else reeds(batch, p.x, y, p.z, rand);
+        const along = (i - seg.start) * track.spacing;
+        if (along < nextWillow) continue;
+        const q = track.point(i, side * (track.hw[i] + 7.5 + rand() * 3));
+        const m = probe(q.x, q.z);
+        if (!wildBank(m) || m.edge < 6 || !free(q.x, q.z, 3.5)) continue;
+        willow(batch, grove, q.x, height(q.x, q.z) - 0.2, q.z, rand, 0.8 + rand() * 0.35, { lite: true });
+        taken.push({ x: q.x, z: q.z, r: 5 });
+        nextWillow = along + 14 + rand() * 12;
+      }
+      await tick();
+    }
+  }
+
   const scenery = new THREE.Group();
   const chunks = await batch.buildAsync(scenery, 0.1, COLORS_ALL, undefined, tick);
   const glass = await windows.buildAsync(scenery, 0, COLORS_ALL, undefined, tick);
@@ -765,7 +790,7 @@ export async function createTuebingen(group, track, fx) {
   const hazards = new Punts({
     group,
     rand: mulberry32(9071),
-    shores,
+    parked: moored,
     lanes: [
       { points: laneLoop(20, 150, -0.45, 0.3), phase: 0 },
       { points: laneLoop(30, 165, 0.45, -0.25), phase: 0.5 },
