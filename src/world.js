@@ -29,6 +29,9 @@ export const COLORS = {
   rockland: 0xffffff,
   caveRock: 0x262b33,
   stalactite: 0x3a414c,
+  vineStem: 0x3b6e2a,
+  vineLeaf: 0x4cb043,
+  vineLeafDark: 0x2f8a37,
   stripeRed: 0xff4141,
   stripeWhite: 0xf6f8ff,
   roof: 0x0e2a47,
@@ -36,17 +39,36 @@ export const COLORS = {
 
 const IDENTITY = new THREE.Matrix4();
 
+const ROCK_NOISE = /* glsl */ `
+  float rockHash(vec3 p) {
+    return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
+  }
+  float rockNoise(vec3 p) {
+    vec3 i = floor(p);
+    vec3 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    float a = mix(mix(rockHash(i), rockHash(i + vec3(1, 0, 0)), f.x), mix(rockHash(i + vec3(0, 1, 0)), rockHash(i + vec3(1, 1, 0)), f.x), f.y);
+    float b = mix(mix(rockHash(i + vec3(0, 0, 1)), rockHash(i + vec3(1, 0, 1)), f.x), mix(rockHash(i + vec3(0, 1, 1)), rockHash(i + vec3(1, 1, 1)), f.x), f.y);
+    return mix(a, b, f.z);
+  }
+`;
+
 function mossyRock() {
   const material = toon(0xffffff, { vertexColors: true });
   material.onBeforeCompile = (shader) => {
     shader.vertexShader =
-      'attribute float aGreen;\nattribute vec3 aMoss;\nvarying float vGreen;\nvarying vec3 vMoss;\n' +
-      shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvGreen = aGreen;\nvMoss = aMoss;');
+      'attribute float aGreen;\nattribute vec3 aMoss;\nvarying float vGreen;\nvarying vec3 vMoss;\nvarying vec3 vRock;\n' +
+      shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvGreen = aGreen;\nvMoss = aMoss;\nvRock = (modelMatrix * vec4(transformed, 1.0)).xyz;');
     shader.fragmentShader =
-      'varying float vGreen;\nvarying vec3 vMoss;\n' +
+      'varying float vGreen;\nvarying vec3 vMoss;\nvarying vec3 vRock;\n' + ROCK_NOISE +
       shader.fragmentShader.replace(
         '#include <color_fragment>',
         `#include <color_fragment>
+        float mottle = rockNoise(vRock * 0.11);
+        float fleck = rockNoise(vRock * 0.42 + 7.0);
+        diffuseColor.rgb *= 0.88 + 0.16 * mottle + 0.07 * fleck;
+        float seam = abs(fract((vRock.y + mottle * 3.5) * 0.16) - 0.5);
+        diffuseColor.rgb *= 1.0 - (1.0 - smoothstep(0.0, 0.035, seam)) * 0.2;
         float edge = max(fwidth(vGreen), 1e-4);
         float covered = smoothstep(0.5 - edge, 0.5 + edge, vGreen);
         diffuseColor.rgb = mix(diffuseColor.rgb, vMoss, covered);`,
@@ -275,7 +297,7 @@ export class Batcher {
   }
 }
 
-const NO_OUTLINE = new Set(['foam', 'willowCore', 'puntHull', 'caveRock']);
+const NO_OUTLINE = new Set(['foam', 'willowCore', 'puntHull', 'caveRock', 'vineStem']);
 let whiteToon = null;
 const WHITE_TOON = () => (whiteToon ??= toon(0xffffff));
 let vertexToon = null;
@@ -792,11 +814,12 @@ function addIsland(batch, x, z, r, rand, { clearCenter = 0 } = {}) {
   return sand;
 }
 
-const PILLAR_DARK = new THREE.Color(0x737880);
-const PILLAR_STREAK = new THREE.Color(0xa7aaab);
-const PILLAR_LIGHT = new THREE.Color(0xd8d6cc);
-const PILLAR_WET = new THREE.Color(0x46514d);
-const PILLAR_CRACK = new THREE.Color(0x4c5158);
+const ROCK_DARK = new THREE.Color(0x7b7873);
+const ROCK_MID = new THREE.Color(0xaba59b);
+const ROCK_LIGHT = new THREE.Color(0xdcd5c6);
+const ROCK_WARM = new THREE.Color(0xc8b89c);
+const ROCK_WET = new THREE.Color(0x47504b);
+const ROCK_CRACK = new THREE.Color(0x56534e);
 
 function paintPillar(g, top) {
   g.computeVertexNormals();
@@ -810,20 +833,22 @@ function paintPillar(g, top) {
     const x = pos.getX(i);
     const y = pos.getY(i);
     const z = pos.getZ(i);
-    const streak = Math.sin(Math.atan2(z, x) * 9 + y * 0.05) * 0.5 + Math.sin(x * 0.4 - z * 0.3 + y * 0.02) * 0.5;
-    color.copy(PILLAR_STREAK).lerp(streak > 0 ? PILLAR_LIGHT : PILLAR_DARK, Math.abs(streak) * 0.8);
-    color.multiplyScalar(0.92 + 0.12 * Math.sin(y * 0.35 + streak));
-    const band = (y * 0.17 + 0.25 * Math.sin(Math.atan2(z, x) * 3 + x * 0.05) + 10) % 1;
-    if (band < 0.07) color.lerp(PILLAR_CRACK, 0.75);
-    const crack = Math.abs(Math.sin(Math.atan2(z, x) * 7 + Math.sin(y * 0.09 + x * 0.02) * 0.7));
-    if (crack < 0.07) color.lerp(PILLAR_CRACK, 0.85);
-    if (y < 1.6) color.lerp(PILLAR_WET, 1 - THREE.MathUtils.smoothstep(y, -1, 1.6));
+    const warp = Math.sin(x * 0.045 + z * 0.03) * 2.2 + Math.sin(z * 0.06 - x * 0.02) * 1.6;
+    const layer = Math.sin((y + warp) * 0.42);
+    const grain = Math.sin(x * 0.23 + y * 0.11) * Math.sin(z * 0.19 - y * 0.07);
+    color.copy(ROCK_MID);
+    if (layer > 0.35) color.lerp(ROCK_LIGHT, (layer - 0.35) * 1.2);
+    else if (layer < -0.45) color.lerp(ROCK_DARK, (-layer - 0.45) * 1.4);
+    color.lerp(ROCK_WARM, Math.max(0, Math.sin((y + warp) * 0.11 + 1.3)) * 0.35);
+    color.multiplyScalar(0.95 + grain * 0.07);
+    if (Math.abs(Math.sin((y + warp) * 0.21)) < 0.05) color.lerp(ROCK_CRACK, 0.6);
+    if (y < 1.6) color.lerp(ROCK_WET, 1 - THREE.MathUtils.smoothstep(y, -1, 1.6));
     colors.push(color.r, color.g, color.b);
     const ny = nor.getY(i);
     const drape = 0.5 + 0.5 * Math.sin(Math.atan2(z, x) * 5 + x);
     const hang = THREE.MathUtils.smoothstep(y, top - 5 - 16 * drape * drape, top - 0.5) * drape * 0.85;
     greens.push(Math.max(THREE.MathUtils.smoothstep(ny, 0.55, 0.75) * THREE.MathUtils.smoothstep(y, 2.5, 4), hang));
-    const tone = streak > 0.2 ? GRASS_EDGE : GRASS_TONE;
+    const tone = grain > 0.1 ? GRASS_EDGE : GRASS_TONE;
     moss.push(tone.r, tone.g, tone.b);
   }
   g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
@@ -1377,6 +1402,7 @@ function twoSided(positions) {
 }
 
 function addCaveArch(batch, site) {
+  const rand = mulberry32(4242);
   const pts = site.cave.filter((p) => p.roofed && p.z > mainlandEdge(p.x) + 1);
   const frame = (k) => {
     const a = pts[Math.max(0, k - 1)];
@@ -1437,6 +1463,12 @@ function addCaveArch(batch, site) {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(twoSided(panel), 3));
     batch.add('rockland', paintPillar(g, 1e9));
+    if (!mouth) continue;
+    const { fx, fz } = frame(k);
+    for (let j = 2; j < ARCH_SIDES - 1; j++) {
+      const [x, y, z] = inner[j];
+      for (let n = 0; n < 2; n++) hangVine(batch, x - fx * (1 + n * 0.8) + (rand() - 0.5), y + 0.5, z - fz * (1 + n * 0.8), -fx, -fz, 2.5 + rand() * 7, rand);
+    }
   }
 }
 
@@ -1495,6 +1527,39 @@ function courseReach(track, site) {
   return reach;
 }
 
+const VINE_LEAF = new THREE.SphereGeometry(1, 8, 4).scale(0.45, 0.07, 1).translate(0, 0, 0.9);
+const leafTurn = new THREE.Euler(0, 0, 0, 'YXZ');
+const leafQuat = new THREE.Quaternion();
+
+function hangVine(batch, x, y, z, ox, oz, length, rand) {
+  const pts = [];
+  const phase = rand() * 6;
+  const swing = 0.5 + rand() * 1.1;
+  const lean = 0.25 + rand() * 0.4;
+  for (let i = 0; i <= 6; i++) {
+    const t = i / 6;
+    const side = Math.sin(t * 3.4 + phase) * swing * t;
+    const out = lean + 0.5 * t * t;
+    pts.push(new THREE.Vector3(x + ox * out - oz * side, y - length * t, z + oz * out + ox * side));
+  }
+  const curve = new THREE.CatmullRomCurve3(pts);
+  batch.add('vineStem', new THREE.TubeGeometry(curve, 16, 0.08 + rand() * 0.05, 4));
+  const count = Math.max(3, Math.floor(length / 0.75));
+  const face = Math.atan2(ox, oz);
+  for (let i = 1; i <= count; i++) {
+    const t = i / (count + 1);
+    const p = curve.getPointAt(t);
+    const size = (0.5 + rand() * 0.35) * (1 - 0.3 * t);
+    leafTurn.set(0.5 + rand() * 0.7, face + (i % 2 ? 1 : -1) * (0.6 + rand() * 0.9), 0);
+    leafQuat.setFromEuler(leafTurn);
+    batch.add(rand() < 0.55 ? 'vineLeaf' : 'vineLeafDark', VINE_LEAF, new THREE.Matrix4().compose(p, leafQuat, new THREE.Vector3(size, size, size)));
+  }
+  if (rand() < 0.6) {
+    const tip = pts[pts.length - 1];
+    batch.add('vineLeaf', LOW_SPHERE, mat(tip.x, tip.y + 0.2, tip.z, 0.55, 0.45, 0.55));
+  }
+}
+
 function caveFrames(site, roofed) {
   const pts = site.cave.filter((p) => p.roofed === roofed && p.z > mainlandEdge(p.x) + 1);
   return pts.map((p, k) => {
@@ -1522,7 +1587,7 @@ function addCaveInterior(batch, site, scene, rand) {
       const side = rand() < 0.5 ? -1 : 1;
       const lateral = side * (f.half - 0.3);
       const y = 0.4 + rand() * 3;
-      const color = rand() < 0.6 ? 0x6ff3ff : 0xc58bff;
+      const color = rand() < 0.6 ? 0x6ff3ff : 0xa8fbff;
       for (let n = 0; n < 3 + Math.floor(rand() * 3); n++) {
         crystals.push({ x: f.x + f.nx * lateral + (rand() - 0.5) * 2, y: y + rand() * 2, z: f.z + f.nz * lateral + (rand() - 0.5) * 2, s: 0.5 + rand() * 0.9, tilt: (rand() - 0.5) * 1.2, spin: rand() * 6, lean: -side * 0.5, color });
       }
@@ -1584,6 +1649,12 @@ function addGorge(batch, site, rand) {
         const y = Math.min(clifftop(vx, vz), CARVE_FLOOR + 0.82 * 90);
         const sz = 2.2 + rand() * 1.6;
         batch.add(rand() < 0.5 ? 'moss' : 'jungle', LOW_SPHERE, mat(vx, y - sz * 0.2, vz, sz * 1.5, sz, sz * 1.5));
+        for (let n = 0; n < 2 + Math.floor(rand() * 3); n++) {
+          const along = (rand() - 0.5) * 5;
+          const ax = vx + f.nz * along - f.nx * side * 0.4;
+          const az = vz - f.nx * along - f.nz * side * 0.4;
+          hangVine(batch, ax, y - 1, az, -f.nx * side, -f.nz * side, 10 + rand() * 18, rand);
+        }
       }
     }
   });
@@ -1620,7 +1691,13 @@ function addCliffDressing(batch, site, rand) {
       const y = faceRise(x, ledge);
       batch.add(rand() < 0.5 ? 'moss' : 'mossDark', LOW_SPHERE, mat(x, y + sz * 0.25, edge + ledge + faceSway(x, y), sz * 1.4, sz * 0.7, sz));
     }
-    if (rand() < 0.55) {
+    if (rand() < 0.65) {
+      for (let n = 0; n < 2 + Math.floor(rand() * 3); n++) {
+        const vx = x + (rand() - 0.5) * 5;
+        hangVine(batch, vx, lip - 0.2, cliffFace(vx, lip) - 0.3, 0, -1, 5 + rand() * 13, rand);
+      }
+    }
+    if (rand() < 0.3) {
       const key = ['moss', 'mossDark', 'jungle'][Math.floor(rand() * 3)];
       let size = 1.6 + rand() * 1.2;
       let y = lip + size * 0.3;
