@@ -1465,9 +1465,15 @@ function addCaveArch(batch, site) {
     batch.add('rockland', paintPillar(g, 1e9));
     if (!mouth) continue;
     const { fx, fz } = frame(k);
-    for (let j = 2; j < ARCH_SIDES - 1; j++) {
+    for (let j = 1; j < ARCH_SIDES; j++) {
       const [x, y, z] = inner[j];
-      for (let n = 0; n < 2; n++) hangVine(batch, x - fx * (1 + n * 0.8) + (rand() - 0.5), y + 0.5, z - fz * (1 + n * 0.8), -fx, -fz, 2.5 + rand() * 7, rand);
+      const size = 1.3 + rand() * 0.7;
+      batch.add(rand() < 0.5 ? 'moss' : 'jungle', LOW_SPHERE, mat(x - fx * 0.3, y + size * 0.15, z - fz * 0.3, size * 1.3, size * 0.75, size));
+      if (j < 2 || j > ARCH_SIDES - 2) continue;
+      for (let n = 0; n < 2; n++) {
+        const along = (rand() - 0.5) * 1.6;
+        hangVine(batch, x - fx * 0.4 + fz * along, y - size * 0.4, z - fz * 0.4 - fx * along, -fx, -fz, 2.5 + rand() * 7, rand);
+      }
     }
   }
 }
@@ -1539,7 +1545,7 @@ function hangVine(batch, x, y, z, ox, oz, length, rand) {
   for (let i = 0; i <= 6; i++) {
     const t = i / 6;
     const side = Math.sin(t * 3.4 + phase) * swing * t;
-    const out = lean + 0.5 * t * t;
+    const out = lean * Math.min(1, t * 3) + 0.5 * t * t;
     pts.push(new THREE.Vector3(x + ox * out - oz * side, y - length * t, z + oz * out + ox * side));
   }
   const curve = new THREE.CatmullRomCurve3(pts);
