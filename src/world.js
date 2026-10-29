@@ -3,6 +3,7 @@ import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferG
 import { createWater, waveHeight } from './water.js';
 import { ellipseHit, courseBuoys } from './terrain.js';
 import { toon, outlineMaterial, mulberry32 } from './toon.js';
+import { createWaterfalls } from './waterfall.js';
 
 const SKY_TOP = 0x3fa9f5;
 const SKY_HORIZON = 0xc4f1ff;
@@ -23,7 +24,6 @@ export const COLORS = {
   mossDark: 0x3a8f3e,
   jungle: 0x2f8f3a,
   jungleLight: 0x63c24a,
-  falls: 0xffffff,
   rockland: 0xffffff,
   stripeRed: 0xff4141,
   stripeWhite: 0xf6f8ff,
@@ -271,7 +271,7 @@ export class Batcher {
   }
 }
 
-const NO_OUTLINE = new Set(['foam', 'willowCore', 'puntHull', 'falls']);
+const NO_OUTLINE = new Set(['foam', 'willowCore', 'puntHull']);
 let whiteToon = null;
 const WHITE_TOON = () => (whiteToon ??= toon(0xffffff));
 let vertexToon = null;
@@ -941,53 +941,14 @@ function addPillar(batch, x, z, rand, { radius, height, plants = 1 }) {
   return { blob: { x, z, rx: pillar.footprint, rz: pillar.footprint, rot: 0 }, top, topRadius: pillar.topRadius, footprint: pillar.footprint };
 }
 
-const FALL_WHITE = new THREE.Color(0xffffff);
-const FALL_BLUE = new THREE.Color(0xa9dcff);
-const FALL_DEEP = new THREE.Color(0x6fb8f0);
-
-function addWaterfall(batch, pillar, x, z, toward, rand) {
+function waterfallSpec(batch, pillar, x, z, toward, rand) {
   const dx = Math.cos(toward);
   const dz = Math.sin(toward);
-  const tx = -dz;
-  const tz = dx;
   const top = new THREE.Vector3(pillar.top.x + dx * pillar.topRadius * 0.92, pillar.top.y - 0.4, pillar.top.z + dz * pillar.topRadius * 0.92);
   const foot = new THREE.Vector3(x + dx * pillar.footprint * 1.12, 0.2, z + dz * pillar.footprint * 1.12);
-  const rows = 14;
-  const cols = 7;
   const width = 3.2 + rand() * 1.6;
-  const tones = Array.from({ length: cols }, () => rand());
-  const positions = [];
-  const colors = [];
-  const point = (t, u) => {
-    const bow = Math.sin(Math.PI * t) * 2.2 + t * 1.5;
-    const w = width * (0.8 + 0.6 * t);
-    return [top.x + (foot.x - top.x) * t + dx * bow + tx * u * w, top.y + (foot.y - top.y) * t, top.z + (foot.z - top.z) * t + dz * bow + tz * u * w];
-  };
-  const c = new THREE.Color();
-  for (let r = 0; r < rows; r++) {
-    for (let k = 0; k < cols; k++) {
-      const t0 = r / rows;
-      const t1 = (r + 1) / rows;
-      const u0 = k / cols - 0.5;
-      const u1 = (k + 1) / cols - 0.5;
-      const quad = [point(t0, u0), point(t1, u0), point(t1, u1), point(t0, u1)];
-      c.copy(FALL_DEEP).lerp(FALL_BLUE, Math.min(1, tones[k] * 1.4)).lerp(FALL_WHITE, (tones[k] > 0.55 ? 0.7 : 0.2) + t0 * 0.3);
-      for (const v of [quad[0], quad[2], quad[1], quad[0], quad[3], quad[2]]) {
-        positions.push(...v);
-        colors.push(c.r, c.g, c.b);
-      }
-    }
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-  g.computeVertexNormals();
-  batch.add('falls', g);
-  for (let k = 0; k < 7; k++) {
-    const s = 1.8 + rand() * 2.2;
-    batch.add('foam', LOW_SPHERE, mat(foot.x + dx * (2 + rand() * 3) + tx * (rand() - 0.5) * width * 2, 0.6 + rand() * 1.5, foot.z + dz * (2 + rand() * 3) + tz * (rand() - 0.5) * width * 2, s * 1.3, s * 0.8, s));
-  }
   batch.add('foam', RING, mat(foot.x + dx * 3, 0.25, foot.z + dz * 3, width * 1.6, 6, width * 1.6));
+  return { top, foot, dx, dz, width };
 }
 
 function createCumulus(rand) {
@@ -1334,8 +1295,8 @@ function createMarkerBuoy(kind) {
 
 const BAY_SKY = { top: 0x1a78e6, horizon: SKY_HORIZON };
 
-export function createWorld(scene, track) {
-  if (track.map.arena) return createBayArena(scene, track.map.arena);
+export function createWorld(scene, track, fx) {
+  if (track.map.arena) return createBayArena(scene, track.map.arena, fx);
   const fog = new THREE.Fog(SKY_HORIZON, 480, 950);
 
   const sky = createSky(BAY_SKY);
@@ -1388,7 +1349,8 @@ export function createWorld(scene, track) {
       if (height > 34 && radius > 9 && clearance < 90 && falls.length < 6 && rand() < 0.7) falls.push({ pillar, x, z, toward: Math.atan2(track.pz[near.idx] - z, track.px[near.idx] - x) });
     }
   }
-  for (const f of falls) addWaterfall(batch, f.pillar, f.x, f.z, f.toward, rand);
+  const waterfalls = createWaterfalls(falls.map((f) => waterfallSpec(batch, f.pillar, f.x, f.z, f.toward, rand)), rand);
+  scene.add(waterfalls.group);
   addFarIslands(batch, rand);
   addMainland(batch, rand);
   const islands = pillars.map((p) => ({ x: p.x, z: p.z, r: p.r }));
@@ -1449,6 +1411,7 @@ export function createWorld(scene, track) {
         if (cloud.position.x > 1100) cloud.position.x = -1100;
       }
       flyGulls(gulls, t);
+      waterfalls.update(t, dt, camera, fx);
       for (const m of markers) {
         const ph = m.userData.phase;
         m.position.y = waveHeight(m.position.x, m.position.z, t) - 0.4;
@@ -1460,7 +1423,7 @@ export function createWorld(scene, track) {
   };
 }
 
-function createBayArena(scene, arena) {
+function createBayArena(scene, arena, fx) {
   const fog = new THREE.Fog(SKY_HORIZON, 480, 950);
   const sky = createSky(BAY_SKY);
   scene.add(sky);
@@ -1476,10 +1439,11 @@ function createBayArena(scene, arena) {
   const shores = [];
   const reach = (x, z) => Math.sqrt((x / arena.rx) ** 2 + (z / arena.rz) ** 2);
   const tallest = Math.max(...arena.islands.map(([, , , height]) => height));
+  const specs = [];
   for (const [x, z, radius, height] of arena.islands) {
     const pillar = addPillar(batch, x, z, rand, { radius, height });
     shores.push(pillar.blob);
-    if (height === tallest && x !== 0) addWaterfall(batch, pillar, x, z, Math.atan2(-z, -x), rand);
+    if (height === tallest && x !== 0) specs.push(waterfallSpec(batch, pillar, x, z, Math.atan2(-z, -x), rand));
   }
   for (const [x, z, heading, span] of arena.arches) shores.push(...addArchAt(batch, x, z, heading, span, rand));
   for (const [bx, bz] of arena.bases) {
@@ -1518,6 +1482,8 @@ function createBayArena(scene, arena) {
   }
   addFarIslands(batch, rand);
   addMainland(batch, rand);
+  const waterfalls = createWaterfalls(specs, rand);
+  scene.add(waterfalls.group);
 
   const scenery = new THREE.Group();
   const chunks = batch.build(scenery);
@@ -1546,6 +1512,7 @@ function createBayArena(scene, arena) {
         if (cloud.position.x > 1100) cloud.position.x = -1100;
       }
       flyGulls(gulls, t);
+      waterfalls.update(t, dt, camera, fx);
     },
   };
 }

@@ -136,7 +136,7 @@ function prepareVenue(key) {
     const map = mapOf(key);
     const track = createTrack(map);
     const builder = isArena(key) ? ARENA_BUILDERS[map.id] : BUILDERS[map.id];
-    const world = builder ? await (await builder())(group, track, fx) : createWorld(group, track);
+    const world = builder ? await (await builder())(group, track, fx) : createWorld(group, track, fx);
     scene.add(group);
     venues[key] = { track, world, group };
     return venues[key];
@@ -162,7 +162,7 @@ function disposeVenue(id) {
   group.visible = false;
   group.matrixWorldAutoUpdate = false;
   scene.add(group);
-  venues.bay = { track, world: createWorld(group, track), group };
+  venues.bay = { track, world: createWorld(group, track, fx), group };
 }
 let current = venue('bay');
 const hud = new Hud(current.track, sfx);
