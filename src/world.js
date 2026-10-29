@@ -21,6 +21,9 @@ export const COLORS = {
   cliffDark: 0x8f8178,
   moss: 0x4fae4a,
   mossDark: 0x3a8f3e,
+  jungle: 0x2f8f3a,
+  jungleLight: 0x63c24a,
+  falls: 0xffffff,
   rockland: 0xffffff,
   stripeRed: 0xff4141,
   stripeWhite: 0xf6f8ff,
@@ -268,7 +271,7 @@ export class Batcher {
   }
 }
 
-const NO_OUTLINE = new Set(['foam', 'willowCore', 'puntHull']);
+const NO_OUTLINE = new Set(['foam', 'willowCore', 'puntHull', 'falls']);
 let whiteToon = null;
 const WHITE_TOON = () => (whiteToon ??= toon(0xffffff));
 let vertexToon = null;
@@ -785,10 +788,11 @@ function addIsland(batch, x, z, r, rand, { clearCenter = 0 } = {}) {
   return sand;
 }
 
-const PILLAR_DARK = new THREE.Color(0xb07a4f);
-const PILLAR_STREAK = new THREE.Color(0xdcb183);
-const PILLAR_LIGHT = new THREE.Color(0xf4e2c0);
-const PILLAR_WET = new THREE.Color(0x6b5442);
+const PILLAR_DARK = new THREE.Color(0x737880);
+const PILLAR_STREAK = new THREE.Color(0xa7aaab);
+const PILLAR_LIGHT = new THREE.Color(0xd8d6cc);
+const PILLAR_WET = new THREE.Color(0x46514d);
+const PILLAR_CRACK = new THREE.Color(0x4c5158);
 
 function paintPillar(g, top) {
   g.computeVertexNormals();
@@ -805,11 +809,15 @@ function paintPillar(g, top) {
     const streak = Math.sin(Math.atan2(z, x) * 9 + y * 0.05) * 0.5 + Math.sin(x * 0.4 - z * 0.3 + y * 0.02) * 0.5;
     color.copy(PILLAR_STREAK).lerp(streak > 0 ? PILLAR_LIGHT : PILLAR_DARK, Math.abs(streak) * 0.8);
     color.multiplyScalar(0.92 + 0.12 * Math.sin(y * 0.35 + streak));
+    const band = (y * 0.17 + 0.25 * Math.sin(Math.atan2(z, x) * 3 + x * 0.05) + 10) % 1;
+    if (band < 0.07) color.lerp(PILLAR_CRACK, 0.75);
+    const crack = Math.abs(Math.sin(Math.atan2(z, x) * 7 + Math.sin(y * 0.09 + x * 0.02) * 0.7));
+    if (crack < 0.07) color.lerp(PILLAR_CRACK, 0.85);
     if (y < 1.6) color.lerp(PILLAR_WET, 1 - THREE.MathUtils.smoothstep(y, -1, 1.6));
     colors.push(color.r, color.g, color.b);
     const ny = nor.getY(i);
     const drape = 0.5 + 0.5 * Math.sin(Math.atan2(z, x) * 5 + x);
-    const hang = THREE.MathUtils.smoothstep(y, top - 4 - 9 * drape * drape, top - 0.5) * drape * 0.75;
+    const hang = THREE.MathUtils.smoothstep(y, top - 5 - 16 * drape * drape, top - 0.5) * drape * 0.85;
     greens.push(Math.max(THREE.MathUtils.smoothstep(ny, 0.55, 0.75) * THREE.MathUtils.smoothstep(y, top - 3, top - 1), hang));
     const tone = streak > 0.2 ? GRASS_EDGE : GRASS_TONE;
     moss.push(tone.r, tone.g, tone.b);
@@ -822,9 +830,11 @@ function paintPillar(g, top) {
 
 let pillarTemplate = null;
 function pillarGeometry(radius, height, rand) {
-  const waist = 0.45 + rand() * 0.45;
+  const waist = 0.84 + rand() * 0.14;
   const waistAt = 0.3 + rand() * 0.3;
-  const flare = 1 + rand() * 0.6;
+  const flare = 1.04 + rand() * 0.18;
+  const ledges = 4 + rand() * 4;
+  const facets = 5 + Math.floor(rand() * 4);
   const lean = new THREE.Vector2((rand() - 0.5) * radius * 0.5, (rand() - 0.5) * radius * 0.5);
   const stretch = 0.75 + rand() * 0.5;
   const turn = rand() * Math.PI;
@@ -843,6 +853,8 @@ function pillarGeometry(radius, height, rand) {
     let bump = 1;
     for (const l of lumps) bump += Math.sin(a * l.k + l.p + t * height * l.v) * l.a;
     bump += Math.sin(a * 11 + t * 3) * 0.03;
+    bump += (Math.abs(((a / (Math.PI * 2)) * facets + lumps[0].p + 10) % 1 - 0.5) - 0.25) * 0.12;
+    bump *= 1 - 0.045 * (((t * height) / ledges + Math.sin(a * 2 + lumps[1].p) * 0.3 + 10) % 1);
     const rr = r0 * radius * profile * bump;
     const lx = Math.cos(a) * rr * stretch;
     const lz = Math.sin(a) * rr / stretch;
@@ -854,19 +866,40 @@ function pillarGeometry(radius, height, rand) {
   return { geometry: paintPillar(g, height - 2), top: new THREE.Vector3(lean.x, height - 2, lean.y), topRadius: radius * flare * 0.8, footprint: radius * 1.1 * Math.max(stretch, 1 / stretch) };
 }
 
+const CANOPY = ['moss', 'mossDark', 'jungle', 'jungleLight'];
+
+function canopyTree(batch, x, y, z, rand, size) {
+  const h = size * (1.1 + rand() * 0.5);
+  batch.add('coconut', CYLINDER, mat(x, y + h * 0.4, z, size * 0.12, h * 0.8, size * 0.12));
+  batch.add(CANOPY[Math.floor(rand() * CANOPY.length)], LOW_SPHERE, mat(x, y + h, z, size * 0.95, size * 0.7, size * 0.95, 0, rand() * 6, 0));
+  for (let k = 0; k < 3; k++) {
+    const a = rand() * Math.PI * 2;
+    const r = size * (0.55 + rand() * 0.25);
+    const s = size * (0.5 + rand() * 0.25);
+    batch.add(CANOPY[Math.floor(rand() * CANOPY.length)], LOW_SPHERE, mat(x + Math.cos(a) * r, y + h - size * 0.25 + rand() * size * 0.4, z + Math.sin(a) * r, s, s * 0.8, s));
+  }
+}
+
 function plantTop(batch, x, y, z, radius, rand, density = 1) {
-  const palms = Math.max(1, Math.round((1 + rand() * 3) * density * Math.min(1.6, radius / 8)));
+  const area = Math.min(2.4, radius / 7);
+  const palms = Math.max(1, Math.round((1 + rand() * 3) * density * area));
   for (let i = 0; i < palms; i++) {
     const a = rand() * Math.PI * 2;
     const d = radius * Math.sqrt(rand()) * 0.75;
-    addPalm(batch, x + Math.cos(a) * d, y - 0.3, z + Math.sin(a) * d, rand, { height: 5 + rand() * 5, lean: 0.1 + rand() * 0.4, dir: a });
+    addPalm(batch, x + Math.cos(a) * d, y - 0.3, z + Math.sin(a) * d, rand, { height: 6 + rand() * 6, lean: 0.1 + rand() * 0.4, dir: a });
   }
-  const bushes = Math.round((3 + rand() * 5) * density * Math.min(1.8, radius / 8));
-  for (let i = 0; i < bushes; i++) {
+  const trees = Math.round((2 + rand() * 4) * density * area * area);
+  for (let i = 0; i < trees; i++) {
     const a = rand() * Math.PI * 2;
-    const d = radius * Math.sqrt(rand()) * 0.9;
-    const sz = 1.2 + rand() * 1.6;
-    batch.add(rand() < 0.5 ? 'moss' : 'mossDark', LOW_SPHERE, mat(x + Math.cos(a) * d, y + sz * 0.3, z + Math.sin(a) * d, sz * 1.2, sz * 0.75, sz));
+    const d = radius * Math.sqrt(rand()) * 0.8;
+    canopyTree(batch, x + Math.cos(a) * d, y - 0.3, z + Math.sin(a) * d, rand, 2.6 + rand() * 2.4);
+  }
+  const rim = Math.round((6 + rand() * 6) * density * area);
+  for (let i = 0; i < rim; i++) {
+    const a = (i / rim) * Math.PI * 2 + rand() * 0.4;
+    const d = radius * (0.85 + rand() * 0.2);
+    const sz = 1.4 + rand() * 1.8;
+    batch.add(CANOPY[Math.floor(rand() * CANOPY.length)], LOW_SPHERE, mat(x + Math.cos(a) * d, y - sz * 0.2, z + Math.sin(a) * d, sz * 1.2, sz * 0.9, sz));
   }
 }
 
@@ -876,7 +909,166 @@ function addPillar(batch, x, z, rand, { radius, height, plants = 1 }) {
   batch.add('foam', RING, mat(x, 0.2, z, pillar.footprint * 1.05, 6, pillar.footprint * 1.05));
   const top = pillar.top.clone().add(new THREE.Vector3(x, 0, z));
   if (plants) plantTop(batch, top.x, top.y, top.z, pillar.topRadius, rand, plants);
-  return { blob: { x, z, rx: pillar.footprint, rz: pillar.footprint, rot: 0 }, top };
+  return { blob: { x, z, rx: pillar.footprint, rz: pillar.footprint, rot: 0 }, top, topRadius: pillar.topRadius, footprint: pillar.footprint };
+}
+
+const FALL_WHITE = new THREE.Color(0xffffff);
+const FALL_BLUE = new THREE.Color(0xa9dcff);
+const FALL_DEEP = new THREE.Color(0x6fb8f0);
+
+function addWaterfall(batch, pillar, x, z, toward, rand) {
+  const dx = Math.cos(toward);
+  const dz = Math.sin(toward);
+  const tx = -dz;
+  const tz = dx;
+  const top = new THREE.Vector3(pillar.top.x + dx * pillar.topRadius * 0.92, pillar.top.y - 0.4, pillar.top.z + dz * pillar.topRadius * 0.92);
+  const foot = new THREE.Vector3(x + dx * pillar.footprint * 1.12, 0.2, z + dz * pillar.footprint * 1.12);
+  const rows = 14;
+  const cols = 7;
+  const width = 3.2 + rand() * 1.6;
+  const tones = Array.from({ length: cols }, () => rand());
+  const positions = [];
+  const colors = [];
+  const point = (t, u) => {
+    const bow = Math.sin(Math.PI * t) * 2.2 + t * 1.5;
+    const w = width * (0.8 + 0.6 * t);
+    return [top.x + (foot.x - top.x) * t + dx * bow + tx * u * w, top.y + (foot.y - top.y) * t, top.z + (foot.z - top.z) * t + dz * bow + tz * u * w];
+  };
+  const c = new THREE.Color();
+  for (let r = 0; r < rows; r++) {
+    for (let k = 0; k < cols; k++) {
+      const t0 = r / rows;
+      const t1 = (r + 1) / rows;
+      const u0 = k / cols - 0.5;
+      const u1 = (k + 1) / cols - 0.5;
+      const quad = [point(t0, u0), point(t1, u0), point(t1, u1), point(t0, u1)];
+      c.copy(FALL_DEEP).lerp(FALL_BLUE, Math.min(1, tones[k] * 1.4)).lerp(FALL_WHITE, (tones[k] > 0.55 ? 0.7 : 0.2) + t0 * 0.3);
+      for (const v of [quad[0], quad[2], quad[1], quad[0], quad[3], quad[2]]) {
+        positions.push(...v);
+        colors.push(c.r, c.g, c.b);
+      }
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  g.computeVertexNormals();
+  batch.add('falls', g);
+  for (let k = 0; k < 7; k++) {
+    const s = 1.8 + rand() * 2.2;
+    batch.add('foam', LOW_SPHERE, mat(foot.x + dx * (2 + rand() * 3) + tx * (rand() - 0.5) * width * 2, 0.6 + rand() * 1.5, foot.z + dz * (2 + rand() * 3) + tz * (rand() - 0.5) * width * 2, s * 1.3, s * 0.8, s));
+  }
+  batch.add('foam', RING, mat(foot.x + dx * 3, 0.25, foot.z + dz * 3, width * 1.6, 6, width * 1.6));
+}
+
+function createCumulus(rand) {
+  const parts = [];
+  const w = 40 + rand() * 50;
+  for (let i = 0; i < 7; i++) {
+    const u = i / 6 - 0.5;
+    const s = 10 + rand() * 6;
+    parts.push(SPHERE.clone().applyMatrix4(mat(u * w, rand() * 3, (rand() - 0.5) * 12, s * 1.4, s * 0.55, s)));
+  }
+  for (let i = 0; i < 5; i++) {
+    const u = (i / 4 - 0.5) * 0.7;
+    const s = 11 + rand() * 8;
+    parts.push(SPHERE.clone().applyMatrix4(mat(u * w, 7 + rand() * 6, (rand() - 0.5) * 10, s, s * 0.85, s)));
+  }
+  for (let i = 0; i < 3; i++) {
+    const s = 9 + rand() * 7;
+    parts.push(SPHERE.clone().applyMatrix4(mat((rand() - 0.5) * w * 0.35, 17 + rand() * 7, (rand() - 0.5) * 8, s, s * 0.9, s)));
+  }
+  const cloud = new THREE.Mesh(mergeGeometries(parts), toon(0xffffff, { emissive: 0x9bd9ff, emissiveIntensity: 0.22, fog: false }));
+  cloud.scale.setScalar(1.8 + rand() * 1.4);
+  return cloud;
+}
+
+function addCumulus(scene, rand, count) {
+  const clouds = [];
+  for (let i = 0; i < count; i++) {
+    const cloud = createCumulus(rand);
+    const a = rand() * Math.PI * 2;
+    const d = 520 + rand() * 520;
+    cloud.position.set(Math.cos(a) * d, 90 + rand() * 120, Math.sin(a) * d);
+    cloud.rotation.y = rand() * Math.PI;
+    cloud.userData.speed = 2 + rand() * 3;
+    clouds.push(cloud);
+    scene.add(cloud);
+  }
+  return clouds;
+}
+
+const BOX_GEOMETRY = new THREE.BoxGeometry(1, 1, 1);
+
+function createGull() {
+  const group = new THREE.Group();
+  const white = toon(0xffffff);
+  const grey = toon(0xb9c3cc);
+  const dark = toon(0x2f3640);
+  const body = new THREE.Mesh(SPHERE, white);
+  body.scale.set(0.35, 0.3, 0.9);
+  const head = new THREE.Mesh(SPHERE, white);
+  head.scale.setScalar(0.26);
+  head.position.set(0, 0.12, 0.75);
+  const beak = new THREE.Mesh(CONE, toon(0xffb02e));
+  beak.scale.set(0.08, 0.3, 0.08);
+  beak.rotation.x = Math.PI / 2;
+  beak.position.set(0, 0.08, 1.1);
+  group.add(body, head, beak);
+  const wings = [];
+  for (const side of [-1, 1]) {
+    const pivot = new THREE.Group();
+    pivot.position.set(side * 0.25, 0.1, 0.05);
+    const inner = new THREE.Mesh(BOX_GEOMETRY, grey);
+    inner.scale.set(1.1, 0.06, 0.55);
+    inner.position.x = side * 0.55;
+    const outer = new THREE.Mesh(BOX_GEOMETRY, white);
+    outer.scale.set(1.0, 0.05, 0.4);
+    outer.position.set(side * 1.55, 0, -0.05);
+    const tip = new THREE.Mesh(BOX_GEOMETRY, dark);
+    tip.scale.set(0.35, 0.055, 0.32);
+    tip.position.set(side * 2.2, 0, -0.08);
+    pivot.add(inner, outer, tip);
+    group.add(pivot);
+    wings.push(pivot);
+  }
+  group.userData.wings = wings;
+  group.scale.setScalar(1.3);
+  return group;
+}
+
+function addGulls(scene, rand, count) {
+  const gulls = [];
+  for (let i = 0; i < count; i++) {
+    const gull = createGull();
+    gull.userData.orbit = { x: (rand() - 0.5) * 600, z: (rand() - 0.5) * 500, r: 25 + rand() * 50, y: 28 + rand() * 30, speed: (0.25 + rand() * 0.2) * (rand() < 0.5 ? -1 : 1), phase: rand() * Math.PI * 2 };
+    gulls.push(gull);
+    scene.add(gull);
+  }
+  return gulls;
+}
+
+function flyGulls(gulls, t) {
+  for (const gull of gulls) {
+    const o = gull.userData.orbit;
+    const a = o.phase + t * o.speed;
+    gull.position.set(o.x + Math.cos(a) * o.r, o.y + Math.sin(t * 0.7 + o.phase) * 3, o.z + Math.sin(a) * o.r);
+    gull.rotation.set(0, Math.atan2(-Math.sin(a) * Math.sign(o.speed), Math.cos(a) * Math.sign(o.speed)), -0.25 * Math.sign(o.speed));
+    const flap = Math.sin(t * 0.9 + o.phase) > 0.3 ? Math.sin(t * 9 + o.phase) * 0.55 : 0.08;
+    gull.userData.wings[0].rotation.z = -flap;
+    gull.userData.wings[1].rotation.z = flap;
+  }
+}
+
+function addFarIslands(batch, rand) {
+  for (let k = 0; k < 18; k++) {
+    const a = (k / 18) * Math.PI * 2 + rand() * 0.2;
+    const d = 700 + rand() * 180;
+    const x = Math.cos(a) * d;
+    const z = Math.sin(a) * d - 60;
+    if (z > mainlandEdge(x) - 60) continue;
+    addPillar(batch, x, z, rand, { radius: 22 + rand() * 22, height: 30 + rand() * 50, plants: 0.6 });
+  }
 }
 
 function archGeometry(span, height, thick, rand) {
@@ -1111,11 +1303,14 @@ function createMarkerBuoy(kind) {
   return group;
 }
 
+const BAY_SKY = { top: 0x1a78e6, horizon: SKY_HORIZON };
+const BAY_WATER = { deep: 0x0b5cc6, shallow: 0x2fb8ee };
+
 export function createWorld(scene, track) {
   if (track.map.arena) return createBayArena(scene, track.map.arena);
   const fog = new THREE.Fog(SKY_HORIZON, 480, 950);
 
-  const sky = createSky();
+  const sky = createSky(BAY_SKY);
   scene.add(sky);
 
   scene.add(new THREE.HemisphereLight(0xe8f8ff, 0x3cc4d4, 1.4));
@@ -1123,7 +1318,7 @@ export function createWorld(scene, track) {
   sun.position.copy(SUN_DIR).multiplyScalar(100);
   scene.add(sun);
 
-  const water = createWater();
+  const water = createWater(BAY_WATER);
   scene.add(water.mesh);
 
   const rand = mulberry32(20261023);
@@ -1131,6 +1326,7 @@ export function createWorld(scene, track) {
   const half = track.halfWidth;
   const shores = [];
   const pillars = [];
+  const falls = [];
   const fits = (x, z, r) => !pillars.some((o) => Math.hypot(o.x - x, o.z - z) < o.r + r + 6);
   for (const f of [0.2, 0.565, 0.72]) shores.push(...addArch(batch, track, f, rand));
   for (const f of [0.2, 0.47, 0.72]) {
@@ -1153,16 +1349,19 @@ export function createWorld(scene, track) {
       const near = track.project(x, z);
       const clearance = near.distance - track.hw[near.idx];
       const mesa = rand() < 0.18;
-      const radius = mesa ? 13 + rand() * 12 : 4 + rand() * 9;
+      const radius = mesa ? 13 + rand() * 12 : 6 + rand() * 9;
       if (clearance < radius + 6) continue;
       if (!fits(x, z, radius)) continue;
       if (z > mainlandEdge(x) - radius - 14) continue;
-      const height = mesa ? 26 + rand() * 30 : 30 + rand() * 65 + (clearance > 120 ? rand() * 35 : 0);
+      const height = mesa ? 22 + rand() * 24 : 20 + radius * 2.4 + rand() * 28 + (clearance > 120 ? rand() * 25 : 0);
       const pillar = addPillar(batch, x, z, rand, { radius, height });
       pillars.push({ x, z, r: radius });
       shores.push(pillar.blob);
+      if (height > 52 && radius > 7 && clearance < 90 && falls.length < 6 && rand() < 0.7) falls.push({ pillar, x, z, toward: Math.atan2(track.pz[near.idx] - z, track.px[near.idx] - x) });
     }
   }
+  for (const f of falls) addWaterfall(batch, f.pillar, f.x, f.z, f.toward, rand);
+  addFarIslands(batch, rand);
   addMainland(batch, rand);
   const islands = pillars.map((p) => ({ x: p.x, z: p.z, r: p.r }));
   const stacks = [];
@@ -1178,16 +1377,8 @@ export function createWorld(scene, track) {
   const arch = createArch(track, half);
   scene.add(arch);
 
-  const clouds = [];
-  for (let i = 0; i < 16; i++) {
-    const cloud = createCloud(rand);
-    const a = rand() * Math.PI * 2;
-    const d = 150 + rand() * 600;
-    cloud.position.set(Math.cos(a) * d, 110 + rand() * 70, Math.sin(a) * d);
-    cloud.userData.speed = 2 + rand() * 3;
-    clouds.push(cloud);
-    scene.add(cloud);
-  }
+  const clouds = addCumulus(scene, rand, 20);
+  const gulls = addGulls(scene, rand, 9);
 
   const markers = [];
   for (let tries = 0; markers.length < 22 && tries < 600; tries++) {
@@ -1227,8 +1418,9 @@ export function createWorld(scene, track) {
       buoys.userData.update(t, camera);
       for (const cloud of clouds) {
         cloud.position.x += cloud.userData.speed * dt;
-        if (cloud.position.x > 800) cloud.position.x = -800;
+        if (cloud.position.x > 1100) cloud.position.x = -1100;
       }
+      flyGulls(gulls, t);
       for (const m of markers) {
         const ph = m.userData.phase;
         m.position.y = waveHeight(m.position.x, m.position.z, t) - 0.4;
@@ -1242,20 +1434,25 @@ export function createWorld(scene, track) {
 
 function createBayArena(scene, arena) {
   const fog = new THREE.Fog(SKY_HORIZON, 480, 950);
-  const sky = createSky();
+  const sky = createSky(BAY_SKY);
   scene.add(sky);
   scene.add(new THREE.HemisphereLight(0xe8f8ff, 0x3cc4d4, 1.4));
   const sun = new THREE.DirectionalLight(0xfff0d8, 2.4);
   sun.position.copy(SUN_DIR).multiplyScalar(100);
   scene.add(sun);
-  const water = createWater();
+  const water = createWater(BAY_WATER);
   scene.add(water.mesh);
 
   const rand = mulberry32(20261028);
   const batch = new Batcher();
   const shores = [];
   const reach = (x, z) => Math.sqrt((x / arena.rx) ** 2 + (z / arena.rz) ** 2);
-  for (const [x, z, radius, height] of arena.islands) shores.push(addPillar(batch, x, z, rand, { radius, height }).blob);
+  const tallest = Math.max(...arena.islands.map(([, , , height]) => height));
+  for (const [x, z, radius, height] of arena.islands) {
+    const pillar = addPillar(batch, x, z, rand, { radius, height });
+    shores.push(pillar.blob);
+    if (height === tallest && x !== 0) addWaterfall(batch, pillar, x, z, Math.atan2(-z, -x), rand);
+  }
   for (const [x, z, heading, span] of arena.arches) shores.push(...addArchAt(batch, x, z, heading, span, rand));
   for (const [bx, bz] of arena.bases) {
     const out = Math.sign(bx) * (arena.rx + 34);
@@ -1273,7 +1470,7 @@ function createBayArena(scene, arena) {
     const x = ex + (nx / nl) * (radius + 1);
     const z = ez + (nz / nl) * (radius + 1);
     if (z < mainlandEdge(x) - radius - 14) {
-      addPillar(batch, x, z, rand, { radius, height: 22 + rand() * 46 });
+      addPillar(batch, x, z, rand, { radius, height: 20 + radius * 2.2 + rand() * 22 });
       wall.push({ x, z, r: radius });
     }
     a += (radius * 1.5) / Math.hypot(arena.rx * Math.sin(a), arena.rz * Math.cos(a));
@@ -1287,26 +1484,19 @@ function createBayArena(scene, arena) {
       if (reach(x, z) < 1 + (radius + 30) / arena.rz) continue;
       if (z > mainlandEdge(x) - radius - 14) continue;
       if (wall.some((o) => Math.hypot(o.x - x, o.z - z) < o.r + radius + 4)) continue;
-      addPillar(batch, x, z, rand, { radius, height: 30 + rand() * 80 });
+      addPillar(batch, x, z, rand, { radius, height: 22 + radius * 2.6 + rand() * 30 });
       wall.push({ x, z, r: radius });
     }
   }
+  addFarIslands(batch, rand);
   addMainland(batch, rand);
 
   const scenery = new THREE.Group();
   const chunks = batch.build(scenery);
   scene.add(scenery);
 
-  const clouds = [];
-  for (let i = 0; i < 16; i++) {
-    const cloud = createCloud(rand);
-    const a = rand() * Math.PI * 2;
-    const d = 150 + rand() * 600;
-    cloud.position.set(Math.cos(a) * d, 110 + rand() * 70, Math.sin(a) * d);
-    cloud.userData.speed = 2 + rand() * 3;
-    clouds.push(cloud);
-    scene.add(cloud);
-  }
+  const clouds = addCumulus(scene, rand, 20);
+  const gulls = addGulls(scene, rand, 9);
 
   return {
     fog,
@@ -1325,8 +1515,9 @@ function createBayArena(scene, arena) {
       sky.position.copy(camera.position);
       for (const cloud of clouds) {
         cloud.position.x += cloud.userData.speed * dt;
-        if (cloud.position.x > 800) cloud.position.x = -800;
+        if (cloud.position.x > 1100) cloud.position.x = -1100;
       }
+      flyGulls(gulls, t);
     },
   };
 }
