@@ -289,6 +289,7 @@ export async function createDocks(group, track, fx) {
     return Math.abs(Math.atan2(Math.sin(b - a), Math.cos(b - a))) < 0.06;
   };
   const taken = [];
+  const barrels = [];
   const free = (x, z, r) => !taken.some((o) => Math.hypot(o.x - x, o.z - z) < o.r + r);
   const shores = [];
   const blinks = [];
@@ -456,7 +457,7 @@ export async function createDocks(group, track, fx) {
       const r = Math.hypot(bays * (CONTAINER.long + 0.5), rows * (CONTAINER.width + 0.25)) / 2;
       if (!clearOfWater(c.x, c.z, r) || !free(c.x, c.z, r)) {
         if (rand() < 0.5 && free(c.x, c.z, 2.5) && surface.sample(c.x, c.z).edge > WALK + 1) {
-          if (rand() < 0.5) drums(batch, c.x, QUAY_TOP, c.z, rand);
+          if (rand() < 0.5) drums(batch, c.x, QUAY_TOP, c.z, rand, barrels);
           else pallets(batch, c.x, QUAY_TOP, c.z, yaw, rand);
           taken.push({ x: c.x, z: c.z, r: 2.5 });
         }
@@ -509,7 +510,10 @@ export async function createDocks(group, track, fx) {
     if (!landAt(i, side)) continue;
     const p = track.point(i, side * (track.hw[i] - 0.9 - rand() * 0.8));
     if (nearRouteEnd(p.x, p.z, 50)) continue;
-    batch.add(['drumBlue', 'drumRed', 'drumYellow', 'rubber'][Math.floor(rand() * 4)], DRUM, mat(p.x, 0.15, p.z, 0.45, 1.1, 0.45, Math.PI / 2, rand() * 6, 0));
+    const key = ['drumBlue', 'drumRed', 'drumYellow', 'rubber'][Math.floor(rand() * 4)];
+    const yaw = rand() * 6;
+    if (key === 'drumRed') barrels.push({ x: p.x, y: 0.15, z: p.z, yaw, lying: true });
+    else batch.add(key, DRUM, mat(p.x, 0.15, p.z, 0.45, 1.1, 0.45, Math.PI / 2, yaw, 0));
   }
 
   const scenery = new THREE.Group();
@@ -520,7 +524,7 @@ export async function createDocks(group, track, fx) {
   group.add(scenery, glowGroup);
   const labels = decals.build(group);
   lights.build(group);
-  const hazards = new DockHazards({ group, track, lights, rand, amp: 0.8, gantries, sweepers, bridge: bridgeIdx >= 0 ? { idx: bridgeIdx } : null });
+  const hazards = new DockHazards({ group, track, lights, rand, amp: 0.8, gantries, sweepers, barrels, bridge: bridgeIdx >= 0 ? { idx: bridgeIdx } : null });
 
   const blinkMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 8, 6), new THREE.MeshBasicMaterial({ color: 0xff2a1f, fog: false }), blinks.length);
   blinks.forEach((b, k) => blinkMesh.setMatrixAt(k, new THREE.Matrix4().compose(new THREE.Vector3(b.x, b.y, b.z), new THREE.Quaternion(), new THREE.Vector3(0.9, 0.9, 0.9))));

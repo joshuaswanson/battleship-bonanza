@@ -8,6 +8,9 @@ const SLICK_GRIP = 0.16;
 const DRUM_REACH = 8.5;
 const DRUM_SIZE = 1.9;
 const DRUM_RESPAWN = 25;
+const BARREL_SCALE = 0.72;
+const BARREL_REACH = 6;
+const BARREL_RESPAWN = 30;
 const BRIDGE_HEIGHT = 7;
 const BRIDGE_WIDTH = 7;
 const BRIDGE_CYCLE = [5, 2, 5, 2];
@@ -93,7 +96,7 @@ function drumGeometry() {
 const smooth = (u) => u * u * (3 - 2 * u);
 
 export class DockHazards {
-  constructor({ group, track, lights, rand, amp, gantries, sweepers, bridge }) {
+  constructor({ group, track, lights, rand, amp, gantries, sweepers, barrels = [], bridge }) {
     this.track = track;
     this.lights = lights;
     this.group = new THREE.Group();
@@ -104,6 +107,7 @@ export class DockHazards {
     this.obstacles = [];
     this.buildSlicks(rand, amp);
     this.buildDrums(rand);
+    this.buildBarrels(barrels);
     this.gantries = gantries.map((g) => this.buildGantry(g, rand));
     this.sweepers = sweepers.map((s) => ({ ...s, aim: new THREE.Vector3(s.head.x, 0, s.head.z) }));
     this.bridge = bridge ? this.buildBridge(bridge) : null;
@@ -174,6 +178,32 @@ export class DockHazards {
       this.group.add(m);
     }
     this.drumMatrix = new THREE.Matrix4();
+  }
+
+  buildBarrels(list) {
+    this.barrels = list.map((b) => ({ ...b, cy: b.lying ? b.y + 0.2 : b.y, alive: true, timer: 0, fuse: 0, owner: null, grow: 1 }));
+    const geometry = drumGeometry();
+    this.barrelMesh = new THREE.InstancedMesh(geometry, toon(0xffffff, { vertexColors: true }), Math.max(1, this.barrels.length));
+    this.barrelLines = new THREE.InstancedMesh(geometry, outlineMaterial(0.08), Math.max(1, this.barrels.length));
+    this.barrelLines.instanceMatrix = this.barrelMesh.instanceMatrix;
+    this.barrelMesh.count = this.barrelLines.count = this.barrels.length;
+    for (const m of [this.barrelMesh, this.barrelLines]) {
+      m.frustumCulled = false;
+      this.group.add(m);
+    }
+    this.placeBarrels();
+  }
+
+  placeBarrels() {
+    const q = new THREE.Quaternion();
+    const e = new THREE.Euler();
+    const m = new THREE.Matrix4();
+    this.barrels.forEach((b, k) => {
+      const s = (b.alive ? b.grow : 0) * BARREL_SCALE;
+      e.set(b.lying ? Math.PI / 2 : 0, b.yaw, 0, 'YXZ');
+      this.barrelMesh.setMatrixAt(k, m.compose(new THREE.Vector3(b.x, b.cy, b.z), q.setFromEuler(e), new THREE.Vector3(s, s, s)));
+    });
+    this.barrelMesh.instanceMatrix.needsUpdate = true;
   }
 
   buildGantry(g, rand) {
@@ -280,7 +310,7 @@ export class DockHazards {
   }
 
   reset(race) {
-    for (const d of this.drums) Object.assign(d, { alive: true, timer: 0, fuse: 0, owner: null, grow: 1 });
+    for (const d of [...this.drums, ...this.barrels]) Object.assign(d, { alive: true, timer: 0, fuse: 0, owner: null, grow: 1 });
     for (const s of this.slicks) Object.assign(s, { burn: 0, igniter: null });
     this.pending.length = 0;
     for (const b of race.boats) b.grip = 1;
@@ -292,6 +322,9 @@ export class DockHazards {
     this.slicks.forEach((s, k) => this.slickBurn.setX(k, Math.min(1, s.burn * 1.5)));
     this.slickBurn.needsUpdate = true;
     this.animateDrums(time, dt);
+    const changing = this.barrels.some((b) => !b.alive || b.grow < 1);
+    if (changing || this.barrelsDirty) this.placeBarrels();
+    this.barrelsDirty = changing;
     for (const g of this.gantries) this.animateGantry(g, time, dt);
     if (this.bridge) this.animateBridge(time);
     this.animateSweepers(time, dt);
@@ -369,7 +402,7 @@ export class DockHazards {
   }
 
   snapshot() {
-    const out = new Float32Array(this.drums.length * 2 + this.slicks.length + this.sweepers.length * 2);
+    const out = new Float32Array(this.drums.length * 2 + this.slicks.length + this.sweepers.length * 2 + this.barrels.length * 2);
     let o = 0;
     for (const d of this.drums) {
       out[o++] = d.alive ? 1 : 0;
@@ -379,6 +412,10 @@ export class DockHazards {
     for (const s of this.sweepers) {
       out[o++] = s.aim.x;
       out[o++] = s.aim.z;
+    }
+    for (const b of this.barrels) {
+      out[o++] = b.alive ? 1 : 0;
+      out[o++] = b.grow;
     }
     return out;
   }
@@ -391,6 +428,10 @@ export class DockHazards {
     }
     for (const s of this.slicks) s.burn = data[o++];
     for (const s of this.sweepers) s.aim.set(data[o++], 0, data[o++]);
+    for (const b of this.barrels) {
+      b.alive = data[o++] > 0.5;
+      b.grow = data[o++];
+    }
     this.clock = clock;
     this.frozen = true;
   }
@@ -402,6 +443,7 @@ export class DockHazards {
     this.pending.length = 0;
     this.playSlicks(race, dt, blasts);
     this.playDrums(race, dt, blasts);
+    this.playBarrels(race, dt, blasts);
     for (const g of this.gantries) this.playGantry(race, g);
     if (this.bridge) this.playBridge(race);
     this.listObstacles();
@@ -416,6 +458,7 @@ export class DockHazards {
       for (const k of [-1, 0, 1]) list.push({ x: g.x + (g.lx + k * 4) * c, z: g.z - (g.lx + k * 4) * s, r: 3.5 });
     }
     for (const d of this.drums) if (d.alive) list.push({ x: d.x, z: d.z, r: 1.4 * DRUM_SIZE, drum: true });
+    for (const b of this.barrels) if (b.alive && b.lying) list.push({ x: b.x, z: b.z, r: 1.2, drum: true });
     for (const s of this.slicks) if (s.burn > 0) list.push({ x: s.x, z: s.z, r: s.r * 0.85 });
   }
 
@@ -512,6 +555,86 @@ export class DockHazards {
           break;
         }
       }
+    }
+  }
+
+  playBarrels(race, dt, blasts) {
+    for (const d of this.barrels) {
+      if (!d.alive) {
+        d.timer -= dt;
+        if (d.timer <= 0 && race.boats.every((b) => Math.hypot(b.pos.x - d.x, b.pos.z - d.z) > 15)) {
+          d.alive = true;
+          d.grow = 0;
+          d.owner = null;
+        }
+        continue;
+      }
+      if (d.grow < 1) d.grow = Math.min(1, d.grow + dt * 1.5);
+      if (d.fuse > 0) {
+        d.fuse -= dt;
+        if (d.fuse <= 0) this.burst(race, d, d.owner);
+        continue;
+      }
+      for (const blast of blasts) {
+        if (Math.hypot(blast.x - d.x, blast.z - d.z) < BARREL_REACH + 1) {
+          d.fuse = 0.15 + Math.random() * 0.15;
+          d.owner = blast.owner;
+        }
+      }
+      if (d.fuse > 0) continue;
+      const flamer = this.flamesHit(race, d.x, d.z, 1.6);
+      if (flamer) {
+        d.fuse = 0.3;
+        d.owner = flamer;
+        continue;
+      }
+      const shot = race.bullets.findIndex((bullet) => {
+        if (Math.abs(bullet.pos.x - d.x) > 6 || Math.abs(bullet.pos.z - d.z) > 6) return false;
+        const len = bullet.pos.distanceTo(bullet.prev);
+        for (let k = 0; k <= len; k += 0.4) {
+          const u = len ? k / len : 0;
+          const x = bullet.prev.x + (bullet.pos.x - bullet.prev.x) * u;
+          const y = bullet.prev.y + (bullet.pos.y - bullet.prev.y) * u;
+          const z = bullet.prev.z + (bullet.pos.z - bullet.prev.z) * u;
+          if (Math.hypot(x - d.x, z - d.z) < 1.1 && y > d.cy - 1 && y < d.cy + 2.6) return true;
+        }
+        return false;
+      });
+      if (shot >= 0) {
+        const [bullet] = race.bullets.splice(shot, 1);
+        this.burst(race, d, bullet.owner);
+        continue;
+      }
+      if (!d.lying) continue;
+      for (const b of race.boats) {
+        if (!b.alive || b.yOffset > 1.6) continue;
+        if (b.distanceToAxis2D(d.x, d.z) < 1.4 + 0.5) {
+          this.burst(race, d, d.owner ?? b);
+          break;
+        }
+      }
+    }
+  }
+
+  burst(race, d, owner) {
+    d.alive = false;
+    d.timer = BARREL_RESPAWN;
+    d.fuse = 0;
+    race.fx.explosion(d.x, d.cy + 0.5, d.z, 1.1);
+    if (d.lying) race.fx.column(d.x, 0.6, d.z, { x: 0, z: 0 }, 0.8);
+    race.sfx.play('mineBoom', { x: d.x, y: d.cy, z: d.z });
+    this.pending.push({ x: d.x, z: d.z, owner });
+    for (const o of race.boats) {
+      if (!o.alive) continue;
+      const dx = o.pos.x - d.x;
+      const dz = o.pos.z - d.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist > BARREL_REACH || o.yOffset > 4) continue;
+      const near = 1 - dist / BARREL_REACH;
+      const source = owner && owner.alive !== undefined ? owner : o;
+      const push = 7 * near / Math.max(dist, 0.5);
+      race.damage(o, 10 + 12 * near, source, source === o ? 'drum' : 'mine', { knockX: dx * push, knockZ: dz * push, spin: 0.6, launch: 0.4 + near * 0.4 });
+      if (o.isPlayer) race.emit('lockShake', { amount: 1.1 * near + 0.3 }, o);
     }
   }
 

@@ -622,12 +622,16 @@ export function bollard(batch, x, y, z) {
   batch.add('steelDark', CYL, mat(x, y + 0.75, z, 0.5, 0.15, 0.5));
 }
 
-export function drums(batch, x, y, z, rand) {
+export function drums(batch, x, y, z, rand, barrels) {
   const n = 2 + Math.floor(rand() * 5);
   for (let k = 0; k < n; k++) {
     const a = rand() * Math.PI * 2;
     const d = rand() * 1.6;
-    batch.add(pick(['drumBlue', 'drumRed', 'drumYellow'], rand), CYL, mat(x + Math.cos(a) * d, y + 0.55, z + Math.sin(a) * d, 0.45, 1.1, 0.45));
+    const key = pick(['drumBlue', 'drumRed', 'drumYellow'], rand);
+    const px = x + Math.cos(a) * d;
+    const pz = z + Math.sin(a) * d;
+    if (barrels && key === 'drumRed') barrels.push({ x: px, y: y + 0.55, z: pz, yaw: a, lying: false });
+    else batch.add(key, CYL, mat(px, y + 0.55, pz, 0.45, 1.1, 0.45));
   }
 }
 
