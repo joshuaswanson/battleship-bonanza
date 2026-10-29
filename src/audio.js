@@ -3,7 +3,7 @@ const RACE_VOLUME = 0.45;
 const SFX_VOLUME = 0.85;
 
 const RACE_SONGS = ['race-music.mp3', 'coral-cannonade.mp3', 'torpedo-tide-rider.mp3', 'funlit-path.mp3', 'full-tilt-finish-line.mp3'];
-const MAP_SONGS = { canyon: 'canyon-chase-derby.mp3', docks: 'the-midnight-regatta.mp3', bay: 'high-tide-hustle.mp3', jungle: 'temple-rapids-chase.mp3' };
+const MAP_SONGS = { canyon: 'canyon-chase-derby.mp3', docks: 'the-midnight-regatta.mp3', bay: 'high-tide-hustle.mp3', jungle: 'temple-rapids-chase.mp3', alps: 'cowbells-at-the-finish-line.mp3' };
 
 function track(file, volume, preload = 'auto') {
   const audio = new Audio();
