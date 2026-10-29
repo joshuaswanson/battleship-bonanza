@@ -4,7 +4,7 @@ import { createWater, waveHeight } from './water.js';
 import { ellipseHit, courseBuoys } from './terrain.js';
 import { toon, outlineMaterial, mulberry32 } from './toon.js';
 import { createWaterfalls } from './waterfall.js';
-import { whirlpoolSite, Whirlpool, CAVE_HALF } from './whirlpool.js';
+import { whirlpoolSite, Whirlpool, flumeStream } from './whirlpool.js';
 import { OUTER_LIMIT } from './race/shared.js';
 
 const SKY_TOP = 0x3fa9f5;
@@ -28,6 +28,8 @@ export const COLORS = {
   jungleLight: 0x63c24a,
   rockland: 0xffffff,
   caveRock: 0x262b33,
+  stalactite: 0x3a414c,
+  vine: 0x2f7d34,
   stripeRed: 0xff4141,
   stripeWhite: 0xf6f8ff,
   roof: 0x0e2a47,
@@ -1141,21 +1143,42 @@ function addArchAt(batch, x0, z0, heading, span, rand) {
 
 const mainlandEdge = (x) => 485 + 45 * Math.sin(x * 0.005 + 0.7) + 22 * Math.sin(x * 0.013 + 2) + 8 * Math.sin(x * 0.05);
 const mainlandHeight = (x) => 74 + 16 * Math.sin(x * 0.009) + 9 * Math.sin(x * 0.031 + 1);
-const MAINLAND_ROWS = [-14, -5, -1.5, 0.4, 1.5, 3, 5, 9, 16, 30, 60, 120, 240, 520];
-const CARVED_ROWS = [-14, -5, -1.5, 0.4, 1.5, 3, 5, ...Array.from({ length: 74 }, (_, k) => 8 + k * 4), 340, 420, 520];
+const STRATA = 5;
+const FACE_KNOTS = [0.4, ...Array.from({ length: STRATA }, (_, j) => [0.4 + j * 3.2 + 0.3, 0.4 + j * 3.2 + 0.6, 0.4 + j * 3.2 + 0.9, 0.4 + (j + 1) * 3.2]).flat()];
+const FACE_DEPTH = FACE_KNOTS[FACE_KNOTS.length - 1];
+const MAINLAND_ROWS = [-14, -5, -1.5, ...FACE_KNOTS, 24, 32, 60, 120, 240, 520];
+const CARVED_ROWS = [-14, -5, -1.5, ...FACE_KNOTS, ...Array.from({ length: 116 }, (_, k) => 20 + k * 4), 520];
 const CARVE_FLOOR = -8;
-const CRATER_FLOOR = -40;
+const CRATER_FLOOR = -80;
 const CRATER_WALL = 12;
 const CAVE_WALL = 8;
 
 const mainlandRise = (x, d) => mainlandHeight(x) + Math.min(1, d / 40) * (6 * Math.sin(x * 0.02 + d * 0.03) + 5 * Math.sin(d * 0.05 - x * 0.011));
-const faceRise = (x, d) => -4 + (mainlandHeight(x) + 4) * Math.min(1, THREE.MathUtils.smoothstep(d, 0.4, 5) * 1.15);
 const faceSway = (x, y) => Math.sin(y * 0.22 + x * 0.09) * 2.6 + Math.sin(y * 0.07 + x * 0.21) * 1.8;
+
+function faceHeights(x) {
+  const top = mainlandRise(x, FACE_DEPTH);
+  const ys = [-4];
+  for (let j = 0; j < STRATA; j++) {
+    const lip = j === STRATA - 1 ? top - 1 : -4 + (top + 4) * ((j + 1) / STRATA + 0.05 * Math.sin(x * 0.031 + j * 1.7));
+    const from = ys[ys.length - 1];
+    ys.push(from + (lip - from) / 3, from + ((lip - from) * 2) / 3, lip, j === STRATA - 1 ? top : lip + 1.1);
+  }
+  return ys;
+}
+
+function faceRise(x, d) {
+  const ys = faceHeights(x);
+  for (let k = 1; k < FACE_KNOTS.length; k++) {
+    if (d <= FACE_KNOTS[k]) return ys[k - 1] + ((ys[k] - ys[k - 1]) * (d - FACE_KNOTS[k - 1])) / (FACE_KNOTS[k] - FACE_KNOTS[k - 1]);
+  }
+  return ys[ys.length - 1];
+}
 
 function cliffFace(x, y) {
   let lo = 0.4;
-  let hi = 5;
-  for (let k = 0; k < 20; k++) {
+  let hi = FACE_DEPTH;
+  for (let k = 0; k < 24; k++) {
     const mid = (lo + hi) / 2;
     if (faceRise(x, mid) < y) lo = mid;
     else hi = mid;
@@ -1166,8 +1189,10 @@ function cliffFace(x, y) {
 function mainlandGround(x, z) {
   const d = z - mainlandEdge(x);
   if (d < 0.4) return -4;
-  return d < 6 ? faceRise(x, d) : mainlandRise(x, d);
+  return d < FACE_DEPTH ? faceRise(x, d) : mainlandRise(x, d);
 }
+
+const clifftop = (x, z) => mainlandRise(x, Math.max(FACE_DEPTH, z - mainlandEdge(x)));
 
 function carveHeight(site, x, z) {
   if (!site) return Infinity;
@@ -1175,13 +1200,59 @@ function carveHeight(site, x, z) {
   const a = Math.atan2(z - site.center.z, x - site.center.x);
   const r = Math.hypot(x - site.center.x, z - site.center.z) - (site.radius + 2) + Math.sin(a * 9) * 1.2 + Math.sin(a * 23 + 1) * 0.7;
   if (r < CRATER_WALL + 2) h = r < 0 ? CRATER_FLOOR : CARVE_FLOOR + (r / CRATER_WALL) * 90;
-  const d = site.caveDistance(x, z) - CAVE_HALF;
+  const d = site.caveDistance(x, z);
   if (d < CAVE_WALL + 2) h = Math.min(h, CARVE_FLOOR + (Math.max(0, d) / CAVE_WALL) * 90);
   return h;
 }
 
 function inCave(site, x, z) {
-  return site.caveDistance(x, z) < CAVE_HALF + CAVE_WALL + 1 && Math.hypot(x - site.center.x, z - site.center.z) > site.radius + 2 + CRATER_WALL;
+  let best = Infinity;
+  let roofed = false;
+  for (const p of site.cave) {
+    const d = Math.hypot(p.x - x, p.z - z) - p.half;
+    if (d < best) {
+      best = d;
+      roofed = p.roofed;
+    }
+  }
+  return roofed && best < CAVE_WALL + 1;
+}
+
+function nearHole(site, positions, a, b) {
+  const { hole } = site;
+  const x = (positions[a * 3] + positions[b * 3 + 3]) / 2;
+  const y = (positions[a * 3 + 1] + positions[b * 3 + 4]) / 2;
+  const z = (positions[a * 3 + 2] + positions[b * 3 + 5]) / 2;
+  return Math.abs(x - hole.x) < 10 && Math.abs(y - hole.y) < 10 && Math.abs(z - hole.z) < 9;
+}
+
+function addBlowholeCollar(batch, site) {
+  const { hole, flume } = site;
+  const sides = 28;
+  const inner = flume.radius + 0.4;
+  const rim = [];
+  for (let j = 0; j <= sides; j++) {
+    const a = (j / sides) * Math.PI * 2;
+    const outer = 17 + 2.2 * Math.sin(a * 5 + 1) + 1.4 * Math.sin(a * 11);
+    rim.push([a, outer]);
+  }
+  const place = (lx, ly, lz) => [hole.x + lx * Math.cos(hole.heading) + lz * hole.dx, hole.y + ly, hole.z - lx * Math.sin(hole.heading) + lz * hole.dz];
+  const tris = [];
+  for (let j = 0; j < sides; j++) {
+    const [a0, o0] = rim[j];
+    const [a1, o1] = rim[j + 1];
+    const v = (a, r, lz) => place(Math.cos(a) * r, Math.sin(a) * r, lz);
+    const i0 = v(a0, inner, 1.2);
+    const i1 = v(a1, inner, 1.2);
+    const m0 = v(a0, (inner + o0) / 2, 1.6);
+    const m1 = v(a1, (inner + o1) / 2, 1.6);
+    const e0 = v(a0, o0, -2.5);
+    const e1 = v(a1, o1, -2.5);
+    tris.push(...i0, ...m0, ...i1, ...i1, ...m0, ...m1, ...m0, ...e0, ...m1, ...m1, ...e0, ...e1);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(twoSided(tris), 3));
+  batch.add('rockland', paintPillar(g, 1e9));
 }
 
 function addMainland(batch, rand, site = null) {
@@ -1196,7 +1267,7 @@ function addMainland(batch, rand, site = null) {
       let z = edge + d;
       let px = x;
       if (d < 0) y = -4;
-      else if (d < 6) {
+      else if (d <= FACE_DEPTH) {
         y = faceRise(x, d);
         z += faceSway(x, y);
         px += Math.sin(y * 0.15 + x * 0.3) * 1.2;
@@ -1212,6 +1283,7 @@ function addMainland(batch, rand, site = null) {
     for (let r = 0; r < rows - 1; r++) {
       const a = c * rows + r;
       const b = (c + 1) * rows + r;
+      if (site && nearHole(site, positions, a, b)) continue;
       indices.push(a, a + 1, b, a + 1, b + 1, b);
     }
   }
@@ -1257,10 +1329,9 @@ function addMainland(batch, rand, site = null) {
 }
 
 function addCaveRoof(batch, site) {
-  const span = CAVE_HALF + CAVE_WALL + 4;
   const top = [];
   const under = [];
-  const pts = site.cave.filter((p) => p.z > mainlandEdge(p.x) + 2 && Math.hypot(p.x - site.center.x, p.z - site.center.z) > site.radius + 2 + CRATER_WALL * 0.6);
+  const pts = site.cave.filter((p) => p.roofed && p.z > mainlandEdge(p.x) + FACE_DEPTH + 2);
   for (let k = 0; k < pts.length - 2; k += 2) {
     const a = pts[k];
     const b = pts[Math.min(pts.length - 1, k + 2)];
@@ -1270,10 +1341,11 @@ function addCaveRoof(batch, site) {
       const len = Math.hypot(dx, dz) || 1;
       const nx = dz / len;
       const nz = -dx / len;
+      const span = p.half + CAVE_WALL + 4;
       return [-1, 1].map((side) => {
         const x = p.x + nx * side * span;
         const z = p.z + nz * side * span;
-        return [x, mainlandRise(x, Math.max(6, z - mainlandEdge(x))) + 0.6, z];
+        return [x, clifftop(x, z) + 0.6, z];
       });
     };
     const [l0, r0] = strip(a, b);
@@ -1295,7 +1367,6 @@ function addCaveRoof(batch, site) {
   addCaveArch(batch, site);
 }
 
-const ARCH_SPAN = CAVE_HALF + 1.5;
 const ARCH_SPRING = 3;
 const ARCH_RISE = 21;
 const ARCH_SIDES = 14;
@@ -1307,8 +1378,7 @@ function twoSided(positions) {
 }
 
 function addCaveArch(batch, site) {
-  const rimRadius = site.radius + 2 + CRATER_WALL * 0.5;
-  const pts = site.cave.filter((p) => p.z > mainlandEdge(p.x) + 1 && Math.hypot(p.x - site.center.x, p.z - site.center.z) > rimRadius);
+  const pts = site.cave.filter((p) => p.roofed && p.z > mainlandEdge(p.x) + 1);
   const frame = (k) => {
     const a = pts[Math.max(0, k - 1)];
     const b = pts[Math.min(pts.length - 1, k + 1)];
@@ -1319,7 +1389,7 @@ function addCaveArch(batch, site) {
     const { p, nx, nz } = frame(k);
     return Array.from({ length: ARCH_SIDES + 1 }, (_, j) => {
       const phi = (j / ARCH_SIDES) * Math.PI;
-      const lateral = Math.cos(phi) * ARCH_SPAN * (1 + 0.06 * Math.sin(k * 0.7 + j * 2.1));
+      const lateral = Math.cos(phi) * (p.half + 1.5) * (1 + 0.06 * Math.sin(k * 0.7 + j * 2.1));
       const lift = Math.sin(phi) * ARCH_RISE * (1 + 0.05 * Math.sin(k * 1.3 + j));
       return [p.x + nx * lateral, ARCH_SPRING + lift, p.z + nz * lateral];
     });
@@ -1337,7 +1407,8 @@ function addCaveArch(batch, site) {
   for (const k of [0, pts.length - 1]) {
     const { p, nx, nz } = frame(k);
     const inner = ring(k);
-    const wide = CAVE_HALF + CAVE_WALL + 5;
+    const wide = p.half + CAVE_WALL + 5;
+    const mouth = k === 0;
     const panel = [];
     for (let j = 0; j < ARCH_SIDES; j++) {
       const phi0 = (j / ARCH_SIDES) * Math.PI;
@@ -1346,7 +1417,8 @@ function addCaveArch(batch, site) {
         const lateral = Math.cos(phi) * wide;
         const x = p.x + nx * lateral;
         const z = p.z + nz * lateral;
-        return [x, mainlandRise(x, Math.max(6, z - mainlandEdge(x))) + 1, z];
+        const y = clifftop(x, z) + 1;
+        return [x, y, mouth ? Math.max(z, cliffFace(x, y - 2) - 0.6) : z];
       };
       const o0 = outer(phi0);
       const o1 = outer(phi1);
@@ -1357,7 +1429,8 @@ function addCaveArch(batch, site) {
       const lateral = side === 0 ? wide : -wide;
       const x = p.x + nx * lateral;
       const z = p.z + nz * lateral;
-      const high = [x, mainlandRise(x, Math.max(6, z - mainlandEdge(x))) + 1, z];
+      const y = clifftop(x, z) + 1;
+      const high = [x, y, mouth ? Math.max(z, cliffFace(x, y - 2) - 0.6) : z];
       const low = [x, CARVE_FLOOR, z];
       const base = [foot[0], CARVE_FLOOR, foot[2]];
       panel.push(...foot, ...high, ...low, ...foot, ...low, ...base);
@@ -1365,6 +1438,12 @@ function addCaveArch(batch, site) {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(twoSided(panel), 3));
     batch.add('rockland', paintPillar(g, 1e9));
+    if (!mouth) continue;
+    for (let j = 1; j < ARCH_SIDES; j++) {
+      const [x, y, z] = inner[j];
+      const len = 3 + Math.abs(Math.sin(j * 2.3)) * 8;
+      batch.add('vine', CYLINDER, mat(x - frame(k).fx * 0.8, y + 1 - len / 2, z - frame(k).fz * 0.8, 0.2, len, 0.2));
+    }
   }
 }
 
@@ -1376,7 +1455,7 @@ function addCrater(batch, site, rand) {
     const r = rim + 3 + rand() * 30;
     const x = center.x + Math.cos(a) * r;
     const z = center.z + Math.sin(a) * r;
-    if (site.caveDistance(x, z) < CAVE_HALF + CAVE_WALL + 3) continue;
+    if (site.caveDistance(x, z) < CAVE_WALL + 3) continue;
     const y = mainlandGround(x, z);
     if (rand() < 0.4) addPalm(batch, x, y - 0.4, z, rand, { height: 9 + rand() * 8, lean: 0.2 + rand() * 0.4, dir: a + Math.PI });
     else canopyTree(batch, x, y - 0.3, z, rand, 3 + rand() * 2.5);
@@ -1398,15 +1477,7 @@ function addCrater(batch, site, rand) {
 
 function bayWaters(site) {
   const out = { level: 0, amp: 1 };
-  const reach = site.radius + 3;
-  return {
-    sample(x, z) {
-      if (Math.abs(x - site.center.x) < reach && Math.abs(z - site.center.z) < reach) return site.sample(x, z, out);
-      out.level = 0;
-      out.amp = 1;
-      return out;
-    },
-  };
+  return { sample: (x, z) => site.sample(x, z, out) };
 }
 
 function courseReach(track, site) {
@@ -1431,19 +1502,160 @@ function courseReach(track, site) {
   return reach;
 }
 
-function blowholeJet(site) {
-  const { hole } = site;
-  const speed = 11;
-  const rise = 3;
-  const gravity = 20;
-  const land = (rise + Math.sqrt(rise * rise + 2 * gravity * hole.y)) / gravity;
-  const at = (spec, t) => {
-    const time = t * land;
-    const d = speed * time;
-    return [hole.x + hole.dx * d, hole.y + rise * time - 0.5 * gravity * time * time, hole.z + hole.dz * d];
-  };
-  const [fx, , fz] = at(null, 1);
-  return { top: new THREE.Vector3(hole.x, hole.y - 1.2, hole.z), foot: new THREE.Vector3(fx, 0.2, fz), dx: hole.dx, dz: hole.dz, width: 5, path: at };
+function caveFrames(site, roofed) {
+  const pts = site.cave.filter((p) => p.roofed === roofed && p.z > mainlandEdge(p.x) + 1);
+  return pts.map((p, k) => {
+    const a = pts[Math.max(0, k - 1)];
+    const b = pts[Math.min(pts.length - 1, k + 1)];
+    const len = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+    return { ...p, nx: (b.z - a.z) / len, nz: -(b.x - a.x) / len };
+  });
+}
+
+function addCaveInterior(batch, site, scene, rand) {
+  const frames = caveFrames(site, true);
+  const crystals = [];
+  frames.forEach((f, k) => {
+    if (k % 3) return;
+    for (let n = 0; n < 2; n++) {
+      const u = (rand() * 2 - 1) * 0.85;
+      const lateral = u * (f.half + 1.5);
+      const y = ARCH_SPRING + Math.sqrt(1 - u * u) * ARCH_RISE - 0.6;
+      const len = 2.5 + rand() * 6;
+      const r = 0.5 + rand() * 0.9;
+      batch.add('stalactite', CONE, mat(f.x + f.nx * lateral, y - len / 2, f.z + f.nz * lateral, r, len, r, Math.PI, rand() * 6, 0));
+    }
+    if (rand() < 0.7) {
+      const side = rand() < 0.5 ? -1 : 1;
+      const lateral = side * (f.half - 0.3);
+      const y = 0.4 + rand() * 3;
+      const color = rand() < 0.6 ? 0x6ff3ff : 0xc58bff;
+      for (let n = 0; n < 3 + Math.floor(rand() * 3); n++) {
+        crystals.push({ x: f.x + f.nx * lateral + (rand() - 0.5) * 2, y: y + rand() * 2, z: f.z + f.nz * lateral + (rand() - 0.5) * 2, s: 0.5 + rand() * 0.9, tilt: (rand() - 0.5) * 1.2, spin: rand() * 6, lean: -side * 0.5, color });
+      }
+    }
+  });
+  const gem = new THREE.OctahedronGeometry(1, 0).scale(0.55, 1.6, 0.55);
+  const glow = new THREE.InstancedMesh(gem, new THREE.MeshBasicMaterial({ color: 0xffffff }), Math.max(1, crystals.length));
+  const tint = new THREE.Color();
+  crystals.forEach((c, k) => {
+    glow.setMatrixAt(k, mat(c.x, c.y, c.z, c.s, c.s, c.s, c.tilt, c.spin, c.lean));
+    glow.setColorAt(k, tint.set(c.color));
+  });
+  glow.count = crystals.length;
+  glow.computeBoundingSphere();
+  scene.add(glow);
+  const water = [];
+  for (let k = 0; k < frames.length - 1; k++) {
+    const a = frames[k];
+    const b = frames[k + 1];
+    const across = 6;
+    for (let j = 0; j < across; j++) {
+      const u0 = (j / across) * 2 - 1;
+      const u1 = ((j + 1) / across) * 2 - 1;
+      const at = (f, u) => [f.x + f.nx * u * (f.half + 3), 0.12, f.z + f.nz * u * (f.half + 3)];
+      water.push(...at(a, u0), ...at(b, u0), ...at(a, u1), ...at(a, u1), ...at(b, u0), ...at(b, u1));
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(water, 3));
+  g.computeVertexNormals();
+  const pool = createWater({ geometry: g, flat: true, deep: 0x093447, shallow: 0x146a7e, foam: 0x8fd3e6 });
+  pool.mesh.material.polygonOffset = true;
+  pool.mesh.material.polygonOffsetFactor = -2;
+  pool.mesh.material.polygonOffsetUnits = -2;
+  scene.add(pool.mesh);
+  return pool;
+}
+
+function addGorge(batch, site, rand) {
+  const frames = caveFrames(site, false).filter((f) => Math.hypot(f.x - site.center.x, f.z - site.center.z) > site.radius + CRATER_WALL + 6);
+  const specs = [];
+  frames.forEach((f, k) => {
+    if (k % 2) return;
+    for (const side of [-1, 1]) {
+      const rim = f.half + CAVE_WALL + 2 + rand() * 8;
+      const x = f.x + f.nx * side * rim;
+      const z = f.z + f.nz * side * rim;
+      const y = clifftop(x, z);
+      if (rand() < 0.35) addPalm(batch, x, y - 0.4, z, rand, { height: 9 + rand() * 7, lean: 0.4 + rand() * 0.4, dir: Math.atan2(-f.nx * side, -f.nz * side) });
+      else if (rand() < 0.6) canopyTree(batch, x, y - 0.3, z, rand, 3 + rand() * 2);
+      else {
+        const sz = 2.5 + rand() * 3;
+        batch.add(rand() < 0.5 ? 'moss' : 'mossDark', LOW_SPHERE, mat(x, y + sz * 0.3, z, sz * 1.3, sz * 0.8, sz));
+      }
+      if (rand() < 0.6) {
+        const lip = f.half + CAVE_WALL * 0.7;
+        const vx = f.x + f.nx * side * lip;
+        const vz = f.z + f.nz * side * lip;
+        const top = CARVE_FLOOR + 0.7 * 90 - 2;
+        for (let n = 0; n < 3; n++) {
+          const len = 10 + rand() * 30;
+          const ox = (rand() - 0.5) * 4;
+          batch.add('vine', CYLINDER, mat(vx + ox * f.nz, Math.min(top, clifftop(vx, vz)) - len / 2, vz - ox * f.nx, 0.2, len, 0.2));
+        }
+      }
+    }
+  });
+  for (const k of [Math.floor(frames.length * 0.3), Math.floor(frames.length * 0.7)]) {
+    const f = frames[k];
+    if (!f) continue;
+    const side = k % 2 ? 1 : -1;
+    const rim = f.half + CAVE_WALL - 0.5;
+    const tx = f.x + f.nx * side * rim;
+    const tz = f.z + f.nz * side * rim;
+    specs.push({
+      top: new THREE.Vector3(tx, clifftop(tx, tz) - 0.4, tz),
+      foot: new THREE.Vector3(f.x + f.nx * side * (f.half - 3), 0.2, f.z + f.nz * side * (f.half - 3)),
+      dx: -f.nx * side,
+      dz: -f.nz * side,
+      width: 3.5 + rand() * 1.5,
+    });
+  }
+  return specs;
+}
+
+function addCliffDressing(batch, site, rand) {
+  const specs = [];
+  const clear = (x) => Math.abs(x - site.hole.x) > 26 && !site.cave.some((p) => Math.abs(p.x - x) < p.half + 12 && p.z < mainlandEdge(p.x) + 30);
+  for (let x = -460; x <= 460; x += 7 + rand() * 12) {
+    if (!clear(x)) continue;
+    const edge = mainlandEdge(x);
+    const ys = faceHeights(x);
+    const j = Math.floor(rand() * (STRATA - 1));
+    const lip = ys[4 * j + 3];
+    const ledge = 0.4 + j * 3.2 + 2;
+    if (rand() < 0.7) {
+      const sz = 1.6 + rand() * 2;
+      const y = faceRise(x, ledge);
+      batch.add(rand() < 0.5 ? 'moss' : 'mossDark', LOW_SPHERE, mat(x, y + sz * 0.25, edge + ledge + faceSway(x, y), sz * 1.4, sz * 0.7, sz));
+    }
+    if (rand() < 0.55) {
+      const zLip = edge + 0.4 + j * 3.2 + 0.9 + faceSway(x, lip) - 0.5;
+      for (let n = 0; n < 2 + Math.floor(rand() * 3); n++) {
+        const len = 5 + rand() * 12;
+        const ox = x + (rand() - 0.5) * 5;
+        batch.add('vine', CYLINDER, mat(ox, lip - len / 2, zLip - rand() * 0.4, 0.18, len, 0.18));
+      }
+    }
+    if (rand() < 0.45) {
+      const sz = 1.8 + rand() * 3.5;
+      const bz = edge - 1.5 - rand() * 5;
+      batch.add('rock', ROCK, mat(x, 0.1, bz, sz, sz * (0.6 + rand() * 0.4), sz, rand(), rand() * 6, rand()));
+      if (rand() < 0.5) batch.add('foam', RING, mat(x, 0.25, bz, sz * 1.4, 6, sz * 1.4));
+    }
+  }
+  for (const x of [-360, -230, 270, 395]) {
+    const top = faceHeights(x)[4 * STRATA] - 0.6;
+    specs.push({
+      top: new THREE.Vector3(x, top, cliffFace(x, top) - 0.4),
+      foot: new THREE.Vector3(x, 0.2, mainlandEdge(x) - 3),
+      dx: 0,
+      dz: -1,
+      width: 3 + rand() * 1.5,
+    });
+  }
+  return specs;
 }
 
 function addLighthouse(batch, x, z, baseY) {
@@ -1567,8 +1779,8 @@ export function createWorld(scene, track, fx) {
   const pillars = [];
   const falls = [];
   const fits = (x, z, r) => !pillars.some((o) => Math.hypot(o.x - x, o.z - z) < o.r + r + 6);
-  for (const f of [0.168, 0.633, 0.764]) shores.push(...addArch(batch, track, f, rand));
-  for (const f of [0.168, 0.6, 0.764]) {
+  for (const f of [0.131, 0.715, 0.817]) shores.push(...addArch(batch, track, f, rand));
+  for (const f of [0.131, 0.689, 0.817]) {
     const idx = track.wrap(Math.round(f * track.N));
     for (const side of [-1, 1]) {
       const p = track.point(idx, side * (half + 9));
@@ -1600,9 +1812,13 @@ export function createWorld(scene, track, fx) {
     }
   }
   const specs = falls.map((f) => waterfallSpec(batch, f.pillar, f.x, f.z, f.toward, rand));
+  let caveWater = null;
   if (site) {
+    const dress = mulberry32(7101);
     addCaveRoof(batch, site);
-    specs.push(...addCrater(batch, site, rand), blowholeJet(site));
+    addBlowholeCollar(batch, site);
+    caveWater = addCaveInterior(batch, site, scene, dress);
+    specs.push(...addCrater(batch, site, rand), ...addGorge(batch, site, dress), ...addCliffDressing(batch, site, dress), flumeStream(site));
   }
   const waterfalls = createWaterfalls(specs, rand);
   scene.add(waterfalls.group);
@@ -1667,10 +1883,11 @@ export function createWorld(scene, track, fx) {
     update(t, dt, camera) {
       if (whirlpool) {
         whirlpool.animate(t);
+        caveWater.update(t);
         const { center } = site;
-        if (fx && Math.hypot(camera.position.x - center.x, camera.position.z - center.z) < 260 && Math.random() < dt * 2) {
+        if (fx && Math.hypot(camera.position.x - center.x, camera.position.z - center.z) < 300 && Math.random() < dt * 3) {
           const a = Math.random() * Math.PI * 2;
-          fx.mist(center.x + Math.cos(a) * 6, -9, center.z + Math.sin(a) * 6);
+          fx.mist(center.x + Math.cos(a) * 10, -40, center.z + Math.sin(a) * 10);
         }
       }
       water.update(t);

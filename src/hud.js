@@ -93,6 +93,13 @@ export class Hud {
       minZ = Math.min(minZ, track.pz[i]);
       maxZ = Math.max(maxZ, track.pz[i]);
     }
+    const pool = track.whirlpool;
+    if (pool) {
+      minX = Math.min(minX, pool.center.x - pool.radius);
+      maxX = Math.max(maxX, pool.center.x + pool.radius);
+      minZ = Math.min(minZ, pool.center.z - pool.radius);
+      maxZ = Math.max(maxZ, pool.center.z + pool.radius);
+    }
     const pad = 16;
     const size = this.map.width - pad * 2;
     const scale = size / Math.max(maxX - minX, maxZ - minZ);
@@ -231,11 +238,8 @@ export class Hud {
         this.flash.className = 'hud-flash on blast';
         break;
       case 'falls':
-      case 'teleport':
+      case 'launch':
         this.pop(t('wheee'), 'go');
-        break;
-      case 'whirlpool':
-        this.pop(t('plughole'), 'go');
         break;
       case 'laundry':
         this.pop(t('laundry'), 'ko');

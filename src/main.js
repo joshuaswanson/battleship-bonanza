@@ -948,6 +948,7 @@ function handleEvents() {
 }
 
 let last = performance.now();
+let lastGloom = 0;
 function frame(now) {
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
   last = now;
@@ -1012,6 +1013,8 @@ function frame(now) {
   }
   updateSawSound();
 
+  const gloom = mode === 'race' || mode === 'paused' ? (current.world.hazards?.darkness?.(race.player) ?? 0) : 0;
+  if (gloom !== lastGloom) $('gloom').style.opacity = (lastGloom = gloom).toFixed(3);
   if (!(import.meta.env.DEV && window.__bb?.skipRender)) renderer.render(scene, camera);
   adaptResolution(dt);
   if (mode === 'loadout') loadout.render(dt);

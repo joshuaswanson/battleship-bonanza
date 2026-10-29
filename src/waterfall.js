@@ -3,11 +3,14 @@ import { toon, outlineMaterial } from './toon.js';
 
 const SHEET_VERT = /* glsl */ `
   attribute vec3 aFlow;
+  attribute float aShade;
   varying vec3 vFlow;
+  varying float vShade;
   #include <common>
   #include <fog_pars_vertex>
   void main() {
     vFlow = aFlow;
+    vShade = aShade;
     vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
     gl_Position = projectionMatrix * mvPosition;
     #include <fog_vertex>
@@ -17,6 +20,7 @@ const SHEET_VERT = /* glsl */ `
 const SHEET_FRAG = /* glsl */ `
   uniform float uTime;
   varying vec3 vFlow;
+  varying float vShade;
   #include <common>
   #include <fog_pars_fragment>
   void main() {
@@ -31,7 +35,7 @@ const SHEET_FRAG = /* glsl */ `
     color = mix(color, vec3(1.0), streak * 0.85);
     color = mix(color, vec3(1.0), smoothstep(0.7, 1.0, t) * 0.75 + smoothstep(0.1, 0.0, t) * 0.6);
     color = mix(color, vec3(0.16, 0.4, 0.6), smoothstep(0.88, 0.96, edge));
-    gl_FragColor = vec4(color, 1.0);
+    gl_FragColor = vec4(color * vShade, 1.0);
     #include <colorspace_fragment>
     #include <fog_fragment>
   }
@@ -55,13 +59,15 @@ function sheetGeometry(spec) {
   const { dx, dz, width } = spec;
   const tx = -dz;
   const tz = dx;
+  const rows = spec.rows ?? ROWS;
   const positions = [];
   const flows = [];
+  const shades = [];
   const indices = [];
   let along = 0;
   let prev = null;
-  for (let r = 0; r <= ROWS; r++) {
-    const t = r / ROWS;
+  for (let r = 0; r <= rows; r++) {
+    const t = r / rows;
     const [cx, cy, cz] = (spec.path ?? fallPath)(spec, t);
     if (prev) along += Math.hypot(cx - prev[0], cy - prev[1], cz - prev[2]);
     prev = [cx, cy, cz];
@@ -72,9 +78,10 @@ function sheetGeometry(spec) {
       if (spec.path) positions.push(cx + tx * u * w, cy + bulge, cz + tz * u * w);
       else positions.push(cx + tx * u * w + dx * bulge, cy, cz + tz * u * w + dz * bulge);
       flows.push(c / COLS, t, along);
+      shades.push(spec.shade ? spec.shade(t) : 1);
     }
   }
-  for (let r = 0; r < ROWS; r++) {
+  for (let r = 0; r < rows; r++) {
     for (let c = 0; c < COLS; c++) {
       const a = r * (COLS + 1) + c;
       indices.push(a, a + COLS + 1, a + 1, a + 1, a + COLS + 1, a + COLS + 2);
@@ -83,6 +90,7 @@ function sheetGeometry(spec) {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   g.setAttribute('aFlow', new THREE.Float32BufferAttribute(flows, 3));
+  g.setAttribute('aShade', new THREE.Float32BufferAttribute(shades, 1));
   g.setIndex(indices);
   g.computeBoundingSphere();
   return g;
