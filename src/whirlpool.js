@@ -120,8 +120,10 @@ export function whirlpoolSite(track, edgeAt, faceAt) {
 const FUNNEL_VERT = /* glsl */ `
   uniform float uTime;
   uniform vec2 uCenter;
+  uniform float uRadius;
   attribute float aAmp;
   varying vec2 vLocal;
+  varying vec3 vWorld;
   varying float vDepth;
   varying float vWave;
   varying vec3 vNormalW;
@@ -133,8 +135,14 @@ const FUNNEL_VERT = /* glsl */ `
     float b = p.z * 0.08 - uTime * 1.1;
     float c = (p.x + p.z) * 0.13 + uTime * 2.0;
     vWave = 0.45 * sin(a) + 0.35 * sin(b) + 0.2 * sin(c);
-    p.y += vWave * aAmp;
-    vLocal = p.xz - uCenter;
+    vec2 local = p.xz - uCenter;
+    float r = max(length(local), 1.0);
+    float k = clamp(1.0 - r / uRadius, 0.0, 1.0);
+    float theta = atan(local.y, local.x);
+    float swell = sin(9.0 * theta - log(r) * 12.0 - uTime * (2.0 + 5.0 * k)) * 0.5 + sin(14.0 * theta + r * 0.35 - uTime * 3.0) * 0.3;
+    p.y += vWave * aAmp + swell * k * 0.5;
+    vLocal = local;
+    vWorld = p;
     vDepth = position.y;
     vNormalW = normalize(normal);
     vec4 mvPosition = modelViewMatrix * vec4(p, 1.0);
@@ -147,9 +155,11 @@ const FUNNEL_FRAG = /* glsl */ `
   uniform float uTime;
   uniform float uRadius;
   uniform float uDepth;
+  uniform float uDrain;
   uniform vec3 uSunDir;
   uniform vec2 uCenterW;
   varying vec2 vLocal;
+  varying vec3 vWorld;
   varying float vDepth;
   varying float vWave;
   varying vec3 vNormalW;
@@ -161,6 +171,11 @@ const FUNNEL_FRAG = /* glsl */ `
     float warpB = sin(p.x * 1.9 - t * 0.7) * 1.4;
     return sin(p.x * 2.6 + warpA + t * 0.6) * sin(p.y * 2.6 + warpB - t * 0.5);
   }
+  float streaks(float th, float r, float t) {
+    return sin(13.0 * th + r * 0.55 + t * 0.7) * 0.45
+      + sin(21.0 * th - r * 0.8 + 1.7 - t * 0.4) * 0.3
+      + sin(34.0 * th + r * 1.3 + 4.1 + t * 1.1) * 0.25;
+  }
   vec2 spin(vec2 v, float a) {
     float c = cos(a);
     float s = sin(a);
@@ -169,29 +184,47 @@ const FUNNEL_FRAG = /* glsl */ `
   void main() {
     float r = max(length(vLocal), 1.0);
     float k = clamp(1.0 - r / uRadius, 0.0, 1.0);
-    float omega = (22.0 + 42.0 * k) / r * smoothstep(uRadius + 2.0, uRadius - 15.0, r);
-    float flowA = fract(uTime * 0.4);
-    float flowB = fract(uTime * 0.4 + 0.5);
-    vec2 qa = spin(vLocal, -omega * flowA * 2.5);
-    vec2 qb = spin(vLocal, -omega * flowB * 2.5);
-    float wa = 1.0 - abs(2.0 * flowA - 1.0);
-    float wb = 1.0 - wa;
-    float rip = ripple(qa + uCenterW, uTime) * wa + ripple(qb + uCenterW, uTime) * wb;
     float theta = atan(vLocal.y, vLocal.x);
-    float lanes = sin(theta * 9.0 - log(r) * 11.0 - uTime * (1.5 + 6.0 * k) + rip * 1.5) * 0.5 + 0.5;
+    float omega = (22.0 + 42.0 * k) / r * smoothstep(uRadius + 2.0, uRadius - 15.0, r);
+    float pa = fract(uTime * 0.3);
+    float pb = fract(uTime * 0.3 + 0.5);
+    float wa = 1.0 - abs(2.0 * pa - 1.0);
+    float wb = 1.0 - wa;
+    float st = streaks(theta - omega * pa * 3.3, r, uTime) * wa + streaks(theta - omega * pb * 3.3, r, uTime) * wb;
+    float rip = ripple(spin(vLocal, -omega * pa * 3.3) + uCenterW, uTime) * wa + ripple(spin(vLocal, -omega * pb * 3.3) + uCenterW, uTime) * wb;
+    float flow = smoothstep(0.04, 0.45, k);
 
-    float h = clamp(vWave * 0.5 + 0.5, 0.0, 1.0);
-    vec3 deep = vec3(0.059, 0.561, 0.722);
     vec3 shallow = vec3(0.208, 0.839, 0.878);
-    vec3 abyss = vec3(0.02, 0.2, 0.34);
+    vec3 deep = vec3(0.059, 0.561, 0.722);
+    vec3 dusk = vec3(0.03, 0.36, 0.55);
+    vec3 abyss = vec3(0.015, 0.13, 0.24);
     vec3 foam = vec3(0.957, 0.984, 1.0);
-    vec3 color = mix(deep, shallow, smoothstep(0.25, 0.85, h) * (1.0 - k));
-    color = mix(color, abyss, smoothstep(-6.0, -uDepth, vDepth) * 0.85);
-    float light = dot(vNormalW, normalize(uSunDir));
-    color *= mix(0.9, 1.06, step(0.62, light));
-    color = mix(color, foam, smoothstep(0.8, 0.86, rip) * 0.45);
-    color = mix(color, foam, smoothstep(0.9, 0.98, lanes) * smoothstep(0.1, 0.7, k) * (0.25 + 0.3 * k) * (0.6 + 0.4 * rip));
-    color = mix(color, foam, smoothstep(0.9, 0.96, h) * 0.6 * (1.0 - k));
+    float h = clamp(vWave * 0.5 + 0.5, 0.0, 1.0);
+    vec3 color = mix(deep, shallow, smoothstep(0.25, 0.85, h) * (1.0 - flow));
+    float depth = clamp(-vDepth / uDepth, 0.0, 1.0);
+    color = mix(color, dusk, smoothstep(0.05, 0.45, depth));
+    color = mix(color, abyss, smoothstep(0.45, 1.0, depth));
+
+    vec3 tangent = vec3(-sin(theta), 0.0, cos(theta));
+    vec3 n = normalize(vNormalW + tangent * st * 0.35 * flow);
+    vec3 sun = normalize(uSunDir);
+    float lambert = dot(n, sun);
+    color *= mix(mix(0.72, 0.92, step(0.3, lambert)), 1.08, step(0.7, lambert));
+
+    color = mix(color, color * 1.35 + vec3(0.02, 0.05, 0.06), smoothstep(0.25, 0.7, st) * 0.45 * flow);
+    color *= 1.0 - smoothstep(-0.35, -0.85, st) * 0.22 * flow;
+    color = mix(color, foam, smoothstep(0.72, 0.86, st) * (0.25 + 0.5 * k) * flow);
+    color = mix(color, foam, smoothstep(0.8, 0.86, rip) * 0.45 * (1.0 - flow * 0.6));
+    color = mix(color, foam, smoothstep(0.9, 0.96, h) * 0.7 * (1.0 - flow));
+
+    float churn = sin(theta * 11.0 - uTime * 8.0 + r * 1.4) * 0.5 + sin(theta * 17.0 - uTime * 11.0 - r * 0.9 + 2.0) * 0.3 + st * 0.4;
+    float throat = 1.0 - smoothstep(uDrain + 1.0, uDrain + 10.0, r);
+    color = mix(color, foam, throat * smoothstep(0.05, 0.45, churn) * 0.8);
+
+    vec3 view = normalize(cameraPosition - vWorld);
+    float glint = pow(max(dot(reflect(-sun, n), view), 0.0), 48.0);
+    color = mix(color, foam, step(0.55, glint) * 0.6 * (0.3 + flow));
+
     gl_FragColor = vec4(color, 1.0);
     #include <colorspace_fragment>
     #include <fog_fragment>
@@ -273,7 +306,7 @@ export class Whirlpool {
     this.material = new THREE.ShaderMaterial({
       uniforms: THREE.UniformsUtils.merge([
         THREE.UniformsLib.fog,
-        { uTime: { value: 0 }, uCenter: { value: new THREE.Vector2(center.x, center.z) }, uRadius: { value: radius }, uDepth: { value: DEPTH }, uCenterW: { value: new THREE.Vector2(center.x, center.z) }, uSunDir: { value: new THREE.Vector3(0.4, 1, 0.3) } },
+        { uTime: { value: 0 }, uCenter: { value: new THREE.Vector2(center.x, center.z) }, uRadius: { value: radius }, uDepth: { value: DEPTH }, uDrain: { value: DRAIN }, uCenterW: { value: new THREE.Vector2(center.x, center.z) }, uSunDir: { value: new THREE.Vector3(0.4, 1, 0.3) } },
       ]),
       vertexShader: FUNNEL_VERT,
       fragmentShader: FUNNEL_FRAG,

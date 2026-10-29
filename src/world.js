@@ -29,7 +29,6 @@ export const COLORS = {
   rockland: 0xffffff,
   caveRock: 0x262b33,
   stalactite: 0x3a414c,
-  vine: 0x2f7d34,
   stripeRed: 0xff4141,
   stripeWhite: 0xf6f8ff,
   roof: 0x0e2a47,
@@ -1438,12 +1437,6 @@ function addCaveArch(batch, site) {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(twoSided(panel), 3));
     batch.add('rockland', paintPillar(g, 1e9));
-    if (!mouth) continue;
-    for (let j = 1; j < ARCH_SIDES; j++) {
-      const [x, y, z] = inner[j];
-      const len = 3 + Math.abs(Math.sin(j * 2.3)) * 8;
-      batch.add('vine', CYLINDER, mat(x - frame(k).fx * 0.8, y + 1 - len / 2, z - frame(k).fz * 0.8, 0.2, len, 0.2));
-    }
   }
 }
 
@@ -1585,15 +1578,12 @@ function addGorge(batch, site, rand) {
         batch.add(rand() < 0.5 ? 'moss' : 'mossDark', LOW_SPHERE, mat(x, y + sz * 0.3, z, sz * 1.3, sz * 0.8, sz));
       }
       if (rand() < 0.6) {
-        const lip = f.half + CAVE_WALL * 0.7;
+        const lip = f.half + CAVE_WALL * 0.82;
         const vx = f.x + f.nx * side * lip;
         const vz = f.z + f.nz * side * lip;
-        const top = CARVE_FLOOR + 0.7 * 90 - 2;
-        for (let n = 0; n < 3; n++) {
-          const len = 10 + rand() * 30;
-          const ox = (rand() - 0.5) * 4;
-          batch.add('vine', CYLINDER, mat(vx + ox * f.nz, Math.min(top, clifftop(vx, vz)) - len / 2, vz - ox * f.nx, 0.2, len, 0.2));
-        }
+        const y = Math.min(clifftop(vx, vz), CARVE_FLOOR + 0.82 * 90);
+        const sz = 2.2 + rand() * 1.6;
+        batch.add(rand() < 0.5 ? 'moss' : 'jungle', LOW_SPHERE, mat(vx, y - sz * 0.2, vz, sz * 1.5, sz, sz * 1.5));
       }
     }
   });
@@ -1631,11 +1621,14 @@ function addCliffDressing(batch, site, rand) {
       batch.add(rand() < 0.5 ? 'moss' : 'mossDark', LOW_SPHERE, mat(x, y + sz * 0.25, edge + ledge + faceSway(x, y), sz * 1.4, sz * 0.7, sz));
     }
     if (rand() < 0.55) {
-      const zLip = edge + 0.4 + j * 3.2 + 0.9 + faceSway(x, lip) - 0.5;
+      const key = ['moss', 'mossDark', 'jungle'][Math.floor(rand() * 3)];
+      let size = 1.6 + rand() * 1.2;
+      let y = lip + size * 0.3;
       for (let n = 0; n < 2 + Math.floor(rand() * 3); n++) {
-        const len = 5 + rand() * 12;
-        const ox = x + (rand() - 0.5) * 5;
-        batch.add('vine', CYLINDER, mat(ox, lip - len / 2, zLip - rand() * 0.4, 0.18, len, 0.18));
+        const ox = x + (rand() - 0.5) * 1.6;
+        batch.add(key, LOW_SPHERE, mat(ox, y, cliffFace(ox, y) - size * 0.35, size * 1.25, size, size * 0.65));
+        y -= size * 1.15;
+        size *= 0.78;
       }
     }
     if (rand() < 0.45) {

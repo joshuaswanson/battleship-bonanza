@@ -94,6 +94,8 @@ export class Director {
       fov = 60 + speedFrac * 10;
     }
     this.snap = false;
+    const pool = race.track.whirlpool;
+    if (pool && Math.hypot(this.pos.x - pool.center.x, this.pos.z - pool.center.z) < pool.radius + 4) this.pos.y = Math.max(this.pos.y, waveHeight(this.pos.x, this.pos.z, race.time) + 2.2);
 
     this.camera.position.copy(this.pos);
     if (this.shake > 0) {
