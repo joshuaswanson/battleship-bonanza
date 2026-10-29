@@ -27,6 +27,10 @@ export class Hints {
     this.steps = [];
     this.current = null;
     this.el.classList.remove('on');
+    this.touch = touch;
+    this.moved = false;
+    this.idle = 0;
+    this.nudging = false;
     if (localStorage.getItem(SEEN) || !race.player) return;
     this.steps = [
       { text: t(touch ? 'hintDriveTouch' : 'hintDrive'), done: (state) => !touch && state.throttle > 0 && state.steer !== 0, life: touch ? 5 : 12 },
@@ -36,6 +40,7 @@ export class Hints {
   }
 
   update(dt, race, state, pressed) {
+    if (this.nudge(dt, race, state)) return;
     if (!this.steps.length && !this.current) return;
     if (race.state !== 'racing' || !race.player?.alive) return;
     if (this.current) {
@@ -56,7 +61,24 @@ export class Hints {
     this.el.classList.add('on');
   }
 
+  nudge(dt, race, state) {
+    if (this.moved || this.touch || race.state !== 'racing' || !race.player?.alive) return this.nudging;
+    if (state.throttle !== 0) {
+      this.moved = true;
+      if (this.nudging) this.el.classList.remove('on');
+      this.nudging = false;
+      return false;
+    }
+    this.idle += dt;
+    if (this.idle < 3 || this.current || this.nudging) return this.nudging;
+    this.nudging = true;
+    this.el.textContent = t('hintGo');
+    this.el.classList.add('on');
+    return true;
+  }
+
   stop() {
+    this.nudging = false;
     this.steps = [];
     this.current = null;
     this.el.classList.remove('on');
