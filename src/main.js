@@ -487,6 +487,7 @@ function pause(on) {
 function showResults() {
   mode = 'results';
   $('btn-replay').classList.toggle('hidden', session.role === 'guest');
+  $('btn-change-map').classList.toggle('hidden', session.active);
   showScreen('screen-results');
   renderResults(race);
   $('btn-continue').focus();
@@ -599,8 +600,27 @@ $('btn-menu').addEventListener('click', goTitle);
 $('btn-pause').addEventListener('click', () => pause(true));
 $('btn-continue').addEventListener('click', () => {
   if (session.role === 'host') session.send({ t: 'lobbyBack' });
-  wipe(session.active ? goLobby : goLoadout);
+  if (session.active) return wipe(goLobby);
+  advanceMap();
+  wipe(startRace);
 });
+$('btn-change-map').addEventListener('click', () =>
+  wipe(() => {
+    sfx.playMusic('menu');
+    newRace(true);
+    hud.show(false);
+    goMaps();
+  }),
+);
+
+function advanceMap() {
+  const ctf = setup.mode === 'ctf';
+  if (!ctf && setup.map === 'random') return;
+  const ids = ctf ? Object.keys(ARENAS) : MAP_CHOICES.filter((id) => id !== 'random');
+  const next = ids[(ids.indexOf(race.track.map.id) + 1) % ids.length];
+  if (ctf) setup.arena = next;
+  else setup.map = next;
+}
 $('btn-replay').addEventListener('click', () => wipe(startReplay));
 $('btn-replay-exit').addEventListener('click', () => wipe(endReplay));
 function unlockAudio() {

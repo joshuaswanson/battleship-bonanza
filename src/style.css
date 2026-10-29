@@ -2944,6 +2944,19 @@ kbd {
   padding: 0.7em 1em;
 }
 
+#screen-results .row {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+#screen-results .row .btn {
+  flex: 1 1 0;
+}
+
+#screen-results #btn-continue {
+  flex-basis: 100%;
+}
+
 .standings {
   margin: 0;
   padding: 0;
