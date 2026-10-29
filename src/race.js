@@ -133,6 +133,7 @@ export class Race {
         for (const id of HOLD_IDS) b.heat[id].trigger = (control.hold0 && b.items[0] === id) || (control.hold1 && b.items[1] === id);
       } else if (b.alive) {
         driveAI(this, b, dt);
+        this.hazards?.pilot?.(this, b);
       }
     }
 
@@ -259,7 +260,7 @@ export class Race {
     if (this.mode) {
       this.collideShores(b);
       this.mode.confine(this, b);
-    } else this.followCourse(b, dt, fx, fz);
+    } else if (!this.hazards?.carry?.(this, b, dt)) this.followCourse(b, dt, fx, fz);
   }
 
   followCourse(b, dt, fx, fz) {
@@ -361,6 +362,8 @@ export class Race {
 
   respawnSpot(b) {
     if (this.mode) return this.mode.spawnSpot(b);
+    const custom = this.hazards?.respawnSpot?.(this, b);
+    if (custom) return custom;
     const t = this.track;
     const idx = t.step(b.trackIdx, -10);
     const spot = (lateral) => ({ ...t.point(idx, lateral), heading: t.heading(idx), idx });

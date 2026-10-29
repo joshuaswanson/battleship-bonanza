@@ -231,7 +231,11 @@ export class Hud {
         this.flash.className = 'hud-flash on blast';
         break;
       case 'falls':
+      case 'teleport':
         this.pop(t('wheee'), 'go');
+        break;
+      case 'whirlpool':
+        this.pop(t('plughole'), 'go');
         break;
       case 'laundry':
         this.pop(t('laundry'), 'ko');
@@ -722,12 +726,20 @@ export class Hud {
         for (let k = 0; k < chain.length - 1; k++) {
           const i = chain[k];
           const j = chain[k + 1];
+          if (track.whirlpool?.hidden(i) && track.whirlpool.hidden(j)) continue;
           ctx.lineWidth = Math.max(track.hw[i], track.hw[j]) * 2 * this.mapScale + grow;
           ctx.beginPath();
           ctx.moveTo(...this.toMap(track.px[i], track.pz[i]));
           ctx.lineTo(...this.toMap(track.px[j], track.pz[j]));
           ctx.stroke();
         }
+      }
+      const pool = track.whirlpool;
+      if (pool) {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(...this.toMap(pool.center.x, pool.center.z), pool.radius * this.mapScale + grow / 2, 0, Math.PI * 2);
+        ctx.fill();
       }
     };
     const arena = track.map.arena;

@@ -46,7 +46,13 @@ const LIP = 5;
 const RIPPLES = 3;
 const MIST_RANGE = 260;
 
-function sheetGeometry({ top, foot, dx, dz, width }) {
+function fallPath({ top, foot, dx, dz }, t) {
+  const out = Math.sin(Math.PI * t) * 2.2 + t * 1.5 + Math.min(1, t * 6) * 1.2 - 1;
+  return [top.x + (foot.x - top.x) * t + dx * out, top.y + 0.5 - (top.y + 0.5 - foot.y) * t, top.z + (foot.z - top.z) * t + dz * out];
+}
+
+function sheetGeometry(spec) {
+  const { dx, dz, width } = spec;
   const tx = -dz;
   const tz = dx;
   const positions = [];
@@ -56,17 +62,15 @@ function sheetGeometry({ top, foot, dx, dz, width }) {
   let prev = null;
   for (let r = 0; r <= ROWS; r++) {
     const t = r / ROWS;
-    const out = Math.sin(Math.PI * t) * 2.2 + t * 1.5 + Math.min(1, t * 6) * 1.2 - 1;
-    const cx = top.x + (foot.x - top.x) * t + dx * out;
-    const cy = top.y + 0.5 - (top.y + 0.5 - foot.y) * t;
-    const cz = top.z + (foot.z - top.z) * t + dz * out;
+    const [cx, cy, cz] = (spec.path ?? fallPath)(spec, t);
     if (prev) along += Math.hypot(cx - prev[0], cy - prev[1], cz - prev[2]);
     prev = [cx, cy, cz];
     const w = width * (0.75 + 0.6 * t);
     for (let c = 0; c <= COLS; c++) {
       const u = c / COLS - 0.5;
       const bulge = (1 - 4 * u * u) * w * 0.35;
-      positions.push(cx + tx * u * w + dx * bulge, cy, cz + tz * u * w + dz * bulge);
+      if (spec.path) positions.push(cx + tx * u * w, cy + bulge, cz + tz * u * w);
+      else positions.push(cx + tx * u * w + dx * bulge, cy, cz + tz * u * w + dz * bulge);
       flows.push(c / COLS, t, along);
     }
   }
@@ -106,7 +110,8 @@ export function createWaterfalls(specs, rand) {
     group.add(mesh);
   }
 
-  const falls = specs.map(({ top, foot, dx, dz, width }) => ({
+  const falls = specs.map(({ top, foot, dx, dz, width, path }) => ({
+    lipless: !!path,
     top,
     foot,
     dx,
@@ -141,7 +146,7 @@ export function createWaterfalls(specs, rand) {
         }
         for (const c of f.lip) {
           const bob = 1 + Math.sin(t * 3 + c.phase) * 0.12;
-          const size = c.size * bob;
+          const size = f.lipless ? 0 : c.size * bob;
           place(puffs, i++, f.top.x - f.dx * 0.2 + tx * c.lat * f.width, f.top.y + 0.6, f.top.z - f.dz * 0.2 + tz * c.lat * f.width, size * 1.3, size * 0.7, size * 1.3);
         }
         for (let r = 0; r < RIPPLES; r++) {

@@ -940,6 +940,7 @@ function handleEvents() {
     if (e.type === 'ko') cam.shake = 1.6;
     if (e.type === 'lockShake') cam.bump(e.amount);
     if (e.type === 'warp') cam.lift(e.dy);
+    if (e.type === 'teleport') cam.snap = true;
     if (e.type === 'finish' || e.type === 'matchEnd') resultsTimer = 3.5;
     if (e.type === 'go') sfx.playMusic('race');
   }

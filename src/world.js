@@ -4,6 +4,8 @@ import { createWater, waveHeight } from './water.js';
 import { ellipseHit, courseBuoys } from './terrain.js';
 import { toon, outlineMaterial, mulberry32 } from './toon.js';
 import { createWaterfalls } from './waterfall.js';
+import { whirlpoolSite, Whirlpool, CAVE_HALF } from './whirlpool.js';
+import { OUTER_LIMIT } from './race/shared.js';
 
 const SKY_TOP = 0x3fa9f5;
 const SKY_HORIZON = 0xc4f1ff;
@@ -25,6 +27,7 @@ export const COLORS = {
   jungle: 0x2f8f3a,
   jungleLight: 0x63c24a,
   rockland: 0xffffff,
+  caveRock: 0x262b33,
   stripeRed: 0xff4141,
   stripeWhite: 0xf6f8ff,
   roof: 0x0e2a47,
@@ -271,7 +274,7 @@ export class Batcher {
   }
 }
 
-const NO_OUTLINE = new Set(['foam', 'willowCore', 'puntHull']);
+const NO_OUTLINE = new Set(['foam', 'willowCore', 'puntHull', 'caveRock']);
 let whiteToon = null;
 const WHITE_TOON = () => (whiteToon ??= toon(0xffffff));
 let vertexToon = null;
@@ -1139,34 +1142,73 @@ function addArchAt(batch, x0, z0, heading, span, rand) {
 const mainlandEdge = (x) => 485 + 45 * Math.sin(x * 0.005 + 0.7) + 22 * Math.sin(x * 0.013 + 2) + 8 * Math.sin(x * 0.05);
 const mainlandHeight = (x) => 74 + 16 * Math.sin(x * 0.009) + 9 * Math.sin(x * 0.031 + 1);
 const MAINLAND_ROWS = [-14, -5, -1.5, 0.4, 1.5, 3, 5, 9, 16, 30, 60, 120, 240, 520];
+const CARVED_ROWS = [-14, -5, -1.5, 0.4, 1.5, 3, 5, ...Array.from({ length: 74 }, (_, k) => 8 + k * 4), 340, 420, 520];
+const CARVE_FLOOR = -8;
+const CRATER_FLOOR = -40;
+const CRATER_WALL = 12;
+const CAVE_WALL = 8;
 
-function addMainland(batch, rand) {
-  const step = 8;
-  const cols = Math.round(2600 / step);
+const mainlandRise = (x, d) => mainlandHeight(x) + Math.min(1, d / 40) * (6 * Math.sin(x * 0.02 + d * 0.03) + 5 * Math.sin(d * 0.05 - x * 0.011));
+const faceRise = (x, d) => -4 + (mainlandHeight(x) + 4) * Math.min(1, THREE.MathUtils.smoothstep(d, 0.4, 5) * 1.15);
+const faceSway = (x, y) => Math.sin(y * 0.22 + x * 0.09) * 2.6 + Math.sin(y * 0.07 + x * 0.21) * 1.8;
+
+function cliffFace(x, y) {
+  let lo = 0.4;
+  let hi = 5;
+  for (let k = 0; k < 20; k++) {
+    const mid = (lo + hi) / 2;
+    if (faceRise(x, mid) < y) lo = mid;
+    else hi = mid;
+  }
+  return mainlandEdge(x) + lo + faceSway(x, y);
+}
+
+function mainlandGround(x, z) {
+  const d = z - mainlandEdge(x);
+  if (d < 0.4) return -4;
+  return d < 6 ? faceRise(x, d) : mainlandRise(x, d);
+}
+
+function carveHeight(site, x, z) {
+  if (!site) return Infinity;
+  let h = Infinity;
+  const a = Math.atan2(z - site.center.z, x - site.center.x);
+  const r = Math.hypot(x - site.center.x, z - site.center.z) - (site.radius + 2) + Math.sin(a * 9) * 1.2 + Math.sin(a * 23 + 1) * 0.7;
+  if (r < CRATER_WALL + 2) h = r < 0 ? CRATER_FLOOR : CARVE_FLOOR + (r / CRATER_WALL) * 90;
+  const d = site.caveDistance(x, z) - CAVE_HALF;
+  if (d < CAVE_WALL + 2) h = Math.min(h, CARVE_FLOOR + (Math.max(0, d) / CAVE_WALL) * 90);
+  return h;
+}
+
+function inCave(site, x, z) {
+  return site.caveDistance(x, z) < CAVE_HALF + CAVE_WALL + 1 && Math.hypot(x - site.center.x, z - site.center.z) > site.radius + 2 + CRATER_WALL;
+}
+
+function addMainland(batch, rand, site = null) {
+  const xs = [];
+  for (let x = -1300; x <= 1300; x += site && x >= -140 && x < 220 ? 3 : 8) xs.push(x);
+  const rowsAt = site ? CARVED_ROWS : MAINLAND_ROWS;
   const positions = [];
-  for (let c = 0; c <= cols; c++) {
-    const x = -1300 + c * step;
+  for (const x of xs) {
     const edge = mainlandEdge(x);
-    const top = mainlandHeight(x);
-    for (const d of MAINLAND_ROWS) {
+    for (const d of rowsAt) {
       let y;
       let z = edge + d;
       let px = x;
       if (d < 0) y = -4;
       else if (d < 6) {
-        const u = THREE.MathUtils.smoothstep(d, 0.4, 5);
-        y = -4 + (top + 4) * Math.min(1, u * 1.15);
-        z += Math.sin(y * 0.22 + x * 0.09) * 2.6 + Math.sin(y * 0.07 + x * 0.21) * 1.8;
+        y = faceRise(x, d);
+        z += faceSway(x, y);
         px += Math.sin(y * 0.15 + x * 0.3) * 1.2;
       } else {
-        y = top + Math.min(1, d / 40) * (6 * Math.sin(x * 0.02 + d * 0.03) + 5 * Math.sin(d * 0.05 - x * 0.011));
+        y = mainlandRise(x, d);
       }
-      positions.push(px, y, z);
+      positions.push(px, Math.min(y, carveHeight(site, px, z)), z);
     }
   }
-  const rows = MAINLAND_ROWS.length;
+  const rows = rowsAt.length;
   const indices = [];
-  for (let c = 0; c < cols; c++) {
+  for (let c = 0; c < xs.length - 1; c++) {
     for (let r = 0; r < rows - 1; r++) {
       const a = c * rows + r;
       const b = (c + 1) * rows + r;
@@ -1180,6 +1222,18 @@ function addMainland(batch, rand) {
   const nor = land.attributes.normal;
   const green = land.attributes.aGreen;
   for (let i = 0; i < green.count; i++) green.setX(i, THREE.MathUtils.smoothstep(nor.getY(i), 0.55, 0.75));
+  if (site) {
+    const pos = land.attributes.position;
+    const color = land.attributes.color;
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i);
+      const z = pos.getZ(i);
+      if (!inCave(site, x, z)) continue;
+      const shade = 1 - 0.65 * THREE.MathUtils.smoothstep(z - mainlandEdge(x), 4, 30);
+      color.setXYZ(i, color.getX(i) * shade, color.getY(i) * shade, color.getZ(i) * shade);
+      green.setX(i, green.getX(i) * shade);
+    }
+  }
   batch.add('rockland', land);
   for (let x = -1300; x <= 1300; x += 9 + rand() * 9) {
     const edge = mainlandEdge(x);
@@ -1189,13 +1243,207 @@ function addMainland(batch, rand) {
       const px = x + (rand() - 0.5) * 8;
       const pz = edge + d;
       const y = top + Math.min(1, d / 40) * (6 * Math.sin(px * 0.02 + d * 0.03) + 5 * Math.sin(d * 0.05 - px * 0.011));
-      if (rand() < 0.35) addPalm(batch, px, y - 0.4, pz, rand, { height: 8 + rand() * 7, lean: rand() * 0.4, dir: rand() * Math.PI * 2 });
-      else {
-        const sz = 3 + rand() * 4;
-        batch.add(rand() < 0.5 ? 'moss' : 'mossDark', LOW_SPHERE, mat(px, y + sz * 0.3, pz, sz * 1.3, sz * 0.8, sz));
-      }
+      const palm = rand() < 0.35;
+      const height = palm ? 8 + rand() * 7 : 0;
+      const lean = palm ? rand() * 0.4 : 0;
+      const dir = palm ? rand() * Math.PI * 2 : 0;
+      const sz = palm ? 0 : 3 + rand() * 4;
+      const key = palm ? null : rand() < 0.5 ? 'moss' : 'mossDark';
+      if (carveHeight(site, px, pz) < y + 3) continue;
+      if (palm) addPalm(batch, px, y - 0.4, pz, rand, { height, lean, dir });
+      else batch.add(key, LOW_SPHERE, mat(px, y + sz * 0.3, pz, sz * 1.3, sz * 0.8, sz));
     }
   }
+}
+
+function addCaveRoof(batch, site) {
+  const span = CAVE_HALF + CAVE_WALL + 4;
+  const top = [];
+  const under = [];
+  const pts = site.cave.filter((p) => p.z > mainlandEdge(p.x) + 2 && Math.hypot(p.x - site.center.x, p.z - site.center.z) > site.radius + 2 + CRATER_WALL * 0.6);
+  for (let k = 0; k < pts.length - 2; k += 2) {
+    const a = pts[k];
+    const b = pts[Math.min(pts.length - 1, k + 2)];
+    const strip = (p, q) => {
+      const dx = q.x - p.x;
+      const dz = q.z - p.z;
+      const len = Math.hypot(dx, dz) || 1;
+      const nx = dz / len;
+      const nz = -dx / len;
+      return [-1, 1].map((side) => {
+        const x = p.x + nx * side * span;
+        const z = p.z + nz * side * span;
+        return [x, mainlandRise(x, Math.max(6, z - mainlandEdge(x))) + 0.6, z];
+      });
+    };
+    const [l0, r0] = strip(a, b);
+    const [l1, r1] = strip(b, pts[Math.min(pts.length - 1, k + 4)]);
+    top.push(...l0, ...l1, ...r0, ...r0, ...l1, ...r1);
+    const drop = (v) => [v[0], v[1] - 6, v[2]];
+    under.push(...drop(l0), ...drop(r0), ...drop(l1), ...drop(r0), ...drop(r1), ...drop(l1));
+  }
+  const roof = new THREE.BufferGeometry();
+  roof.setAttribute('position', new THREE.Float32BufferAttribute(top, 3));
+  const painted = paintPillar(roof, 1e9);
+  const green = painted.attributes.aGreen;
+  for (let i = 0; i < green.count; i++) green.setX(i, 1);
+  batch.add('rockland', painted);
+  const ceiling = new THREE.BufferGeometry();
+  ceiling.setAttribute('position', new THREE.Float32BufferAttribute(under, 3));
+  ceiling.computeVertexNormals();
+  batch.add('caveRock', ceiling);
+  addCaveArch(batch, site);
+}
+
+const ARCH_SPAN = CAVE_HALF + 1.5;
+const ARCH_SPRING = 3;
+const ARCH_RISE = 21;
+const ARCH_SIDES = 14;
+
+function twoSided(positions) {
+  const out = [...positions];
+  for (let i = 0; i < positions.length; i += 9) out.push(...positions.slice(i, i + 3), ...positions.slice(i + 6, i + 9), ...positions.slice(i + 3, i + 6));
+  return out;
+}
+
+function addCaveArch(batch, site) {
+  const rimRadius = site.radius + 2 + CRATER_WALL * 0.5;
+  const pts = site.cave.filter((p) => p.z > mainlandEdge(p.x) + 1 && Math.hypot(p.x - site.center.x, p.z - site.center.z) > rimRadius);
+  const frame = (k) => {
+    const a = pts[Math.max(0, k - 1)];
+    const b = pts[Math.min(pts.length - 1, k + 1)];
+    const len = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+    return { p: pts[k], fx: (b.x - a.x) / len, fz: (b.z - a.z) / len, nx: (b.z - a.z) / len, nz: -(b.x - a.x) / len };
+  };
+  const ring = (k) => {
+    const { p, nx, nz } = frame(k);
+    return Array.from({ length: ARCH_SIDES + 1 }, (_, j) => {
+      const phi = (j / ARCH_SIDES) * Math.PI;
+      const lateral = Math.cos(phi) * ARCH_SPAN * (1 + 0.06 * Math.sin(k * 0.7 + j * 2.1));
+      const lift = Math.sin(phi) * ARCH_RISE * (1 + 0.05 * Math.sin(k * 1.3 + j));
+      return [p.x + nx * lateral, ARCH_SPRING + lift, p.z + nz * lateral];
+    });
+  };
+  const vault = [];
+  for (let k = 0; k < pts.length - 2; k += 2) {
+    const r0 = ring(k);
+    const r1 = ring(Math.min(pts.length - 1, k + 2));
+    for (let j = 0; j < ARCH_SIDES; j++) vault.push(...r0[j], ...r1[j], ...r0[j + 1], ...r0[j + 1], ...r1[j], ...r1[j + 1]);
+  }
+  const arch = new THREE.BufferGeometry();
+  arch.setAttribute('position', new THREE.Float32BufferAttribute(twoSided(vault), 3));
+  arch.computeVertexNormals();
+  batch.add('caveRock', arch);
+  for (const k of [0, pts.length - 1]) {
+    const { p, nx, nz } = frame(k);
+    const inner = ring(k);
+    const wide = CAVE_HALF + CAVE_WALL + 5;
+    const panel = [];
+    for (let j = 0; j < ARCH_SIDES; j++) {
+      const phi0 = (j / ARCH_SIDES) * Math.PI;
+      const phi1 = ((j + 1) / ARCH_SIDES) * Math.PI;
+      const outer = (phi) => {
+        const lateral = Math.cos(phi) * wide;
+        const x = p.x + nx * lateral;
+        const z = p.z + nz * lateral;
+        return [x, mainlandRise(x, Math.max(6, z - mainlandEdge(x))) + 1, z];
+      };
+      const o0 = outer(phi0);
+      const o1 = outer(phi1);
+      panel.push(...inner[j], ...o0, ...inner[j + 1], ...inner[j + 1], ...o0, ...o1);
+    }
+    for (const side of [0, ARCH_SIDES]) {
+      const foot = inner[side];
+      const lateral = side === 0 ? wide : -wide;
+      const x = p.x + nx * lateral;
+      const z = p.z + nz * lateral;
+      const high = [x, mainlandRise(x, Math.max(6, z - mainlandEdge(x))) + 1, z];
+      const low = [x, CARVE_FLOOR, z];
+      const base = [foot[0], CARVE_FLOOR, foot[2]];
+      panel.push(...foot, ...high, ...low, ...foot, ...low, ...base);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(twoSided(panel), 3));
+    batch.add('rockland', paintPillar(g, 1e9));
+  }
+}
+
+function addCrater(batch, site, rand) {
+  const { center, radius } = site;
+  const rim = radius + 2 + CRATER_WALL;
+  for (let k = 0; k < 46; k++) {
+    const a = rand() * Math.PI * 2;
+    const r = rim + 3 + rand() * 30;
+    const x = center.x + Math.cos(a) * r;
+    const z = center.z + Math.sin(a) * r;
+    if (site.caveDistance(x, z) < CAVE_HALF + CAVE_WALL + 3) continue;
+    const y = mainlandGround(x, z);
+    if (rand() < 0.4) addPalm(batch, x, y - 0.4, z, rand, { height: 9 + rand() * 8, lean: 0.2 + rand() * 0.4, dir: a + Math.PI });
+    else canopyTree(batch, x, y - 0.3, z, rand, 3 + rand() * 2.5);
+  }
+  return [2.1, 3.5, 4.8].map((a) => {
+    const dx = -Math.cos(a);
+    const dz = -Math.sin(a);
+    const tx = center.x - dx * (rim - 0.5);
+    const tz = center.z - dz * (rim - 0.5);
+    return {
+      top: new THREE.Vector3(tx, mainlandGround(tx, tz) - 0.4, tz),
+      foot: new THREE.Vector3(center.x - dx * (radius - 2), 0.2, center.z - dz * (radius - 2)),
+      dx,
+      dz,
+      width: 4.5 + rand() * 2,
+    };
+  });
+}
+
+function bayWaters(site) {
+  const out = { level: 0, amp: 1 };
+  const reach = site.radius + 3;
+  return {
+    sample(x, z) {
+      if (Math.abs(x - site.center.x) < reach && Math.abs(z - site.center.z) < reach) return site.sample(x, z, out);
+      out.level = 0;
+      out.amp = 1;
+      return out;
+    },
+  };
+}
+
+function courseReach(track, site) {
+  const reach = [new Float32Array(track.total), new Float32Array(track.total)];
+  for (let i = 0; i < track.total; i++) {
+    for (const [k, side] of [[0, -1], [1, 1]]) {
+      let lim = track.hw[i] + OUTER_LIMIT;
+      if (i >= site.mouthIdx - 30 && i <= site.entryIdx) lim = track.hw[i] - 1.5;
+      else if (i < site.holeIdx || i > site.holeIdx + 25) {
+        for (let d = 0; d < lim; d += 1.5) {
+          const x = track.px[i] + track.nx[i] * side * d;
+          const z = track.pz[i] + track.nz[i] * side * d;
+          if (z > mainlandEdge(x) - 4) {
+            lim = Math.max(0, d - 1);
+            break;
+          }
+        }
+      }
+      reach[k][i] = lim;
+    }
+  }
+  return reach;
+}
+
+function blowholeJet(site) {
+  const { hole } = site;
+  const speed = 11;
+  const rise = 3;
+  const gravity = 20;
+  const land = (rise + Math.sqrt(rise * rise + 2 * gravity * hole.y)) / gravity;
+  const at = (spec, t) => {
+    const time = t * land;
+    const d = speed * time;
+    return [hole.x + hole.dx * d, hole.y + rise * time - 0.5 * gravity * time * time, hole.z + hole.dz * d];
+  };
+  const [fx, , fz] = at(null, 1);
+  return { top: new THREE.Vector3(hole.x, hole.y - 1.2, hole.z), foot: new THREE.Vector3(fx, 0.2, fz), dx: hole.dx, dz: hole.dz, width: 5, path: at };
 }
 
 function addLighthouse(batch, x, z, baseY) {
@@ -1297,6 +1545,8 @@ const BAY_SKY = { top: 0x1a78e6, horizon: SKY_HORIZON };
 
 export function createWorld(scene, track, fx) {
   if (track.map.arena) return createBayArena(scene, track.map.arena, fx);
+  const site = track.map.whirlpool ? whirlpoolSite(track, mainlandEdge, cliffFace) : null;
+  track.whirlpool = site;
   const fog = new THREE.Fog(SKY_HORIZON, 480, 950);
 
   const sky = createSky(BAY_SKY);
@@ -1307,7 +1557,7 @@ export function createWorld(scene, track, fx) {
   sun.position.copy(SUN_DIR).multiplyScalar(100);
   scene.add(sun);
 
-  const water = createWater();
+  const water = createWater({ hole: site ? [site.center.x, site.center.z, site.radius + 2] : null });
   scene.add(water.mesh);
 
   const rand = mulberry32(20261023);
@@ -1317,8 +1567,8 @@ export function createWorld(scene, track, fx) {
   const pillars = [];
   const falls = [];
   const fits = (x, z, r) => !pillars.some((o) => Math.hypot(o.x - x, o.z - z) < o.r + r + 6);
-  for (const f of [0.2, 0.565, 0.72]) shores.push(...addArch(batch, track, f, rand));
-  for (const f of [0.2, 0.47, 0.72]) {
+  for (const f of [0.168, 0.633, 0.764]) shores.push(...addArch(batch, track, f, rand));
+  for (const f of [0.168, 0.6, 0.764]) {
     const idx = track.wrap(Math.round(f * track.N));
     for (const side of [-1, 1]) {
       const p = track.point(idx, side * (half + 9));
@@ -1349,10 +1599,17 @@ export function createWorld(scene, track, fx) {
       if (height > 34 && radius > 9 && clearance < 90 && falls.length < 6 && rand() < 0.7) falls.push({ pillar, x, z, toward: Math.atan2(track.pz[near.idx] - z, track.px[near.idx] - x) });
     }
   }
-  const waterfalls = createWaterfalls(falls.map((f) => waterfallSpec(batch, f.pillar, f.x, f.z, f.toward, rand)), rand);
+  const specs = falls.map((f) => waterfallSpec(batch, f.pillar, f.x, f.z, f.toward, rand));
+  if (site) {
+    addCaveRoof(batch, site);
+    specs.push(...addCrater(batch, site, rand), blowholeJet(site));
+  }
+  const waterfalls = createWaterfalls(specs, rand);
   scene.add(waterfalls.group);
   addFarIslands(batch, rand);
-  addMainland(batch, rand);
+  addMainland(batch, rand, site);
+  const whirlpool = site ? new Whirlpool({ track, site, group: scene }) : null;
+  if (site) track.reach = courseReach(track, site);
   const islands = pillars.map((p) => ({ x: p.x, z: p.z, r: p.r }));
   const stacks = [];
 
@@ -1361,7 +1618,7 @@ export function createWorld(scene, track, fx) {
   const chunks = batch.build(scenery);
   scene.add(scenery);
 
-  const buoys = courseBuoys(track, () => true);
+  const buoys = courseBuoys(track, (idx) => !site || idx < site.mouthIdx - 10 || idx > site.holeIdx + 30);
   scene.add(buoys);
 
   const arch = createArch(track, half);
@@ -1397,11 +1654,25 @@ export function createWorld(scene, track, fx) {
     islands,
     shores,
     solid(p) {
-      if (p.z > mainlandEdge(p.x) && p.y < 70) return new THREE.Vector3(0, 0, -1);
+      if (p.z > mainlandEdge(p.x) - 2) {
+        const natural = mainlandGround(p.x, p.z);
+        if (p.y < Math.min(natural, carveHeight(site, p.x, p.z))) return new THREE.Vector3(0, 0, -1);
+        if (site && p.y > natural - 6 && p.y < natural + 1 && inCave(site, p.x, p.z)) return new THREE.Vector3(0, -1, 0);
+      }
       return ellipseHit(shores, p);
     },
+    surface: site ? bayWaters(site) : null,
+    hazards: whirlpool,
     stacks,
     update(t, dt, camera) {
+      if (whirlpool) {
+        whirlpool.animate(t);
+        const { center } = site;
+        if (fx && Math.hypot(camera.position.x - center.x, camera.position.z - center.z) < 260 && Math.random() < dt * 2) {
+          const a = Math.random() * Math.PI * 2;
+          fx.mist(center.x + Math.cos(a) * 6, -9, center.z + Math.sin(a) * 6);
+        }
+      }
       water.update(t);
       cullChunks(chunks, camera, fog.far);
       sky.position.copy(camera.position);

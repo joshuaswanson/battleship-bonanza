@@ -30,6 +30,11 @@ export class Director {
   }
 
   update(dt, race, replaying) {
+    const watched = race.player && !race.attract && !replaying ? race.player : race.boats[this.focus];
+    if (watched) {
+      if (this.watchedAt && watched.pos.distanceToSquared(this.watchedAt) > 3600) this.snap = true;
+      (this.watchedAt ??= new THREE.Vector3()).copy(watched.pos);
+    }
     const k = (rate) => (this.snap ? 1 : 1 - Math.exp(-rate * dt));
     let fov = 66;
 
@@ -71,7 +76,7 @@ export class Director {
       const fz = Math.cos(this.heading);
       const speedFrac = Math.max(0, Math.min(1.4, b.speed / BASE_SPEED));
       const back = 11 + speedFrac * 2;
-      const chase = new THREE.Vector3(b.pos.x - fx * back, b.waterY + 6 + b.yOffset * (b.air?.fall ? 0.95 : 0.6), b.pos.z - fz * back);
+      const chase = new THREE.Vector3(b.pos.x - fx * back, b.waterY + 6 + Math.max(0, b.yOffset) * (b.air?.fall ? 0.95 : 0.6), b.pos.z - fz * back);
       let desired = chase;
       if (race.state === 'countdown') {
         const u = Math.min(1, Math.max(0, (COUNTDOWN - race.countdown) / (COUNTDOWN - 1)));

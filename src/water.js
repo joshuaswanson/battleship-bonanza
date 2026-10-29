@@ -74,6 +74,7 @@ const VERT = /* glsl */ `
 const FRAG = /* glsl */ `
   uniform float uTime;
   uniform float uAmp;
+  uniform vec3 uHole;
   uniform vec3 uDeep;
   uniform vec3 uShallow;
   uniform vec3 uFoam;
@@ -99,6 +100,7 @@ const FRAG = /* glsl */ `
   #include <common>
   #include <fog_pars_fragment>
   void main() {
+    if (uHole.z > 0.0 && distance(vWorld.xz, uHole.xy) < uHole.z) discard;
     float h = clamp(vHeight / max(uAmp, 0.01) * 0.5 + 0.5, 0.0, 1.0);
     vec3 color = mix(uDeep, uShallow, smoothstep(0.25, 0.85, h));
 
@@ -133,7 +135,7 @@ const FRAG = /* glsl */ `
   }
 `;
 
-export function createWater({ size = 1800, segments = 240, geometry = null, flat = false, amp = 1, deep = 0x0f8fb8, shallow = 0x35d6e0, foam = 0xf4fbff, flowSpeed = 0.35, rapids = 0 } = {}) {
+export function createWater({ size = 1800, segments = 240, geometry = null, flat = false, amp = 1, deep = 0x0f8fb8, shallow = 0x35d6e0, foam = 0xf4fbff, flowSpeed = 0.35, rapids = 0, hole = null } = {}) {
   geometry ??= new THREE.PlaneGeometry(size, size, segments, segments);
   if (!flat) geometry.rotateX(-Math.PI / 2);
   const material = new THREE.ShaderMaterial({
@@ -148,6 +150,7 @@ export function createWater({ size = 1800, segments = 240, geometry = null, flat
         uSunDir: { value: new THREE.Vector3(0.4, 1, 0.3) },
         uFlowSpeed: { value: flowSpeed },
         uRapids: { value: rapids },
+        uHole: { value: new THREE.Vector3(...(hole ?? [0, 0, 0])) },
       },
     ]),
     vertexShader: VERT,
