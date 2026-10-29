@@ -1537,7 +1537,7 @@ const VINE_LEAF = new THREE.SphereGeometry(1, 8, 4).scale(0.45, 0.07, 1).transla
 const leafTurn = new THREE.Euler(0, 0, 0, 'YXZ');
 const leafQuat = new THREE.Quaternion();
 
-function hangVine(batch, x, y, z, ox, oz, length, rand) {
+function hangVine(batch, x, y, z, ox, oz, length, rand, drift = 0) {
   const pts = [];
   const phase = rand() * 6;
   const swing = 0.5 + rand() * 1.1;
@@ -1545,7 +1545,7 @@ function hangVine(batch, x, y, z, ox, oz, length, rand) {
   for (let i = 0; i <= 6; i++) {
     const t = i / 6;
     const side = Math.sin(t * 3.4 + phase) * swing * t;
-    const out = lean * Math.min(1, t * 3) + 0.5 * t * t;
+    const out = lean * Math.min(1, t * 3) + 0.5 * t * t + drift * t;
     pts.push(new THREE.Vector3(x + ox * out - oz * side, y - length * t, z + oz * out + ox * side));
   }
   const curve = new THREE.CatmullRomCurve3(pts);
@@ -1642,6 +1642,7 @@ function addGorge(batch, site, rand) {
       const x = f.x + f.nx * side * rim;
       const z = f.z + f.nz * side * rim;
       const y = clifftop(x, z);
+      if (carveHeight(site, x, z) < y - 0.5) continue;
       if (rand() < 0.35) addPalm(batch, x, y - 0.4, z, rand, { height: 9 + rand() * 7, lean: 0.4 + rand() * 0.4, dir: Math.atan2(-f.nx * side, -f.nz * side) });
       else if (rand() < 0.6) canopyTree(batch, x, y - 0.3, z, rand, 3 + rand() * 2);
       else {
@@ -1649,17 +1650,21 @@ function addGorge(batch, site, rand) {
         batch.add(rand() < 0.5 ? 'moss' : 'mossDark', LOW_SPHERE, mat(x, y + sz * 0.3, z, sz * 1.3, sz * 0.8, sz));
       }
       if (rand() < 0.6) {
-        const lip = f.half + CAVE_WALL * 0.82;
+        let lip = f.half + CAVE_WALL * 0.7;
+        while (lip < f.half + CAVE_WALL + 4 && carveHeight(site, f.x + f.nx * side * lip, f.z + f.nz * side * lip) < clifftop(f.x + f.nx * side * lip, f.z + f.nz * side * lip) - 1) lip += 0.5;
         const vx = f.x + f.nx * side * lip;
         const vz = f.z + f.nz * side * lip;
-        const y = Math.min(clifftop(vx, vz), CARVE_FLOOR + 0.82 * 90);
+        const y = Math.min(clifftop(vx, vz), carveHeight(site, vx, vz));
+        const below = carveHeight(site, f.x + f.nx * side * (lip - 3), f.z + f.nz * side * (lip - 3));
+        if (y - below > 45) continue;
         const sz = 2.2 + rand() * 1.6;
-        batch.add(rand() < 0.5 ? 'moss' : 'jungle', LOW_SPHERE, mat(vx, y - sz * 0.2, vz, sz * 1.5, sz, sz * 1.5));
+        batch.add(rand() < 0.5 ? 'moss' : 'jungle', LOW_SPHERE, mat(vx, y - sz * 0.35, vz, sz * 1.5, sz, sz * 1.5));
         for (let n = 0; n < 2 + Math.floor(rand() * 3); n++) {
           const along = (rand() - 0.5) * 5;
-          const ax = vx + f.nz * along - f.nx * side * 0.4;
-          const az = vz - f.nx * along - f.nz * side * 0.4;
-          hangVine(batch, ax, y - 1, az, -f.nx * side, -f.nz * side, 10 + rand() * 18, rand);
+          const length = 10 + rand() * 18;
+          const ax = vx + f.nz * along - f.nx * side * 0.8;
+          const az = vz - f.nx * along - f.nz * side * 0.8;
+          hangVine(batch, ax, y - sz * 0.6, az, -f.nx * side, -f.nz * side, length, rand, length * 0.12);
         }
       }
     }
@@ -1672,7 +1677,7 @@ function addGorge(batch, site, rand) {
     const tx = f.x + f.nx * side * rim;
     const tz = f.z + f.nz * side * rim;
     specs.push({
-      top: new THREE.Vector3(tx, clifftop(tx, tz) - 0.4, tz),
+      top: new THREE.Vector3(tx, Math.min(clifftop(tx, tz), carveHeight(site, tx, tz)) - 0.4, tz),
       foot: new THREE.Vector3(f.x + f.nx * side * (f.half - 3), 0.2, f.z + f.nz * side * (f.half - 3)),
       dx: -f.nx * side,
       dz: -f.nz * side,
