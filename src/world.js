@@ -818,7 +818,7 @@ function paintPillar(g, top) {
     const ny = nor.getY(i);
     const drape = 0.5 + 0.5 * Math.sin(Math.atan2(z, x) * 5 + x);
     const hang = THREE.MathUtils.smoothstep(y, top - 5 - 16 * drape * drape, top - 0.5) * drape * 0.85;
-    greens.push(Math.max(THREE.MathUtils.smoothstep(ny, 0.55, 0.75) * THREE.MathUtils.smoothstep(y, top - 3, top - 1), hang));
+    greens.push(Math.max(THREE.MathUtils.smoothstep(ny, 0.55, 0.75) * THREE.MathUtils.smoothstep(y, 2.5, 4), hang));
     const tone = streak > 0.2 ? GRASS_EDGE : GRASS_TONE;
     moss.push(tone.r, tone.g, tone.b);
   }
@@ -828,42 +828,55 @@ function paintPillar(g, top) {
   return g;
 }
 
-let pillarTemplate = null;
 function pillarGeometry(radius, height, rand) {
-  const waist = 0.84 + rand() * 0.14;
-  const waistAt = 0.3 + rand() * 0.3;
-  const flare = 1.04 + rand() * 0.18;
-  const ledges = 4 + rand() * 4;
-  const facets = 5 + Math.floor(rand() * 4);
-  const lean = new THREE.Vector2((rand() - 0.5) * radius * 0.5, (rand() - 0.5) * radius * 0.5);
-  const stretch = 0.75 + rand() * 0.5;
+  const sides = 6 + Math.floor(rand() * 4);
+  const stretch = 0.8 + rand() * 0.4;
   const turn = rand() * Math.PI;
-  const lumps = Array.from({ length: 5 }, () => ({ k: 1 + Math.floor(rand() * 5), p: rand() * 6, a: 0.04 + rand() * 0.1, v: rand() * 0.2 }));
-  const g = (pillarTemplate ??= mergeVertices(new THREE.CylinderGeometry(1, 1, 1, 16, 22).translate(0, 0.5, 0).deleteAttribute('normal').deleteAttribute('uv'))).clone();
-  const pos = g.attributes.position;
-  for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i);
-    const t = pos.getY(i);
-    const z = pos.getZ(i);
-    const r0 = Math.hypot(x, z);
-    const a = Math.atan2(z, x);
-    let profile = 1 - (1 - waist) * Math.exp(-(((t - waistAt) / 0.28) ** 2));
-    profile *= 1 + (flare - 1) * THREE.MathUtils.smoothstep(t, 0.72, 0.97);
-    profile *= 1 + 0.25 * (1 - THREE.MathUtils.smoothstep(t, 0, 0.12));
-    let bump = 1;
-    for (const l of lumps) bump += Math.sin(a * l.k + l.p + t * height * l.v) * l.a;
-    bump += Math.sin(a * 11 + t * 3) * 0.03;
-    bump += (Math.abs(((a / (Math.PI * 2)) * facets + lumps[0].p + 10) % 1 - 0.5) - 0.25) * 0.12;
-    bump *= 1 - 0.045 * (((t * height) / ledges + Math.sin(a * 2 + lumps[1].p) * 0.3 + 10) % 1);
-    const rr = r0 * radius * profile * bump;
-    const lx = Math.cos(a) * rr * stretch;
-    const lz = Math.sin(a) * rr / stretch;
-    const shift = t * t;
-    let y = t * height - 2;
-    if (t > 0.999 && r0 < 0.999) y += Math.sin(x * 3 + z * 2) * 0.6;
-    pos.setXYZ(i, lx * Math.cos(turn) - lz * Math.sin(turn) + lean.x * shift, y, lx * Math.sin(turn) + lz * Math.cos(turn) + lean.y * shift);
+  const angles = Array.from({ length: sides }, (_, k) => ((k + (rand() - 0.5) * 0.55) / sides) * Math.PI * 2);
+  const radial = angles.map(() => 0.84 + rand() * 0.32);
+  const tiered = rand() < 0.65;
+  const ledge = 0.32 + rand() * 0.26;
+  const shrink = 0.7 + rand() * 0.14;
+  const taper = 0.8 + rand() * 0.1;
+  const rows = tiered
+    ? [[0, 1.14], [0.1, 1.06], [ledge * 0.55, 1.0], [ledge, 0.96], [ledge + 0.012, shrink], [ledge + (1 - ledge) * 0.55, shrink * 0.97], [1, shrink * 0.9]]
+    : [[0, 1.14], [0.1, 1.06], [0.42, 0.98], [0.74, 0.92], [1, taper]];
+  const span = height;
+  const ring = rows.map(([t, r]) =>
+    angles.map((a0, k) => {
+      const a = a0 + (rand() - 0.5) * 0.08;
+      const rr = radius * r * radial[k] * (1 + (rand() - 0.5) * 0.07);
+      const lx = Math.cos(a) * rr * stretch;
+      const lz = (Math.sin(a) * rr) / stretch;
+      return [lx * Math.cos(turn) - lz * Math.sin(turn), t * span - 2, lx * Math.sin(turn) + lz * Math.cos(turn)];
+    }),
+  );
+  const top = height - 2;
+  const positions = [];
+  const tri = (p, q, r) => positions.push(...p, ...q, ...r);
+  for (let r = 0; r < rows.length - 1; r++) {
+    for (let k = 0; k < sides; k++) {
+      const a = ring[r][k];
+      const b = ring[r][(k + 1) % sides];
+      const c = ring[r + 1][(k + 1) % sides];
+      const d = ring[r + 1][k];
+      tri(a, c, b);
+      tri(a, d, c);
+    }
   }
-  return { geometry: paintPillar(g, height - 2), top: new THREE.Vector3(lean.x, height - 2, lean.y), topRadius: radius * flare * 0.8, footprint: radius * 1.1 * Math.max(stretch, 1 / stretch) };
+  const cap = ring.at(-1);
+  const center = [cap.reduce((sum, v) => sum + v[0], 0) / sides, top + 0.3, cap.reduce((sum, v) => sum + v[2], 0) / sides];
+  for (let k = 0; k < sides; k++) tri(center, cap[(k + 1) % sides], cap[k]);
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  const capRadius = radius * (tiered ? shrink * 0.9 : taper) * Math.min(...radial);
+  return {
+    geometry: paintPillar(g, top),
+    top: new THREE.Vector3(center[0], top + 0.3, center[2]),
+    topRadius: capRadius * 0.95,
+    footprint: radius * 1.14 * Math.max(...radial) * Math.max(stretch, 1 / stretch),
+    ledge: tiered ? { y: ledge * span - 2, inner: radius * shrink, outer: radius * 0.96 * Math.min(...radial) } : null,
+  };
 }
 
 const CANOPY = ['moss', 'mossDark', 'jungle', 'jungleLight'];
@@ -909,6 +922,22 @@ function addPillar(batch, x, z, rand, { radius, height, plants = 1 }) {
   batch.add('foam', RING, mat(x, 0.2, z, pillar.footprint * 1.05, 6, pillar.footprint * 1.05));
   const top = pillar.top.clone().add(new THREE.Vector3(x, 0, z));
   if (plants) plantTop(batch, top.x, top.y, top.z, pillar.topRadius, rand, plants);
+  if (plants && pillar.ledge) {
+    const { y, inner, outer } = pillar.ledge;
+    for (let k = 0; k < 6; k++) {
+      const a = rand() * Math.PI * 2;
+      const d = (inner + outer) / 2;
+      const sz = 1.3 + rand() * 1.4;
+      batch.add(CANOPY[Math.floor(rand() * CANOPY.length)], LOW_SPHERE, mat(x + Math.cos(a) * d, y + sz * 0.3, z + Math.sin(a) * d, sz * 1.2, sz * 0.8, sz));
+    }
+  }
+  const rubble = 5 + Math.floor(rand() * 6);
+  for (let k = 0; k < rubble; k++) {
+    const a = rand() * Math.PI * 2;
+    const d = pillar.footprint * (0.88 + rand() * 0.16);
+    const sz = 1.4 + rand() * 2.6;
+    batch.add('rock', ROCK, mat(x + Math.cos(a) * d, 0.2 + rand() * 0.6, z + Math.sin(a) * d, sz, sz * (0.6 + rand() * 0.4), sz, rand(), rand() * 6, rand()));
+  }
   return { blob: { x, z, rx: pillar.footprint, rz: pillar.footprint, rot: 0 }, top, topRadius: pillar.topRadius, footprint: pillar.footprint };
 }
 
@@ -1304,7 +1333,6 @@ function createMarkerBuoy(kind) {
 }
 
 const BAY_SKY = { top: 0x1a78e6, horizon: SKY_HORIZON };
-const BAY_WATER = { deep: 0x0b5cc6, shallow: 0x2fb8ee };
 
 export function createWorld(scene, track) {
   if (track.map.arena) return createBayArena(scene, track.map.arena);
@@ -1318,7 +1346,7 @@ export function createWorld(scene, track) {
   sun.position.copy(SUN_DIR).multiplyScalar(100);
   scene.add(sun);
 
-  const water = createWater(BAY_WATER);
+  const water = createWater();
   scene.add(water.mesh);
 
   const rand = mulberry32(20261023);
@@ -1353,11 +1381,11 @@ export function createWorld(scene, track) {
       if (clearance < radius + 6) continue;
       if (!fits(x, z, radius)) continue;
       if (z > mainlandEdge(x) - radius - 14) continue;
-      const height = mesa ? 22 + rand() * 24 : 20 + radius * 2.4 + rand() * 28 + (clearance > 120 ? rand() * 25 : 0);
+      const height = mesa ? 18 + rand() * 20 : 10 + radius * (1.7 + rand() * 1.5) + (clearance > 120 ? rand() * 20 : 0);
       const pillar = addPillar(batch, x, z, rand, { radius, height });
       pillars.push({ x, z, r: radius });
       shores.push(pillar.blob);
-      if (height > 52 && radius > 7 && clearance < 90 && falls.length < 6 && rand() < 0.7) falls.push({ pillar, x, z, toward: Math.atan2(track.pz[near.idx] - z, track.px[near.idx] - x) });
+      if (height > 34 && radius > 9 && clearance < 90 && falls.length < 6 && rand() < 0.7) falls.push({ pillar, x, z, toward: Math.atan2(track.pz[near.idx] - z, track.px[near.idx] - x) });
     }
   }
   for (const f of falls) addWaterfall(batch, f.pillar, f.x, f.z, f.toward, rand);
@@ -1440,7 +1468,7 @@ function createBayArena(scene, arena) {
   const sun = new THREE.DirectionalLight(0xfff0d8, 2.4);
   sun.position.copy(SUN_DIR).multiplyScalar(100);
   scene.add(sun);
-  const water = createWater(BAY_WATER);
+  const water = createWater();
   scene.add(water.mesh);
 
   const rand = mulberry32(20261028);
@@ -1470,7 +1498,7 @@ function createBayArena(scene, arena) {
     const x = ex + (nx / nl) * (radius + 1);
     const z = ez + (nz / nl) * (radius + 1);
     if (z < mainlandEdge(x) - radius - 14) {
-      addPillar(batch, x, z, rand, { radius, height: 20 + radius * 2.2 + rand() * 22 });
+      addPillar(batch, x, z, rand, { radius, height: 12 + radius * (1.6 + rand() * 1.4) });
       wall.push({ x, z, r: radius });
     }
     a += (radius * 1.5) / Math.hypot(arena.rx * Math.sin(a), arena.rz * Math.cos(a));
@@ -1484,7 +1512,7 @@ function createBayArena(scene, arena) {
       if (reach(x, z) < 1 + (radius + 30) / arena.rz) continue;
       if (z > mainlandEdge(x) - radius - 14) continue;
       if (wall.some((o) => Math.hypot(o.x - x, o.z - z) < o.r + radius + 4)) continue;
-      addPillar(batch, x, z, rand, { radius, height: 22 + radius * 2.6 + rand() * 30 });
+      addPillar(batch, x, z, rand, { radius, height: 14 + radius * (1.8 + rand() * 1.6) });
       wall.push({ x, z, r: radius });
     }
   }
