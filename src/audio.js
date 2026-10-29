@@ -3,6 +3,7 @@ const RACE_VOLUME = 0.45;
 const SFX_VOLUME = 0.85;
 
 const RACE_SONGS = ['race-music.mp3', 'coral-cannonade.mp3', 'torpedo-tide-rider.mp3', 'funlit-path.mp3', 'full-tilt-finish-line.mp3'];
+const MAP_SONGS = { canyon: 'canyon-chase-derby.mp3' };
 
 function track(file, volume, preload = 'auto') {
   const audio = new Audio();
@@ -20,6 +21,7 @@ export class Sfx {
     this.musicOn = localStorage.getItem('bb-music') !== '0';
     this.listener = null;
     this.raceSongs = RACE_SONGS.map((file) => track(file, RACE_VOLUME, 'none'));
+    this.mapSongs = Object.fromEntries(Object.entries(MAP_SONGS).map(([map, file]) => [map, track(file, RACE_VOLUME, 'none')]));
     this.raceSong = (Number(localStorage.getItem('bb-race-song')) || 0) % RACE_SONGS.length;
     this.tracks = { menu: track('menu-music.mp3', 0.45), race: this.raceSongs[this.raceSong] };
     this.preloadRaceSong();
@@ -31,8 +33,18 @@ export class Sfx {
     return this.ctx ? (this.ctx.outputLatency || 0) + (this.ctx.baseLatency || 0) : 0;
   }
 
-  nextRaceSong() {
+  nextRaceSong(map) {
     this.tracks.race.pause();
+    const own = this.mapSongs[map];
+    if (own) {
+      this.tracks.race = own;
+      own.volume = RACE_VOLUME;
+      if (own.preload !== 'auto') {
+        own.preload = 'auto';
+        own.load();
+      }
+      return;
+    }
     this.tracks.race = this.raceSongs[this.raceSong];
     this.tracks.race.volume = RACE_VOLUME;
     this.raceSong = (this.raceSong + 1) % this.raceSongs.length;
@@ -49,7 +61,7 @@ export class Sfx {
 
   playMusic(name, { at, loop = true } = {}) {
     if (name !== this.musicWanted) {
-      for (const audio of [this.tracks.menu, ...this.raceSongs]) audio.pause();
+      for (const audio of [this.tracks.menu, ...this.raceSongs, ...Object.values(this.mapSongs)]) audio.pause();
       if (name) this.tracks[name].currentTime = 0;
     }
     this.musicWanted = name;

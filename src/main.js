@@ -435,10 +435,10 @@ async function startRace() {
   if (session.role === 'guest') return;
   sfx.unlock();
   sfx.playMusic(null);
-  sfx.nextRaceSong();
   sfx.duckMusic(false);
   saveSetup();
   const map = pickMap(false);
+  sfx.nextRaceSong(map);
   if (venues[map]) await prepareVenue(map);
   else await showLoading(map, prepareVenue(map));
   newRace(false, map);
@@ -706,10 +706,10 @@ function quitOnlineRace() {
 async function startOnline() {
   sfx.unlock();
   sfx.playMusic(null);
-  sfx.nextRaceSong();
   sfx.duckMusic(false);
   saveSetup();
   const map = pickMap(false);
+  sfx.nextRaceSong(map);
   const defs = onlineDefs(online.players, isArena(map));
   const guests = [...session.guests.keys()].filter((peer) => defs.some((d) => d.peer === peer));
   online.waiting = new Set(guests);
@@ -750,7 +750,7 @@ async function guestStart(msg) {
   hints.stop();
   sfx.unlock();
   sfx.playMusic(null);
-  sfx.nextRaceSong();
+  sfx.nextRaceSong(key);
   sfx.duckMusic(false);
   if (venues[key]) await prepareVenue(key);
   else await showLoading(key, prepareVenue(key));
