@@ -4,6 +4,7 @@ import { createWater, waveHeight } from './water.js';
 import { ellipseHit, courseBuoys } from './terrain.js';
 import { toon, outlineMaterial, mulberry32 } from './toon.js';
 import { createWaterfalls } from './waterfall.js';
+import { leafBush, fern, leafCanopy } from './foliage.js';
 import { whirlpoolSite, Whirlpool, flumeStream } from './whirlpool.js';
 import { OUTER_LIMIT } from './race/shared.js';
 
@@ -650,7 +651,7 @@ function addSeaStack(batch, x, z, rand) {
         addPalm(batch, px, spot.y - 0.3, pz, rand, { height: 7 + rand() * 6, lean: 0.1 + rand() * 0.35, dir: rand() * Math.PI * 2 });
       } else {
         const sz = 1.6 + rand() * 1.8;
-        batch.add(rand() < 0.5 ? 'moss' : 'mossDark', LOW_SPHERE, mat(px, spot.y + sz * 0.3, pz, sz * 1.2, sz * 0.8, sz));
+        leafBush(batch, px, spot.y - 0.2, pz, rand, sz * 0.75);
       }
     }
     footprint.push({ x, z, rx: r * stretch * 0.95, rz: (r / stretch) * 0.95, rot });
@@ -798,9 +799,7 @@ function addIsland(batch, x, z, r, rand, { clearCenter = 0 } = {}) {
       const y = groundAt(px, pz);
       if (y < 0.6) continue;
       const s = 1.2 + rand() * 1.6;
-      for (let k = 0; k < 3; k++) {
-        batch.add('bush', LOW_SPHERE, mat(px + (k - 1) * s * 0.7, y + s * 0.3, pz + (rand() - 0.5) * s, s * (0.8 + rand() * 0.4), s * 0.75, s));
-      }
+      for (let k = 0; k < 3; k++) leafBush(batch, px + (k - 1) * s * 0.7, y - 0.1, pz + (rand() - 0.5) * s, rand, s * (0.7 + rand() * 0.3));
     }
   }
 
@@ -913,13 +912,7 @@ const CANOPY = ['moss', 'mossDark', 'jungle', 'jungleLight'];
 function canopyTree(batch, x, y, z, rand, size) {
   const h = size * (1.1 + rand() * 0.5);
   batch.add('coconut', CYLINDER, mat(x, y + h * 0.4, z, size * 0.12, h * 0.8, size * 0.12));
-  batch.add(CANOPY[Math.floor(rand() * CANOPY.length)], LOW_SPHERE, mat(x, y + h, z, size * 0.95, size * 0.7, size * 0.95, 0, rand() * 6, 0));
-  for (let k = 0; k < 3; k++) {
-    const a = rand() * Math.PI * 2;
-    const r = size * (0.55 + rand() * 0.25);
-    const s = size * (0.5 + rand() * 0.25);
-    batch.add(CANOPY[Math.floor(rand() * CANOPY.length)], LOW_SPHERE, mat(x + Math.cos(a) * r, y + h - size * 0.25 + rand() * size * 0.4, z + Math.sin(a) * r, s, s * 0.8, s));
-  }
+  leafCanopy(batch, x, y + h * 0.75, z, rand, size);
 }
 
 function plantTop(batch, x, y, z, radius, rand, density = 1) {
@@ -936,12 +929,12 @@ function plantTop(batch, x, y, z, radius, rand, density = 1) {
     const d = radius * Math.sqrt(rand()) * 0.8;
     canopyTree(batch, x + Math.cos(a) * d, y - 0.3, z + Math.sin(a) * d, rand, 2.6 + rand() * 2.4);
   }
-  const rim = Math.round((6 + rand() * 6) * density * area);
+  const rim = Math.round((2 + rand() * 3) * density * area);
   for (let i = 0; i < rim; i++) {
     const a = (i / rim) * Math.PI * 2 + rand() * 0.4;
     const d = radius * (0.85 + rand() * 0.2);
     const sz = 1.4 + rand() * 1.8;
-    batch.add(CANOPY[Math.floor(rand() * CANOPY.length)], LOW_SPHERE, mat(x + Math.cos(a) * d, y - sz * 0.2, z + Math.sin(a) * d, sz * 1.2, sz * 0.9, sz));
+    fern(batch, x + Math.cos(a) * d, y - 0.3, z + Math.sin(a) * d, rand, sz * 0.5, { yaw: Math.atan2(Math.cos(a), Math.sin(a)), spread: 1.8, droop: 1 });
   }
 }
 
@@ -953,11 +946,11 @@ function addPillar(batch, x, z, rand, { radius, height, plants = 1 }) {
   if (plants) plantTop(batch, top.x, top.y, top.z, pillar.topRadius, rand, plants);
   if (plants && pillar.ledge) {
     const { y, inner, outer } = pillar.ledge;
-    for (let k = 0; k < 6; k++) {
+    for (let k = 0; k < 3; k++) {
       const a = rand() * Math.PI * 2;
       const d = (inner + outer) / 2;
       const sz = 1.3 + rand() * 1.4;
-      batch.add(CANOPY[Math.floor(rand() * CANOPY.length)], LOW_SPHERE, mat(x + Math.cos(a) * d, y + sz * 0.3, z + Math.sin(a) * d, sz * 1.2, sz * 0.8, sz));
+      fern(batch, x + Math.cos(a) * d, y - 0.1, z + Math.sin(a) * d, rand, sz * 0.5, { yaw: Math.atan2(Math.cos(a), Math.sin(a)), spread: 2.4, droop: 0.9 });
     }
   }
   const rubble = 5 + Math.floor(rand() * 6);
@@ -1347,7 +1340,7 @@ function addMainland(batch, rand, site = null) {
       const key = palm ? null : rand() < 0.5 ? 'moss' : 'mossDark';
       if (carveHeight(site, px, pz) < y + 3) continue;
       if (palm) addPalm(batch, px, y - 0.4, pz, rand, { height, lean, dir });
-      else batch.add(key, LOW_SPHERE, mat(px, y + sz * 0.3, pz, sz * 1.3, sz * 0.8, sz));
+      else if (key) leafBush(batch, px, y - 0.3, pz, rand, sz * 0.6);
     }
   }
 }
@@ -1468,7 +1461,7 @@ function addCaveArch(batch, site) {
     for (let j = 1; j < ARCH_SIDES; j++) {
       const [x, y, z] = inner[j];
       const size = 1.3 + rand() * 0.7;
-      batch.add(rand() < 0.5 ? 'moss' : 'jungle', LOW_SPHERE, mat(x - fx * 0.3, y + size * 0.15, z - fz * 0.3, size * 1.3, size * 0.75, size));
+      fern(batch, x - fx * 0.3, y + 0.3, z - fz * 0.3, rand, 0.8 + rand() * 0.4, { yaw: Math.atan2(-fx, -fz), spread: 2.4, droop: 1.3 });
       if (j < 2 || j > ARCH_SIDES - 2) continue;
       for (let n = 0; n < 2; n++) {
         const along = (rand() - 0.5) * 1.6;
@@ -1560,10 +1553,6 @@ function hangVine(batch, x, y, z, ox, oz, length, rand, drift = 0) {
     leafQuat.setFromEuler(leafTurn);
     batch.add(rand() < 0.55 ? 'vineLeaf' : 'vineLeafDark', VINE_LEAF, new THREE.Matrix4().compose(p, leafQuat, new THREE.Vector3(size, size, size)));
   }
-  if (rand() < 0.6) {
-    const tip = pts[pts.length - 1];
-    batch.add('vineLeaf', LOW_SPHERE, mat(tip.x, tip.y + 0.2, tip.z, 0.55, 0.45, 0.55));
-  }
 }
 
 function caveFrames(site, roofed) {
@@ -1645,10 +1634,7 @@ function addGorge(batch, site, rand) {
       if (carveHeight(site, x, z) < y - 0.5) continue;
       if (rand() < 0.35) addPalm(batch, x, y - 0.4, z, rand, { height: 9 + rand() * 7, lean: 0.4 + rand() * 0.4, dir: Math.atan2(-f.nx * side, -f.nz * side) });
       else if (rand() < 0.6) canopyTree(batch, x, y - 0.3, z, rand, 3 + rand() * 2);
-      else {
-        const sz = 2.5 + rand() * 3;
-        batch.add(rand() < 0.5 ? 'moss' : 'mossDark', LOW_SPHERE, mat(x, y + sz * 0.3, z, sz * 1.3, sz * 0.8, sz));
-      }
+      else leafBush(batch, x, y - 0.3, z, rand, 1.6 + rand() * 1.6);
       if (rand() < 0.6) {
         let lip = f.half + CAVE_WALL * 0.7;
         while (lip < f.half + CAVE_WALL + 4 && carveHeight(site, f.x + f.nx * side * lip, f.z + f.nz * side * lip) < clifftop(f.x + f.nx * side * lip, f.z + f.nz * side * lip) - 1) lip += 0.5;
@@ -1658,7 +1644,7 @@ function addGorge(batch, site, rand) {
         const below = carveHeight(site, f.x + f.nx * side * (lip - 3), f.z + f.nz * side * (lip - 3));
         if (y - below > 45) continue;
         const sz = 2.2 + rand() * 1.6;
-        batch.add(rand() < 0.5 ? 'moss' : 'jungle', LOW_SPHERE, mat(vx, y - sz * 0.35, vz, sz * 1.5, sz, sz * 1.5));
+        fern(batch, vx, y - 0.4, vz, rand, sz * 0.55, { yaw: Math.atan2(-f.nx * side, -f.nz * side), spread: 2, droop: 1.4 });
         for (let n = 0; n < 2 + Math.floor(rand() * 3); n++) {
           const along = (rand() - 0.5) * 5;
           const length = 10 + rand() * 18;
@@ -1700,7 +1686,8 @@ function addCliffDressing(batch, site, rand) {
     if (rand() < 0.7) {
       const sz = 1.6 + rand() * 2;
       const y = faceRise(x, ledge);
-      batch.add(rand() < 0.5 ? 'moss' : 'mossDark', LOW_SPHERE, mat(x, y + sz * 0.25, edge + ledge + faceSway(x, y), sz * 1.4, sz * 0.7, sz));
+      if (rand() < 0.5) leafBush(batch, x, y - 0.2, edge + ledge + faceSway(x, y), rand, sz * 0.55);
+      else fern(batch, x, y - 0.1, edge + ledge + faceSway(x, y), rand, sz * 0.45, { droop: 0.8 });
     }
     if (rand() < 0.65) {
       for (let n = 0; n < 2 + Math.floor(rand() * 3); n++) {
@@ -1709,15 +1696,8 @@ function addCliffDressing(batch, site, rand) {
       }
     }
     if (rand() < 0.3) {
-      const key = ['moss', 'mossDark', 'jungle'][Math.floor(rand() * 3)];
-      let size = 1.6 + rand() * 1.2;
-      let y = lip + size * 0.3;
-      for (let n = 0; n < 2 + Math.floor(rand() * 3); n++) {
-        const ox = x + (rand() - 0.5) * 1.6;
-        batch.add(key, LOW_SPHERE, mat(ox, y, cliffFace(ox, y) - size * 0.35, size * 1.25, size, size * 0.65));
-        y -= size * 1.15;
-        size *= 0.78;
-      }
+      const ox = x + (rand() - 0.5) * 1.6;
+      fern(batch, ox, lip + 0.2, cliffFace(ox, lip) - 0.4, rand, 0.9 + rand() * 0.5, { yaw: Math.PI, spread: 2.4, droop: 1.5 });
     }
     if (rand() < 0.45) {
       const sz = 1.8 + rand() * 3.5;
