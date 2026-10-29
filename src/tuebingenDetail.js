@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { frame } from './alpine.js';
 import { GOTHIC, ROUND } from './veniceDetail.js';
 import { mulberry32, toon, INK } from './toon.js';
+import { LOW_SPHERE } from './world.js';
 
 export const TOWN_COLORS = {
   plaster: 0xf7f3ea,
@@ -88,6 +89,10 @@ export const TOWN_COLORS = {
   trainRed: 0xd8343a,
   barnWood: 0x9a5a36,
   rapeseed: 0xf2d43a,
+  reed: 0x86c24c,
+  reedDark: 0x5c9f3b,
+  reedStem: 0x6e9a3c,
+  cattail: 0x6b3f22,
 };
 
 const FACADES = ['cream', 'ochre', 'yellow', 'pink', 'salmon', 'mint', 'sky', 'lilac', 'apricot', 'plaster'];
@@ -1191,15 +1196,59 @@ export function hayBales(batch, x, y, z, rand) {
   if (count > 3) put('straw', CYL, 0.6, 2.25, 0.4, 0.85, 1.3, 0.85, Math.PI / 2, 0, 0.4);
 }
 
+const BLADE = new THREE.ConeGeometry(1, 1, 4).translate(0, 0.5, 0);
+const STALK = new THREE.CylinderGeometry(1, 1, 1, 5).translate(0, 0.5, 0);
+const HEAD = new THREE.CapsuleGeometry(1, 3.2, 3, 8);
+
 export function reeds(batch, x, y, z, rand) {
-  const put = frame(batch, x, y, z, rand() * 6.3, 0, 0, 1);
-  for (let k = 0; k < 9; k++) {
+  const put = frame(batch, x, y - 0.3, z, rand() * 6.3, 0, 0, 1);
+  const blades = 12 + Math.floor(rand() * 8);
+  for (let k = 0; k < blades; k++) {
     const a = rand() * Math.PI * 2;
-    const d = rand() * 1.8;
-    const h = 2 + rand() * 1.4;
-    const lean = (rand() - 0.5) * 0.25;
-    put(pick(['leafB', 'trail', 'leafD'], rand), CONE, Math.cos(a) * d, h / 2 - 0.2, Math.sin(a) * d, 0.32, h, 0.32, lean, rand() * 3, lean);
-    if (rand() < 0.4) put('bark', CYL, Math.cos(a) * d, h * 0.8, Math.sin(a) * d, 0.13, 0.55, 0.13, lean, 0, lean);
+    const d = rand() * 1.4;
+    const h = 1.6 + rand() * 1.8;
+    put(rand() < 0.6 ? 'reed' : 'reedDark', BLADE, Math.cos(a) * d, 0, Math.sin(a) * d, 0.22, h, 0.05, 0, -a + Math.PI / 2, 0.12 + rand() * 0.38);
+  }
+  const tails = 2 + Math.floor(rand() * 4);
+  for (let k = 0; k < tails; k++) {
+    const a = rand() * Math.PI * 2;
+    const d = rand() * 1.1;
+    const h = 2.6 + rand() * 1.2;
+    const lean = (rand() - 0.5) * 0.16;
+    const tilt = (rand() - 0.5) * 0.16;
+    const sx = Math.cos(a) * d;
+    const sz = Math.sin(a) * d;
+    put('reedStem', STALK, sx, 0, sz, 0.045, h, 0.045, tilt, 0, lean);
+    const top = (u) => [sx - Math.sin(lean) * h * u, Math.cos(lean) * Math.cos(tilt) * h * u, sz + Math.sin(tilt) * h * u];
+    const [hx, hy, hz] = top(0.86);
+    put('cattail', HEAD, hx, hy, hz, 0.13, 0.13, 0.13, tilt, 0, lean);
+    const [px, py, pz] = top(1.04);
+    put('reedStem', STALK, px, py - 0.1, pz, 0.02, 0.35, 0.02, tilt, 0, lean);
+  }
+}
+
+export function shrub(batch, x, y, z, rand, scale = 1) {
+  const put = frame(batch, x, y, z, rand() * 6.3, 0, 0, scale);
+  const s = 1 + rand() * 0.6;
+  const key = pick(['hedge', 'leafA', 'leafC', 'leafB'], rand);
+  const alt = pick(['leafB', 'leafD', 'leafA', 'hedge'], rand);
+  put(key, LOW_SPHERE, 0, s * 0.5, 0, s, s * 0.8, s);
+  const lobes = 4 + Math.floor(rand() * 2);
+  for (let k = 0; k < lobes; k++) {
+    const a = (k / lobes) * Math.PI * 2 + rand() * 0.8;
+    const d = s * (0.65 + rand() * 0.3);
+    const r = s * (0.5 + rand() * 0.25);
+    put(k % 2 ? alt : key, LOW_SPHERE, Math.cos(a) * d, r * 0.55, Math.sin(a) * d, r, r * 0.85, r);
+  }
+  put(alt, LOW_SPHERE, (rand() - 0.5) * s * 0.4, s * 1.05, (rand() - 0.5) * s * 0.4, s * 0.6, s * 0.5, s * 0.6);
+  if (rand() < 0.45) {
+    const bloom = pick(['flower', 'flowerB', 'frameWhite', 'flowerD'], rand);
+    const count = 6 + Math.floor(rand() * 5);
+    for (let k = 0; k < count; k++) {
+      const a = rand() * Math.PI * 2;
+      const up = 0.35 + rand() * 0.5;
+      put(bloom, LOW_SPHERE, Math.cos(a) * Math.cos(up) * s * 0.95, s * 0.45 + Math.sin(up) * s * 0.75, Math.sin(a) * Math.cos(up) * s * 0.95, 0.17, 0.14, 0.17);
+    }
   }
 }
 

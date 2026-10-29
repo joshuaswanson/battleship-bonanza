@@ -297,7 +297,7 @@ export class Batcher {
   }
 }
 
-const NO_OUTLINE = new Set(['foam', 'willowCore', 'puntHull', 'caveRock', 'vineStem']);
+const NO_OUTLINE = new Set(['foam', 'willowCore', 'puntHull', 'caveRock', 'vineStem', 'reed', 'reedDark', 'reedStem']);
 let whiteToon = null;
 const WHITE_TOON = () => (whiteToon ??= toon(0xffffff));
 let vertexToon = null;

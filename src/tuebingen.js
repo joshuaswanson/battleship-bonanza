@@ -6,7 +6,7 @@ import { Batcher, cullChunks, slicer, COLORS, mat, createSky, createCloud, creat
 import { courseSurface, buildHeightfield, groundHit, quayWalls, smooth, noise } from './terrain.js';
 import {
   TOWN_COLORS, PUNT_LENGTH, pick, gabledHouse, hoelderlinTower, burse, collegiateChurch, castle, planeTree, willow, WillowGrove, leafyTree, fruitTree,
-  chapel, aula, townHall, bench, lamp, shed, archBridge, boathouse, cafe, canoeRack, hayBales, reeds, tents, playground, station, railway, train, barn, institute,
+  chapel, aula, townHall, bench, lamp, shed, archBridge, boathouse, cafe, canoeRack, hayBales, reeds, shrub, tents, playground, station, railway, train, barn, institute,
 } from './tuebingenDetail.js';
 import { Punts } from './tuebingenHazards.js';
 
@@ -387,7 +387,7 @@ export async function createTuebingen(group, track, fx) {
     const p = track.point(i, TOWN * (track.hw[i] + 7 + rand() * 4));
     if (!free(p.x, p.z, 1.5)) continue;
     if (rand() < 0.35) leafyTree(batch, p.x, MAUER + 0.7, p.z, rand, 0.7 + rand() * 0.3);
-    else batch.add(pick(['hedge', 'leafC', 'leafA'], rand), LOW_SPHERE, mat(p.x, MAUER + 1.2, p.z, 1.6 + rand(), 1.3, 1.6 + rand()));
+    else shrub(batch, p.x, MAUER + 0.6, p.z, rand, 1.2);
   }
   for (let d = -30; d < FRONT_WALL_END; d += 2.2) {
     const i = idxAt(d);
@@ -559,7 +559,7 @@ export async function createTuebingen(group, track, fx) {
           for (let k = 0; k < 3; k++) {
             const bx = p.x + (rand() - 0.5) * 4;
             const bz = p.z + (rand() - 0.5) * 4;
-            if (probe(bx, bz).edge > 2.5) batch.add(pick(['hedge', 'leafC', 'leafA', 'leafB'], rand), LOW_SPHERE, mat(bx, height(bx, bz) + 0.6, bz, 1.4 + rand(), 1.1 + rand() * 0.5, 1.4 + rand()));
+            if (probe(bx, bz).edge > 2.5) shrub(batch, bx, height(bx, bz), bz, rand, 1.1);
           }
         }
         taken.push({ x: p.x, z: p.z, r: 2.5 });
@@ -752,7 +752,7 @@ export async function createTuebingen(group, track, fx) {
         const n = probe(p.x, p.z);
         if (!wildBank(n) || n.edge < 0.6 || n.edge > 4.5) continue;
         const y = height(p.x, p.z);
-        if (rand() < 0.6) batch.add(pick(['hedge', 'leafC', 'leafA', 'leafB', 'leafD'], rand), LOW_SPHERE, mat(p.x, y + 0.25, p.z, 1.4 + rand() * 1.1, 0.9 + rand() * 0.6, 1.4 + rand() * 1.1));
+        if (rand() < 0.6) shrub(batch, p.x, y - 0.2, p.z, rand);
         else reeds(batch, p.x, y, p.z, rand);
         const along = (i - seg.start) * track.spacing;
         if (along < nextWillow) continue;
