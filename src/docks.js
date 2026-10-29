@@ -516,6 +516,21 @@ export async function createDocks(group, track, fx) {
     else batch.add(key, DRUM, mat(p.x, 0.15, p.z, 0.45, 1.1, 0.45, Math.PI / 2, yaw, 0));
   }
 
+  const edgeRand = mulberry32(5151);
+  for (const seg of track.segments) for (const side of [-1, 1]) {
+    for (let i = seg.start + Math.floor(edgeRand() * 20); i <= seg.end; i += Math.round((70 + edgeRand() * 50) / track.spacing)) {
+      if (!landAt(i, side)) continue;
+      const c = quayPoint(i, side, 2.6);
+      if (surface.sample(c.x, c.z).edge < 1.5 || !free(c.x, c.z, 1.6) || nearRouteEnd(c.x, c.z, 30)) continue;
+      const n = 1 + Math.floor(edgeRand() * 3);
+      for (let k = 0; k < n; k++) {
+        const along = (k - (n - 1) / 2) * 1.05;
+        barrels.push({ x: c.x + track.tx[i] * along, y: QUAY_TOP + 0.55, z: c.z + track.tz[i] * along, yaw: edgeRand() * 6, lying: false });
+      }
+      taken.push({ x: c.x, z: c.z, r: 1.6 });
+    }
+  }
+
   const scenery = new THREE.Group();
   const chunks = await batch.buildAsync(scenery, 0.1, COLORS_ALL, undefined, tick);
   const glowGroup = new THREE.Group();
