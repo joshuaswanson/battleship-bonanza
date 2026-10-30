@@ -43,6 +43,7 @@ export class Race {
     this.chopper = chopper;
     this.iceMarks = new Map();
     this.iceChunks = [];
+    this.iceFlashes = [];
     if (chopper) chopper.onShatter = (tree, dir) => this.shatterIce(tree, dir);
     this.hazards = hazards;
     this.mode = mode;
@@ -731,6 +732,7 @@ export class Race {
     for (const m of this.missiles) this.scene.remove(m.mesh);
     for (const m of this.mines) this.scene.remove(m.mesh);
     for (const c of this.iceChunks) this.scene.remove(c.mesh);
+    for (const f of this.iceFlashes) this.scene.remove(f.mesh);
     for (const mark of this.iceMarks.values()) this.scene.remove(mark);
     for (const h of this.hooks) this.scene.remove(h.mesh, h.rope, h.loose?.mesh ?? h.rope);
     this.scene.remove(this.bulletMesh, this.bulletOutline);

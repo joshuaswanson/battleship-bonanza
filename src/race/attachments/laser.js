@@ -1,14 +1,24 @@
 import * as THREE from 'three';
 import { laserWobble, aimLaserGun, stepLaser, laserDirection, pointLaserGun } from '../../boatModel.js';
 import { waveHeight } from '../../water.js';
-import { toon, outlined } from '../../toon.js';
+import { toon } from '../../toon.js';
 import { LASER_REACH, SAW_LEAK } from '../shared.js';
 
 const ICE_MELT = 0.5;
-const ICE_BLOCK = new THREE.DodecahedronGeometry(1, 0);
-const ICE_TONES = [0xd6f6ff, 0x9fdcf4, 0x6cc7ec];
+const ICE_SHARDS = 34;
+const ICE_FLASH = 0.2;
+const ICE_SHARD = new THREE.OctahedronGeometry(1, 0).toNonIndexed();
+ICE_SHARD.computeVertexNormals();
+const ICE_TONES = [0xeafcff, 0xbdeafa, 0x8fdcf2, 0x6cc7ec];
 const iceMaterials = [];
-const iceBlockMaterial = (k) => (iceMaterials[k % 3] ??= toon(ICE_TONES[k % 3]));
+const iceShardMaterial = (k) => (iceMaterials[k % 4] ??= toon(ICE_TONES[k % 4]));
+const FLASH_BALL = new THREE.SphereGeometry(1, 16, 12);
+
+function iceFlash(at) {
+  const mesh = new THREE.Mesh(FLASH_BALL, new THREE.MeshBasicMaterial({ color: 0xe8fbff, transparent: true, opacity: 0.32, depthWrite: false, blending: THREE.AdditiveBlending }));
+  mesh.position.copy(at);
+  return mesh;
+}
 
 function meltMark() {
   const g = new THREE.Group();
@@ -64,23 +74,26 @@ export const methods = {
     const low = tree.base + tree.hang.low;
     const high = tree.base + tree.hang.high;
     const hit = tree.meltHit ?? new THREE.Vector3(tree.x, (low + high) / 2, tree.z);
-    const count = 9;
-    const tall = (high - low) / count;
-    for (let k = 0; k < count; k++) {
+    for (let k = 0; k < ICE_SHARDS; k++) {
       const a = r() * Math.PI * 2;
-      const size = tree.radius * (0.62 + r() * 0.3);
-      const mesh = outlined(ICE_BLOCK, iceBlockMaterial(k), 0.05);
-      mesh.position.set(tree.x + Math.cos(a) * tree.radius * 0.18, low + (k + 0.5) * tall, tree.z + Math.sin(a) * tree.radius * 0.18);
-      mesh.scale.set(size, tall * (0.62 + r() * 0.22), size * (0.8 + r() * 0.3));
-      mesh.rotation.set(r() * 0.5, r() * 6, r() * 0.5);
+      const u = r();
+      const spot = new THREE.Vector3(tree.x + Math.cos(a) * tree.radius * Math.sqrt(r()) * 0.75, low + u * (high - low), tree.z + Math.sin(a) * tree.radius * Math.sqrt(r()) * 0.75);
+      const near = Math.max(0, 1 - spot.distanceTo(hit) / 9);
+      const size = (0.6 + r() * r() * 2.2) * (1.4 - near * 0.6);
+      const mesh = new THREE.Mesh(ICE_SHARD, iceShardMaterial(k));
+      mesh.position.copy(spot);
+      mesh.scale.set(size * (0.3 + r() * 0.35), size * (1 + r() * 1.3), size * (0.3 + r() * 0.35));
+      mesh.rotation.set(r() * 6, r() * 6, r() * 6);
       this.scene.add(mesh);
-      const away = mesh.position.clone().sub(hit);
-      const reach = Math.max(0, 1 - away.length() / (high - low));
-      away.normalize().multiplyScalar(2 + reach * 12).addScaledVector(dir, 2 + reach * 5);
-      this.iceChunks.push({ mesh, vel: away, spin: new THREE.Vector3((r() - 0.5) * 2.4, (r() - 0.5) * 2.4, (r() - 0.5) * 2.4), floor: tree.base + mesh.scale.y * 0.7, life: 5.5 + r() * 2 });
+      const away = spot.clone().sub(hit);
+      away.y *= 0.45;
+      away.normalize().multiplyScalar(4 + near * 20 + r() * 5).addScaledVector(dir, 2 + near * 9);
+      this.iceChunks.push({ mesh, vel: away, spin: new THREE.Vector3((r() - 0.5) * 9, (r() - 0.5) * 9, (r() - 0.5) * 9), floor: tree.base + 0.5, sink: 1.2 + r() * 2.4, life: 2.2 + r() * 1.8 });
     }
-    for (let k = 0; k < 16; k++) this.fx.bubbles(hit.x, hit.y + (r() - 0.5) * 8, hit.z);
-    this.fx.sparkBurst(hit.x, hit.y, hit.z, 0xe8fbff, 22);
+    this.iceFlashes.push({ mesh: iceFlash(hit), t: 0 });
+    this.scene.add(this.iceFlashes.at(-1).mesh);
+    for (let k = 0; k < 26; k++) this.fx.puffs.emit(hit.x, hit.y, hit.z, (r() - 0.5) * 22, (r() - 0.5) * 16, (r() - 0.5) * 22, 0.08 + r() * 0.16, 0.5 + r() * 0.6, 0xffffff, 3, 1.4, 1);
+    for (let k = 0; k < 10; k++) this.fx.bubbles(hit.x, hit.y + (r() - 0.5) * 7, hit.z);
     this.sfx.play('hit', hit);
     this.sfx.play('tink', hit);
   },
@@ -96,20 +109,29 @@ export const methods = {
         this.iceMarks.delete(tree);
       }
     }
+    this.iceFlashes = this.iceFlashes.filter((f) => {
+      f.t += dt / ICE_FLASH;
+      f.mesh.scale.setScalar(1 + f.t * 9);
+      f.mesh.material.opacity = Math.max(0, 0.32 * (1 - f.t) ** 2);
+      if (f.t < 1) return true;
+      this.scene.remove(f.mesh);
+      return false;
+    });
     this.iceChunks = this.iceChunks.filter((c) => {
       c.life -= dt;
-      c.vel.multiplyScalar(Math.exp(-1.1 * dt));
-      c.vel.y -= 5 * dt;
+      c.vel.multiplyScalar(Math.exp(-3.4 * dt));
+      c.vel.y -= c.sink * dt;
       c.mesh.position.addScaledVector(c.vel, dt);
+      c.spin.multiplyScalar(Math.exp(-0.9 * dt));
       if (c.mesh.position.y <= c.floor) {
         c.mesh.position.y = c.floor;
         c.vel.set(0, 0, 0);
-        c.spin.multiplyScalar(Math.exp(-5 * dt));
+        c.spin.set(0, 0, 0);
       }
       c.mesh.rotation.x += c.spin.x * dt;
       c.mesh.rotation.y += c.spin.y * dt;
       c.mesh.rotation.z += c.spin.z * dt;
-      if (c.life < 1) c.mesh.scale.multiplyScalar(Math.exp(-3 * dt));
+      if (c.life < 0.8) c.mesh.scale.multiplyScalar(Math.exp(-5 * dt));
       if (c.life > 0) return true;
       this.scene.remove(c.mesh);
       return false;

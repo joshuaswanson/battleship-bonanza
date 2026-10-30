@@ -189,21 +189,36 @@ function penguinShape({ flap = 0.2, tilt = 0, back = 0x2b323b, belly = 0xf1efe8,
 const PENGUINS = [penguinShape({}), penguinShape({ flap: 0.55 }), penguinShape({ flap: 0.28, tilt: -0.2 }), penguinShape({ flap: 0.12, tilt: 0.12 })];
 const CHICK = penguinShape({ flap: 0.3, back: 0x8f969e, belly: 0xc8ccd0, patch: 0xc8ccd0, foot: 0x4a4f56, chick: true });
 
-const SHATTER = new THREE.DodecahedronGeometry(1, 0);
-const SHATTER_TOP = toon(0xd6f6ff);
-const SHATTER_LOW = toon(0x9fdcf4);
+const BREAK_SPIKE = new THREE.ConeGeometry(1, 1, 4).toNonIndexed();
+BREAK_SPIKE.computeVertexNormals();
+const BREAK_TOP = toon(0xd6f6ff);
+const BREAK_LOW = toon(0x9fdcf4);
+
+function brokenEnd(holder, y, tree, facing, material, width) {
+  const seed = mulberry32(Math.round(tree.x * 7 + tree.z * 13) + (facing > 0 ? 1 : 0));
+  const r = tree.radius * 0.72;
+  const flat = new THREE.Mesh(CYLINDER, material);
+  flat.position.y = y - facing * 0.5;
+  flat.scale.set(tree.radius * width, 1, tree.radius * width);
+  holder.add(flat);
+  for (let k = 0; k < 9; k++) {
+    const a = (k / 9) * Math.PI * 2 + seed() * 0.5;
+    const d = r * (k % 3 === 0 ? 0.2 + seed() * 0.3 : 0.6 + seed() * 0.3);
+    const w = r * (0.3 + seed() * 0.22);
+    const len = r * (0.7 + seed() * 1.5);
+    const spike = new THREE.Mesh(BREAK_SPIKE, material);
+    spike.position.set(Math.cos(a) * d, y + (facing * len) / 2, Math.sin(a) * d);
+    spike.scale.set(w, facing * len, w);
+    spike.rotation.y = seed() * 3;
+    spike.rotation.z = (seed() - 0.5) * 0.5;
+    spike.rotation.x = (seed() - 0.5) * 0.5;
+    holder.add(spike);
+  }
+}
 
 function shatterCaps(holder, drop, tree) {
-  const r = tree.radius;
-  const upper = new THREE.Mesh(SHATTER, SHATTER_TOP);
-  upper.scale.set(r * 0.95, 2.4, r * 0.95);
-  upper.rotation.set(0.5, tree.x, 0.3);
-  holder.add(upper);
-  const lower = new THREE.Mesh(SHATTER, SHATTER_LOW);
-  lower.position.y = drop;
-  lower.scale.set(r * 1.2, 1.5, r * 1.2);
-  lower.rotation.set(0.3, tree.z, 0.5);
-  holder.add(lower);
+  brokenEnd(holder, 0, tree, -1, BREAK_TOP, 1.05);
+  brokenEnd(holder, drop, tree, 1, BREAK_LOW, 1.5);
 }
 
 function icePillarShape(rand) {
