@@ -57,11 +57,11 @@ function buildRails(group, track) {
     const start = track.river.land.launch + node * RAIL_SWITCH_EVERY;
     if (start + RAIL_SWITCH_LENGTH > last) break;
     for (const [from, to] of [[-1, 0], [0, -1], [0, 1], [1, 0]]) {
-      for (let u = 0; u < 1; u += 0.036) {
-        const k = u * u * (3 - 2 * u);
+      for (let u = 0; u < 1; u += 0.018) {
+        const k = u * u * u * (u * (u * 6 - 15) + 10);
         const lat = (from + (to - from) * k) * RAIL_GAP;
         const s = start + u * RAIL_SWITCH_LENGTH;
-        for (const side of [-1, 1]) brace.push([s, lat + side * WHEEL_X, (to - from) * 6 * u * (1 - u) * RAIL_GAP / RAIL_SWITCH_LENGTH]);
+        for (const side of [-1, 1]) brace.push([s, lat + side * WHEEL_X, (to - from) * 30 * u * u * (1 - u) * (1 - u) * RAIL_GAP / RAIL_SWITCH_LENGTH]);
       }
     }
   }

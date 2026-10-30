@@ -1,6 +1,6 @@
 import { waveHeight, isWater } from '../water.js';
 import { t as tr } from '../i18n.js';
-import { BASE_SPEED, RAIL_GAP, RAIL_SWITCH_EVERY, RAIL_SWITCH_LENGTH, RAIL_WISH, RAM_MIN, RAM_REACH, SHORE_MARGIN, clamp, wrapAngle } from './shared.js';
+import { BASE_SPEED, RAIL_GAP, RAIL_SETTLE, RAIL_SWITCH_EVERY, RAIL_SWITCH_LENGTH, RAIL_WISH, RAM_MIN, RAM_REACH, SHORE_MARGIN, clamp, wrapAngle } from './shared.js';
 
 const ROCK_LAUNCH = BASE_SPEED * 0.45;
 const LAND_FLIGHT = 3.2;
@@ -89,8 +89,9 @@ export const methods = {
     const node = Math.floor(t.ahead(t.river.land.launch, b.trackS) / RAIL_SWITCH_EVERY);
     if (b.rail === null) {
       b.rail = clamp(Math.round(lateral / RAIL_GAP), -1, 1);
-      b.railMove = null;
+      b.railMove = Math.abs(lateral - b.rail * RAIL_GAP) > 0.6 ? { from: lateral, to: b.rail * RAIL_GAP, u: 0, length: RAIL_SETTLE } : null;
       b.railNode = node;
+      b.railTurn = 0;
     }
     if (b.isPlayer && !b.railHinted) {
       b.railHinted = true;
@@ -105,7 +106,7 @@ export const methods = {
       b.railNode = node;
       const next = b.rail + b.railWish;
       if (!b.railMove && b.railWishTime > 0 && Math.abs(next) <= 1) {
-        b.railMove = { from: b.rail, to: next, u: 0 };
+        b.railMove = { from: b.rail * RAIL_GAP, to: next * RAIL_GAP, u: 0, length: RAIL_SWITCH_LENGTH };
         b.rail = next;
         this.sfx.play('clank', b.pos);
       }
@@ -114,16 +115,22 @@ export const methods = {
     let slip = 0;
     if (b.railMove) {
       const move = b.railMove;
-      move.u = Math.min(1, move.u + (Math.abs(b.speed) * dt) / RAIL_SWITCH_LENGTH);
-      const u = move.u * move.u * (3 - 2 * move.u);
-      lat = (move.from + (move.to - move.from) * u) * RAIL_GAP;
-      slip = Math.atan2((move.to - move.from) * RAIL_GAP * 6 * move.u * (1 - move.u), RAIL_SWITCH_LENGTH);
-      if (move.u >= 1) b.railMove = null;
+      move.u = Math.min(1, move.u + (Math.abs(b.speed) * dt) / move.length);
+      const u = move.u;
+      lat = move.from + (move.to - move.from) * u * u * u * (u * (u * 6 - 15) + 10);
+      slip = Math.atan2(((move.to - move.from) * 30 * u * u * (1 - u) * (1 - u)) / move.length, 1);
+      if (u >= 1) b.railMove = null;
     }
     const shift = lat - lateral;
     b.pos.x += t.nx[i] * shift;
     b.pos.z += t.nz[i] * shift;
-    b.heading = t.heading(i) + slip;
+    const at = b.trackS / t.spacing;
+    const k = Math.floor(at);
+    const next = t.heading(t.wrap(k + 1));
+    const here = t.heading(t.wrap(k));
+    const along = here + wrapAngle(next - here) * (at - k);
+    b.railTurn += (slip - b.railTurn) * (1 - Math.exp(-14 * dt));
+    b.heading += wrapAngle(along + b.railTurn - b.heading) * (1 - Math.exp(-16 * dt));
     b.vel.set(Math.sin(b.heading) * b.speed, 0, Math.cos(b.heading) * b.speed);
   },
 

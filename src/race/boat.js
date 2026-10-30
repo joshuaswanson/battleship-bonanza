@@ -47,6 +47,7 @@ export class Boat {
     this.railMove = null;
     this.railWish = 0;
     this.railWishTime = 0;
+    this.railTurn = 0;
     this.roll = 0;
     scene.add(this.model.root);
     this.turrets = this.model.swivels
