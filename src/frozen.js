@@ -191,18 +191,52 @@ const CHICK = penguinShape({ flap: 0.3, back: 0x8f969e, belly: 0xc8ccd0, patch: 
 
 const BREAK_SPIKE = new THREE.ConeGeometry(1, 1, 4).toNonIndexed();
 BREAK_SPIKE.computeVertexNormals();
-const BREAK_TOP = toon(0xd6f6ff);
-const BREAK_LOW = toon(0x9fdcf4);
+const BREAK_TOP = toon(0xd6f6ff, { side: THREE.DoubleSide });
+const BREAK_LOW = toon(0x9fdcf4, { side: THREE.DoubleSide });
+const BREAK_SHARDS = 14;
+const SLICE_PAD = 0.9;
 
-function brokenEnd(holder, y, tree, facing, material, width) {
+function pillarSlice(tree, height) {
+  const spots = [];
+  const a = new THREE.Vector3();
+  const b = new THREE.Vector3();
+  for (const part of tree.parts) {
+    const pos = part.geometry.attributes.position;
+    for (let k = 0; k < pos.count; k += 3) {
+      for (const [i, j] of [[k, k + 1], [k + 1, k + 2], [k + 2, k]]) {
+        a.fromBufferAttribute(pos, i).applyMatrix4(part.matrix);
+        b.fromBufferAttribute(pos, j).applyMatrix4(part.matrix);
+        if ((a.y - height) * (b.y - height) >= 0) continue;
+        const u = (height - a.y) / (b.y - a.y);
+        spots.push([a.x + (b.x - a.x) * u - tree.x, a.z + (b.z - a.z) * u - tree.z]);
+      }
+    }
+  }
+  spots.sort((p, q) => Math.atan2(p[1], p[0]) - Math.atan2(q[1], q[0]));
+  const out = ([x, z]) => {
+    const reach = (Math.hypot(x, z) + SLICE_PAD) / Math.hypot(x, z);
+    return [x * reach, z * reach];
+  };
+  const flat = [];
+  spots.forEach((p, k) => {
+    const [px, pz] = out(p);
+    const [qx, qz] = out(spots[(k + 1) % spots.length]);
+    flat.push(0, 0, 0, qx, 0, qz, px, 0, pz);
+  });
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(flat, 3));
+  g.computeVertexNormals();
+  return g;
+}
+
+function brokenEnd(holder, y, tree, facing, material) {
   const seed = mulberry32(Math.round(tree.x * 7 + tree.z * 13) + (facing > 0 ? 1 : 0));
   const r = tree.radius * 0.72;
-  const flat = new THREE.Mesh(CYLINDER, material);
-  flat.position.y = y - facing * 0.5;
-  flat.scale.set(tree.radius * width, 1, tree.radius * width);
-  holder.add(flat);
-  for (let k = 0; k < 9; k++) {
-    const a = (k / 9) * Math.PI * 2 + seed() * 0.5;
+  const cap = new THREE.Mesh(pillarSlice(tree, holder.position.y + y), material);
+  cap.position.y = y;
+  holder.add(cap);
+  for (let k = 0; k < BREAK_SHARDS; k++) {
+    const a = (k / BREAK_SHARDS) * Math.PI * 2 + seed() * 0.5;
     const d = r * (k % 3 === 0 ? 0.2 + seed() * 0.3 : 0.6 + seed() * 0.3);
     const w = r * (0.3 + seed() * 0.22);
     const len = r * (0.7 + seed() * 1.5);
@@ -217,8 +251,8 @@ function brokenEnd(holder, y, tree, facing, material, width) {
 }
 
 function shatterCaps(holder, drop, tree) {
-  brokenEnd(holder, 0, tree, -1, BREAK_TOP, 1.05);
-  brokenEnd(holder, drop, tree, 1, BREAK_LOW, 1.5);
+  brokenEnd(holder, 0, tree, -1, BREAK_TOP);
+  brokenEnd(holder, drop, tree, 1, BREAK_LOW);
 }
 
 function icePillarShape(rand) {
