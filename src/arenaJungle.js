@@ -89,6 +89,20 @@ function ruin(batch, o, rand, height) {
   }
 }
 
+const CROWN = new THREE.IcosahedronGeometry(1, 0);
+const CROWN_KEYS = ['leaf', 'leafDark', 'leafTeal', 'leaf', 'leafLime', 'leafLight'];
+
+function crown(batch, x, y, z, size, rand) {
+  const lumps = 3 + Math.floor(rand() * 2);
+  const key = CROWN_KEYS[Math.floor(rand() * CROWN_KEYS.length)];
+  for (let i = 0; i < lumps; i++) {
+    const a = (i / lumps) * Math.PI * 2 + rand();
+    const off = i === 0 ? 0 : size * (0.5 + rand() * 0.3);
+    const r = size * (i === 0 ? 0.85 : 0.5 + rand() * 0.25);
+    batch.add(rand() < 0.8 ? key : CROWN_KEYS[Math.floor(rand() * CROWN_KEYS.length)], CROWN, mat(x + Math.cos(a) * off, y - (i === 0 ? 0 : size * 0.15), z + Math.sin(a) * off, r, r * 0.6, r, 0, rand() * 6, 0));
+  }
+}
+
 export async function createJungleArena(group, track) {
   const arena = track.map.arena;
   const tick = slicer();
@@ -195,21 +209,40 @@ export async function createJungleArena(group, track) {
     taken.push({ x, z, r: 4 });
     palms++;
   }
-  for (let tries = 0, made = 0; made < 900 && tries < 16000; tries++) {
-    if (tries % 300 === 0) await tick();
-    const x = bounds.minX + rand() * (bounds.maxX - bounds.minX);
-    const z = bounds.minZ + rand() * (bounds.maxZ - bounds.minZ);
-    const d = beyond(arena, x, z);
-    if (d < 14) continue;
-    const y = height(x, z);
-    if (y < 1 || !free(x, z, 3)) continue;
-    const roll = rand();
-    if (roll < 0.22) addGiant(batch, x, y - 0.3, z, rand, 0.9 + rand() * 0.4);
-    else if (roll < 0.62) addBroadleaf(batch, x, y - 0.2, z, rand, 1 + rand() * 0.4);
-    else if (roll < 0.8) addBanana(batch, x, y, z, rand, rand() < 0.4);
-    else addBush(batch, x, y, z, rand);
-    taken.push({ x, z, r: roll < 0.22 ? 6 : 3 });
-    made++;
+  const NEAR = 85;
+  const FAR = 320;
+  for (let gx = bounds.minX; gx < bounds.maxX; gx += 10) {
+    await tick();
+    for (let gz = bounds.minZ; gz < bounds.maxZ; gz += 10) {
+      const x = gx + (rand() - 0.5) * 8;
+      const z = gz + (rand() - 0.5) * 8;
+      const d = beyond(arena, x, z);
+      if (d < 12 || d > NEAR || rand() > 0.8) continue;
+      const y = height(x, z);
+      if (y < 1 || !free(x, z, 3)) continue;
+      const roll = rand();
+      if (roll < 0.3) addGiant(batch, x, y - 0.3, z, rand, 0.8 + rand() * 0.45);
+      else if (roll < 0.68) addBroadleaf(batch, x, y - 0.2, z, rand, 0.9 + rand() * 0.5);
+      else if (roll < 0.84) addBanana(batch, x, y, z, rand, rand() < 0.5);
+      else addBush(batch, x, y, z, rand);
+      if (d < 40 && rand() < 0.5) addFern(batch, x + (rand() - 0.5) * 5, y, z + (rand() - 0.5) * 5, rand);
+    }
+  }
+  for (let gx = bounds.minX; gx < bounds.maxX; gx += 11) {
+    await tick();
+    for (let gz = bounds.minZ; gz < bounds.maxZ; gz += 11) {
+      const x = gx + (rand() - 0.5) * 9;
+      const z = gz + (rand() - 0.5) * 9;
+      const d = beyond(arena, x, z);
+      if (d <= NEAR - 10 || d > FAR || rand() > 0.88) continue;
+      const y = height(x, z);
+      if (y < 1 || !free(x, z, 5)) continue;
+      if (rand() < 0.06) {
+        addGiant(batch, x, y - 0.3, z, rand, 1.1 + rand() * 0.4);
+        continue;
+      }
+      crown(batch, x, y + 13 + rand() * 9, z, 6 + rand() * 4, rand);
+    }
   }
   for (let k = 0; k < 260; k++) {
     const a = rand() * Math.PI * 2;
