@@ -53,6 +53,7 @@ export const methods = {
   },
 
   updateBullets(dt) {
+    if (this.ceasefire) this.bullets.length = 0;
     const c = new THREE.Vector3();
     const seg = new THREE.Vector3();
     const m = new THREE.Matrix4();

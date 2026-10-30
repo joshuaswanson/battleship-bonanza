@@ -8,6 +8,11 @@ export const methods = {
     const desired = new THREE.Vector3();
     const c = new THREE.Vector3();
     this.missiles = this.missiles.filter((m) => {
+      if (this.ceasefire || m.target?.morphing || m.owner.morphing) {
+        this.fx.smoke(m.pos.x, m.pos.y, m.pos.z);
+        this.scene.remove(m.mesh);
+        return false;
+      }
       m.life -= dt;
       m.speed = Math.min(fast(85), m.speed + fast(60) * dt);
       if (m.fizzle > 0) {

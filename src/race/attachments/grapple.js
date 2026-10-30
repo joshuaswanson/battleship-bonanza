@@ -100,6 +100,7 @@ export const methods = {
       const o = h.owner;
       o.model.hookMount.getWorldPosition(from);
       if (!o.alive && h.phase !== 'retract') h.phase = 'retract';
+      if (h.phase !== 'retract' && (this.ceasefire || o.morphing || h.target?.morphing)) this.slacken(h, from, dt);
 
       if (h.phase === 'fly') {
         if (h.target && h.target.alive) {

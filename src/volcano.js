@@ -41,7 +41,9 @@ function islandHeight(x, z) {
   const volcano = LAVA_Y - 6 + (cone - (LAVA_Y - 6)) * crater;
   const table = PLATEAU + 0.5 * lump;
   const sea = -16;
-  const edge = CLIFF + 14 * Math.sin(Math.atan2(z, x) * 7) * 0.4;
+  const angle = Math.atan2(z, x);
+  const south = Math.atan2(Math.sin(angle + Math.PI / 2), Math.cos(angle + Math.PI / 2));
+  const edge = CLIFF + 14 * Math.sin(angle * 7) * 0.4 + 190 * Math.exp(-((south / 0.6) ** 2));
   return Math.max(volcano * (1 - smooth(edge + 2, edge + 12, r)) + sea * smooth(edge + 2, edge + 12, r), table + (sea - table) * smooth(edge, edge + 10, r));
 }
 

@@ -155,17 +155,19 @@ export class Chopper {
     const tree = this.trees[id];
     if (!tree || tree.cut) return;
     tree.cut = true;
-    this.data.set([cutY, tree.x, tree.z, 1], id * 4);
+    const low = tree.hang ? tree.base + tree.hang.low : cutY;
+    const top = tree.hang ? tree.base + tree.hang.high : cutY;
+    this.data.set([low, tree.x, tree.z, 1], id * 4);
     this.texture.needsUpdate = true;
-    const pivot = new THREE.Vector3(tree.x, cutY, tree.z);
+    const pivot = new THREE.Vector3(tree.x, top, tree.z);
     const holder = new THREE.Group();
     holder.position.copy(pivot);
     const inverse = new THREE.Matrix4().makeTranslation(-pivot.x, -pivot.y, -pivot.z);
-    const clip = new THREE.Plane(new THREE.Vector3(0, 1, 0), -cutY);
+    const clip = new THREE.Plane(new THREE.Vector3(0, 1, 0), -top);
     const materials = new Map();
     for (const part of tree.parts) {
       const box = part.geometry.boundingBox.clone().applyMatrix4(part.matrix);
-      if (box.max.y <= cutY) continue;
+      if (box.max.y <= top) continue;
       const painted = part.geometry.hasAttribute('color');
       const id = `${part.key}|${painted}`;
       if (!materials.has(id)) materials.set(id, this.partMaterial(part.key, clip, painted));
@@ -176,6 +178,11 @@ export class Chopper {
     }
     this.group.add(holder);
     const flat = new THREE.Vector3(dir.x, 0, dir.z).normalize();
+    if (tree.hang) {
+      tree.hang.dress(holder, low - top, tree);
+      this.falling.push({ holder, clip, pivot, axis: new THREE.Vector3(flat.z, 0, -flat.x), angle: 0, speed: 0, rest: 0, landed: true });
+      return;
+    }
     this.falling.push({ holder, clip, pivot, axis: new THREE.Vector3(flat.z, 0, -flat.x), angle: 0.06, speed: 1.3, rest: Math.PI / 2 - 0.08, landed: false, height: tree.height });
     while (this.falling.length > 40) {
       const old = this.falling.shift();

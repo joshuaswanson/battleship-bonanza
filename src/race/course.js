@@ -61,7 +61,7 @@ export const methods = {
   },
 
   submerged(b) {
-    return this.track.formKind(b.trackS) === 'sub' && b.formP >= 1 && !b.air;
+    return this.track.formKind(b.trackS) === 'sub' && b.formP >= 1 && b.waterY < -1;
   },
 
   holdCourse(b, dt) {

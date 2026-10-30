@@ -189,6 +189,23 @@ function penguinShape({ flap = 0.2, tilt = 0, back = 0x2b323b, belly = 0xf1efe8,
 const PENGUINS = [penguinShape({}), penguinShape({ flap: 0.55 }), penguinShape({ flap: 0.28, tilt: -0.2 }), penguinShape({ flap: 0.12, tilt: 0.12 })];
 const CHICK = penguinShape({ flap: 0.3, back: 0x8f969e, belly: 0xc8ccd0, patch: 0xc8ccd0, foot: 0x4a4f56, chick: true });
 
+const SHATTER = new THREE.DodecahedronGeometry(1, 0);
+const SHATTER_TOP = toon(0xd6f6ff);
+const SHATTER_LOW = toon(0x9fdcf4);
+
+function shatterCaps(holder, drop, tree) {
+  const r = tree.radius;
+  const upper = new THREE.Mesh(SHATTER, SHATTER_TOP);
+  upper.scale.set(r * 0.95, 2.4, r * 0.95);
+  upper.rotation.set(0.5, tree.x, 0.3);
+  holder.add(upper);
+  const lower = new THREE.Mesh(SHATTER, SHATTER_LOW);
+  lower.position.y = drop;
+  lower.scale.set(r * 1.2, 1.5, r * 1.2);
+  lower.rotation.set(0.3, tree.z, 0.5);
+  holder.add(lower);
+}
+
 function icePillarShape(rand) {
   const sides = 7;
   const rows = 8;
@@ -400,7 +417,7 @@ export async function createFrozen(group, track, fx) {
     const p = place(track, s, lat);
     const floor = height(p.x, p.z);
     const r = 3.4 + rand() * 2.4;
-    chopper.plant(batch, { x: p.x, z: p.z, base: floor, height: 1.5 - floor, radius: r }).add('pillar', columns[k % columns.length], mat(p.x, floor - 0.5, p.z, r, 1.5 - floor, r, 0, rand() * 6, 0));
+    chopper.plant(batch, { x: p.x, z: p.z, base: floor, height: 1.5 - floor, radius: r, hang: { low: 2.4, high: 21, dress: shatterCaps } }).add('pillar', columns[k % columns.length], mat(p.x, floor - 0.5, p.z, r, 1.5 - floor, r, 0, rand() * 6, 0));
     for (let n = 0; n < 6; n++) {
       const a = rand() * 6.3;
       const q = 1.2 + rand() * 1.8;
@@ -566,9 +583,7 @@ export async function createFrozen(group, track, fx) {
     },
     update(t, dt, camera) {
       water.update(t);
-      chopper.update(dt, (f) => {
-        for (let k = 0; k < 18; k++) fx.bubbles(f.pivot.x + (Math.random() - 0.5) * 16, f.pivot.y, f.pivot.z + (Math.random() - 0.5) * 16);
-      });
+      chopper.update(dt);
       underMat.uniforms.uTime.value = t;
       floorMat.uniforms.uTime.value = t;
       cullChunks(chunks, camera, fog.far);

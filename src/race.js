@@ -52,6 +52,8 @@ export class Race {
     this.laps = attract || mode ? Infinity : laps;
     this.boats = defs.map((def, i) => new Boat(def, i, scene, track.river?.land?.kind));
     this.tireMarks = track.river?.land?.kind === 'truck' ? new TireMarks(scene) : null;
+    this.jetPoint = new THREE.Vector3();
+    this.ceasefire = false;
     this.player = this.boats.find((b) => b.isLocal) ?? this.boats.find((b) => b.isPlayer) ?? null;
     this.bullets = [];
     this.missiles = [];
@@ -108,6 +110,7 @@ export class Race {
 
   update(dt, time, input, remote = null) {
     this.time = time;
+    this.ceasefire = this.boats.some((b) => b.isPlayer && b.morphing);
 
     if (this.state === 'countdown') {
       this.countdown -= dt;
@@ -226,6 +229,7 @@ export class Race {
     b.speed = approach(b.speed, target, rate * dt);
 
     const morphing = !!b.orbit || (!!b.form && b.formP > 0 && b.formP < 1);
+    b.morphing = morphing;
     const steer = controllable && !morphing ? b.control.steer : 0;
     b.steerVis += (steer - b.steerVis) * (1 - Math.exp(-8 * dt));
     const speedFrac = clamp(b.speed / BASE_SPEED, 0, 1);
@@ -488,7 +492,7 @@ export class Race {
 
   damage(target, amount, source, kind, { knockX = 0, knockZ = 0, spin = 0, stun = 0, launch = 0 } = {}) {
     if (this.allied(source, target)) return false;
-    if (!target.alive || target.invuln > 0 || (target.finished && !this.attract)) return false;
+    if (!target.alive || target.invuln > 0 || (target.finished && !this.attract) || target.morphing || this.ceasefire) return false;
     const c = target.center();
     const blocked = (target.has('armor') && (kind === 'bullet' || kind === 'spikes' || kind === 'saw')) || (target.has('spikes') && kind === 'saw');
     if (blocked) {
@@ -619,6 +623,7 @@ export class Race {
     const id = b.items[slot];
     const item = ITEMS[id];
     if (!item || item.passive || item.hold || this.state !== 'racing' || !b.alive) return false;
+    if (b.morphing || (this.ceasefire && id !== 'jetpack')) return false;
     if (b.disabled > 0 && item.group === 'weapons') {
       if (b.isPlayer) this.emit('nope', {}, b);
       return false;
@@ -635,9 +640,13 @@ export class Race {
     return true;
   }
 
+  holdFire(b) {
+    return b.morphing || this.ceasefire;
+  }
+
   stepHold(b, id, step, mount, dt) {
     const heat = b.heat[id];
-    if (this.state !== 'racing' || !b.alive || b.disabled > 0) heat.trigger = false;
+    if (this.state !== 'racing' || !b.alive || b.disabled > 0 || this.holdFire(b)) heat.trigger = false;
     const result = step(heat, b.model, dt, this.time);
     if (result.overheatedNow) {
       this.sfx.play('overheat', b.pos);

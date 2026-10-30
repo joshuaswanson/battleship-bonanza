@@ -4,6 +4,18 @@ import { waveHeight } from '../../water.js';
 import { LASER_REACH, SAW_LEAK } from '../shared.js';
 
 export const methods = {
+  shatterIce(tree) {
+    const r = Math.random;
+    for (let k = 0; k < 60; k++) {
+      const y = tree.base + 3 + r() * (tree.hang.high - 3);
+      const a = r() * Math.PI * 2;
+      const push = 1 + r() * 7;
+      this.fx.puffs.emit(tree.x + Math.cos(a) * tree.radius * 0.6, y, tree.z + Math.sin(a) * tree.radius * 0.6, Math.cos(a) * push, (r() - 0.6) * 3, Math.sin(a) * push, 0.3 + r() * 0.9, 1.4 + r() * 1.4, k % 3 ? 0xd6f6ff : 0x8fdcf2, 2.5, 1.2, 0);
+    }
+    for (let k = 0; k < 14; k++) this.fx.bubbles(tree.x, tree.base + 4 + r() * 12, tree.z);
+    this.sfx.play('tink', tree);
+  },
+
   updateLasers(dt) {
     for (const b of this.boats) {
       if (!b.has('laser')) continue;
@@ -49,6 +61,7 @@ export const methods = {
         const { tree, point } = trunk;
         const cutY = Math.min(Math.max(point.y, tree.base + 0.6), tree.base + tree.height * 0.45);
         this.chopper.chop(tree.id, cutY, dir.clone());
+        if (tree.hang) this.shatterIce(tree);
         this.fx.beam(origin, point, 0xff2a2a, 0.5, 0.05, 1, b.model.laserMount);
         this.fx.sparkBurst(point.x, cutY, point.z, 0xffb070, 14);
         for (let k = 0; k < 10; k++) this.fx.puffs.emit(point.x, cutY, point.z, (Math.random() - 0.5) * 8, 2 + Math.random() * 5, (Math.random() - 0.5) * 8, 0.18 + Math.random() * 0.12, 0.8, 0xc99a5c, 18, 0.6, 1);

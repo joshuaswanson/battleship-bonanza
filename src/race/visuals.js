@@ -80,9 +80,11 @@ export const methods = {
     updateMissileTips(b.model, dt);
 
     const jetOn = !!b.air?.jet;
+    const wetJet = jetOn && this.submerged(b);
     for (const flame of flames) {
-      flame.visible = jetOn;
+      flame.visible = jetOn && !wetJet;
       if (jetOn) flame.scale.set(0.32 + Math.random() * 0.1, 1.6 + Math.random() * 0.8, 0.32 + Math.random() * 0.1);
+      if (wetJet) this.jetBubbles(flame);
     }
 
     for (const sp of spinners) sp.mesh.rotation[sp.axis] += sp.speed * dt;
@@ -113,6 +115,12 @@ export const methods = {
       body.position.y += b.form.ride;
       if (track.formKind(s) === 'jet' && b.formP >= 1) body.rotation.z += b.steerVis * 0.5;
     }
+  },
+
+  jetBubbles(flame) {
+    const r = Math.random;
+    const p = flame.getWorldPosition(this.jetPoint);
+    for (let k = 0; k < 4; k++) this.fx.puffs.emit(p.x + (r() - 0.5), p.y, p.z + (r() - 0.5), (r() - 0.5) * 7, -3 + r() * 5, (r() - 0.5) * 7, 0.2 + r() * 0.4, 0.8 + r() * 0.6, 0xcff6ff, -9, 0.8, 1);
   },
 
   boatTrail(b, dt) {

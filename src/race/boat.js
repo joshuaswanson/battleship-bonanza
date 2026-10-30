@@ -41,6 +41,7 @@ export class Boat {
     this.form = FORMS[formKind] ? new FORMS[formKind](this.model, def.color) : null;
     this.formP = 0;
     this.orbit = null;
+    this.morphing = false;
     this.roll = 0;
     scene.add(this.model.root);
     this.turrets = this.model.swivels
