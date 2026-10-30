@@ -8,6 +8,7 @@ const LAND_PEAK = 32;
 const SURFACE_FLIGHT = 2;
 const SURFACE_PEAK = 17;
 const LIP_POP = 20;
+const LIP_SPEED = 0.75;
 const JET_PEAK = 16;
 const HOLD_LOOK = 34;
 const HOLD_CENTER = 0.85;
@@ -26,6 +27,7 @@ export const methods = {
       const offLip = t.formAt(b.riverS ?? s);
       let vy = offLip ? LIP_POP : 3;
       if (offLip) this.sfx.play('untransform', b.pos);
+      if (offLip) b.speed = Math.max(b.speed, BASE_SPEED * LIP_SPEED);
       if (b.air?.fall) vy = b.air.vy;
       else if (b.air) vy = (b.air.peak * 4 * (1 - (2 * b.air.t) / b.air.dur)) / b.air.dur;
       b.air = { fall: true, y: before + b.yOffset, vy };

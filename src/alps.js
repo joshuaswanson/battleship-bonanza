@@ -33,6 +33,8 @@ export const ALPS_COLORS = {
   flagWhite: 0xffffff,
   gateBlue: 0x2f7fd8,
   liftSteel: 0x6d7a88,
+  crag: 0x6a6460,
+  cragDark: 0x4e4a48,
   islet: 0x9a958c,
 };
 
@@ -43,9 +45,14 @@ const SPIRE = new THREE.ConeGeometry(1, 1, 4).rotateY(Math.PI / 4);
 const TURRET = new THREE.ConeGeometry(1, 1, 12);
 const BALL = new THREE.SphereGeometry(1, 10, 8);
 const LIFT_REACH = 44;
+const RIDGE_REACH = 210;
+const RIDGE_FACE = 30;
+const CRAG_ROCKS = 26;
+const CRAG_LIFT = 34;
+const RIDGE_LEDGE = 8;
 const LIFT_CLEARANCE = 15;
-const HORN = { x: 110, z: 500, tip: 24, tower: 98, apron: 214, crest: 7, leanX: 15, leanZ: 4 };
-const HORN_SLOPES = { tip: 2.3, tower: 1.22, apron: 0.47 };
+const HORN = { x: 110, z: 500, tip: 26, tower: 128, apron: 236, crest: 15, leanX: 18, leanZ: 5 };
+const HORN_SLOPES = { tip: 1.55, tower: 1.02, apron: 0.42 };
 const HORN_HEIGHT = HORN.tip * HORN_SLOPES.tip + (HORN.tower - HORN.tip) * HORN_SLOPES.tower + (HORN.apron - HORN.tower) * HORN_SLOPES.apron;
 const HORN_FACES = [[-0.77, -0.64, 1.14], [0.66, -0.75, 0.86], [0.72, 0.69, 1], [-0.7, 0.71, 0.92]];
 const roofShape = new THREE.Shape([new THREE.Vector2(-1, 0), new THREE.Vector2(1, 0), new THREE.Vector2(0, 1)]);
@@ -73,8 +80,8 @@ function matterhorn(x, z) {
   const sz = dz - HORN.leanZ * bend;
   const d = hornReach(sx, sz);
   const away = Math.hypot(sx, sz) || 1;
-  const shoulder = 11 * Math.exp(-(((d - 62) / 14) ** 2)) * Math.max(0, -sx / away) ** 6;
-  return { rise: hornRise(d) + shoulder, rho: d / HORN.apron };
+  const shoulders = 13 * Math.exp(-(((d - 70) / 20) ** 2)) * (Math.max(0, -sx / away) ** 4 + 0.7 * Math.max(0, sx / away) ** 4);
+  return { rise: hornRise(d) + shoulders, rho: d / HORN.apron };
 }
 
 function lakeness(f) {
@@ -129,6 +136,34 @@ function boatLift(batch, track, height) {
   }
 }
 
+function lipCrags(batch, track, height, lipTop, rand) {
+  const { lip } = track.river.land;
+  for (const side of [-1, 1]) {
+    for (let k = 0; k < CRAG_ROCKS; k++) {
+      const t = k / (CRAG_ROCKS - 1);
+      const s = lip - 90 + 300 * t;
+      const i = track.wrap(Math.round(s / track.spacing));
+      const lat = side * (track.hw[i] + 20 + 44 * t + 13 * Math.sin(k * 1.7 + side));
+      const p = track.point(i, lat);
+      const crest = (lipTop + CRAG_LIFT) * (1 - t) ** 1.15 + 5 + 16 * Math.abs(Math.sin(k * 2.3));
+      const base = Math.min(height(p.x, p.z), crest - 8);
+      const tall = crest - base;
+      const r = 9 + 11 * (1 - t) + rand() * 6;
+      batch.add(k % 2 ? 'crag' : 'cragDark', ROCK, mat(p.x, base + tall * 0.42, p.z, r, tall * 0.6, r * (0.7 + rand() * 0.5), rand() * 0.4, rand() * 6, rand() * 0.4));
+    }
+  }
+  for (let k = 0; k < 34; k++) {
+    const u = (k / 33) * 2 - 1;
+    const s = lip + 6 + 18 * rand();
+    const i = track.wrap(Math.round(s / track.spacing));
+    const p = track.point(i, u * (track.hw[i] + 12));
+    const ground = height(p.x, p.z);
+    if (ground < 4) continue;
+    const r = 4 + rand() * 6;
+    batch.add(k % 3 ? 'cragDark' : 'crag', ROCK, mat(p.x, ground - r * 0.3, p.z, r * 1.5, r, r, rand(), rand() * 6, rand()));
+  }
+}
+
 function placer(batch) {
   return (key, geometry, origin, yaw, lx, y, lz, sx, sy, sz, rx = 0, rz = 0, extraYaw = 0) => {
     const c = Math.cos(yaw);
@@ -163,7 +198,8 @@ export async function createAlps(group, track, fx) {
   group.add(sun);
 
   const N = track.N;
-  const { span } = track.river.land;
+  const { span, lip } = track.river.land;
+  const lipTop = track.level(lip - 2);
   const lakeAt = (idx) => {
     const main = track.mainIndex(idx);
     const d = track.landDepth(main * track.spacing);
@@ -176,10 +212,25 @@ export async function createAlps(group, track, fx) {
     const s = surface.sample(x, z);
     return s.edge - lakeAt(s.idx) * (32 + 40 * noise(x * 1.3 + 50, z * 1.3));
   };
+  const lipRidge = (x, z, natural) => {
+    const { s, idx } = surface.sample(x, z);
+    const past = track.ahead(lip, s);
+    if (past > RIDGE_REACH) return natural;
+    const hw = track.hw[idx];
+    const lat = (x - track.px[idx]) * track.nx[idx] + (z - track.pz[idx]) * track.nz[idx];
+    const spur = smooth(hw * 1.14, hw * 1.7, Math.abs(lat));
+    const gully = 0.5 + 0.5 * Math.sin(lat * 0.1 + 5 * noise(x * 1.4, z * 1.4));
+    const reach = (RIDGE_FACE + (RIDGE_REACH - RIDGE_FACE) * spur * (0.62 + 0.38 * noise(x * 0.9 + 70, z * 0.9))) * (0.68 + 0.5 * gully);
+    if (past >= reach) return natural;
+    const top = lipTop * (1 - (past / reach) ** 1.6) * (0.82 + 0.3 * noise(x * 3.4, z * 3.4));
+    const ledge = top / RIDGE_LEDGE;
+    const step = Math.floor(ledge);
+    return Math.max(natural, RIDGE_LEDGE * (step + smooth(0.5, 0.92, ledge - step)));
+  };
   const carveRun = (x, z, natural) => {
     const { s, edge, level } = surface.sample(x, z);
     const d = track.landDepth(s);
-    if (d < 0) return natural;
+    if (d < 0) return lipRidge(x, z, natural);
     const clearance = LIFT_CLEARANCE * smooth(0, 40, d) * (1 - smooth(SKI_CLIMB - 44, SKI_CLIMB - 6, d));
     const flank = natural + level * (1 - smooth(30, 120, edge));
     const floor = level - 0.15 - clearance;
@@ -189,7 +240,7 @@ export async function createAlps(group, track, fx) {
     const { s, edge } = surface.sample(x, z);
     const d = track.landDepth(s);
     if (d < 0) return 0;
-    return smooth(SKI_CLIMB - 70, SKI_CLIMB - 12, d) * (1 - smooth(60, 130, edge)) * smooth(26, 44, y) * smooth(0.5, 0.7, ny);
+    return smooth(SKI_CLIMB - 70, SKI_CLIMB - 12, d) * (1 - smooth(60, 130, edge)) * smooth(26, 44, y) * smooth(0.5, 0.7, ny) * (1 - smooth(span - 12, span - 3, d));
   };
   const height = (x, z) => {
     const shore = shoreOf(x, z);
@@ -223,10 +274,11 @@ export async function createAlps(group, track, fx) {
     const snowLine = 105 + 30 * noise(x * 2, z * 2);
     const { rise, rho } = matterhorn(x, z);
     const onHorn = rho < 1 ? 1 - smooth(0.86, 1, rho) : 0;
-    const streaks = smooth(0.66, 0.7, noise(x * 8 + y * 5, z * 8 + y * 3));
+    const ledges = smooth(0.7, 0.86, Math.sin(y * 0.42 + 5 * noise(x * 2.6, z * 2.6)));
+    const streaks = ledges * smooth(0.46, 0.6, noise(x * 6, z * 6));
     const towerEnd = HORN.tower / HORN.apron;
     const field = smooth(towerEnd - 0.05, towerEnd - 0.01, rho) * (1 - smooth(towerEnd + 0.16, towerEnd + 0.22, rho + 0.14 * (noise(x * 3, z * 3) - 0.5)));
-    const hornSnow = Math.max(field, streaks * 0.9);
+    const hornSnow = Math.max(field, streaks * 0.9) * smooth(62, 84, y);
     color.lerp(shades.hornRock, onHorn);
     color.lerp(shades.snow, Math.max(smooth(snowLine - 6, snowLine + 6, y) * smooth(0.35, 0.55, ny) * (1 - onHorn), hornSnow * onHorn));
     const drift = smooth(0.35, 0.7, noise(x * 1.2 + 11, z * 1.2 - 7));
@@ -448,12 +500,16 @@ export async function createAlps(group, track, fx) {
     slalomGate(batch, p.x, track.level(s), p.z, track.heading(i), k % 2 ? 'flagRed' : 'gateBlue');
   }
   boatLift(batch, track, height);
+  lipCrags(batch, track, height, lipTop, rand);
   chopper.finish(ALPS_COLORS);
   const chunks = await batch.buildAsync(scenery, 0.1, ALPS_COLORS, undefined, tick);
   chunks.push(...(await herdBatch.buildAsync(scenery, 0.045, ALPS_COLORS, undefined, tick)));
   group.add(scenery);
 
-  const buoys = courseBuoys(track, (idx) => lakeAt(idx) > 0.4 && !track.formAt(track.mainIndex(idx) * track.spacing));
+  const buoys = courseBuoys(track, (idx, side) => {
+    const p = track.point(idx, side * (track.hw[track.wrap(idx)] + 1.5));
+    return lakeAt(idx) > 0.4 && !track.formAt(track.mainIndex(idx) * track.spacing) && height(p.x, p.z) < -0.6;
+  });
   group.add(buoys);
   group.add(createArch(track, track.hw[0]));
 
