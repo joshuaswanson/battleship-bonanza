@@ -1458,18 +1458,22 @@ function addCaveArch(batch, site) {
     batch.add('rockland', paintPillar(g, 1e9));
     if (!mouth) continue;
     const { fx, fz } = frame(k);
+    const lip = new THREE.CatmullRomCurve3(inner.map(([x, y, z]) => new THREE.Vector3(x - fx * 0.6, y + 0.4, z - fz * 0.6)));
+    const rim = new THREE.TubeGeometry(lip, 48, LIP_RADIUS, 9, false).toNonIndexed();
+    batch.add('rockland', paintPillar(rim, 1e9));
     for (let j = 1; j < ARCH_SIDES; j++) {
       const [x, y, z] = inner[j];
-      const size = 1.3 + rand() * 0.7;
-      fern(batch, x - fx * 0.3, y + 0.3, z - fz * 0.3, rand, 0.8 + rand() * 0.4, { yaw: Math.atan2(-fx, -fz), spread: 2.4, droop: 1.3 });
+      fern(batch, x - fx * 0.8, y + 0.4 + LIP_RADIUS * 0.8, z - fz * 0.8, rand, 0.7 + rand() * 0.35, { yaw: Math.atan2(-fx, -fz), spread: 2.4, droop: 1.3 });
       if (j < 2 || j > ARCH_SIDES - 2) continue;
       for (let n = 0; n < 2; n++) {
         const along = (rand() - 0.5) * 1.6;
-        hangVine(batch, x - fx * 0.4 + fz * along, y - size * 0.4, z - fz * 0.4 - fx * along, -fx, -fz, 2.5 + rand() * 7, rand);
+        hangVine(batch, x - fx * 0.9 + fz * along, y + 0.4, z - fz * 0.9 - fx * along, -fx, -fz, 3 + rand() * 7, rand);
       }
     }
   }
 }
+
+const LIP_RADIUS = 1.5;
 
 function addCrater(batch, site, rand) {
   const { center, radius } = site;
@@ -1945,11 +1949,6 @@ export function createWorld(scene, track, fx) {
       if (whirlpool) {
         whirlpool.animate(t);
         caveWater.update(t);
-        const { center } = site;
-        if (fx && Math.hypot(camera.position.x - center.x, camera.position.z - center.z) < 300 && Math.random() < dt * 3) {
-          const a = Math.random() * Math.PI * 2;
-          fx.mist(center.x + Math.cos(a) * 10, -40, center.z + Math.sin(a) * 10);
-        }
       }
       water.update(t);
       cullChunks(chunks, camera, fog.far);

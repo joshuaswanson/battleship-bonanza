@@ -4,6 +4,7 @@ import { BASE_SPEED } from './race/shared.js';
 
 export const HOLE_Y = 26;
 const DEPTH = 44;
+const THROAT = 70;
 const DRAIN = 9;
 const STEEP = 2.4;
 const DRAIN_TIME = 0.7;
@@ -217,14 +218,12 @@ const FUNNEL_FRAG = /* glsl */ `
     color = mix(color, foam, smoothstep(0.8, 0.86, rip) * 0.45 * (1.0 - flow * 0.6));
     color = mix(color, foam, smoothstep(0.9, 0.96, h) * 0.7 * (1.0 - flow));
 
-    float churn = sin(theta * 11.0 - uTime * 8.0 + r * 1.4) * 0.5 + sin(theta * 17.0 - uTime * 11.0 - r * 0.9 + 2.0) * 0.3 + st * 0.4;
-    float throat = 1.0 - smoothstep(uDrain + 1.0, uDrain + 10.0, r);
-    color = mix(color, foam, throat * smoothstep(0.05, 0.45, churn) * 0.8);
 
     vec3 view = normalize(cameraPosition - vWorld);
     float glint = pow(max(dot(reflect(-sun, n), view), 0.0), 48.0);
     color = mix(color, foam, step(0.55, glint) * 0.6 * (0.3 + flow));
 
+    color = mix(color, vec3(0.0, 0.03, 0.06), smoothstep(-uDepth * 0.7, -uDepth - 26.0, vDepth));
     gl_FragColor = vec4(color, 1.0);
     #include <colorspace_fragment>
     #include <fog_fragment>
@@ -232,19 +231,27 @@ const FUNNEL_FRAG = /* glsl */ `
 `;
 
 function funnelGeometry(center, radius) {
-  const rings = 72;
   const segs = 180;
   const positions = [];
   const amps = [];
   const indices = [];
   const outer = radius + 2;
-  for (let i = 0; i <= rings; i++) {
-    const u = i / rings;
+  const profile = [];
+  for (let i = 0; i < 16; i++) {
+    const u = i / 16;
+    profile.push([1.2 + (DRAIN - 1.2) * Math.sqrt(u), -DEPTH - THROAT * Math.pow(1 - u, 1.6)]);
+  }
+  for (let i = 0; i <= 72; i++) {
+    const u = i / 72;
     const r = DRAIN + (outer - DRAIN) * (u * u * 0.55 + u * 0.45);
+    profile.push([r, funnelLevel(r, outer)]);
+  }
+  const rings = profile.length - 1;
+  for (const [r, y] of profile) {
     for (let j = 0; j <= segs; j++) {
       const a = (j / segs) * Math.PI * 2;
-      positions.push(center.x + Math.cos(a) * r, funnelLevel(r, outer), center.z + Math.sin(a) * r);
-      amps.push(funnelAmp(r, radius));
+      positions.push(center.x + Math.cos(a) * r, y, center.z + Math.sin(a) * r);
+      amps.push(y < -DEPTH ? 0 : funnelAmp(r, radius));
     }
   }
   for (let i = 0; i < rings; i++) {
@@ -276,7 +283,7 @@ export function flumeStream(site) {
   const path = (spec, t) => {
     if (t <= inside) {
       const p = flume.curve.getPointAt(t / inside);
-      return [p.x, p.y - water + 0.05, p.z];
+      return [p.x, p.y - water - 0.65, p.z];
     }
     const time = ((t - inside) / (1 - inside)) * fly;
     const d = speed * time;
@@ -291,6 +298,7 @@ export function flumeStream(site) {
     width: 5,
     rows: 110,
     shade: (t) => (t < inside * 0.97 ? 0.3 : 1),
+    bulge: (t) => (t < inside ? 0 : 0.35),
     path,
   };
 }
@@ -313,22 +321,6 @@ export class Whirlpool {
       fog: true,
     });
     this.group.add(new THREE.Mesh(funnelGeometry(center, radius), this.material));
-    const dark = new THREE.MeshBasicMaterial({ color: 0x050d14, side: THREE.BackSide });
-    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(DRAIN + 0.3, DRAIN + 0.3, 90, 32, 1, true), dark);
-    shaft.position.set(center.x, -DEPTH - 44, center.z);
-    this.group.add(shaft);
-    const floor = new THREE.Mesh(new THREE.CircleGeometry(DRAIN + 0.4, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x050d14 }));
-    floor.position.set(center.x, -DEPTH - 1.5, center.z);
-    this.group.add(floor);
-    this.throat = new THREE.Group();
-    this.throat.position.set(center.x, -DEPTH + 0.3, center.z);
-    for (let k = 0; k < 3; k++) {
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(DRAIN + 0.4 + k * 1.6, 0.55 - k * 0.12, 6, 64).rotateX(Math.PI / 2), toon(k ? 0xd8f4fb : 0xf4fbff));
-      ring.position.y = k * 0.9;
-      ring.scale.y = 0.6;
-      this.throat.add(ring);
-    }
-    this.group.add(this.throat);
     const tube = new THREE.Mesh(new THREE.TubeGeometry(flume.curve, 120, flume.radius, 14, false), new THREE.MeshBasicMaterial({ color: 0x0b141c, side: THREE.BackSide }));
     this.group.add(tube);
     const mouth = new THREE.Group();
@@ -359,7 +351,6 @@ export class Whirlpool {
 
   animate(t) {
     this.material.uniforms.uTime.value = t;
-    this.throat.rotation.y = t * 3;
   }
 
   darkness(b) {

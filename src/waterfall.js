@@ -93,7 +93,7 @@ function sheetGeometry(spec, { back = 0, seed = 0, shade = 1 } = {}) {
     const w = width * (0.75 + 0.9 * t);
     for (let c = 0; c <= COLS; c++) {
       const u = c / COLS - 0.5;
-      const bulge = (1 - 4 * u * u) * w * 0.35;
+      const bulge = (1 - 4 * u * u) * w * (spec.bulge ? spec.bulge(t) : 0.35);
       if (spec.path) positions.push(cx + tx * u * w, cy + bulge, cz + tz * u * w);
       else positions.push(cx + tx * u * w + dx * (bulge - back), cy, cz + tz * u * w + dz * (bulge - back));
       flows.push(c / COLS, t, along);
