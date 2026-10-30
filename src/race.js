@@ -32,6 +32,8 @@ const KIND_ITEM = { ram: 'spikes', bullet: 'machinegun', saw: 'saw', laser: 'las
 
 const MODULES = [machinegun, missiles, mines, grapple, emp, jetpack, laser, flamethrower, saw, spikes, aiming, course, visuals];
 
+const BEACH_FUNNEL = 240;
+
 export class Race {
   actions = Object.assign({}, ...MODULES.map((m) => m.actions ?? {}));
 
@@ -365,6 +367,12 @@ export class Race {
 
   edgeLimit(pr) {
     const t = this.track;
+    const land = t.river?.land;
+    if (land?.form === 'tank') {
+      const s = t.sAt[pr.idx];
+      const pinch = t.formAt(s) ? 1 : Math.max(0, 1 - t.ahead(s, land.launch) / BEACH_FUNNEL);
+      if (pinch > 0) return t.hw[pr.idx] - 1 + (OUTER_LIMIT + 1) * (1 - pinch);
+    }
     return t.reach ? t.reach[pr.lateral > 0 ? 1 : 0][pr.idx] : t.hw[pr.idx] + (t.banked ? -(t.map.bankMargin ?? BANK_MARGIN) : OUTER_LIMIT);
   }
 
