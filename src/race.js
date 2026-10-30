@@ -7,7 +7,7 @@ import { TrackFeatures } from './features.js';
 import { Wakes } from './wake.js';
 import { TireMarks } from './tireMarks.js';
 import { t as tr } from './i18n.js';
-import { ACCEL, ARMOR_SPEED, BANK_MARGIN, BASE_SPEED, BRAKE, CIRCLE_OFFSET, COAST, FALL_GRAVITY, GRIP, HOLD_IDS, JET_SPEED, JET_THRUST, KO_TIME, LAND_GRIP, LAPS, MAX_HP, MUD_POOL, MUD_SPEED, OFF_COURSE_SPEED, OUTER_LIMIT, RADIUS, REGEN_DELAY, REGEN_MAX, REGEN_RAMP, REGEN_START, REVERSE_SPEED, TURN_RATE, approach, clamp } from './race/shared.js';
+import { ACCEL, ARMOR_SPEED, BANK_MARGIN, BASE_SPEED, BRAKE, CIRCLE_OFFSET, COAST, FALL_GRAVITY, GRIP, HOLD_IDS, JET_ASSIST, JET_ASSIST_STEER, JET_SPEED, JET_THRUST, KO_TIME, LAND_GRIP, LAPS, MAX_HP, MUD_POOL, MUD_SPEED, OFF_COURSE_SPEED, OUTER_LIMIT, RADIUS, REGEN_DELAY, REGEN_MAX, REGEN_RAMP, REGEN_START, REVERSE_SPEED, TURN_RATE, approach, clamp } from './race/shared.js';
 import { Boat } from './race/boat.js';
 import { carrierSpeed } from './ctf.js';
 import * as machinegun from './race/attachments/machinegun.js';
@@ -240,6 +240,7 @@ export class Race {
     const turn = clamp(Math.abs(b.speed) / 14, 0.25, 1) * (b.air ? 0.6 : onLand ? 1.25 : 1) * (1 - 0.2 * speedFrac);
     b.heading -= steer * TURN_RATE * turn * dt * (b.speed < -0.5 ? -1 : 1);
     if (morphing) this.holdCourse(b, dt);
+    else if (jetting) this.holdCourse(b, dt, steer ? JET_ASSIST_STEER : JET_ASSIST);
 
     const fx = Math.sin(b.heading);
     const fz = Math.cos(b.heading);

@@ -1,10 +1,11 @@
 import * as THREE from 'three';
-import { toon, glow, mulberry32 } from './toon.js';
+import { toon, mulberry32 } from './toon.js';
 import { groundHit } from './terrain.js';
-import { Batcher, cullChunks, slicer, COLORS, mat, CONE, ROCK, CYLINDER, SPHERE, addPalm, createSky, createCloud, createArch, SUN_DIR } from './world.js';
+import { Batcher, cullChunks, slicer, COLORS, mat, ROCK, addPalm, createSky, createCloud, createArch, SUN_DIR } from './world.js';
 import { riverSurface, buildFalls } from './jungle.js';
 import { createWater } from './water.js';
-import { BOX, groundMesh, noise, seaStrip, smooth } from './mapKit.js';
+import { BASE_COLORS, buildBase } from './volcanoBase.js';
+import { groundMesh, noise, seaStrip, smooth } from './mapKit.js';
 
 const SKY = 0xf0c8a0;
 const RIM = 92;
@@ -14,6 +15,7 @@ const PLATEAU = 58;
 const CLIFF = 488;
 const PALETTE = {
   ...COLORS,
+  ...BASE_COLORS,
   basalt: 0x3d3a3f,
   basaltLight: 0x5c565a,
   ash: 0x7f7670,
@@ -177,51 +179,6 @@ function disc(x, z, radius, y, material) {
   return mesh;
 }
 
-function radar(batch, x, y, z, rand) {
-  batch.add('steelDark', CYLINDER, mat(x, y + 3, z, 1.6, 6, 1.6));
-  batch.add('concrete', SPHERE, mat(x, y + 8, z, 7, 2.2, 7, 0.7, rand() * 6, 0));
-  batch.add('steelDark', CYLINDER, mat(x, y + 10, z, 0.25, 4, 0.25, 0.7, 0, 0));
-}
-
-function bunker(batch, x, y, z, yaw) {
-  batch.add('concrete', BOX, mat(x, y + 2.2, z, 16, 4.4, 10, 0, yaw, 0));
-  batch.add('steelDark', BOX, mat(x + Math.sin(yaw) * 5.1, y + 2.6, z + Math.cos(yaw) * 5.1, 11, 0.9, 0.3, 0, yaw, 0));
-  batch.add('villain', BOX, mat(x, y + 4.7, z, 16.6, 0.6, 10.6, 0, yaw, 0));
-}
-
-function fuelTanks(batch, x, y, z) {
-  for (let k = 0; k < 3; k++) {
-    batch.add('concrete', CYLINDER, mat(x + k * 9, y + 4, z, 4, 8, 4));
-    batch.add('villain', CYLINDER, mat(x + k * 9, y + 4.5, z, 4.08, 1, 4.08));
-    batch.add('steel', SPHERE, mat(x + k * 9, y + 8, z, 4, 1.2, 4));
-  }
-}
-
-function hangar(batch, x, y, z, yaw) {
-  batch.add('steel', CYLINDER, mat(x, y + 2, z, 13, 26, 13, Math.PI / 2, yaw, 0));
-  batch.add('steelDark', BOX, mat(x + Math.sin(yaw) * 13.2, y + 4, z + Math.cos(yaw) * 13.2, 18, 11, 0.5, 0, yaw, 0));
-  batch.add('hazard', BOX, mat(x + Math.sin(yaw) * 13.5, y + 9.8, z + Math.cos(yaw) * 13.5, 18, 0.5, 0.3, 0, yaw, 0));
-}
-
-function rocket(batch, x, y, z) {
-  batch.add('concrete', CYLINDER, mat(x, y + 15, z, 3, 30, 3));
-  batch.add('villain', CONE, mat(x, y + 34, z, 3.05, 8, 3.05));
-  batch.add('villain', CYLINDER, mat(x, y + 18, z, 3.06, 2, 3.06));
-  for (let k = 0; k < 4; k++) {
-    const a = (k / 4) * Math.PI * 2;
-    batch.add('steelDark', BOX, mat(x + Math.cos(a) * 3.4, y + 3.6, z + Math.sin(a) * 3.4, 3, 7, 0.5, 0, -a, 0));
-  }
-  batch.add('steelDark', BOX, mat(x + 6, y + 15, z, 1, 32, 1));
-  batch.add('steelDark', BOX, mat(x + 3.5, y + 24, z, 5, 0.6, 0.6));
-}
-
-function blastDoor(batch, x, y, z, yaw) {
-  batch.add('steelDark', BOX, mat(x, y + 11, z, 34, 22, 4, 0, yaw, 0));
-  for (const side of [-1, 1]) batch.add('steel', BOX, mat(x + Math.cos(yaw) * side * 7.8, y + 10, z - Math.sin(yaw) * side * 7.8, 15, 19, 4.8, 0, yaw, 0));
-  batch.add('hazard', BOX, mat(x, y + 21, z, 35, 1.2, 5, 0, yaw, 0));
-  batch.add('villain', BOX, mat(x + Math.sin(yaw) * 2.6, y + 10, z + Math.cos(yaw) * 2.6, 1, 19, 0.3, 0, yaw, 0));
-}
-
 function cliffRocks(batch, track, s, rand) {
   for (let k = 0; k < 26; k++) {
     const i = track.wrap(Math.round((s - 12 + rand() * 22) / track.spacing));
@@ -311,35 +268,15 @@ export async function createVolcano(group, track, fx) {
   const blobs = [];
   cliffRocks(batch, track, launch, rand);
   const source = buildSource(batch, group, track, rand);
-  const riverF = launch / track.length;
-  const onCourse = (u, lat) => {
-    const i = track.wrap(Math.round(u * riverF * track.N));
-    const p = track.point(i, lat);
-    return { ...p, y: height(p.x, p.z), yaw: track.heading(i) };
-  };
-  for (const [u, lat, build] of [
-    [0.16, 66, (p) => radar(batch, p.x, p.y, p.z, rand)],
-    [0.24, 60, (p) => bunker(batch, p.x, p.y, p.z, p.yaw)],
-    [0.33, 72, (p) => fuelTanks(batch, p.x, p.y, p.z)],
-    [0.42, 64, (p) => hangar(batch, p.x, p.y, p.z, p.yaw)],
-    [0.5, 78, (p) => rocket(batch, p.x, p.y, p.z)],
-    [0.57, 60, (p) => bunker(batch, p.x, p.y, p.z, p.yaw)],
-    [0.64, 84, (p) => radar(batch, p.x, p.y, p.z, rand)],
-    [0.71, 66, (p) => hangar(batch, p.x, p.y, p.z, p.yaw)],
-    [0.78, 70, (p) => rocket(batch, p.x, p.y, p.z)],
-    [0.85, 62, (p) => fuelTanks(batch, p.x, p.y, p.z)],
-    [0.92, 60, (p) => bunker(batch, p.x, p.y, p.z, p.yaw)],
-  ]) {
-    build(onCourse(u, lat));
-    await tick();
-  }
+  const trim = new Batcher();
+  const occupied = buildBase(batch, trim, track, height, launch);
   for (let k = 0; k < 420; k++) {
     const a = rand() * 6.3;
     const r = 240 + rand() * 240;
     const x = Math.cos(a) * r;
     const z = Math.sin(a) * r;
     const near = surface.sample(x, z);
-    if (near.edge < 8) continue;
+    if (near.edge < 8 || occupied(x, z)) continue;
     const y = height(x, z);
     if (y < PLATEAU - 8 || y > 130) continue;
     addPalm(batch, x, y - 0.4, z, rand, { height: 7 + rand() * 7, lean: rand() * 0.4, dir: rand() * 6.3 });
@@ -350,7 +287,7 @@ export async function createVolcano(group, track, fx) {
     const r = 110 + rand() * 360;
     const x = Math.cos(a) * r;
     const z = Math.sin(a) * r;
-    if (surface.sample(x, z).edge < 6) continue;
+    if (surface.sample(x, z).edge < 6 || occupied(x, z)) continue;
     const s = 3 + rand() * 7;
     batch.add(k % 2 ? 'basalt' : 'basaltLight', ROCK, mat(x, height(x, z) + s * 0.2, z, s, s * 0.8, s, rand(), rand() * 6, rand()));
   }
@@ -364,8 +301,18 @@ export async function createVolcano(group, track, fx) {
     batch.add('basalt', ROCK, mat(p.x, level + 0.5, p.z, r, r * 0.9, r, rand(), rand() * 6, rand()));
     blobs.push({ x: p.x, z: p.z, rx: r * 0.9, rz: r * 0.9, rot: 0, top: level + r * 0.6, launch: true });
   }
+  for (let s = launch + 380, k = 0; s < lip - 1150; s += 105 + rand() * 30, k++) {
+    const i = track.wrap(Math.round(s / track.spacing));
+    const side = track.px[i] * track.nx[i] + track.pz[i] * track.nz[i] > 0 ? 1 : -1;
+    const p = track.point(i, side * (track.hw[i] + 16 + rand() * 12));
+    const r = 11 + rand() * 7;
+    const h = 30 + rand() * 24;
+    batch.add(k % 2 ? 'basalt' : 'basaltLight', ROCK, mat(p.x, h * 0.42, p.z, r, h, r, rand() * 0.2, rand() * 6, rand() * 0.2));
+    batch.add('moss', ROCK, mat(p.x, h * 1.2, p.z, r * 0.72, r * 0.3, r * 0.72, 0, rand() * 6, 0));
+  }
   const scenery = new THREE.Group();
   const chunks = await batch.buildAsync(scenery, 0.1, PALETTE, 120, tick);
+  chunks.push(...(await trim.buildAsync(scenery, 0, PALETTE, 120, tick)));
   group.add(scenery);
   group.add(createArch(track, track.halfWidth));
 

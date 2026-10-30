@@ -11,6 +11,7 @@ const JET_PEAK = 16;
 const HOLD_LOOK = 34;
 const HOLD_CENTER = 0.85;
 const HOLD_RATE = 5;
+const JET_LOOK = 1.1;
 
 export const methods = {
   followRiver(b, s) {
@@ -64,13 +65,14 @@ export const methods = {
     return this.track.formKind(b.trackS) === 'sub' && b.formP >= 1 && b.waterY < -1;
   },
 
-  holdCourse(b, dt) {
+  holdCourse(b, dt, rate = HOLD_RATE) {
     const t = this.track;
     const here = t.norm(b.trackIdx);
     const lateral = (b.pos.x - t.px[here]) * t.nx[here] + (b.pos.z - t.pz[here]) * t.nz[here];
-    const ahead = t.point(t.step(here, HOLD_LOOK / t.spacing), lateral * HOLD_CENTER);
+    const look = Math.max(HOLD_LOOK, Math.abs(b.speed) * JET_LOOK);
+    const ahead = t.point(t.step(here, look / t.spacing), lateral * HOLD_CENTER);
     const diff = wrapAngle(Math.atan2(ahead.x - b.pos.x, ahead.z - b.pos.z) - b.heading);
-    b.heading += diff * (1 - Math.exp(-HOLD_RATE * dt));
+    b.heading += diff * (1 - Math.exp(-rate * dt));
   },
 
   groundHit(b, x, z, size) {
