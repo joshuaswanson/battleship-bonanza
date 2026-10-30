@@ -11,6 +11,7 @@ const BALL = new THREE.SphereGeometry(1, 14, 10);
 const DOME = new THREE.SphereGeometry(1, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2);
 const VAULT = new THREE.CylinderGeometry(1, 1, 1, 18, 1, false, -Math.PI / 2, Math.PI).rotateX(-Math.PI / 2);
 const RIB = new THREE.TorusGeometry(1, 0.03, 6, 18, Math.PI);
+const VAULT_END = new THREE.CircleGeometry(1, 18, 0, Math.PI).rotateY(Math.PI);
 const SLOPE = new THREE.CylinderGeometry(0.72, 1, 1, 4).rotateY(Math.PI / 4);
 const WEDGE = new THREE.CylinderGeometry(1, 1, 1, 3).rotateY(Math.PI / 6);
 const DISH = new THREE.LatheGeometry([[0.001, -0.08], [0.3, -0.03], [0.6, 0.12], [0.86, 0.34], [1.03, 0.54], [1, 0.56], [0.85, 0.42], [0.6, 0.24], [0.3, 0.1], [0.001, 0.06]].map(([r, y]) => new THREE.Vector2(r, y)), 22);
@@ -108,6 +109,10 @@ function hangar(k, pad) {
   const w = 19;
   const len = 42;
   k.put('panel', VAULT, 0, pad, 0, w, w * 0.92, len);
+  k.put('panelDark', VAULT_END, 0, pad, -len / 2, w, w * 0.92, 1);
+  k.put('steelDark', BOX, 0, pad + 3.4, -len / 2 - 0.3, 9, 6.8, 0.6);
+  k.glow('lit', BOX, 0, pad + 8.6, -len / 2 - 0.25, 7, 1.2, 0.2);
+  hazardBand(k, 0, pad + 7.2, -len / 2 - 0.5, 10);
   for (let n = -3; n <= 3; n++) k.put('panelDark', RIB, 0, pad, n * 6.6, w * 1.01, w * 0.93, 22);
   k.put('steelDark', BOX, 0, pad + 8.4, len / 2 + 0.3, w * 1.28, 16.8, 1.4);
   k.glow('glass', BOX, 0, pad + 5.4, len / 2 + 1.1, w * 1.08, 10.8, 0.3);
@@ -295,16 +300,40 @@ const TYPES = {
   reactor: { build: reactor, depth: 46, width: 62 },
 };
 
-export function stationSpots(track, riverEnd) {
-  return STATIONS.map(([u, side, type]) => {
-    const { depth, width } = TYPES[type];
+function spotOnBank(track, s, side, type) {
+  const { depth, width } = TYPES[type];
+  const i = track.wrap(Math.round(s / track.spacing));
+  const hw = track.hw[i];
+  const lat = side * (hw + 11 + depth / 2);
+  const p = track.point(i, lat);
+  return { ...p, s, i, side, type, depth, width, yaw: Math.atan2(-side * track.nx[i], -side * track.nz[i]) };
+}
+
+function onSolidGround(track, height, spot) {
+  const floor = track.level(spot.s) - 3;
+  const { i, side, depth, width } = spot;
+  const tx = track.tx[i];
+  const tz = track.tz[i];
+  const nx = side * track.nx[i];
+  const nz = side * track.nz[i];
+  for (const along of [-1, 0, 1]) {
+    for (const out of [0.5, 1, 1.6]) {
+      const x = spot.x + tx * along * (width / 2 + 8) + nx * (depth / 2) * out;
+      const z = spot.z + tz * along * (width / 2 + 8) + nz * (depth / 2) * out;
+      if (height(x, z) < floor) return false;
+    }
+  }
+  return true;
+}
+
+export function stationSpots(track, riverEnd, height) {
+  const spots = [];
+  for (const [u, wanted, type] of STATIONS) {
     const s = u * riverEnd;
-    const i = track.wrap(Math.round(s / track.spacing));
-    const hw = track.hw[i];
-    const lat = side * (hw + 11 + depth / 2);
-    const p = track.point(i, lat);
-    return { ...p, s, i, side, type, depth, width, yaw: Math.atan2(-side * track.nx[i], -side * track.nz[i]) };
-  });
+    const spot = [wanted, -wanted].map((side) => spotOnBank(track, s, side, type)).find((o) => onSolidGround(track, height, o));
+    if (spot) spots.push(spot);
+  }
+  return spots;
 }
 
 function foundation(k, spot, pad) {
@@ -314,6 +343,10 @@ function foundation(k, spot, pad) {
   hazardBand(k, 0, pad - 1.8, depth / 2 + 0.4, width);
   for (let x = -width / 2 + 5; x < width / 2; x += 10) k.put('concreteDark', BOX, x, pad - 7, depth / 2 + 0.1, 1.4, 10, 0.5);
   k.put('steelDark', BOX, 0, pad + 0.05, 0, width - 2, 0.1, depth - 2);
+  k.put('concreteDark', BOX, 0, pad - 0.5, -depth / 2 - 0.2, width + 0.6, 1.2, 0.9);
+  hazardBand(k, 0, pad - 1.8, -depth / 2 - 0.4, width);
+  for (const z of [-1, 1]) k.put('concreteDark', BOX, width / 2 + 0.2, pad - 0.5, z * depth / 4, 0.9, 1.2, depth / 2);
+  for (const z of [-1, 1]) k.put('concreteDark', BOX, -width / 2 - 0.2, pad - 0.5, z * depth / 4, 0.9, 1.2, depth / 2);
 }
 
 function bridge(batch, trim, track, s, level) {
@@ -354,6 +387,8 @@ function perimeter(batch, trim, track, height, level, from, to, spots) {
     const i = track.wrap(Math.round(s / track.spacing));
     for (const side of [-1, 1]) {
       const p = track.point(i, side * (track.hw[i] + 7));
+      const back = track.point(i, side * (track.hw[i] + 24));
+      if (height(back.x, back.z) < level(s) - 3) continue;
       const y = Math.max(height(p.x, p.z), level(s) + 2.5);
       const k = kit(batch, trim, p.x, y, p.z, track.heading(i));
       k.put('concrete', BOX, 0, 0, 0, 1.8, 7, 25);
@@ -373,7 +408,7 @@ function perimeter(batch, trim, track, height, level, from, to, spots) {
 }
 
 export function buildBase(batch, trim, track, height, riverEnd) {
-  const spots = stationSpots(track, riverEnd);
+  const spots = stationSpots(track, riverEnd, height);
   const level = (s) => track.level(s);
   for (const spot of spots) {
     const pad = Math.max(height(spot.x, spot.z), level(spot.s) + 4);

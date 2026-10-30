@@ -7,7 +7,7 @@ import { TrackFeatures } from './features.js';
 import { Wakes } from './wake.js';
 import { TireMarks } from './tireMarks.js';
 import { t as tr } from './i18n.js';
-import { ACCEL, ARMOR_SPEED, BANK_MARGIN, BASE_SPEED, BRAKE, CIRCLE_OFFSET, COAST, FALL_GRAVITY, GRIP, HOLD_IDS, JET_ASSIST, JET_ASSIST_STEER, JET_SPEED, JET_THRUST, KO_TIME, LAND_GRIP, LAPS, MAX_HP, MUD_POOL, MUD_SPEED, OFF_COURSE_SPEED, OUTER_LIMIT, RADIUS, REGEN_DELAY, REGEN_MAX, REGEN_RAMP, REGEN_START, REVERSE_SPEED, TURN_RATE, approach, clamp } from './race/shared.js';
+import { ACCEL, ARMOR_SPEED, BANK_MARGIN, BASE_SPEED, BRAKE, CIRCLE_OFFSET, COAST, FALL_GRAVITY, GRIP, HOLD_IDS, JET_ASSIST, JET_ASSIST_EASE, JET_SPEED, JET_STEER, JET_THRUST, KO_TIME, LAND_GRIP, LAPS, MAX_HP, MUD_POOL, MUD_SPEED, OFF_COURSE_SPEED, OUTER_LIMIT, RADIUS, REGEN_DELAY, REGEN_MAX, REGEN_RAMP, REGEN_START, REVERSE_SPEED, TURN_RATE, approach, clamp } from './race/shared.js';
 import { Boat } from './race/boat.js';
 import { carrierSpeed } from './ctf.js';
 import * as machinegun from './race/attachments/machinegun.js';
@@ -234,13 +234,14 @@ export class Race {
 
     const morphing = !!b.orbit || (!!b.form && b.formP > 0 && b.formP < 1);
     b.morphing = morphing;
+    const flying = !morphing && !!b.form && b.formP >= 1 && t.jetCruise(b.trackS);
     const steer = controllable && !morphing ? b.control.steer : 0;
     b.steerVis += (steer - b.steerVis) * (1 - Math.exp(-8 * dt));
     const speedFrac = clamp(b.speed / BASE_SPEED, 0, 1);
-    const turn = clamp(Math.abs(b.speed) / 14, 0.25, 1) * (b.air ? 0.6 : onLand ? 1.25 : 1) * (1 - 0.2 * speedFrac);
+    const turn = clamp(Math.abs(b.speed) / 14, 0.25, 1) * (b.air ? 0.6 : onLand ? 1.25 : 1) * (1 - 0.2 * speedFrac) * (flying ? JET_STEER : 1);
     b.heading -= steer * TURN_RATE * turn * dt * (b.speed < -0.5 ? -1 : 1);
     if (morphing) this.holdCourse(b, dt);
-    else if (jetting) this.holdCourse(b, dt, steer ? JET_ASSIST_STEER : JET_ASSIST);
+    else if (flying) this.holdCourse(b, dt, JET_ASSIST * (1 - Math.abs(b.steerVis) * JET_ASSIST_EASE));
 
     const fx = Math.sin(b.heading);
     const fz = Math.cos(b.heading);
@@ -385,7 +386,7 @@ export class Race {
     b.vel.x = dx * speed;
     b.vel.z = dz * speed;
     b.heading = Math.atan2(dx, dz);
-    if (b.spinTime <= 0) {
+    if (b.spinTime <= 0 && !this.rigidForm(b)) {
       b.spinTime = 0.9;
       b.spinDur = 0.9;
     }
@@ -529,6 +530,10 @@ export class Race {
     target.vel.z += knockZ;
     const SLOWDOWN = { bullet: 0.97, saw: 0.94, laser: 0.97, reflect: 0.97, flame: 0.97, fire: 1 };
     target.speed *= SLOWDOWN[kind] ?? 0.7;
+    if (this.rigidForm(target)) {
+      spin = 0;
+      launch = 0;
+    }
     if (spin && target.spinTime <= 0) {
       target.spinTime = spin;
       target.spinDur = spin;

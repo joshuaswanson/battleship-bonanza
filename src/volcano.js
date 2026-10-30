@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { toon, mulberry32 } from './toon.js';
 import { groundHit } from './terrain.js';
+import { jungleClump } from './foliage.js';
 import { Batcher, cullChunks, slicer, COLORS, mat, ROCK, addPalm, createSky, createCloud, createArch, SUN_DIR } from './world.js';
 import { riverSurface, buildFalls } from './jungle.js';
 import { createWater } from './water.js';
@@ -13,6 +14,10 @@ const PEAK = 236;
 const LAVA_Y = 208;
 const PLATEAU = 58;
 const CLIFF = 488;
+const CANYON_HALF = 60;
+const CANYON_IN = 430;
+const CANYON_OUT = 720;
+const FIELD_CELL = 14;
 const PALETTE = {
   ...COLORS,
   ...BASE_COLORS,
@@ -50,12 +55,80 @@ function islandHeight(x, z) {
 }
 
 function groundHeight(surface, track, x, z) {
+  const { edge, s } = surface.sample(x, z);
+  const base = openHeight(surface, track, x, z);
+  const field = track.river.flight;
+  if (!field) return base;
+  const ridge = canyonRidge(field, x, z);
+  if (ridge <= base) return base;
+  return base + (ridge - base) * (track.formAt(s) ? 1 : smooth(22, 75, edge));
+}
+
+function openHeight(surface, track, x, z) {
   const { edge, s, level } = surface.sample(x, z);
   const raw = shapedHeight(track, edge, s, level, x, z);
   const past = track.ahead(track.river.land.launch, s);
   if (past > 170) return raw;
   const notch = smooth(1, 6, past) * (1 - smooth(12, 40, edge));
   return raw + (-16 - raw) * notch;
+}
+
+const canyonFade = (s, start, end) => smooth(0, 260, s - start) * smooth(0, 300, end - s);
+
+async function flightField(surface, track, tick) {
+  const { launch, lip } = track.river.land;
+  const start = launch + CANYON_IN;
+  const end = lip - CANYON_OUT;
+  const points = [];
+  for (let s = start; s < end; s += 12) {
+    const i = track.wrap(Math.round(s / track.spacing));
+    points.push({ x: track.px[i], z: track.pz[i], w: canyonFade(s, start, end) });
+  }
+  const { minX, maxX, minZ, maxZ } = surface.bounds;
+  const cols = Math.ceil((maxX - minX) / FIELD_CELL) + 2;
+  const rows = Math.ceil((maxZ - minZ) / FIELD_CELL) + 2;
+  const dist = new Float32Array(cols * rows);
+  const weight = new Float32Array(cols * rows);
+  for (let r = 0; r < rows; r++) {
+    await tick();
+    const z = minZ + r * FIELD_CELL;
+    for (let c = 0; c < cols; c++) {
+      const x = minX + c * FIELD_CELL;
+      let best = Infinity;
+      let w = 0;
+      for (const p of points) {
+        const d = (x - p.x) ** 2 + (z - p.z) ** 2;
+        if (d < best) {
+          best = d;
+          w = p.w;
+        }
+      }
+      dist[r * cols + c] = Math.sqrt(best);
+      weight[r * cols + c] = w;
+    }
+  }
+  const at = (grid, x, z) => {
+    const fx = Math.min(cols - 1.001, Math.max(0, (x - minX) / FIELD_CELL));
+    const fz = Math.min(rows - 1.001, Math.max(0, (z - minZ) / FIELD_CELL));
+    const c = Math.floor(fx);
+    const r = Math.floor(fz);
+    const u = fx - c;
+    const v = fz - r;
+    const a = grid[r * cols + c];
+    const b = grid[r * cols + c + 1];
+    const e = grid[(r + 1) * cols + c];
+    const f = grid[(r + 1) * cols + c + 1];
+    return a + (b - a) * u + (e + (f - e) * u - a - (b - a) * u) * v;
+  };
+  return { dist: (x, z) => at(dist, x, z), weight: (x, z) => at(weight, x, z), start, end };
+}
+
+function canyonRidge(field, x, z) {
+  const d = field.dist(x, z);
+  const w = field.weight(x, z);
+  if (w <= 0 || d > 320) return -16;
+  const top = 86 + 36 * noise(x * 1.1, z * 1.1) + 14 * noise(x * 3, z * 3);
+  return -16 + (top + 16) * w * smooth(CANYON_HALF + 8, CANYON_HALF + 46, d) * (1 - smooth(200, 310, d));
 }
 
 function shapedHeight(track, edge, s, level, x, z) {
@@ -179,6 +252,63 @@ function disc(x, z, radius, y, material) {
   return mesh;
 }
 
+const COLUMN = new THREE.CylinderGeometry(1, 1, 1, 6).toNonIndexed();
+COLUMN.deleteAttribute('uv');
+COLUMN.computeVertexNormals();
+
+async function buildCanyon(batch, canyon, track, height, rand, tick) {
+  const { start, end } = track.river.flight;
+  const tiers = [[4, 15, 34], [12, 34, 62], [21, 60, 96]];
+  let n = 0;
+  for (let s = start + 40; s < end - 40; s += 10.5) {
+    if (++n % 24 === 0) await tick();
+    const i = track.wrap(Math.round(s / track.spacing));
+    const fade = canyonFade(s, start, end);
+    for (const side of [-1, 1]) {
+      const wave = Math.sin(s * 0.013 + side) * 3 + Math.sin(s * 0.041) * 1.6;
+      for (const [out, low, high] of tiers) {
+        const p = track.point(i, side * (CANYON_HALF + out + wave + rand() * 2.5));
+        const r = 5.4 + rand() * 2.2;
+        const h = (low + rand() * (high - low)) * fade;
+        const yaw = rand() * 1;
+        if (h < 3) continue;
+        canyon.add(rand() < 0.55 ? 'basalt' : 'basaltLight', COLUMN, mat(p.x, (h - 18) / 2, p.z, r, h + 18, r, 0, yaw, 0));
+        canyon.add(rand() < 0.5 ? 'ash' : 'basaltLight', COLUMN, mat(p.x, h + 0.35, p.z, r * 0.94, 0.7, r * 0.94, 0, yaw, 0));
+        if (out > 12 && rand() < 0.42) canyon.add('moss', COLUMN, mat(p.x, h + 0.9, p.z, r * 0.8, 0.5, r * 0.8, 0, yaw, 0));
+        if (out > 12 && rand() < 0.1) jungleClump(batch, p.x, h + 0.4, p.z, rand, 3 + rand() * 2.4);
+      }
+    }
+  }
+}
+
+function canyonFoam(track) {
+  const { start, end } = track.river.flight;
+  const positions = [];
+  const index = [];
+  let row = 0;
+  for (const side of [-1, 1]) {
+    const first = row;
+    for (let s = start + 40; s < end - 40; s += 9) {
+      const i = track.wrap(Math.round(s / track.spacing));
+      const wave = Math.sin(s * 0.013 + side) * 3 + Math.sin(s * 0.041) * 1.6;
+      const inner = CANYON_HALF + wave - 4 - 2.4 * Math.sin(s * 0.31 + side);
+      const a = track.point(i, side * inner);
+      const b = track.point(i, side * (CANYON_HALF + wave + 5));
+      positions.push(a.x, 0.5, a.z, b.x, 0.5, b.z);
+      if (row > first) {
+        const k = row * 2;
+        if (side > 0) index.push(k - 2, k, k - 1, k - 1, k, k + 1);
+        else index.push(k - 2, k - 1, k, k - 1, k + 1, k);
+      }
+      row++;
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  g.setIndex(index);
+  return new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.72, side: THREE.DoubleSide }));
+}
+
 function cliffRocks(batch, track, s, rand) {
   for (let k = 0; k < 26; k++) {
     const i = track.wrap(Math.round((s - 12 + rand() * 22) / track.spacing));
@@ -220,6 +350,7 @@ export async function createVolcano(group, track, fx) {
   group.add(sun);
 
   const surface = await riverSurface(track, tick);
+  track.river.flight = await flightField(surface, track, tick);
   const height = (x, z) => groundHeight(surface, track, x, z);
   const sand = new THREE.Color(0x4a4448);
   const mossy = new THREE.Color(0x3c7a1c);
@@ -269,6 +400,7 @@ export async function createVolcano(group, track, fx) {
   cliffRocks(batch, track, launch, rand);
   const source = buildSource(batch, group, track, rand);
   const trim = new Batcher();
+  const canyon = new Batcher();
   const occupied = buildBase(batch, trim, track, height, launch);
   for (let k = 0; k < 420; k++) {
     const a = rand() * 6.3;
@@ -301,18 +433,12 @@ export async function createVolcano(group, track, fx) {
     batch.add('basalt', ROCK, mat(p.x, level + 0.5, p.z, r, r * 0.9, r, rand(), rand() * 6, rand()));
     blobs.push({ x: p.x, z: p.z, rx: r * 0.9, rz: r * 0.9, rot: 0, top: level + r * 0.6, launch: true });
   }
-  for (let s = launch + 380, k = 0; s < lip - 1150; s += 105 + rand() * 30, k++) {
-    const i = track.wrap(Math.round(s / track.spacing));
-    const side = track.px[i] * track.nx[i] + track.pz[i] * track.nz[i] > 0 ? 1 : -1;
-    const p = track.point(i, side * (track.hw[i] + 16 + rand() * 12));
-    const r = 11 + rand() * 7;
-    const h = 30 + rand() * 24;
-    batch.add(k % 2 ? 'basalt' : 'basaltLight', ROCK, mat(p.x, h * 0.42, p.z, r, h, r, rand() * 0.2, rand() * 6, rand() * 0.2));
-    batch.add('moss', ROCK, mat(p.x, h * 1.2, p.z, r * 0.72, r * 0.3, r * 0.72, 0, rand() * 6, 0));
-  }
+  await buildCanyon(batch, canyon, track, height, rand, tick);
   const scenery = new THREE.Group();
   const chunks = await batch.buildAsync(scenery, 0.1, PALETTE, 120, tick);
   chunks.push(...(await trim.buildAsync(scenery, 0, PALETTE, 120, tick)));
+  chunks.push(...(await canyon.buildAsync(scenery, 0.12, PALETTE, 280, tick)));
+  group.add(canyonFoam(track));
   group.add(scenery);
   group.add(createArch(track, track.halfWidth));
 

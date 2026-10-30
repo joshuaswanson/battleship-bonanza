@@ -11,6 +11,7 @@ const JET_PEAK = 16;
 const HOLD_LOOK = 34;
 const HOLD_CENTER = 0.85;
 const HOLD_RATE = 5;
+const HOLD_EASE = 7;
 const JET_LOOK = 1.1;
 
 export const methods = {
@@ -70,9 +71,18 @@ export const methods = {
     const here = t.norm(b.trackIdx);
     const lateral = (b.pos.x - t.px[here]) * t.nx[here] + (b.pos.z - t.pz[here]) * t.nz[here];
     const look = Math.max(HOLD_LOOK, Math.abs(b.speed) * JET_LOOK);
-    const ahead = t.point(t.step(here, look / t.spacing), lateral * HOLD_CENTER);
-    const diff = wrapAngle(Math.atan2(ahead.x - b.pos.x, ahead.z - b.pos.z) - b.heading);
-    b.heading += diff * (1 - Math.exp(-rate * dt));
+    const at = (b.trackS + look) / t.spacing;
+    const i = Math.floor(at);
+    const u = at - i;
+    const a = t.point(t.wrap(i), lateral * HOLD_CENTER);
+    const c = t.point(t.wrap(i + 1), lateral * HOLD_CENTER);
+    const diff = wrapAngle(Math.atan2(a.x + (c.x - a.x) * u - b.pos.x, a.z + (c.z - a.z) * u - b.pos.z) - b.heading);
+    b.holdTurn = (b.holdTurn ?? 0) + (diff * rate - (b.holdTurn ?? 0)) * (1 - Math.exp(-HOLD_EASE * dt));
+    b.heading += b.holdTurn * dt;
+  },
+
+  rigidForm(b) {
+    return !!b.form && b.formP > 0.5 && this.track.formKind(b.trackS) !== 'truck' && this.track.formAt(b.trackS);
   },
 
   groundHit(b, x, z, size) {
@@ -136,6 +146,15 @@ export const methods = {
       const uz = nz / len;
       const vn = b.vel.x * ux + b.vel.z * uz;
       if (blob.launch && -vn > ROCK_LAUNCH) {
+        if (this.rigidForm(b)) {
+          b.vel.x -= ux * vn * 1.3;
+          b.vel.z -= uz * vn * 1.3;
+          b.speed *= 0.94;
+          b.bump(3);
+          this.groundHit(b, b.pos.x, b.pos.z, 0.7);
+          this.sfx.play('hit', b.pos);
+          continue;
+        }
         this.launchOffRock(b, blob);
         continue;
       }
