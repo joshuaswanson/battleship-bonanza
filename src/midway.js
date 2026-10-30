@@ -293,7 +293,7 @@ export async function createMidway(group, track, fx) {
         w.s = g.s ?? 1;
         guns.push(w);
       }
-      ships.push({ x: p.x, z: p.z, L: size.L });
+      ships.push({ x: p.x, z: p.z, L: size.L, yaw });
       shores.push({ x: p.x, z: p.z, rx: size.B / 2 + 0.5, rz: size.L / 2, rot: yaw });
       return { x: p.x, z: p.z, yaw };
     }
@@ -376,7 +376,7 @@ export async function createMidway(group, track, fx) {
         w.s = g.s ?? 1;
         guns.push(w);
       }
-      ships.push({ x: best.x, z: best.z, L: size.L });
+      ships.push({ x: best.x, z: best.z, L: size.L, yaw: best.yaw });
       shores.push({ x: best.x, z: best.z, rx: size.B / 2 + 0.5, rz: size.L / 2, rot: best.yaw });
       group.userData.splitShip = { x: best.x, z: best.z, yaw: best.yaw };
     }
@@ -385,16 +385,25 @@ export async function createMidway(group, track, fx) {
     place(f, side, 10, 96, 11, angle, tinCan);
   }
   for (let k = 0; k < 7; k++) {
-    const a = (k / 7) * Math.PI * 2 + rand();
-    const d = 520 + rand() * 180;
-    const x = Math.cos(a) * d;
-    const z = Math.sin(a) * d + 100;
-    const yaw = rand() * Math.PI;
-    const local = { local: [] };
-    if (k % 3 === 0) bigShip(x, z, yaw, local);
-    else tinCan(x, z, yaw, local);
-    if (k % 2 === 0) fires.push(new THREE.Vector3(x, 8, z));
+    const big = k % 3 === 0;
+    const L = big ? 172 * BATTLESHIP_SCALE : 96;
+    const B = big ? 30 * BATTLESHIP_SCALE : 11;
+    for (let tries = 0; tries < 40; tries++) {
+      const a = (k / 7) * Math.PI * 2 + rand();
+      const d = 520 + rand() * 180;
+      const x = Math.cos(a) * d;
+      const z = Math.sin(a) * d + 100;
+      const yaw = rand() * Math.PI;
+      if (!fits(x, z, yaw, L, B, 30)) continue;
+      const local = { local: [] };
+      if (big) bigShip(x, z, yaw, local);
+      else tinCan(x, z, yaw, local);
+      ships.push({ x, z, L, yaw });
+      if (k % 2 === 0) fires.push(new THREE.Vector3(x, 8, z));
+      break;
+    }
   }
+  group.userData.fleet = ships;
 
   for (let k = 0; k < 16; k++) {
     for (let tries = 0; tries < 40; tries++) {
