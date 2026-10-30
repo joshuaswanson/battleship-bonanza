@@ -7,7 +7,7 @@ import { TEAMS } from './ctf.js';
 
 export const POINTS = 5;
 export const MATCH_TIME_CP = 360;
-export const ZONE = 16;
+export const ZONE = 24;
 const CAP_TIME = 6;
 const RESPAWN_DELAY = 4;
 const LETTERS = ['A', 'B', 'C', 'D', 'E'];
