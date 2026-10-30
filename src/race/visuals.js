@@ -42,7 +42,7 @@ export const methods = {
       body.rotation.x += (targetPitch - body.rotation.x) * ease;
       body.rotation.z += (targetRoll - body.rotation.z) * ease;
     } else {
-      const k = 1 - b.ko / KO_TIME;
+      const k = Math.min(1.6, ((b.koTime ?? KO_TIME) - b.ko) / KO_TIME);
       body.rotation.z += (Math.PI * 0.95 - body.rotation.z) * ease;
       root.position.y -= Math.max(0, k - 0.3) * 4;
     }
