@@ -365,7 +365,7 @@ function goLoadout() {
 
 const wipe = createWipe($('wipe'), sfx);
 
-const MAP_CHOICES = ['canyon', 'jungle', 'bay', 'frozen', 'docks', 'volcano', 'alps', 'venice', 'midway', 'tuebingen', 'random'].filter((id) => !HIDDEN_MAPS.includes(id));
+const MAP_CHOICES = ['bay', 'jungle', 'canyon', 'frozen', 'docks', 'volcano', 'alps', 'venice', 'midway', 'tuebingen', 'random'].filter((id) => !HIDDEN_MAPS.includes(id));
 const die = (pips, cls) => `<svg class="die ${cls}" viewBox="0 0 40 40"><rect x="3" y="3" width="34" height="34" rx="9" fill="#fff" stroke="#0E2A47" stroke-width="3.5"/>${pips.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="3.6" fill="#0E2A47"/>`).join('')}</svg>`;
 const DICE = die([[12, 12], [20, 20], [28, 28]], 'die-a') + die([[12, 12], [28, 12], [12, 28], [28, 28], [20, 20]], 'die-b');
 function renderModes() {
