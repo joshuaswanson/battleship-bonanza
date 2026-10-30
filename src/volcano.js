@@ -22,6 +22,8 @@ const WATER = { deep: 0x0f7fa8, shallow: 0x35d0d4 };
 const LAVA_START = 40;
 const LAVA_REACH = 46;
 const OVERRUN = 330;
+const ROCK_GAP = 160;
+const MOUTH_ROCKS = 4;
 const LAVA_CARVE = 400;
 const LAVA_ENTRY = 9;
 const LAVA_FLOOR = 0.8;
@@ -789,7 +791,8 @@ export async function createVolcano(group, track, fx) {
     const { edge, s } = surface.sample(x, z);
     return edge < margin && !track.formAt(s);
   };
-  const flows = [headStream(track), overrun(track)];
+  const overrunFlow = overrun(track);
+  const flows = [headStream(track), overrunFlow];
   for (const a of [0.5, 1.15, 1.9, 2.5, 3.2, 5.7, 6.05]) flows.push(streamPoints(a, (x, z) => reachesRiver(x, z, 2) || occupied(x, z)));
   for (let s = 160; s < launch - 200; s += 190 + rand() * 170) {
     const clearOfDrops = track.river.drops.every((d) => Math.abs(d.s - s) > 70);
@@ -866,24 +869,32 @@ export async function createVolcano(group, track, fx) {
     }
     if (k % 30 === 0) await tick();
   }
-  for (let k = 0; k < 120; k++) {
-    const a = rand() * 6.3;
-    const r = 110 + rand() * 360;
-    const x = Math.cos(a) * r;
-    const z = Math.sin(a) * r;
-    if (surface.sample(x, z).edge < 14 || occupied(x, z)) continue;
-    const s = 3 + rand() * 7;
-    batch.add(k % 2 ? 'basalt' : 'basaltLight', ROCK, mat(x, height(x, z) + s * 0.2, z, s, s * 0.8, s, rand(), rand() * 6, rand()));
-  }
-  for (let k = 0; k < 30; k++) {
-    const s = 120 + rand() * (launch - 240);
-    const i = track.wrap(Math.round(s / track.spacing));
-    const lat = (rand() < 0.5 ? -1 : 1) * track.hw[i] * (0.68 + rand() * 0.24);
-    const p = track.point(i, lat);
-    const level = track.level(s);
-    const r = 2.8 + rand() * 2.2;
-    batch.add('basalt', ROCK, mat(p.x, level + 0.5, p.z, r, r * 0.9, r, rand(), rand() * 6, rand()));
-    blobs.push({ x: p.x, z: p.z, rx: r * 0.9, rz: r * 0.9, rot: 0, top: level + r * 0.6, launch: true });
+  for (const flow of flows) {
+    for (let k = 0; k < 12; k++) {
+      const { x, z, width } = flow[Math.floor(rand() * flow.length)];
+      const a = rand() * 6.3;
+      const out = width + 4 + rand() * 22;
+      const px = x + Math.cos(a) * out;
+      const pz = z + Math.sin(a) * out;
+      if (surface.sample(px, pz).edge < 14 || occupied(px, pz)) continue;
+      const s = 3 + rand() * 6;
+      batch.add(k % 2 ? 'basalt' : 'basaltLight', ROCK, mat(px, height(px, pz) + s * 0.2, pz, s, s * 0.8, s, rand(), rand() * 6, rand()));
+    }
+    const mouth = flow[flow.length - 1];
+    const { s: at } = surface.sample(mouth.x, mouth.z);
+    const clearOfDrops = track.river.drops.every((d) => Math.abs(d.s - at) > 60);
+    if (flow === overrunFlow || !reachesRiver(mouth.x, mouth.z, 8) || at > launch - ROCK_GAP || !clearOfDrops) continue;
+    const i = track.wrap(Math.round(at / track.spacing));
+    const side = (mouth.x - track.px[i]) * track.nx[i] + (mouth.z - track.pz[i]) * track.nz[i] > 0 ? 1 : -1;
+    for (let k = 0; k < MOUTH_ROCKS; k++) {
+      const s = at + (k - (MOUTH_ROCKS - 1) / 2) * 13 + (rand() - 0.5) * 6;
+      const j = track.wrap(Math.round(s / track.spacing));
+      const p = track.point(j, side * track.hw[j] * (0.68 + rand() * 0.24));
+      const level = track.level(s);
+      const r = 2.8 + rand() * 2.2;
+      batch.add('basalt', ROCK, mat(p.x, level + 0.5, p.z, r, r * 0.9, r, rand(), rand() * 6, rand()));
+      blobs.push({ x: p.x, z: p.z, rx: r * 0.9, rz: r * 0.9, rot: 0, top: level + r * 0.6, launch: true });
+    }
   }
   await buildCanyon(surface, batch, canyon, group, track, height, rand, tick, streamMat);
   group.add(canyonLava(track, streamMat));
