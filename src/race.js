@@ -113,7 +113,7 @@ export class Race {
 
   update(dt, time, input, remote = null) {
     this.time = time;
-    this.ceasefire = this.boats.some((b) => b.isPlayer && b.morphing);
+    this.ceasefire = !remote && this.boats.some((b) => b.isPlayer && b.morphing);
 
     if (this.state === 'countdown') {
       this.countdown -= dt;
