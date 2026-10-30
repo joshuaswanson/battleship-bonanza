@@ -4,6 +4,7 @@ import { t, ordinal, itemName } from './i18n.js';
 import { MAX_HP } from './race.js';
 import { COUNT_LAND } from './audio.js';
 import { TEAMS, CAPTURES_TO_WIN } from './ctf.js';
+import { pointLetter } from './controlPoints.js';
 
 const written = new WeakMap();
 function changed(el, key, value) {
@@ -265,6 +266,11 @@ export class Hud {
       case 'overtime':
         this.pop(t('ctf_overtime'), 'ko');
         break;
+      case 'pointCaptured': {
+        const ours = e.team === this.race.player.team;
+        this.pop(t(ours ? 'cp_won' : 'cp_lost', { p: e.letter }), ours ? 'go' : 'ko');
+        break;
+      }
       case 'matchEnd':
         this.pop(t(e.winner === this.race.player.team ? 'ctf_win' : 'ctf_lose'), e.winner === this.race.player.team ? 'go' : 'ko');
         break;
@@ -436,6 +442,7 @@ export class Hud {
   }
 
   updateScore(ctf) {
+    if (ctf.kind === 'cp') return this.updatePoints(ctf);
     const score = ctf.score.join(':');
     if (score !== this.lastScore) {
       this.place.innerHTML = ctf.score.map((n, team) => `<span class="score-team" style="--team:${hex(TEAMS[team].color)}">${n}</span>`).join('<span class="score-sep">:</span>');
@@ -444,6 +451,23 @@ export class Hud {
     }
     setText(this.lap, ctf.overtime ? t('ctf_suddenDeath') : t('ctf_firstTo', { n: CAPTURES_TO_WIN }));
     setText(this.time, formatTime(Math.max(0, ctf.clock)));
+  }
+
+  updatePoints(cp) {
+    const me = this.race.player.team;
+    const sign = cp.points.map((p) => `${p.owner}${p.capper}${Math.round(p.progress * 20)}${p.contested ? 1 : 0}`).join();
+    if (sign !== this.lastScore) {
+      const color = (team) => (team === null ? '#E9EDF2' : hex(TEAMS[team].color));
+      this.place.innerHTML = `<span class="cp-row">${cp.points
+        .map((p) => `<span class="cp-pill${p.contested ? ' contested' : ''}" style="--own:${color(p.owner)};--cap:${color(p.capper)};--p:${Math.round(p.progress * 100)}%">${pointLetter(p.index)}</span>`)
+        .join('')}</span>`;
+      this.lastScore = sign;
+    }
+    const threat = cp.target(1 - me);
+    const held = threat >= 0 && cp.points[threat].owner === me && cp.points[threat].progress > 0 && cp.points[threat].capper === 1 - me;
+    const aim = cp.target(me);
+    setText(this.lap, held ? t('cp_hold', { p: pointLetter(threat) }) : aim >= 0 ? t('cp_take', { p: pointLetter(aim) }) : '');
+    setText(this.time, formatTime(Math.max(0, cp.clock)));
   }
 
   updateBars(race, camera) {
@@ -473,11 +497,12 @@ export class Hud {
     this.marks = [];
     if (!race.mode) return;
     const me = race.player.team;
-    for (const [kind, team] of [['flag', 1 - me], ['flag', me], ['base', me], ['base', 1 - me]]) {
+    const kinds = race.mode.kind === 'cp' ? [['point', 0], ['point', 1]] : [['flag', 1 - me], ['flag', me], ['base', me], ['base', 1 - me]];
+    for (const [kind, team] of kinds) {
       const el = document.createElement('div');
       el.className = `mark mark-${kind}${team === me ? ' mine' : ''}`;
       el.style.setProperty('--team', hex(TEAMS[team].color));
-      el.innerHTML = `<i class="mark-arrow"></i><span class="mark-icon">${MARK_ICONS[kind]}</span><em class="mark-dist"></em>`;
+      el.innerHTML = `<i class="mark-arrow"></i><span class="mark-icon">${MARK_ICONS[kind === 'point' ? 'base' : kind]}</span><em class="mark-dist"></em>`;
       this.marksEl.append(el);
       this.marks.push({ el, kind, team, dist: el.querySelector('.mark-dist'), arrow: el.querySelector('.mark-arrow'), shown: '' });
     }
@@ -494,14 +519,27 @@ export class Hud {
       let x = base.x;
       let z = base.z;
       let visible = !race.attract && race.state === 'racing';
-      if (mark.kind === 'flag') {
+      if (mark.kind === 'point') {
+        const aim = mark.team === 0 ? ctf.target(me.team) : ctf.target(1 - me.team);
+        const p = ctf.points[aim];
+        visible &&= !!p && (mark.team === 0 || p.owner === me.team) && Math.hypot(p.x - me.pos.x, p.z - me.pos.z) > 30;
+        if (p) {
+          ({ x, z } = p);
+          const color = p.owner === null ? '#E9EDF2' : hex(TEAMS[p.owner].color);
+          if (mark.color !== color) {
+            mark.el.style.setProperty('--team', color);
+            mark.color = color;
+          }
+          mark.el.classList.toggle('mine', mark.team === 1);
+        }
+      } else if (mark.kind === 'flag') {
         if (flag.state === 'carried' && flag.carrier) ({ x, z } = flag.carrier.pos);
         else ({ x, z } = flag);
         if (flag.carrier === me) visible = false;
       } else if (flag.state === 'home') visible = false;
       mark.el.classList.toggle('on', visible);
       if (!visible) continue;
-      mark.el.classList.toggle('alert', mark.kind === 'flag' && flag.state !== 'home');
+      mark.el.classList.toggle('alert', mark.kind === 'flag' ? flag.state !== 'home' : mark.kind === 'point' && mark.team === 1 && ctf.points[ctf.target(1 - me.team)]?.capper === 1 - me.team);
       const v = this.projected.set(x, 7, z).project(camera);
       const behind = v.z > 1;
       const inside = !behind && Math.abs(v.x) < 0.9 && Math.abs(v.y) < 0.86;
@@ -696,6 +734,24 @@ export class Hud {
     }
     ctx.globalAlpha = 1;
     if (race.mode) for (const flag of race.mode.flags) this.drawFlag(flag);
+    if (race.mode?.points) for (const point of race.mode.points) this.drawPoint(point);
+  }
+
+  drawPoint(point) {
+    const { ctx } = this;
+    const [x, y] = this.toMap(point.x, point.z);
+    ctx.fillStyle = point.owner === null ? '#E9EDF2' : hex(TEAMS[point.owner].color);
+    ctx.strokeStyle = '#0E2A47';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x, y, 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#0E2A47';
+    ctx.font = '900 10px "Saira Condensed", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(pointLetter(point.index), x, y + 1);
   }
 
   drawFlag(flag) {

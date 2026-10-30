@@ -10,6 +10,7 @@ import { createWorld, buildBudget } from './world.js';
 import { MAPS } from './maps.js';
 import { ARENAS } from './arenas.js';
 import { CaptureTheFlag, TEAMS } from './ctf.js';
+import { ControlPoints } from './controlPoints.js';
 import { Recorder, Replay } from './replay.js';
 import { Hints } from './hints.js';
 import { Director } from './director.js';
@@ -123,9 +124,9 @@ const ARENA_BUILDERS = {
   harbor: () => import('./arenaHarbor.js').then((m) => m.createHarborArena),
 };
 
-const ARENA_PREFIX = 'ctf:';
-const isArena = (key) => key.startsWith(ARENA_PREFIX);
-const mapOf = (key) => (isArena(key) ? ARENAS[key.slice(ARENA_PREFIX.length)] : MAPS[key]);
+const TEAM_MODES = { ctf: CaptureTheFlag, cp: ControlPoints };
+const isArena = (key) => key.split(':')[0] in TEAM_MODES;
+const mapOf = (key) => (isArena(key) ? ARENAS[key.split(':')[1]] : MAPS[key]);
 
 function prepareVenue(key) {
   if (venues[key]) return Promise.resolve(venues[key]);
@@ -183,7 +184,7 @@ function useVenue(id) {
 function pickMap(attract) {
   if (import.meta.env.DEV && window.__bb?.map) return window.__bb.map;
   if (attract) return 'bay';
-  if (setup.mode === 'ctf') return ARENA_PREFIX + (ARENAS[setup.arena] ? setup.arena : Object.keys(ARENAS)[0]);
+  if (setup.mode in TEAM_MODES) return `${setup.mode}:${ARENAS[setup.arena] ? setup.arena : Object.keys(ARENAS)[0]}`;
   if (MAPS[setup.map]) return setup.map;
   const ids = Object.keys(MAPS);
   return ids[Math.floor(Math.random() * ids.length)];
@@ -292,7 +293,7 @@ function newRace(attract, map = pickMap(attract), given = null, guest = false) {
   fx.decals.clear();
   useVenue(map);
   current.world.chopper?.reset();
-  const ctf = isArena(map) ? new CaptureTheFlag({ scene, track: current.track }) : null;
+  const ctf = isArena(map) ? new TEAM_MODES[map.split(':')[0]]({ scene, track: current.track }) : null;
   const dealt = given ?? (ctf ? makeTeams(setup) : makeDefs(attract ? null : setup));
   const defs = ctf ? dealt.map((def) => ({ ...def, color: TEAMS[def.team].color })) : dealt;
   race = new Race({ scene, track: current.track, fx, sfx: attract ? SILENT : sfx, shores: current.world.shores, solid: current.world.solid, raycast: current.world.raycast ?? null, chopper: current.world.chopper ?? null, hazards: current.world.hazards ?? null, mode: ctf, defs, attract });
@@ -361,7 +362,7 @@ const MAP_CHOICES = ['canyon', 'bay', 'jungle', 'docks', 'alps', 'venice', 'midw
 const die = (pips, cls) => `<svg class="die ${cls}" viewBox="0 0 40 40"><rect x="3" y="3" width="34" height="34" rx="9" fill="#fff" stroke="#0E2A47" stroke-width="3.5"/>${pips.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="3.6" fill="#0E2A47"/>`).join('')}</svg>`;
 const DICE = die([[12, 12], [20, 20], [28, 28]], 'die-a') + die([[12, 12], [28, 12], [12, 28], [28, 28], [20, 20]], 'die-b');
 function renderModes() {
-  const ctf = setup.mode === 'ctf';
+  const ctf = setup.mode in TEAM_MODES;
   $('maps-title').textContent = t(ctf ? 'pickArena' : 'pickCourse');
   $('btn-go').textContent = t(ctf ? 'startMatch' : 'startRace');
 }
@@ -386,7 +387,7 @@ function renderArenas() {
 
 function renderMaps() {
   renderModes();
-  if (setup.mode === 'ctf') return renderArenas();
+  if (setup.mode in TEAM_MODES) return renderArenas();
   $('map-cards').classList.remove('arenas');
   $('map-cards').innerHTML = MAP_CHOICES.map((id, i) => {
     const art = id === 'random' ? 'map-art random' : 'map-art';
@@ -614,7 +615,7 @@ $('btn-change-map').addEventListener('click', () =>
 );
 
 function advanceMap() {
-  const ctf = setup.mode === 'ctf';
+  const ctf = setup.mode in TEAM_MODES;
   if (!ctf && setup.map === 'random') return;
   const ids = ctf ? Object.keys(ARENAS) : MAP_CHOICES.filter((id) => id !== 'random');
   const next = ids[(ids.indexOf(race.track.map.id) + 1) % ids.length];

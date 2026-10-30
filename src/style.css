@@ -792,12 +792,12 @@ kbd {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 1.6rem;
-  width: min(900px, 100%);
+  gap: 1.4rem;
+  width: min(1180px, 100%);
 }
 
 .mode-cards .map-card {
-  flex: 0 1 clamp(240px, 34vw, 380px);
+  flex: 0 1 clamp(230px, 29vw, 360px);
 }
 
 .mode-cards .map-art {
@@ -1759,6 +1759,35 @@ kbd {
 .score-sep {
   margin: 0 0.12em;
   color: var(--foam);
+}
+
+.cp-row {
+  display: inline-flex;
+  gap: 0.18em;
+  vertical-align: middle;
+}
+
+.cp-pill {
+  display: inline-grid;
+  place-items: center;
+  width: 1.05em;
+  height: 1.05em;
+  font-size: 0.62em;
+  color: #fff;
+  text-shadow: 0 0.06em 0 var(--ink), 0.05em 0 0 var(--ink), -0.05em 0 0 var(--ink), 0 -0.05em 0 var(--ink);
+  background: conic-gradient(var(--cap) var(--p), var(--own) 0);
+  border: 0.09em solid var(--ink);
+  border-radius: 50%;
+}
+
+.cp-pill.contested {
+  animation: cp-flash 0.5s steps(2) infinite;
+}
+
+@keyframes cp-flash {
+  50% {
+    border-color: #ffd23f;
+  }
 }
 
 #hud.ctf .place-of {

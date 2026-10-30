@@ -185,7 +185,7 @@ export class Race {
       b.speed *= damp;
       b.pos.addScaledVector(b.vel, dt);
       if (Math.random() < 0.6) this.fx.bubbles(b.pos.x, b.waterY + 0.2, b.pos.z);
-      if (b.ko <= 0) this.respawn(b);
+      if (b.ko <= -(this.mode?.respawnDelay ?? 0)) this.respawn(b);
       return;
     }
 

@@ -51,7 +51,7 @@ export function renderResults(race) {
   if (ctf) $('results-title').innerHTML = matchTitle(ctf, p.team);
   else $('results-title').textContent = p.finished ? t('youFinished', { place: ordinal(p.finishOrder), n: p.finishOrder }) : t('raceOver');
   const rows = ctf ? [...race.boats].sort((a, b) => a.team - b.team || b.stats.captures - a.stats.captures || b.stats.kills - a.stats.kills) : race.order;
-  $('standings').innerHTML = `<li class="st-head"><span></span><span></span><span></span><span>${ctf ? t('colCaps') : ''}</span><span class="st-mini"><span>${t('colDmg')}</span><span>${t('colKo')}</span><span>${t('colSunk')}</span></span></li>` + rows
+  $('standings').innerHTML = `<li class="st-head"><span></span><span></span><span></span><span>${ctf ? t(ctf.kind === 'cp' ? 'colPoints' : 'colCaps') : ''}</span><span class="st-mini"><span>${t('colDmg')}</span><span>${t('colKo')}</span><span>${t('colSunk')}</span></span></li>` + rows
     .map((b) => {
       const time = ctf ? String(b.stats.captures) : b.finished ? formatTime(b.finishTime) : t('lapN', { n: b.lap });
       const place = ctf ? `<i class="st-team" style="background:${hex(TEAMS[b.team].color)}"></i>` : ordinal(b.place);
