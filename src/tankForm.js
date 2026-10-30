@@ -53,7 +53,8 @@ function buildParts() {
     glacis: merge([plate([[1.2, 0.2], [5.3, -0.75], [5.3, -0.5], [1.2, 1.2]], 3.9, 0)]),
     bowTrim: merge([box(3.9, 0.22, 0.2, 0, -0.45, 5.34), box(0.5, 0.4, 0.5, 1.4, 0.05, 3.9), box(0.5, 0.4, 0.5, -1.4, 0.05, 3.9)]),
     upperHull: merge([box(3.9, 0.82, 6.3, 0, 0.8, -1.75)]),
-    engineDeck: merge([box(3.1, 0.1, 1.7, 0, 1.26, -3.8), ...[-1, -0.5, 0, 0.5, 1].map((x) => box(0.16, 0.14, 1.5, x, 1.32, -3.8))]),
+    engineDeck: merge([box(3.1, 0.08, 0.86, 0, 1.25, -4.38), ...[-1, -0.5, 0, 0.5, 1].map((x) => box(0.16, 0.12, 0.72, x, 1.3, -4.38))]),
+    rearMount: merge([tube(0.84, 0.16, 0, 1.3, -3.1), tube(0.62, 0.14, 0, 1.44, -3.1)]),
     rearPlate: merge([box(3.9, 1.3, 0.2, 0, 0.5, -4.92)]),
     mufflers: merge([-1, 1].map((x) => sideways(tube(0.24, 1.1, 0, 0, 0)).translate(x, 0.3, -5.16))),
     turret: merge([turretBody, bustle]),
@@ -105,6 +106,7 @@ export class TankForm extends HullForm {
     add(P.bowTrim, S.dark, 0.03, this.armor);
     add(P.upperHull, paint, 0.05, this.armor);
     add(P.engineDeck, S.dark, 0.02, this.armor);
+    add(P.rearMount, S.dark, 0.03, this.armor);
     add(P.rearPlate, paint, 0.03, this.armor);
     add(P.mufflers, S.metal, 0.02, this.armor);
     rig.add(this.armor);
@@ -164,7 +166,7 @@ export class TankForm extends HullForm {
     for (const t of this.turrets) {
       const front = t.slot === 0;
       const seat = smooth(seg(m, front ? 2.75 : 2.65, front ? 3.2 : 3.1));
-      this.placeTurret(t, mix(this.riseOf(t, m), front ? 2.62 : 1.62, seat), mix(t.rest.z, front ? 0 : -3.5, seat), 0.72, 1, m, seat > 0.99);
+      this.placeTurret(t, mix(this.riseOf(t, m), front ? 2.62 : 1.5, seat), mix(t.rest.z, front ? 0 : -3.1, seat), 0.72, 1, m, seat > 0.99);
     }
   }
 

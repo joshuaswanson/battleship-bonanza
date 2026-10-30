@@ -7,6 +7,10 @@ const TALL = 12;
 const DEEP = 24;
 const WALL = 4;
 const TEXEL = 0.055;
+const SLOT_X = 15.4;
+const SLOT_Y = 6.7;
+const SLOT_W = 5.2;
+const SLOT_H = 1.5;
 
 function boardForm() {
   const canvas = document.createElement('canvas');
@@ -99,7 +103,17 @@ export function casemate() {
   const dark = toon(0x121110);
   const steel = toon(0x3c4044);
   const front = DEEP / 2;
+  const face = front - 0.65;
   const wings = [1, -1].map((side) => slab(3, TALL - 1, 18, 0, (TALL - 1) / 2, 0).rotateY(side * 0.55).translate(side * (WIDTH / 2 + 3), 0, front + 2));
+  const hoods = [1, -1].flatMap((side) => {
+    const x = side * SLOT_X;
+    return [
+      slab(SLOT_W + 2, 0.6, 1.8, x, SLOT_Y + SLOT_H / 2 + 0.3, face + 0.8, 0.12),
+      slab(SLOT_W + 2, 0.5, 1.2, x, SLOT_Y - SLOT_H / 2 - 0.25, face + 0.5, 0.1),
+      slab(0.5, SLOT_H, 1.2, x - SLOT_W / 2 - 0.25, SLOT_Y, face + 0.5, 0.08),
+      slab(0.5, SLOT_H, 1.2, x + SLOT_W / 2 + 0.25, SLOT_Y, face + 0.5, 0.08),
+    ];
+  });
   const shell = merge([
     apertured(WIDTH, TALL, 12, 4.2, 8.2, WALL - 1, front - WALL),
     apertured(WIDTH - 4, TALL - 1, 7.6, 4.8, 7.6, 1.6, front - WALL - 2),
@@ -107,16 +121,21 @@ export function casemate() {
     slab(WIDTH + 9, 1.2, 3, 0, TALL + 0.1, front + 7, 0.3),
     slab(WIDTH, TALL, DEEP - WALL - 3, 0, TALL / 2, -3.5),
     ...wings,
+    ...hoods,
   ].map(worldUV));
   const group = new THREE.Group();
   group.add(outlined(shell, concrete, 0.14));
   group.add(new THREE.Mesh(merge([slab(WIDTH - 5, TALL - 1.5, 0.6, 0, TALL / 2, front - WALL - 3.6)]), dark));
   const stain = new THREE.Mesh(new THREE.PlaneGeometry(38, 13), new THREE.MeshBasicMaterial({ map: sootMark(), transparent: true, depthWrite: false }));
-  stain.position.set(0, 6.6, front + 0.42);
+  stain.position.set(0, 6.6, face + 0.03);
   group.add(stain);
   const barrel = new THREE.CylinderGeometry(0.42, 0.56, 15, 12).rotateX(Math.PI / 2).translate(0, 6.2, front + 5);
   const brake = new THREE.CylinderGeometry(0.82, 0.82, 1.6, 12).rotateX(Math.PI / 2).translate(0, 6.2, front + 12.6);
   const mantlet = new THREE.SphereGeometry(2.4, 12, 8).scale(1.5, 1, 0.8).translate(0, 6.2, front - 2.6);
   group.add(outlined(merge([barrel, brake, mantlet]), steel, 0.08));
-  return { group, muzzles: { gun: new THREE.Vector3(0, 6.2, front + 13.6), guns: [new THREE.Vector3(-8.6, 6.4, front + 0.6), new THREE.Vector3(8.6, 6.4, front + 0.6)] } };
+  const slots = [1, -1].map((side) => new THREE.BoxGeometry(SLOT_W, SLOT_H, 0.1).translate(side * SLOT_X, SLOT_Y, face + 0.06));
+  group.add(new THREE.Mesh(merge(slots), dark));
+  const mgs = [1, -1].map((side) => new THREE.CylinderGeometry(0.11, 0.15, 2.6, 8).rotateX(Math.PI / 2).translate(side * SLOT_X, SLOT_Y - 0.1, face + 1.3));
+  group.add(outlined(merge(mgs), steel, 0.05));
+  return { group, muzzles: { gun: new THREE.Vector3(0, 6.2, front + 13.6), guns: [1, -1].map((side) => new THREE.Vector3(side * SLOT_X, SLOT_Y - 0.1, face + 2.7)) } };
 }
