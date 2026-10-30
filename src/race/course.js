@@ -1,5 +1,6 @@
 import { waveHeight, isWater } from '../water.js';
-import { BASE_SPEED, RAIL_GAP, RAIL_SETTLE, RAIL_SWITCH_LENGTH, RAIL_WISH, RAM_MIN, RAM_REACH, SHORE_MARGIN, clamp, wrapAngle } from './shared.js';
+import { LIFT_LANES, SKI_CLIMB } from '../track.js';
+import { BASE_SPEED, LIFT_SPEED, RAIL_GAP, RAIL_SETTLE, RAIL_SWITCH_LENGTH, RAIL_WISH, RAM_MIN, RAM_REACH, SHORE_MARGIN, clamp, wrapAngle } from './shared.js';
 
 const ROCK_LAUNCH = BASE_SPEED * 0.45;
 const LAND_FLIGHT = 3.2;
@@ -51,6 +52,10 @@ export const methods = {
       return;
     }
     if (t.ahead(b.riverS, land.launch) >= step) return;
+    if (land.kind === 'ski') {
+      this.hookLift(b);
+      return;
+    }
     b.orbit = { t: 0, dur: LAND_FLIGHT };
     b.speed = Math.max(b.speed, BASE_SPEED * b.skill * 0.8);
     b.boost = Math.max(b.boost, 1);
@@ -62,11 +67,24 @@ export const methods = {
     if (b.isPlayer) this.emit('ramp', {}, b);
   },
 
+  hookLift(b) {
+    const t = this.track;
+    const i = t.norm(b.trackIdx);
+    const lateral = (b.pos.x - t.px[i]) * t.nx[i] + (b.pos.z - t.pz[i]) * t.nz[i];
+    const lane = LIFT_LANES.reduce((best, x) => (Math.abs(x - lateral) < Math.abs(best - lateral) ? x : best));
+    const dur = SKI_CLIMB / LIFT_SPEED;
+    b.orbit = { t: 0, dur };
+    b.air = { t: 0, dur, peak: 0, jet: false, lift: true, lane };
+    this.sfx.play('clank', b.pos);
+    this.sfx.play('transform', b.pos);
+    if (b.isPlayer) this.emit('ramp', {}, b);
+  },
+
   submerged(b) {
     return this.track.formKind(b.trackS) === 'sub' && b.formP >= 1 && b.waterY < -1;
   },
 
-  holdCourse(b, dt, rate = HOLD_RATE) {
+  holdCourse(b, dt, rate = HOLD_RATE, line = null) {
     const t = this.track;
     const here = t.norm(b.trackIdx);
     const lateral = (b.pos.x - t.px[here]) * t.nx[here] + (b.pos.z - t.pz[here]) * t.nz[here];
@@ -74,8 +92,9 @@ export const methods = {
     const at = (b.trackS + look) / t.spacing;
     const i = Math.floor(at);
     const u = at - i;
-    const a = t.point(t.wrap(i), lateral * HOLD_CENTER);
-    const c = t.point(t.wrap(i + 1), lateral * HOLD_CENTER);
+    const aim = line ?? lateral * HOLD_CENTER;
+    const a = t.point(t.wrap(i), aim);
+    const c = t.point(t.wrap(i + 1), aim);
     const diff = wrapAngle(Math.atan2(a.x + (c.x - a.x) * u - b.pos.x, a.z + (c.z - a.z) * u - b.pos.z) - b.heading);
     b.holdTurn = (b.holdTurn ?? 0) + (diff * rate - (b.holdTurn ?? 0)) * (1 - Math.exp(-HOLD_EASE * dt));
     b.heading += b.holdTurn * dt;

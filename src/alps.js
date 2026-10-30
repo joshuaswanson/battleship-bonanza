@@ -6,6 +6,7 @@ import { courseSurface, buildHeightfield, courseBuoys, swissFlag, flagClock, gro
 import { FLORA_COLORS, tree, sapling, boulder, cow, loadCowKit } from './alpine.js';
 import { Chopper } from './chop.js';
 import { alpineGround } from './groundShader.js';
+import { LIFT_HANG, LIFT_LANES, SKI_CLIMB } from './track.js';
 import { LANDMARK_COLORS, castle, coveredBridge, waterTower, buildSteamer, chalet, lakeDock } from './alpsLandmarks.js';
 
 export const ALPS_COLORS = {
@@ -41,8 +42,34 @@ const OCT = new THREE.CylinderGeometry(1, 1, 1, 8);
 const SPIRE = new THREE.ConeGeometry(1, 1, 4).rotateY(Math.PI / 4);
 const TURRET = new THREE.ConeGeometry(1, 1, 12);
 const BALL = new THREE.SphereGeometry(1, 10, 8);
+const LIFT_REACH = 44;
+const LIFT_CLEARANCE = 15;
+const HORN = { x: 110, z: 500, height: 330, base: 262, leanX: -46, leanZ: 22 };
 const roofShape = new THREE.Shape([new THREE.Vector2(-1, 0), new THREE.Vector2(1, 0), new THREE.Vector2(0, 1)]);
 const ROOF = new THREE.ExtrudeGeometry(roofShape, { depth: 1, bevelEnabled: false }).translate(0, 0, -0.5);
+
+function hornRadius(dx, dz) {
+  const a = Math.atan2(dz, dx) + 0.5;
+  const ridges = Math.abs(Math.cos(2 * a)) ** 1.6;
+  const uneven = 1 + 0.13 * Math.sin(a + 1.1) + 0.07 * Math.sin(3 * a);
+  return HORN.base * (0.62 + 0.42 * ridges) * uneven;
+}
+
+function hornProfile(dx, dz) {
+  const rho = Math.hypot(dx, dz) / hornRadius(dx, dz);
+  if (rho >= 1) return { rise: 0, rho };
+  const a = Math.atan2(dz, dx);
+  const shoulder = 34 * Math.exp(-(((rho - 0.5) / 0.11) ** 2)) * Math.max(0, Math.cos(a - 0.6)) ** 4;
+  return { rise: HORN.height * (1 - rho) ** 1.32 + shoulder, rho };
+}
+
+function matterhorn(x, z) {
+  const dx = x - HORN.x;
+  const dz = z - HORN.z;
+  const guess = hornProfile(dx, dz).rise / HORN.height;
+  const bend = guess * guess;
+  return hornProfile(dx - HORN.leanX * bend, dz - HORN.leanZ * bend);
+}
 
 function lakeness(f) {
   if (f >= 0.31 && f <= 0.88) return 0;
@@ -65,34 +92,34 @@ function slalomGate(batch, x, y, z, yaw, key) {
   batch.add(key, BOX, mat(x, y + 4.2, z, 6.8, 1.7, 0.1, 0, yaw));
 }
 
-function skiLift(batch, track, height, rand) {
-  const { launch, span } = track.river.land;
-  const towers = [];
-  for (let d = 260; d < span - 80; d += 118) {
+function boatLift(batch, track, height) {
+  const { launch } = track.river.land;
+  const at = (d, lat) => {
     const s = launch + d;
-    const i = track.wrap(Math.round(s / track.spacing));
-    const p = track.point(i, -(track.hw[i] + 30));
-    const base = height(p.x, p.z);
-    const top = base + 18;
-    beam(batch, 'liftSteel', new THREE.Vector3(p.x, base - 1, p.z), new THREE.Vector3(p.x, top, p.z), 0.42);
-    const arm = new THREE.Vector3(track.tz[i], 0, -track.tx[i]).multiplyScalar(4.2);
-    const point = new THREE.Vector3(p.x, top, p.z);
-    beam(batch, 'liftSteel', point.clone().sub(arm), point.clone().add(arm), 0.24);
-    towers.push({ near: point.clone().sub(arm), far: point.clone().add(arm) });
+    const p = track.point(track.wrap(Math.round(s / track.spacing)), lat);
+    return new THREE.Vector3(p.x, track.level(s) + LIFT_HANG, p.z);
+  };
+  for (const lane of LIFT_LANES) {
+    for (let d = 0; d < SKI_CLIMB + 10; d += 10) beam(batch, 'liftSteel', at(d, lane), at(d + 10, lane), 0.13);
   }
-  for (let k = 0; k < towers.length - 1; k++) {
-    for (const key of ['near', 'far']) {
-      const a = towers[k][key];
-      const b = towers[k + 1][key];
-      beam(batch, 'woodDark', a, b, 0.07);
-      for (let u = 0.2; u < 1; u += 0.3) {
-        const hook = a.clone().lerp(b, u);
-        const seat = hook.clone();
-        seat.y -= 2.8;
-        beam(batch, 'liftSteel', hook, seat, 0.06);
-        batch.add(key === 'near' ? 'flagRed' : 'gateBlue', BOX, mat(seat.x, seat.y, seat.z, 2, 0.3, 0.9, 0, rand() * 0.2));
-      }
+  for (const d of [4, 66, 130, 194, 256, SKI_CLIMB + 6]) {
+    const left = at(d, -LIFT_REACH);
+    const right = at(d, LIFT_REACH);
+    for (const top of [left, right]) {
+      top.y += 3;
+      beam(batch, 'liftSteel', new THREE.Vector3(top.x, Math.min(height(top.x, top.z), top.y - 6) - 2, top.z), top, 0.8);
     }
+    beam(batch, 'liftSteel', left, right, 0.55);
+    for (const lane of LIFT_LANES) {
+      const sheave = at(d, lane);
+      batch.add('gateBlue', BOX, mat(sheave.x, sheave.y + 1.2, sheave.z, 1.4, 2.2, 3, 0, track.heading(track.wrap(Math.round((launch + d) / track.spacing)))));
+    }
+  }
+  for (const [d, key] of [[-4, 'roofRed'], [SKI_CLIMB + 10, 'roofRed']]) {
+    const middle = at(d, 0);
+    const yaw = track.heading(track.wrap(Math.round((launch + d) / track.spacing)));
+    batch.add(key, ROOF, mat(middle.x, middle.y + 4.2, middle.z, 22, 7, 56, 0, yaw + Math.PI / 2));
+    batch.add('plaster', BOX, mat(middle.x, middle.y + 3.4, middle.z, 104, 1.6, 18, 0, yaw));
   }
 }
 
@@ -145,13 +172,18 @@ export async function createAlps(group, track, fx) {
   };
   const carveRun = (x, z, natural) => {
     const { s, edge, level } = surface.sample(x, z);
-    if (track.landDepth(s) < 0) return natural;
+    const d = track.landDepth(s);
+    if (d < 0) return natural;
+    const clearance = LIFT_CLEARANCE * smooth(0, 40, d) * (1 - smooth(SKI_CLIMB - 44, SKI_CLIMB - 6, d));
     const flank = natural + level * (1 - smooth(30, 120, edge));
-    return level - 0.15 + (flank - level) * smooth(0, 80, edge);
+    const floor = level - 0.15 - clearance;
+    return floor + (flank - floor) * smooth(0, 80, edge);
   };
-  const glacier = (x, z) => {
+  const glacier = (x, z, y, ny) => {
     const { s, edge } = surface.sample(x, z);
-    return track.landDepth(s) < 0 ? 0 : 1 - smooth(60, 130, edge);
+    const d = track.landDepth(s);
+    if (d < 0) return 0;
+    return smooth(SKI_CLIMB - 70, SKI_CLIMB - 12, d) * (1 - smooth(60, 130, edge)) * smooth(26, 44, y) * smooth(0.5, 0.7, ny);
   };
   const height = (x, z) => {
     const shore = shoreOf(x, z);
@@ -159,10 +191,8 @@ export async function createAlps(group, track, fx) {
     y += smooth(5, 70, shore) * (4 + 14 * noise(x * 1.7, z * 1.7));
     const ridge = 1 - Math.abs(Math.sin(x * 0.011 + Math.sin(z * 0.007) * 2) * Math.cos(z * 0.013 - x * 0.004));
     y += smooth(60, 300, shore) * (80 + 140 * ridge * noise(x * 0.7 + 200, z * 0.7 - 100));
-    const mx = x - 110;
-    const mz = z - 500;
-    const pyramid = Math.max(Math.abs(mx * 0.71 + mz * 0.71), Math.abs(mx * 0.71 - mz * 0.71));
-    y += Math.max(0, 280 - pyramid * 1.7) * smooth(40, 140, shore);
+    const { rise } = matterhorn(x, z);
+    if (rise > 0) y += (rise + 2.6 * Math.sin(rise * 0.16) + 7 * noise(x * 1.6, z * 1.6) * smooth(0, 40, rise)) * smooth(4, 70, shore);
     return carveRun(x, z, y);
   };
   const tint = new THREE.Color();
@@ -175,6 +205,7 @@ export async function createAlps(group, track, fx) {
     rockHigh: new THREE.Color(0x8f8c8a),
     snow: new THREE.Color(0xf6f9ff),
     snowShade: new THREE.Color(0xcfe2f6),
+    hornRock: new THREE.Color(0x6e665e),
   };
   const mixed = new THREE.Color();
   const paint = (x, y, z, ny, color) => {
@@ -184,9 +215,14 @@ export async function createAlps(group, track, fx) {
     const cliff = 0.68 + 0.1 * (noise(x * 0.9 + 30, z * 0.9) - 0.5);
     color.lerp(mixed, smooth(cliff + 0.04, cliff - 0.04, ny));
     const snowLine = 105 + 30 * noise(x * 2, z * 2);
-    color.lerp(shades.snow, smooth(snowLine - 6, snowLine + 6, y) * smooth(0.35, 0.55, ny));
+    const { rho } = matterhorn(x, z);
+    const hornFace = rho < 1 ? 1 - smooth(0.82, 1, rho) : 0;
+    const dusting = smooth(0.34, 0.5, ny) + (smooth(0.62, 0.74, ny + 0.1 * (noise(x * 2.4, z * 2.4) - 0.5)) - smooth(0.34, 0.5, ny)) * hornFace;
+    color.lerp(shades.hornRock, Math.max(hornFace * smooth(0.82, 0.7, ny), 0.8 * smooth(0.6, 0.4, ny)));
+    const cap = hornFace * smooth(190, 300, y) * smooth(0.42, 0.6, noise(x * 1.8 - 40, z * 1.8 + 12));
+    color.lerp(shades.snow, Math.max(smooth(snowLine - 6, snowLine + 6, y) * dusting, cap));
     const drift = smooth(0.35, 0.7, noise(x * 1.2 + 11, z * 1.2 - 7));
-    color.lerp(mixed.copy(shades.snow).lerp(shades.snowShade, drift), glacier(x, z));
+    color.lerp(mixed.copy(shades.snow).lerp(shades.snowShade, drift), glacier(x, z, y, ny));
     color.lerp(shades.sand, smooth(2.2, 0.4, y));
     color.multiply(tint.setScalar(0.94 + 0.08 * noise(x * 5 + 7, z * 5)));
   };
@@ -380,7 +416,7 @@ export async function createAlps(group, track, fx) {
 
   const scenery = new THREE.Group();
   const { launch } = track.river.land;
-  for (let d = 200, n = 0; d < span - 50; d += 7) {
+  for (let d = SKI_CLIMB - 40, n = 0; d < span - 50; d += 7) {
     if (++n % 40 === 0) await tick();
     const i = track.wrap(Math.round((launch + d) / track.spacing));
     for (const side of [-1, 1]) {
@@ -389,7 +425,7 @@ export async function createAlps(group, track, fx) {
       if (free(p.x, p.z, 3)) plantTree(tree, p.x, height(p.x, p.z), p.z, 0.8 + rand() * 0.7);
     }
   }
-  for (let d = 280, k = 0; d < span - 150; d += 130 + rand() * 70, k++) {
+  for (let d = SKI_CLIMB + 90, k = 0; d < span - 150; d += 130 + rand() * 70, k++) {
     const i = track.wrap(Math.round((launch + d) / track.spacing));
     const lat = (k % 2 ? 1 : -1) * (0.35 + rand() * 0.4) * track.hw[i];
     for (let n = 0; n < 3; n++) {
@@ -397,13 +433,13 @@ export async function createAlps(group, track, fx) {
       plantTree(tree, p.x + (rand() - 0.5) * 8, track.level(launch + d), p.z + (rand() - 0.5) * 8, 0.8 + rand() * 0.5);
     }
   }
-  for (let d = 240, k = 0; d < span - 60; d += 84, k++) {
+  for (let d = SKI_CLIMB + 50, k = 0; d < span - 60; d += 84, k++) {
     const s = launch + d;
     const i = track.wrap(Math.round(s / track.spacing));
     const p = track.point(i, (k % 2 ? 1 : -1) * 15);
     slalomGate(batch, p.x, track.level(s), p.z, track.heading(i), k % 2 ? 'flagRed' : 'gateBlue');
   }
-  skiLift(batch, track, height, rand);
+  boatLift(batch, track, height);
   chopper.finish(ALPS_COLORS);
   const chunks = await batch.buildAsync(scenery, 0.1, ALPS_COLORS, undefined, tick);
   chunks.push(...(await herdBatch.buildAsync(scenery, 0.045, ALPS_COLORS, undefined, tick)));

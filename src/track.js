@@ -25,10 +25,12 @@ const RAIL_START = 110;
 const MINE_START = 330;
 const MINE_END = 90;
 const JET_EASE = 260;
-const SKI_CLIMB = 205;
-const SKI_START = 150;
-const SKI_END_HEIGHT = 0.16;
-const SKI_KICK = 3;
+export const SKI_CLIMB = 300;
+export const LIFT_LANES = [-30, -15, 0, 15, 30];
+export const LIFT_HANG = 11;
+const SKI_START = 296;
+const SKI_END_HEIGHT = 0.4;
+const SKI_KICK = 5;
 const STICK = 5;
 const INTENT = 14;
 
@@ -386,7 +388,7 @@ export function createTrack(map) {
       return dive + climb + settle + 2.4 * Math.sin(d * 0.016) * landSmooth(d, 340, 500) * (1 - landSmooth(d, span - 1100, span - 900)) - baseLevel(s);
     }
     if (kind === 'ski') {
-      const climb = landSmooth(d, 8, SKI_CLIMB);
+      const climb = 0.6 * Math.min(1, d / SKI_CLIMB) + 0.4 * landSmooth(d, 0, SKI_CLIMB);
       const run = landSmooth(d, SKI_CLIMB, span);
       const rollers = 2.2 * Math.sin(d * 0.019) * landSmooth(d, SKI_CLIMB, SKI_CLIMB + 80) * (1 - landSmooth(d, span - 160, span - 70));
       return height * climb * (1 - (1 - SKI_END_HEIGHT) * run) + rollers + SKI_KICK * landSmooth(d, span - 45, span);

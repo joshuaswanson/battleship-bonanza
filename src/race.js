@@ -7,7 +7,7 @@ import { TrackFeatures } from './features.js';
 import { Wakes } from './wake.js';
 import { TireMarks } from './tireMarks.js';
 import { t as tr } from './i18n.js';
-import { ACCEL, ARMOR_SPEED, BANK_MARGIN, BASE_SPEED, BRAKE, CART_SPEED, CIRCLE_OFFSET, COAST, FALL_GRAVITY, GRIP, HOLD_IDS, JET_ASSIST, JET_ASSIST_EASE, JET_SPEED, JET_STEER, JET_THRUST, KO_TIME, LAND_GRIP, LAPS, MAX_HP, MORPH_CLEAR, MORPH_PUSH, MORPH_SHOVE, MUD_POOL, MUD_SPEED, OFF_COURSE_SPEED, OUTER_LIMIT, RADIUS, REGEN_DELAY, REGEN_MAX, REGEN_RAMP, REGEN_START, REVERSE_SPEED, SKI_GRIP, SKI_SPEED, SKI_THRUST, TURN_RATE, approach, clamp } from './race/shared.js';
+import { ACCEL, ARMOR_SPEED, BANK_MARGIN, BASE_SPEED, BRAKE, CART_SPEED, CIRCLE_OFFSET, COAST, FALL_GRAVITY, GRIP, HOLD_IDS, JET_ASSIST, JET_ASSIST_EASE, JET_SPEED, JET_STEER, JET_THRUST, KO_TIME, LAND_GRIP, LAPS, LIFT_SPEED, MAX_HP, MORPH_CLEAR, MORPH_PUSH, MORPH_SHOVE, MUD_POOL, MUD_SPEED, OFF_COURSE_SPEED, OUTER_LIMIT, RADIUS, REGEN_DELAY, REGEN_MAX, REGEN_RAMP, REGEN_START, REVERSE_SPEED, SKI_GRIP, SKI_SPEED, SKI_THRUST, TURN_RATE, approach, clamp } from './race/shared.js';
 import { Boat } from './race/boat.js';
 import { carrierSpeed } from './ctf.js';
 import * as machinegun from './race/attachments/machinegun.js';
@@ -237,7 +237,7 @@ export class Race {
     if (b.boost > 0 && target > b.speed) rate *= 2;
     if (jetting && target > b.speed) rate *= JET_THRUST;
     if (skiing && target > b.speed) rate *= SKI_THRUST;
-    b.speed = approach(b.speed, target, rate * dt);
+    b.speed = b.air?.lift ? LIFT_SPEED : approach(b.speed, target, rate * dt);
 
     const morphing = !!b.orbit || (!!b.form && b.formP > 0 && b.formP < 1);
     b.morphing = morphing;
@@ -252,7 +252,7 @@ export class Race {
     const speedFrac = clamp(b.speed / BASE_SPEED, 0, 1);
     const turn = clamp(Math.abs(b.speed) / 14, 0.25, 1) * (b.air ? 0.6 : onLand ? 1.25 : 1) * (1 - 0.2 * speedFrac) * (flying ? JET_STEER : 1);
     if (!railed) b.heading -= steer * TURN_RATE * turn * dt * (b.speed < -0.5 ? -1 : 1);
-    if (morphing) this.holdCourse(b, dt);
+    if (morphing) this.holdCourse(b, dt, undefined, b.air?.lane);
     else if (flying) this.holdCourse(b, dt, JET_ASSIST * (1 - Math.abs(b.steerVis) * JET_ASSIST_EASE));
 
     const fx = Math.sin(b.heading);

@@ -1,10 +1,12 @@
 import * as THREE from 'three';
 import { cachedGeometry } from './toon.js';
 import { HullForm, back, box, merge, mix, morphTime, seg, smooth, tube } from './hullForm.js';
+import { LIFT_HANG } from './track.js';
 
 const SPEC = { key: 'ski', hatch: false, jaws: false };
 export const SKI_RIDE = 1.5;
 const RUNNER_X = 2.7;
+const ARM_DROP = 0.86;
 
 function runner() {
   const points = [[0, -0.1, -5], [0, -0.2, -2], [0, -0.2, 2], [0, -0.1, 3.8], [0, 0.35, 5], [0, 1, 5.6]].map(([x, y, z]) => new THREE.Vector3(x, y, z));
@@ -32,6 +34,8 @@ function buildParts() {
     rim: merge([new THREE.TorusGeometry(1.5, 0.11, 6, 22, Math.PI).translate(0, 0.42, 0.7), new THREE.TorusGeometry(1.5, 0.11, 6, 22, Math.PI).translate(0, 0.42, -0.72)]),
     bar: merge([tube(0.09, 1.7, 0, 0.85, 0), tube(0.09, 1.1, 0, 1.7, 0.5).rotateX(Math.PI / 2).translate(0, 1.2, 1.2)]),
     fin: merge([box(0.16, 1.5, 1.6, 0, 0.75, 0)]),
+    rod: merge([tube(0.13, LIFT_HANG - 1.6, 0, (LIFT_HANG - 1.6) / 2, 0)]),
+    grip: merge([box(1.2, 0.9, 2.2, 0, 0, 0)]),
     roundel: merge([new THREE.CircleGeometry(0.62, 18).rotateX(-1.08).translate(0, 1.42, 2.72)]),
   };
 }
@@ -47,13 +51,13 @@ export class SkiForm extends HullForm {
       const fold = new THREE.Group();
       fold.position.set(side * 1.1, -0.2, 0);
       const arm = new THREE.Group();
-      arm.position.set(side * (RUNNER_X - 1.1), -0.86, 0);
+      arm.position.set(side * (RUNNER_X - 1.1), -ARM_DROP, 0);
       add(P.blade, paint, 0.04, arm);
       add(P.binding, S.chrome, 0.02, arm);
       add(side > 0 ? P.strutRight : P.strutLeft, S.dark, 0.02, arm);
       fold.add(arm);
       rig.add(fold);
-      return { fold, side };
+      return { fold, arm, side };
     });
     this.nose = [[P.noseLeft, 1], [P.noseRight, -1]].map(([geometry, side]) => this.shellPart(geometry, side, paint, 2));
     this.tail = [[P.tailLeft, 1], [P.tailRight, -1]].map(([geometry, side]) => this.shellPart(geometry, side, S.white, 2));
@@ -66,8 +70,27 @@ export class SkiForm extends HullForm {
       rig.add(bar);
       return { bar, side };
     });
+    this.hanger = new THREE.Group();
+    this.hanger.position.set(0, 1.2, 0);
+    add(P.rod, S.metal, 0.02, this.hanger);
+    const grip = add(P.grip, S.dark, 0.03, this.hanger);
+    grip.position.y = LIFT_HANG - 1.6;
+    this.hanger.visible = false;
+    rig.add(this.hanger);
     this.fin = add(P.fin, paint, 0.03);
     this.fin.position.set(0, 0.9, -3.4);
+  }
+
+  hang(on) {
+    this.hanger.visible = on;
+  }
+
+  carve(lean, slide) {
+    for (const { arm, side } of this.runners) {
+      arm.rotation.z = -lean;
+      arm.rotation.y = slide * 0.5;
+      arm.position.y = -ARM_DROP - side * RUNNER_X * Math.tan(lean);
+    }
   }
 
   shellPart(geometry, side, material, reach) {

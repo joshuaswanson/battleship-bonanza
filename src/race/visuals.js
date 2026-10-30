@@ -10,7 +10,11 @@ const WRECK_ROLL = 1.48;
 const WRECK_PITCH = 0.16;
 const WRECK_LIFT = 1.5;
 const FORM_OUT = 1.1;
-const SKI_LEAN = 0.12;
+const SKI_BANK = 0.3;
+const SKI_SLIDE = 0.2;
+const SKI_MAX_LEAN = 0.2;
+const SKI_LIFT = 1.2;
+const SKI_EASE = 6;
 
 export const methods = {
   updateVisual(b, dt) {
@@ -45,7 +49,7 @@ export const methods = {
     if (b.alive) {
       let airPitch = 0;
       if (b.air?.fall) airPitch = clamp(-b.air.vy * 0.018, -0.1, 0.55);
-      else if (b.air) airPitch = -0.25 * (1 - 2 * Math.min(1, b.air.t / b.air.dur));
+      else if (b.air && !b.air.lift) airPitch = -0.25 * (1 - 2 * Math.min(1, b.air.t / b.air.dur));
       const targetPitch = -Math.atan2(slope, 6.8) * onWater - 0.08 * speedFrac - clamp(accel, -20, 20) * 0.003 + airPitch;
       const targetRoll = Math.atan2(hL - hR, 3.6) * onWater + b.steerVis * 0.2 * clamp(speedFrac, 0, 1);
       body.rotation.x += (targetPitch - body.rotation.x) * ease;
@@ -119,23 +123,46 @@ export const methods = {
       body.position.y += b.form.ride;
       if (track.formKind(s) === 'jet' && b.formP >= 1) this.bankJet(b, dt);
     }
-    if (track.onSnow(s) && b.formP >= 1) this.carve(b);
+    b.form.hang?.(!!b.air?.lift);
+    if (track.onSnow(s) && b.formP >= 1 && !b.air) this.carve(b, dt);
+    else if (b.skiSlide) {
+      b.skiSlide *= Math.exp(-SKI_EASE * dt);
+      if (Math.abs(b.skiSlide) < 0.002) b.skiSlide = 0;
+      body.rotation.y = b.skiSlide;
+    }
     if (b.rail !== null && b.alive) {
       body.position.y += Math.sin(this.time * 62) * 0.016 + Math.sin(this.time * 27 + b.index) * 0.02;
       this.railSparks(b);
     }
   },
 
-  carve(b) {
-    if (b.alive) b.model.body.rotation.z += b.steerVis * SKI_LEAN;
+  carve(b, dt) {
+    const turn = wrapAngle(b.heading - (b.lastHeading ?? b.heading)) / Math.max(dt, 1e-3);
+    b.lastHeading = b.heading;
+    b.skiTurn = (b.skiTurn ?? 0) + (turn - (b.skiTurn ?? 0)) * (1 - Math.exp(-SKI_EASE * dt));
+    const pace = clamp(Math.abs(b.speed) / BASE_SPEED, 0, 1);
+    const lean = clamp(-b.skiTurn * SKI_BANK * pace, -SKI_MAX_LEAN, SKI_MAX_LEAN);
+    b.skiSlide = clamp(b.skiTurn * SKI_SLIDE * pace, -0.2, 0.2);
+    const body = b.model.body;
+    if (b.alive) {
+      body.rotation.z = lean;
+      body.rotation.y = b.skiSlide;
+      body.position.y += Math.abs(lean) * SKI_LIFT;
+    }
+    b.form.carve(lean, b.skiSlide);
     const r = Math.random;
-    if (b.air || Math.abs(b.speed) < 15 || r() > 0.5 + Math.abs(b.steerVis) * 0.5) return;
-    const side = r() < 0.5 ? 1 : -1;
+    const bite = Math.abs(lean) / SKI_MAX_LEAN;
+    if (Math.abs(b.speed) < 15) return;
+    const outer = lean > 0 ? 1 : -1;
     const fx = Math.sin(b.heading);
     const fz = Math.cos(b.heading);
-    const x = b.pos.x + fz * side * 1.8 - fx * 3.4;
-    const z = b.pos.z - fx * side * 1.8 - fz * 3.4;
-    this.fx.puffs.emit(x, b.waterY + 0.3, z, -b.vel.x * 0.12 + (r() - 0.5) * 5 + fz * b.steerVis * 9, 2 + r() * 4, -b.vel.z * 0.12 + (r() - 0.5) * 5 - fx * b.steerVis * 9, 0.35 + r() * 0.6, 0.5, r() < 0.5 ? 0xffffff : 0xe6f2ff, 3, 1.2, 0);
+    for (let k = 0; k < 1 + bite * 3; k++) {
+      const u = r() * 5 - 3;
+      const x = b.pos.x - fz * outer * 2.7 + fx * u;
+      const z = b.pos.z + fx * outer * 2.7 + fz * u;
+      const throwOut = 3 + bite * 15 * r();
+      this.fx.puffs.emit(x, b.waterY + 0.3, z, -b.vel.x * 0.1 - fz * outer * throwOut, 2 + r() * (3 + bite * 7), -b.vel.z * 0.1 + fx * outer * throwOut, 0.3 + r() * (0.4 + bite * 0.6), 0.55, r() < 0.5 ? 0xffffff : 0xe6f2ff, 8, 1, 0);
+    }
   },
 
   railSparks(b) {
