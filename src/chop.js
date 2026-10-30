@@ -3,7 +3,6 @@ import { toon, INK } from './toon.js';
 
 const WIDTH = 1024;
 const UNCUT = -1e5;
-const ICE_CONE = 0.9;
 
 const CHOP_VERT = /* glsl */ `
   vec4 chopInfo = texelFetch(uCuts, ivec2(int(mod(aChop.x, ${WIDTH}.0)), int(aChop.x / ${WIDTH}.0)), 0);
@@ -131,29 +130,10 @@ export class Chopper {
       const list = this.grid.get(`${Math.floor(p.x / 12)},${Math.floor(p.z / 12)}`);
       if (!list) continue;
       for (const tree of list) {
-        if (!tree.cut && Math.hypot(p.x - tree.x, p.z - tree.z) < tree.radius) return tree;
+        if (!tree.cut && !tree.hang && Math.hypot(p.x - tree.x, p.z - tree.z) < tree.radius) return tree;
       }
     }
     return null;
-  }
-
-  iceTarget(origin, dir, reach, lock) {
-    let best = null;
-    let near = reach;
-    for (const t of this.trees) {
-      if (!t.hang || t.cut) continue;
-      const dx = t.x - origin.x;
-      const dz = t.z - origin.z;
-      const d = Math.hypot(dx, dz);
-      if (d > reach || d < 1) continue;
-      if ((dx * dir.x + dz * dir.z) / (d * Math.hypot(dir.x, dir.z)) < ICE_CONE) continue;
-      if (t === lock) return t;
-      if (d < near) {
-        near = d;
-        best = t;
-      }
-    }
-    return best;
   }
 
   march(origin, dir, reach) {

@@ -163,13 +163,7 @@ export const methods = {
       dir.normalize();
       let origin = pointLaserGun(b.model, dir, new THREE.Vector3());
       const reach = LASER_REACH * Math.hypot(1, drop);
-      const ice = this.chopper?.iceTarget(origin, dir, LASER_REACH, b.iceLock);
-      b.iceLock = ice;
-      if (ice && !this.raycastBoats(origin, dir, reach, b)) {
-        dir.set(ice.x - origin.x, 0, ice.z - origin.z).normalize();
-        origin = pointLaserGun(b.model, dir, origin);
-      }
-      const ahead = ice ? null : this.chopper?.trunkAhead(origin, dir, LASER_REACH);
+      const ahead = this.chopper?.trunkAhead(origin, dir, LASER_REACH);
       if (ahead && !this.raycastBoats(origin, dir, reach, b)) {
         for (const up of [1.2, 2.5, 4, 6, ahead.height * 0.45]) {
           const toward = new THREE.Vector3(ahead.x, ahead.base + Math.min(up, ahead.height * 0.45) + wobble.lift * 4, ahead.z).sub(origin);
