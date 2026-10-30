@@ -411,8 +411,10 @@ export async function createMidway(group, track, fx) {
 
   group.userData.burningCarrier = burningCarrier;
   const scenery = new THREE.Group();
-  const beach = await buildBeach({ group, batch, track, surface, tick, rand, shores: hedgehogs });
+  const fine = new Batcher();
+  const beach = await buildBeach({ group, batch, fine, track, surface, tick, rand, shores: hedgehogs });
   const chunks = batch.build(scenery, 0.1, NAVY);
+  chunks.push(...fine.build(scenery, 0, NAVY));
   scenery.updateMatrixWorld(true);
   const decks = deckProfiles(shores, chunks.map((c) => c.group));
   group.userData.decks = decks;
@@ -593,7 +595,7 @@ export async function createMidway(group, track, fx) {
   group.add(shellMesh);
   const shells = [];
   const events = [];
-  const shellBeach = bunkerFire({ guns: beach.guns, track, fx, surface, events, height: beach.height, tracers: (from, to) => tracers.fire(from, to, 260, 0.02, 3, 0.05) });
+  const shellBeach = bunkerFire({ guns: beach.guns, mgs: beach.mgs, track, fx, surface, events, height: beach.height, tracers: (from, to, speed) => tracers.fire(from, to, speed, 0.012) });
   const GRAVITY = 26;
   const SHELL_SPEED = 125;
   const muzzle = new THREE.Vector3();
@@ -898,6 +900,7 @@ export async function createMidway(group, track, fx) {
       }
       update(t, dt);
       shellBeach(dt, camera);
+      beach.update(t, dt, fx, camera);
     },
   };
 }

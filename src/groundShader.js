@@ -115,6 +115,43 @@ export function alpineGround(material) {
   return material;
 }
 
+export function sandGround(material) {
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vGround;\nvarying vec3 vGroundN;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\nvGround = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvGroundN = normalize(mat3(modelMatrix) * objectNormal);');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>\n${NOISE}`)
+      .replace(
+        '#include <color_fragment>',
+        /* glsl */ `#include <color_fragment>
+        {
+          vec3 c = diffuseColor.rgb;
+          vec2 q = vGround.xz;
+          float px = length(fwidth(q));
+          float grass = smoothstep(0.03, 0.12, c.g - max(c.r, c.b));
+          float sand = (1.0 - grass) * (1.0 - smoothstep(9.0, 13.0, vGround.y));
+          vec2 s = mat2(0.94, -0.34, 0.34, 0.94) * q;
+          float bend = gFbm(s * 0.03) * 16.0;
+          float ripple = sin(s.y * 1.5 + bend) * 0.5 + 0.5;
+          float wet = 1.0 - smoothstep(0.1, 2.0, vGround.y + (gFbm(q * 0.05) - 0.5) * 1.4);
+          c *= mix(0.86, 1.1, gFbm(q * 0.035));
+          c *= 1.0 - sand * (1.0 - wet) * (ripple * ripple) * 0.17 * gFade(px, 1.5);
+          c *= 1.0 + sand * (gNoise(q * 2.6) - 0.5) * 0.14 * gFade(px, 2.6);
+          c = mix(c, c * vec3(0.72, 0.68, 0.62), smoothstep(0.42, 0.5, gNoise(q * 0.16 + 3.0)) * wet * 0.5);
+          float wrack = smoothstep(0.1, 0.0, abs(vGround.y - 2.3 - (gFbm(q * 0.04) - 0.5) * 1.6)) * smoothstep(0.35, 0.6, gNoise(q * 0.9));
+          c = mix(c, vec3(0.2, 0.17, 0.12), wrack * 0.7);
+          if (grass > 0.0) c = mix(c, grassDetail(c, q, px), grass);
+          float rock = (1.0 - sand) * (1.0 - grass);
+          if (rock > 0.0) c *= mix(0.86, 1.08, gFbm(q * 0.12));
+          diffuseColor.rgb = c;
+        }`,
+      );
+  };
+  material.customProgramCacheKey = () => 'sand-ground';
+  return material;
+}
+
 const CANYON = /* glsl */ `
   varying float vKind;
   vec3 strata(float id) {

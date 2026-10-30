@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { HULL_L } from './boatModel.js';
 import { cachedGeometry, toon } from './toon.js';
 import { HullForm, back, box, merge, mix, morphTime, seg, sideways, smooth, tube } from './hullForm.js';
 
@@ -29,19 +28,38 @@ function loopPoint(u, out) {
   return out.set(half + Math.sin(a) * TRACK_R, -Math.cos(a) * TRACK_R, Math.PI + a);
 }
 
+function plate(points, thick, x) {
+  const shape = new THREE.Shape();
+  points.forEach(([z, y], k) => (k ? shape.lineTo(z, y) : shape.moveTo(z, y)));
+  shape.closePath();
+  return new THREE.ExtrudeGeometry(shape, { depth: thick, bevelEnabled: true, bevelSize: 0.05, bevelThickness: 0.05, bevelSegments: 1 }).rotateY(-Math.PI / 2).translate(x + thick / 2, 0, 0);
+}
+
+function sprocket() {
+  const teeth = Array.from({ length: 10 }, (_, k) => box(0.3, 0.3, 0.3, 0, 0.86, 0).rotateX((k / 10) * Math.PI * 2));
+  return merge([sideways(tube(0.74, 0.46, 0, 0, 0)), ...teeth]);
+}
+
 function buildParts() {
+  const turretBody = new THREE.SphereGeometry(1, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2).scale(1.95, 1.05, 2.5);
+  const bustle = box(2.4, 0.66, 0.8, 0, 0.33, -2.15);
   return {
     link: new THREE.BoxGeometry(1.15, 0.2, 0.5),
     wheel: merge([sideways(tube(0.62, 0.5, 0, 0, 0))]),
     hub: merge([sideways(tube(0.26, 0.56, 0, 0, 0))]),
-    fender: merge([box(1.5, 0.14, TRACK_LENGTH + 2.4, 0, TRACK_R + 0.34, 0)]),
-    skirt: merge([box(0.12, 0.8, TRACK_LENGTH + 1, 0.74, 0.5, 0)]),
-    turret: merge([box(3.1, 1.1, 3.4, 0, 0.55, 0), box(2.3, 0.5, 2.4, 0, 1.25, -0.1)]),
-    mantlet: merge([box(1.5, 0.8, 0.6, 0, 0.6, 1.9)]),
-    barrel: merge([tube(0.2, 5.4, 0, 2.7, 0, 0.17).rotateX(Math.PI / 2)]),
-    brake: merge([tube(0.3, 0.7, 0, 0, 0).rotateX(Math.PI / 2).translate(0, 0, 5.4)]),
-    hatch: merge([tube(0.5, 0.2, 0.7, 1.6, -0.5)]),
-    exhaust: merge([box(1.6, 0.5, 1, -0.9, 0, 0), box(1.6, 0.5, 1, 0.9, 0, 0)]),
+    sprocket: sprocket(),
+    roller: merge([sideways(tube(0.24, 0.42, 0, 0, 0))]),
+    fender: merge([box(1.42, 0.1, TRACK_LENGTH + 2.2, 0, TRACK_R + 0.3, 0)]),
+    glacis: merge([plate([[1.2, 0.2], [5.3, -0.75], [5.3, -0.5], [1.2, 1.2]], 3.9, 0)]),
+    bowTrim: merge([box(3.9, 0.22, 0.2, 0, -0.45, 5.34), box(0.5, 0.4, 0.5, 1.4, 0.05, 3.9), box(0.5, 0.4, 0.5, -1.4, 0.05, 3.9)]),
+    upperHull: merge([box(3.9, 0.82, 6.3, 0, 0.8, -1.75)]),
+    engineDeck: merge([box(3.1, 0.1, 1.7, 0, 1.26, -3.8), ...[-1, -0.5, 0, 0.5, 1].map((x) => box(0.16, 0.14, 1.5, x, 1.32, -3.8))]),
+    rearPlate: merge([box(3.9, 1.3, 0.2, 0, 0.5, -4.92)]),
+    mufflers: merge([-1, 1].map((x) => sideways(tube(0.24, 1.1, 0, 0, 0)).translate(x, 0.3, -5.16))),
+    turret: merge([turretBody, bustle]),
+    ring: merge([tube(1.75, 0.22, 0, 0.1, 0)]),
+    cupola: merge([tube(0.62, 0.42, 0.72, 1.24, -0.7), tube(0.66, 0.1, 0.72, 1.5, -0.7)]),
+    aerial: merge([tube(0.035, 3.6, -1.1, 2.6, -1.9)]),
   };
 }
 
@@ -66,26 +84,37 @@ export class TankForm extends HullForm {
         root.add(wheel);
         return wheel;
       });
-      const fender = add(P.fender, paint, 0.03, root);
-      fender.scale.x = 1;
-      const skirt = add(P.skirt, paint, 0.03, root);
-      skirt.scale.x = side;
+      add(P.fender, paint, 0.03, root);
+      for (const end of [1, -1]) {
+        const drive = new THREE.Group();
+        drive.position.set(0, 0.02, (end * TRACK_LENGTH) / 2);
+        add(P.sprocket, S.metal, 0.03, drive);
+        add(P.hub, S.dark, 0.02, drive);
+        root.add(drive);
+        wheels.push(drive);
+      }
+      for (const z of [-2.2, 0, 2.2]) {
+        const roller = add(P.roller, S.dark, 0.02, root);
+        roller.position.set(0, TRACK_R - 0.3, z);
+      }
       rig.add(root);
       return { root, links, wheels, side };
     });
+    this.armor = new THREE.Group();
+    add(P.glacis, paint, 0.05, this.armor);
+    add(P.bowTrim, S.dark, 0.03, this.armor);
+    add(P.upperHull, paint, 0.05, this.armor);
+    add(P.engineDeck, S.dark, 0.02, this.armor);
+    add(P.rearPlate, paint, 0.03, this.armor);
+    add(P.mufflers, S.metal, 0.02, this.armor);
+    rig.add(this.armor);
     this.turret = new THREE.Group();
-    this.turret.position.set(0, 0.92, -0.2);
-    add(P.turret, paint, 0.05, this.turret);
-    add(P.mantlet, S.dark, 0.03, this.turret);
-    add(P.hatch, S.dark, 0.02, this.turret);
-    this.barrel = new THREE.Group();
-    this.barrel.position.set(0, 0.62, 2.1);
-    add(P.barrel, S.dark, 0.03, this.barrel);
-    add(P.brake, S.metal, 0.03, this.barrel);
-    this.turret.add(this.barrel);
+    this.turret.position.set(0, 1.28, 0.2);
+    add(P.ring, S.dark, 0.03, this.turret);
+    add(P.turret, paint, 0.06, this.turret);
+    add(P.cupola, S.dark, 0.03, this.turret);
+    add(P.aerial, S.dark, 0, this.turret);
     rig.add(this.turret);
-    this.exhaust = add(P.exhaust, S.dark, 0.02);
-    this.exhaust.position.set(0, 0.95, -HULL_L + 0.8);
     this.dummy = new THREE.Object3D();
     this.spot = new THREE.Vector3();
   }
@@ -122,18 +151,20 @@ export class TankForm extends HullForm {
     this.turret.visible = m > 1.85;
     this.turret.scale.setScalar(Math.max(0.001, mix(0.4, 1, rise)));
     this.turret.rotation.y = steer * 0.25;
-    this.barrel.scale.z = Math.max(0.001, back(seg(m, 2.35, 2.9), 1.5));
     this.motor.rotation.x = back(seg(m, 1.6, 2.2), 1.2) * 1.7;
     this.leg.scale.y = mix(1, 0.1, seg(m, 1.9, 2.3));
     this.motor.scale.setScalar(Math.max(0.001, 1 - seg(m, 2.3, 2.7)));
     this.mountPart.visible = m < 2.7;
-    this.exhaust.scale.setScalar(Math.max(0.001, back(seg(m, 2.6, 2.95), 1.8)));
+    const plated = back(seg(m, 1.7, 2.3), 1.4);
+    this.armor.visible = m > 1.65;
+    this.armor.position.y = mix(-1.1, 0, plated);
+    this.armor.scale.set(Math.max(0.001, mix(0.5, 1, plated)), 1, Math.max(0.001, plated));
     this.pole.scale.setScalar(Math.max(0.001, 1 - seg(m, 2.05, 2.35)));
     this.refs.flag.visible = m < 2.3;
     for (const t of this.turrets) {
       const front = t.slot === 0;
       const seat = smooth(seg(m, front ? 2.75 : 2.65, front ? 3.2 : 3.1));
-      this.placeTurret(t, mix(this.riseOf(t, m), front ? 2.75 : 1.55, seat), mix(t.rest.z, front ? -0.4 : -3.1, seat), 0.8, 1, m, seat > 0.99);
+      this.placeTurret(t, mix(this.riseOf(t, m), front ? 2.62 : 1.62, seat), mix(t.rest.z, front ? 0 : -3.5, seat), 0.72, 1, m, seat > 0.99);
     }
   }
 
