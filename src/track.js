@@ -19,6 +19,7 @@ function smoothKeys(keys, f) {
 
 const FORK_STEP = 4;
 const JET_SKIM = 26;
+const JET_EASE = 260;
 const STICK = 5;
 const INTENT = 14;
 
@@ -325,7 +326,8 @@ export function createTrack(map) {
     };
     if (map.river.land) {
       const { from, to, height, kind = 'truck', dive = 6, ramp = 150, peak = 0 } = map.river.land;
-      river.land = { launch: from * length, lip: to * length, span: (to - from) * length, height, kind, dive, ramp, peak };
+      const lip = Math.abs(to * length - seam) < spacing * 2 ? seam : to * length;
+      river.land = { launch: from * length, lip, span: lip - from * length, height, kind, dive, ramp, peak };
     }
     if (map.river.fork) {
       const path = new THREE.CatmullRomCurve3(map.river.fork.map(([x, z]) => new THREE.Vector3(x, 0, z)), false, 'centripetal');
@@ -371,6 +373,7 @@ export function createTrack(map) {
   const offWater = (s) => landDepth(s) >= (river?.land?.dive ?? 0);
   const formAt = (s) => landDepth(s) >= 0;
   const formKind = (s) => (landDepth(s) >= 0 ? river.land.kind : null);
+  const jetCruise = (s) => formKind(s) === 'jet' && landDepth(s) < river.land.span - JET_EASE;
 
   function nearestMain(x, z) {
     let best = 0;
@@ -468,6 +471,7 @@ export function createTrack(map) {
     offWater,
     formAt,
     formKind,
+    jetCruise,
     inTunnel,
     pastSeam,
     ahead,

@@ -210,7 +210,7 @@ export class Race {
     if (this.isTethered(b)) max *= 0.8;
     if (b.offCourse > 0) max *= OFF_COURSE_SPEED;
     const onLand = t.onLand(b.trackS);
-    const jetting = !!b.form && b.formP >= 1 && t.formKind(b.trackS) === 'jet';
+    const jetting = !!b.form && b.formP >= 1 && t.jetCruise(b.trackS);
     if (jetting) max *= JET_SPEED;
     if (onLand) {
       const i = t.norm(b.trackIdx);
