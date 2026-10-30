@@ -16,6 +16,8 @@ const SKI_SLIDE = 0.2;
 const SKI_MAX_LEAN = 0.2;
 const SKI_LIFT = 1.2;
 const SKI_EASE = 6;
+const SCREW_BUBBLE_RATE = 170;
+const SCREW_BUBBLE_RANGE = 220;
 const POLE_OUT = 0.3;
 const POLE_IN = 0.4;
 const POLE_SWAY = 0.035;
@@ -121,6 +123,7 @@ export const methods = {
     b.form.set(b.formP, b.roll, -b.steerVis * 0.4, this.time);
     b.model.fire.position.y = b.form.ride;
     const body = b.model.body;
+    if (b.form.screw && b.alive && this.submerged(b)) this.screwBubbles(b, dt);
     if (track.grounded(s)) {
       b.form.scorch(b.alive ? 0 : 1);
       body.position.y += b.form.ride * (1 + b.squash * 0.02) + (b.alive ? 0 : WRECK_LIFT * Math.abs(Math.sin(body.rotation.z)));
@@ -202,6 +205,24 @@ export const methods = {
     b.lastLevel = b.waterY;
     b.jetPitch = (b.jetPitch ?? 0) + (-Math.atan(climb) - (b.jetPitch ?? 0)) * (1 - Math.exp(-JET_BANK_EASE * dt));
     b.model.body.rotation.x = clamp(b.jetPitch, -0.6, 0.6) + (b.form.pitch ?? 0);
+  },
+
+  screwBubbles(b, dt) {
+    const focus = this.player ?? this.boats[0];
+    if (Math.hypot(b.pos.x - focus.pos.x, b.pos.z - focus.pos.z) > SCREW_BUBBLE_RANGE) return;
+    const pace = Math.min(1, Math.abs(b.speed) / BASE_SPEED);
+    const r = Math.random;
+    const p = b.form.screw.getWorldPosition(this.jetPoint);
+    for (let k = Math.floor(dt * SCREW_BUBBLE_RATE * (0.25 + 0.75 * pace) + r()); k > 0; k--) {
+      const a = this.time * 26 + r() * 1.2;
+      const c = Math.cos(a);
+      const s = Math.sin(a);
+      const lx = Math.cos(b.heading);
+      const lz = -Math.sin(b.heading);
+      const x = p.x + lx * c * 1.1 - b.vel.x * 0.06;
+      const z = p.z + lz * c * 1.1 - b.vel.z * 0.06;
+      this.fx.puffs.emit(x, p.y + s * 1.1, z, -b.vel.x * 0.28 + lx * c * 3 + (r() - 0.5) * 3, 1.6 + s * 3 + r() * 2, -b.vel.z * 0.28 + lz * c * 3 + (r() - 0.5) * 3, 0.14 + r() * 0.3, 0.9 + r() * 0.8, 0xdff6ff, -2.5, 1.4, 1);
+    }
   },
 
   jetBubbles(flame) {
