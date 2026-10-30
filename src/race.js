@@ -7,7 +7,7 @@ import { TrackFeatures } from './features.js';
 import { Wakes } from './wake.js';
 import { TireMarks } from './tireMarks.js';
 import { t as tr } from './i18n.js';
-import { ACCEL, ARMOR_SPEED, BANK_MARGIN, BASE_SPEED, BRAKE, CIRCLE_OFFSET, COAST, FALL_GRAVITY, GRIP, HOLD_IDS, JET_ASSIST, JET_ASSIST_EASE, JET_SPEED, JET_STEER, JET_THRUST, KO_TIME, LAND_GRIP, LAPS, MAX_HP, MUD_POOL, MUD_SPEED, OFF_COURSE_SPEED, OUTER_LIMIT, RADIUS, REGEN_DELAY, REGEN_MAX, REGEN_RAMP, REGEN_START, REVERSE_SPEED, TURN_RATE, approach, clamp } from './race/shared.js';
+import { ACCEL, ARMOR_SPEED, BANK_MARGIN, BASE_SPEED, BRAKE, CIRCLE_OFFSET, COAST, FALL_GRAVITY, GRIP, HOLD_IDS, JET_ASSIST, JET_ASSIST_EASE, JET_SPEED, JET_STEER, JET_THRUST, KO_TIME, LAND_GRIP, LAPS, MAX_HP, MORPH_CLEAR, MORPH_PUSH, MORPH_SHOVE, MUD_POOL, MUD_SPEED, OFF_COURSE_SPEED, OUTER_LIMIT, RADIUS, REGEN_DELAY, REGEN_MAX, REGEN_RAMP, REGEN_START, REVERSE_SPEED, TURN_RATE, approach, clamp } from './race/shared.js';
 import { Boat } from './race/boat.js';
 import { carrierSpeed } from './ctf.js';
 import * as machinegun from './race/attachments/machinegun.js';
@@ -148,6 +148,7 @@ export class Race {
 
     for (const b of this.boats) this.updateBoat(b, dt);
     this.whitecaps(dt);
+    this.clearMorphers(dt);
     this.collideBoats();
     this.updateBullets(dt);
     this.updateMissiles(dt);
@@ -442,6 +443,30 @@ export class Race {
     this.groundHit(b, spot.x, spot.z, 1);
   }
 
+  clearMorphers(dt) {
+    const ease = 1 - Math.exp(-MORPH_PUSH * dt);
+    for (const me of this.boats) {
+      if (!me.isPlayer || !me.morphing || !me.alive) continue;
+      for (const o of this.boats) {
+        if (o === me || !o.alive) continue;
+        let dx = o.pos.x - me.pos.x;
+        let dz = o.pos.z - me.pos.z;
+        let d = Math.hypot(dx, dz);
+        if (d >= MORPH_CLEAR) continue;
+        if (d < 0.01) {
+          dx = Math.cos(me.heading);
+          dz = -Math.sin(me.heading);
+          d = 1;
+        }
+        const gap = MORPH_CLEAR - d;
+        o.pos.x += (dx / d) * gap * ease;
+        o.pos.z += (dz / d) * gap * ease;
+        o.vel.x += (dx / d) * gap * MORPH_SHOVE * dt;
+        o.vel.z += (dz / d) * gap * MORPH_SHOVE * dt;
+      }
+    }
+  }
+
   collideBoats() {
     const boats = this.boats;
     for (let i = 0; i < boats.length; i++) {
@@ -450,6 +475,7 @@ export class Race {
       for (let j = i + 1; j < boats.length; j++) {
         const b = boats[j];
         if (!b.alive) continue;
+        if (a.morphing || b.morphing) continue;
         if (Math.abs(a.yOffset - b.yOffset) > 2.5) continue;
         let best = null;
         for (const oa of [-CIRCLE_OFFSET, CIRCLE_OFFSET]) {
