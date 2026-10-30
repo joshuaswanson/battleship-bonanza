@@ -20,7 +20,8 @@ const CANYON_OUT = 720;
 const FIELD_CELL = 14;
 const WATER = { deep: 0x0f7fa8, shallow: 0x35d0d4 };
 const LAVA_START = 18;
-const TONGUE = 190;
+const LAVA_REACH = 46;
+const OVERRUN = 330;
 const LAVA_CARVE = 400;
 const LAVA_ENTRY = 9;
 const LAVA_FLOOR = 0.8;
@@ -86,7 +87,7 @@ function groundHeight(surface, track, x, z) {
   if (weight <= 0) return base;
   const d = field.dist(x, z);
   const rim = (28 + 36 * noise(x * 1.1, z * 1.1) + 14 * noise(x * 3, z * 3)) * (1 - smooth(200, 310, d));
-  const top = base + rim * weight;
+  const top = base + rim * weight * smooth(CANYON_HALF + 20, CANYON_HALF + 60, d);
   return top + (-16 - top) * weight * (1 - smooth(CANYON_HALF + 40, CANYON_HALF + 88, d));
 }
 
@@ -149,14 +150,15 @@ function shapedHeight(track, edge, s, level, x, z) {
   const land = islandHeight(x, z);
   const free = track.formAt(s) ? track.landAmount(s) : 0;
   const floor = track.ahead(track.river.land.launch, s) < LAVA_CARVE ? -2 : level - 10;
-  if (free >= 1) return land + (Math.min(land, floor) - land) * (1 - smooth(4, 30, edge));
+  const open = land + (Math.min(land, floor) - land) * (1 - smooth(4, 30, edge));
+  if (free >= 1) return open;
   const hw = track.halfWidth;
   const dist = edge + hw;
   const bank = smooth(hw - 6, hw + 8, dist);
   const levee = Math.max(land, level + 4 + 3 * noise(x, z));
   const shoulder = levee + (land - levee) * smooth(hw + 14, hw + 170, dist);
   const carved = level - 5 + (shoulder - level + 5) * bank;
-  return carved + (land - carved) * free;
+  return carved + (open - carved) * free;
 }
 
 const LAVA_VERT = /* glsl */ `
@@ -652,6 +654,7 @@ async function buildCanyon(surface, batch, canyon, group, track, height, rand, t
 function canyonLava(track, material) {
   const { end } = track.river.flight;
   const { launch } = track.river.land;
+  const side = uphillSide(track, track.wrap(Math.round(launch / track.spacing)));
   const across = 12;
   const pos = [];
   const flow = [];
@@ -659,10 +662,10 @@ function canyonLava(track, material) {
   let rows = 0;
   for (let row = launch + LAVA_START; row <= end; row += 8) {
     const y = LAVA_ENTRY + (LAVA_FLOOR - LAVA_ENTRY) * smooth(40, 320, row - launch);
-    const lobes = 1 - smooth(0, 40, row - launch - LAVA_START);
+    const sway = 1 - smooth(0, 44, row - launch - LAVA_START);
     for (let c = 0; c <= across; c++) {
       const u = (c / across) * 2 - 1;
-      const s = row - lobes * (14 + 12 * Math.sin(c * 2.1)) * Math.abs(u);
+      const s = frontRow(row, u, side, sway);
       const i = track.wrap(Math.round(s / track.spacing));
       const lat = u * (cliffOut(s, Math.sign(u) || 1, 1) + 14);
       const p = track.point(i, lat);
@@ -684,25 +687,37 @@ function canyonLava(track, material) {
   return new THREE.Mesh(g, material);
 }
 
+const uphillSide = (track, i) => (track.px[i] * track.nx[i] + track.pz[i] * track.nz[i] < 0 ? 1 : -1);
+
+function frontRow(s, u, side, sway) {
+  return s - sway * (LAVA_REACH * (0.5 + 0.5 * u * side) + 5 * Math.sin(u * 7));
+}
+
 function lavaFront(track, steam) {
   const { launch } = track.river.land;
   const i = track.wrap(Math.round(launch / track.spacing));
-  const hw = track.hw[i];
-  for (let lat = -hw; lat <= hw; lat += 7) steam.push({ ...track.point(i, lat), y: track.baseLevel(launch) + 0.4, blast: true });
+  const side = uphillSide(track, i);
+  for (let u = -1; u <= 1; u += 0.14) {
+    const s = frontRow(launch + LAVA_START, u, side, 1);
+    const j = track.wrap(Math.round(s / track.spacing));
+    steam.push({ ...track.point(j, u * track.hw[j]), y: track.baseLevel(s) + 0.4, blast: true });
+  }
 }
 
-function bankTongue(track, side) {
+function overrun(track) {
   const { launch } = track.river.land;
+  const i = track.wrap(Math.round((launch + 8) / track.spacing));
+  const side = uphillSide(track, i);
+  const reach = Math.hypot(track.px[i], track.pz[i]);
+  const mouth = track.point(i, -side * track.hw[i] * 0.55);
+  const dirX = -track.px[i] / reach;
+  const dirZ = -track.pz[i] / reach;
   const points = [];
-  for (let k = 0; k <= 80; k++) {
-    const t = k / 80;
-    const s = launch - TONGUE + (TONGUE + LAVA_START + 14) * t;
-    const i = track.wrap(Math.round(s / track.spacing));
-    const hw = track.hw[i];
-    const creep = t * t;
-    const width = 2 + hw * 0.5 * creep + 1.6 * Math.sin(t * 23 + side);
-    const p = track.point(i, side * (hw + 2 - width - hw * 0.36 * creep + 2.4 * Math.sin(t * 17 + side * 2)));
-    points.push({ x: p.x, z: p.z, width, along: t * 200, cool: 1 - smooth(0, 0.1, t) });
+  for (let k = 0; k <= 110; k++) {
+    const t = k / 110;
+    const out = OVERRUN * (1 - t);
+    const wander = 26 * Math.sin(t * 7) * (1 - t);
+    points.push({ x: mouth.x + dirX * out - dirZ * wander, z: mouth.z + dirZ * out + dirX * wander, width: 9 + 34 * t * t + 2 * Math.sin(t * 19), along: t * OVERRUN, cool: 1 - smooth(0, 0.05, t) });
   }
   return points;
 }
@@ -774,9 +789,9 @@ export async function createVolcano(group, track, fx) {
     const { edge, s } = surface.sample(x, z);
     return edge < margin && !track.formAt(s);
   };
-  const flows = [headStream(track)];
+  const flows = [headStream(track), overrun(track)];
   for (const a of [0.5, 1.15, 1.9, 2.5, 3.2, 5.7, 6.05]) flows.push(streamPoints(a, (x, z) => reachesRiver(x, z, 2) || occupied(x, z)));
-  for (let s = 160; s < launch - 40; s += s < launch - 300 ? 190 + rand() * 170 : 50 + rand() * 40) {
+  for (let s = 160; s < launch - 200; s += 190 + rand() * 170) {
     const clearOfDrops = track.river.drops.every((d) => Math.abs(d.s - s) > 70);
     const clearOfBridges = [0.31, 0.66].every((u) => Math.abs(u * launch - s) > 60);
     if (!clearOfDrops || !clearOfBridges) continue;
@@ -822,10 +837,12 @@ export async function createVolcano(group, track, fx) {
   group.add(disc(0, 0, 90, LAVA_Y - 1, lavaMat));
   const spout = fountain(streamMat);
   group.add(spout);
-  const onRiver = (x, z) => surface.sample(x, z).level - 0.45;
-  for (const side of [-1, 1]) group.add(new THREE.Mesh(lavaRibbon(bankTongue(track, side), onRiver), streamMat));
+  const aboveRiver = (x, z) => {
+    const { level, s } = surface.sample(x, z);
+    return Math.max(height(x, z), (track.formAt(s) ? LAVA_ENTRY : level) - 0.3);
+  };
   for (const points of flows) {
-    group.add(new THREE.Mesh(lavaRibbon(points, height), streamMat));
+    group.add(new THREE.Mesh(lavaRibbon(points, aboveRiver), streamMat));
     const { x, z } = points[points.length - 1];
     if (reachesRiver(x, z, 8)) steam.push({ x, y: surface.sample(x, z).level + 0.4, z });
     await tick();
