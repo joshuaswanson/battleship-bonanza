@@ -94,7 +94,7 @@ export const MAPS = {
       top: 152,
       drops: [[0.0499, 50], [0.0867, 50]],
       tunnel: [0.9813, 0.9813, 0.9813],
-      land: { kind: 'jet', from: 0.3396, to: 0.9813, height: 20, peak: 292 },
+      land: { kind: 'jet', form: 'heli', from: 0.3396, to: 0.9813, height: 20, peak: 292 },
     },
     widths: [[0, 44], [0.0369, 44], [0.0651, 30], [0.3309, 30], [0.3396, 34], [0.383, 60], [0.9293, 60], [0.9748, 44]],
     control: [

@@ -350,9 +350,9 @@ export function createTrack(map) {
       top: map.river.top ?? map.river.slope * length + drops.reduce((sum, d) => sum + d.height, 0),
     };
     if (map.river.land) {
-      const { from, to, height, kind = 'truck', dive = 6, ramp = 150, peak = 0, split = 0, added = 0 } = map.river.land;
+      const { from, to, height, kind = 'truck', form = kind, dive = 6, ramp = 150, peak = 0, split = 0, added = 0 } = map.river.land;
       const lip = Math.abs(to * length - seam) < spacing * 2 ? seam : to * length;
-      river.land = { launch: from * length, lip, span: lip - from * length, height, kind, dive, ramp, peak, split, added };
+      river.land = { launch: from * length, lip, span: lip - from * length, height, kind, form, dive, ramp, peak, split, added };
       if (kind === 'cart') river.land.crossings = railCrossings(river.land.span);
     }
     if (map.river.fork) {

@@ -185,7 +185,7 @@ export const methods = {
     const climb = (b.waterY - (b.lastLevel ?? b.waterY)) / Math.max(dt, 1e-3) / Math.max(30, Math.abs(b.speed));
     b.lastLevel = b.waterY;
     b.jetPitch = (b.jetPitch ?? 0) + (-Math.atan(climb) - (b.jetPitch ?? 0)) * (1 - Math.exp(-JET_BANK_EASE * dt));
-    b.model.body.rotation.x = clamp(b.jetPitch, -0.6, 0.6);
+    b.model.body.rotation.x = clamp(b.jetPitch, -0.6, 0.6) + (b.form.pitch ?? 0);
   },
 
   jetBubbles(flame) {

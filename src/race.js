@@ -54,7 +54,7 @@ export class Race {
     this.sfx = sfx;
     this.attract = attract;
     this.laps = attract || mode ? Infinity : laps;
-    this.boats = defs.map((def, i) => new Boat(def, i, scene, track.river?.land?.kind));
+    this.boats = defs.map((def, i) => new Boat(def, i, scene, track.river?.land?.form ?? track.river?.land?.kind));
     const formKind = track.river?.land?.kind;
     this.tireMarks = formKind === 'truck' || formKind === 'ski' ? new TireMarks(scene, { snow: formKind === 'ski' }) : null;
     this.jetPoint = new THREE.Vector3();
