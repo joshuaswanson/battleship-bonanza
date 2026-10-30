@@ -126,6 +126,7 @@ const ARENA_BUILDERS = {
 
 const TEAM_MODES = { ctf: CaptureTheFlag, cp: ControlPoints };
 const SHOW_TEAM_MODES = import.meta.env.DEV;
+const HIDDEN_MAPS = import.meta.env.DEV ? [] : ['tuebingen'];
 const isArena = (key) => key.split(':')[0] in TEAM_MODES;
 const mapOf = (key) => (isArena(key) ? ARENAS[key.split(':')[1]] : MAPS[key]);
 
@@ -187,7 +188,7 @@ function pickMap(attract) {
   if (attract) return 'bay';
   if (setup.mode in TEAM_MODES) return `${setup.mode}:${ARENAS[setup.arena] ? setup.arena : Object.keys(ARENAS)[0]}`;
   if (MAPS[setup.map]) return setup.map;
-  const ids = Object.keys(MAPS);
+  const ids = Object.keys(MAPS).filter((id) => !HIDDEN_MAPS.includes(id));
   return ids[Math.floor(Math.random() * ids.length)];
 }
 
@@ -201,6 +202,7 @@ function loadSetup() {
 }
 const setup = loadSetup();
 if (!SHOW_TEAM_MODES) setup.mode = 'race';
+if (HIDDEN_MAPS.includes(setup.map)) setup.map = 'random';
 const saveSetup = () => localStorage.setItem('bb-setup', JSON.stringify(setup));
 
 const shuffle = (xs) => {
@@ -360,7 +362,7 @@ function goLoadout() {
 
 const wipe = createWipe($('wipe'), sfx);
 
-const MAP_CHOICES = ['canyon', 'bay', 'jungle', 'docks', 'alps', 'venice', 'midway', 'tuebingen', 'random'];
+const MAP_CHOICES = ['canyon', 'bay', 'jungle', 'docks', 'alps', 'venice', 'midway', 'tuebingen', 'random'].filter((id) => !HIDDEN_MAPS.includes(id));
 const die = (pips, cls) => `<svg class="die ${cls}" viewBox="0 0 40 40"><rect x="3" y="3" width="34" height="34" rx="9" fill="#fff" stroke="#0E2A47" stroke-width="3.5"/>${pips.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="3.6" fill="#0E2A47"/>`).join('')}</svg>`;
 const DICE = die([[12, 12], [20, 20], [28, 28]], 'die-a') + die([[12, 12], [28, 12], [12, 28], [28, 28], [20, 20]], 'die-b');
 function renderModes() {
