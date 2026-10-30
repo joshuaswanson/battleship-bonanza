@@ -261,18 +261,20 @@ export function buildGoldMine(batch, trim, group, track, rand) {
     update(camera, surface, fog, day, sky) {
       const { s, dist } = surface.sample(camera.position.x, camera.position.z);
       const inside = track.inMine(s) && dist < WALL + 60;
-      sky.visible = !inside;
-      if (!inside) {
+      const daylight = inside ? track.mineDaylight(s) : 1;
+      sky.visible = daylight > 0.01;
+      if (daylight >= 1) {
         fog.color.copy(day.color);
         fog.near = day.near;
         fog.far = day.far;
         return null;
       }
       const open = caveOpen(caveMid, s);
-      mix.copy(mineFog).lerp(caveFog, open);
+      const reach = daylight * daylight;
+      mix.copy(mineFog).lerp(caveFog, open).lerp(day.color, daylight);
       fog.color.copy(mix);
-      fog.near = 30 + open * 40;
-      fog.far = 180 + open * 120;
+      fog.near = 30 + open * 40 + (day.near - 30 - open * 40) * reach;
+      fog.far = 180 + open * 120 + (day.far - 180 - open * 120) * reach;
       return mix;
     },
   };

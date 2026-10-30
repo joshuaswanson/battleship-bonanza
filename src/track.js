@@ -24,6 +24,7 @@ const JET_SKIM = 26;
 const RAIL_START = 110;
 const MINE_START = 330;
 const MINE_END = 90;
+const MINE_FADE = 170;
 const JET_EASE = 260;
 export const SKI_CLIMB = 300;
 export const LIFT_LANES = [-30, -15, 0, 15, 30];
@@ -429,6 +430,12 @@ export function createTrack(map) {
     const old = s <= land.split ? s : Math.max(land.split, s - land.added);
     return old / (length - land.added);
   };
+  const mineDaylight = (s) => {
+    const d = landDepth(s);
+    if (d < 0 || river.land.kind !== 'cart') return 1;
+    const exit = river.land.span - MINE_END;
+    return Math.max(1 - landSmooth(d, MINE_START - 30, MINE_START + 90), landSmooth(d, exit - MINE_FADE, exit - 10));
+  };
   const offWater = (s) => landDepth(s) >= (river?.land?.dive ?? 0);
   const formAt = (s) => landDepth(s) >= 0;
   const formKind = (s) => (landDepth(s) >= 0 ? river.land.kind : null);
@@ -535,6 +542,7 @@ export function createTrack(map) {
     grounded,
     inMine,
     mineMask,
+    mineDaylight,
     offWater,
     formAt,
     formKind,
