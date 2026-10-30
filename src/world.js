@@ -1164,7 +1164,7 @@ const STRATA = 5;
 const FACE_KNOTS = [0.4, ...Array.from({ length: STRATA }, (_, j) => [0.4 + j * 3.2 + 0.3, 0.4 + j * 3.2 + 0.6, 0.4 + j * 3.2 + 0.9, 0.4 + (j + 1) * 3.2]).flat()];
 const FACE_DEPTH = FACE_KNOTS[FACE_KNOTS.length - 1];
 const MAINLAND_ROWS = [-14, -5, -1.5, ...FACE_KNOTS, 24, 32, 60, 120, 240, 520];
-const CARVED_ROWS = [-14, -5, -1.5, ...FACE_KNOTS, ...Array.from({ length: 116 }, (_, k) => 20 + k * 4), 520];
+const CARVED_ROWS = [-14, -5, -1.5, ...FACE_KNOTS, ...Array.from({ length: 166 }, (_, k) => 20 + k * 4), 720];
 const CARVE_FLOOR = -8;
 const CRATER_FLOOR = -80;
 const CRATER_WALL = 12;
@@ -1835,6 +1835,7 @@ export function createWorld(scene, track, fx) {
   scene.add(sun);
 
   const water = createWater({ hole: site ? [site.center.x, site.center.z, site.radius + 2] : null });
+  if (site) water.mesh.position.z = 130;
   scene.add(water.mesh);
 
   const rand = mulberry32(20261023);
@@ -1844,7 +1845,7 @@ export function createWorld(scene, track, fx) {
   const pillars = [];
   const falls = [];
   const fits = (x, z, r) => !pillars.some((o) => Math.hypot(o.x - x, o.z - z) < o.r + r + 6);
-  for (const f of [0.131, 0.715, 0.817]) shores.push(...addArch(batch, track, f, rand));
+  for (const f of [0.118, 0.743, 0.835]) shores.push(...addArch(batch, track, f, rand));
   for (const f of [0.131, 0.689, 0.817]) {
     const idx = track.wrap(Math.round(f * track.N));
     for (const side of [-1, 1]) {
