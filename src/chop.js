@@ -180,6 +180,7 @@ export class Chopper {
     const flat = new THREE.Vector3(dir.x, 0, dir.z).normalize();
     if (tree.hang) {
       tree.hang.dress(holder, low - top, tree);
+      this.onShatter?.(tree, dir);
       this.falling.push({ holder, clip, pivot, axis: new THREE.Vector3(flat.z, 0, -flat.x), angle: 0, speed: 0, rest: 0, landed: true });
       return;
     }
@@ -216,7 +217,10 @@ export class Chopper {
   reset() {
     for (const f of this.falling) this.group.remove(f.holder);
     this.falling.length = 0;
-    for (const t of this.trees) t.cut = false;
+    for (const t of this.trees) {
+      t.cut = false;
+      t.melt = 0;
+    }
     if (this.data) {
       for (let i = 0; i < this.trees.length; i++) this.data.set([UNCUT, 0, 0, 0], i * 4);
       this.texture.needsUpdate = true;

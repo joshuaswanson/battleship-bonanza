@@ -1,19 +1,119 @@
 import * as THREE from 'three';
 import { laserWobble, aimLaserGun, stepLaser, laserDirection, pointLaserGun } from '../../boatModel.js';
 import { waveHeight } from '../../water.js';
+import { toon, outlined } from '../../toon.js';
 import { LASER_REACH, SAW_LEAK } from '../shared.js';
 
+const ICE_MELT = 1.1;
+const ICE_BLOCK = new THREE.DodecahedronGeometry(1, 0);
+const ICE_TONES = [0xd6f6ff, 0x9fdcf4, 0x6cc7ec];
+const iceMaterials = [];
+const iceBlockMaterial = (k) => (iceMaterials[k % 3] ??= toon(ICE_TONES[k % 3]));
+
+function meltMark() {
+  const g = new THREE.Group();
+  const hot = (color, opacity) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, side: THREE.DoubleSide });
+  g.add(new THREE.Mesh(new THREE.CircleGeometry(0.9, 18), hot(0xe8341c, 0.92)));
+  const mid = new THREE.Mesh(new THREE.CircleGeometry(0.62, 16), hot(0xffa02a, 1));
+  mid.position.z = 0.015;
+  g.add(mid);
+  const core = new THREE.Mesh(new THREE.CircleGeometry(0.34, 14), hot(0xfff8d8, 1));
+  core.position.z = 0.03;
+  g.add(core);
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(0.36, 12, 8), hot(0xffd070, 1));
+  g.add(ball);
+  for (let k = 0; k < 9; k++) {
+    const a = (k / 9) * Math.PI * 2 + (k % 2) * 0.3;
+    const len = 1 + (k % 3) * 0.45;
+    const crack = new THREE.Mesh(new THREE.PlaneGeometry(len, 0.05).translate(len / 2 + 0.3, 0, 0), hot(0x1f6fa8, 0.9));
+    crack.rotation.z = a;
+    crack.position.z = 0.02;
+    g.add(crack);
+  }
+  return g;
+}
+
 export const methods = {
-  shatterIce(tree) {
-    const r = Math.random;
-    for (let k = 0; k < 60; k++) {
-      const y = tree.base + 3 + r() * (tree.hang.high - 3);
-      const a = r() * Math.PI * 2;
-      const push = 1 + r() * 7;
-      this.fx.puffs.emit(tree.x + Math.cos(a) * tree.radius * 0.6, y, tree.z + Math.sin(a) * tree.radius * 0.6, Math.cos(a) * push, (r() - 0.6) * 3, Math.sin(a) * push, 0.3 + r() * 0.9, 1.4 + r() * 1.4, k % 3 ? 0xd6f6ff : 0x8fdcf2, 2.5, 1.2, 0);
+  meltIce(tree, point, dir, dt) {
+    tree.melt = (tree.melt ?? 0) + dt;
+    tree.meltAt = this.time;
+    const out = dir.clone().negate();
+    const hot = point.clone().addScaledVector(dir, tree.radius * 0.1);
+    let mark = this.iceMarks.get(tree);
+    if (!mark) {
+      mark = meltMark();
+      this.iceMarks.set(tree, mark);
+      this.scene.add(mark);
     }
-    for (let k = 0; k < 14; k++) this.fx.bubbles(tree.x, tree.base + 4 + r() * 12, tree.z);
-    this.sfx.play('tink', tree);
+    tree.meltHit = hot;
+    const u = Math.min(1, tree.melt / ICE_MELT);
+    mark.position.copy(hot);
+    mark.lookAt(hot.clone().add(out));
+    mark.scale.setScalar(tree.radius * (0.25 + u * 1.15));
+    const r = Math.random;
+    for (let k = 0; k < 2; k++) this.fx.puffs.emit(hot.x + (r() - 0.5), hot.y + (r() - 0.5), hot.z + (r() - 0.5), out.x * 3 + (r() - 0.5) * 2, 3 + r() * 3, out.z * 3 + (r() - 0.5) * 2, 0.2 + r() * 0.4 * (0.5 + u), 0.8, 0xd8f6ff, -5, 0.9, 1);
+    if (r() < 0.4) this.fx.sparkBurst(hot.x, hot.y, hot.z, 0xfff0c0, 3);
+    if (tree.melt >= ICE_MELT) this.chopper.chop(tree.id, hot.y, dir.clone());
+  },
+
+  shatterIce(tree, dir) {
+    const mark = this.iceMarks.get(tree);
+    if (mark) this.scene.remove(mark);
+    this.iceMarks.delete(tree);
+    const r = Math.random;
+    const low = tree.base + tree.hang.low;
+    const high = tree.base + tree.hang.high;
+    const hit = tree.meltHit ?? new THREE.Vector3(tree.x, (low + high) / 2, tree.z);
+    const count = 9;
+    const tall = (high - low) / count;
+    for (let k = 0; k < count; k++) {
+      const a = r() * Math.PI * 2;
+      const size = tree.radius * (0.62 + r() * 0.3);
+      const mesh = outlined(ICE_BLOCK, iceBlockMaterial(k), 0.05);
+      mesh.position.set(tree.x + Math.cos(a) * tree.radius * 0.18, low + (k + 0.5) * tall, tree.z + Math.sin(a) * tree.radius * 0.18);
+      mesh.scale.set(size, tall * (0.62 + r() * 0.22), size * (0.8 + r() * 0.3));
+      mesh.rotation.set(r() * 0.5, r() * 6, r() * 0.5);
+      this.scene.add(mesh);
+      const away = mesh.position.clone().sub(hit);
+      const reach = Math.max(0, 1 - away.length() / (high - low));
+      away.normalize().multiplyScalar(2 + reach * 12).addScaledVector(dir, 2 + reach * 5);
+      this.iceChunks.push({ mesh, vel: away, spin: new THREE.Vector3((r() - 0.5) * 2.4, (r() - 0.5) * 2.4, (r() - 0.5) * 2.4), floor: tree.base + mesh.scale.y * 0.7, life: 5.5 + r() * 2 });
+    }
+    for (let k = 0; k < 16; k++) this.fx.bubbles(hit.x, hit.y + (r() - 0.5) * 8, hit.z);
+    this.fx.sparkBurst(hit.x, hit.y, hit.z, 0xe8fbff, 22);
+    this.sfx.play('hit', hit);
+    this.sfx.play('tink', hit);
+  },
+
+  updateIceChunks(dt) {
+    for (const [tree, mark] of this.iceMarks) {
+      if (this.time - tree.meltAt < 0.12) continue;
+      tree.melt -= dt * 0.6;
+      mark.scale.multiplyScalar(Math.exp(-2 * dt));
+      if (tree.melt <= 0) {
+        tree.melt = 0;
+        this.scene.remove(mark);
+        this.iceMarks.delete(tree);
+      }
+    }
+    this.iceChunks = this.iceChunks.filter((c) => {
+      c.life -= dt;
+      c.vel.multiplyScalar(Math.exp(-1.1 * dt));
+      c.vel.y -= 5 * dt;
+      c.mesh.position.addScaledVector(c.vel, dt);
+      if (c.mesh.position.y <= c.floor) {
+        c.mesh.position.y = c.floor;
+        c.vel.set(0, 0, 0);
+        c.spin.multiplyScalar(Math.exp(-5 * dt));
+      }
+      c.mesh.rotation.x += c.spin.x * dt;
+      c.mesh.rotation.y += c.spin.y * dt;
+      c.mesh.rotation.z += c.spin.z * dt;
+      if (c.life < 1) c.mesh.scale.multiplyScalar(Math.exp(-3 * dt));
+      if (c.life > 0) return true;
+      this.scene.remove(c.mesh);
+      return false;
+    });
   },
 
   updateLasers(dt) {
@@ -59,9 +159,13 @@ export const methods = {
       let hit = this.raycastBoats(origin, dir, trunk ? trunk.t : wall ? wall.t : reach, b);
       if (trunk && !hit) {
         const { tree, point } = trunk;
+        if (tree.hang) {
+          this.fx.beam(origin, point, 0xff2a2a, 0.5, 0.05, 1, b.model.laserMount);
+          this.meltIce(tree, point, dir, dt);
+          continue;
+        }
         const cutY = Math.min(Math.max(point.y, tree.base + 0.6), tree.base + tree.height * 0.45);
         this.chopper.chop(tree.id, cutY, dir.clone());
-        if (tree.hang) this.shatterIce(tree);
         this.fx.beam(origin, point, 0xff2a2a, 0.5, 0.05, 1, b.model.laserMount);
         this.fx.sparkBurst(point.x, cutY, point.z, 0xffb070, 14);
         for (let k = 0; k < 10; k++) this.fx.puffs.emit(point.x, cutY, point.z, (Math.random() - 0.5) * 8, 2 + Math.random() * 5, (Math.random() - 0.5) * 8, 0.18 + Math.random() * 0.12, 0.8, 0xc99a5c, 18, 0.6, 1);

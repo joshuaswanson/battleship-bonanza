@@ -41,6 +41,9 @@ export class Race {
     this.bankProbe = new THREE.Vector3();
     this.raycast = raycast;
     this.chopper = chopper;
+    this.iceMarks = new Map();
+    this.iceChunks = [];
+    if (chopper) chopper.onShatter = (tree, dir) => this.shatterIce(tree, dir);
     this.hazards = hazards;
     this.mode = mode;
     this.blasts = [];
@@ -152,6 +155,7 @@ export class Race {
     this.updateHooks(dt);
     this.updatePulses(dt);
     this.updateLasers(dt);
+    this.updateIceChunks(dt);
     this.updateFlames(dt);
     this.features.update(this, dt, this.time);
     this.tireMarks?.update(this.boats, this.time);
@@ -694,6 +698,8 @@ export class Race {
     }
     for (const m of this.missiles) this.scene.remove(m.mesh);
     for (const m of this.mines) this.scene.remove(m.mesh);
+    for (const c of this.iceChunks) this.scene.remove(c.mesh);
+    for (const mark of this.iceMarks.values()) this.scene.remove(mark);
     for (const h of this.hooks) this.scene.remove(h.mesh, h.rope, h.loose?.mesh ?? h.rope);
     this.scene.remove(this.bulletMesh, this.bulletOutline);
     this.features.dispose();
