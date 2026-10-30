@@ -112,6 +112,7 @@ export class Sfx {
       this.engine.start();
       this.buildSaw();
       this.buildFlame();
+      this.buildRotor();
     }
     if (this.ctx.state === 'suspended') this.ctx.resume();
     if (this.musicWanted && this.musicOn && this.music.paused) this.music.play().catch(() => {});
@@ -193,6 +194,60 @@ export class Sfx {
     screech.connect(screechGain).connect(grind);
     for (const node of [lfo, ...whine, motor, hiss, grindNoise, screech]) node.start();
     this.saw = { out, grind, whine, motor };
+  }
+
+  buildRotor() {
+    const ctx = this.ctx;
+    const out = ctx.createGain();
+    out.gain.value = 0;
+    out.connect(this.master);
+    const chop = ctx.createGain();
+    chop.gain.value = 0.5;
+    chop.connect(out);
+    const beat = ctx.createOscillator();
+    beat.type = 'sawtooth';
+    beat.frequency.value = 7;
+    const depth = ctx.createGain();
+    depth.gain.value = -0.5;
+    beat.connect(depth).connect(chop.gain);
+    beat.start();
+    const wash = ctx.createBufferSource();
+    wash.buffer = this.noiseBuffer;
+    wash.loop = true;
+    wash.playbackRate.value = 0.5;
+    wash.start();
+    const washFilter = ctx.createBiquadFilter();
+    washFilter.type = 'lowpass';
+    washFilter.frequency.value = 460;
+    const washGain = ctx.createGain();
+    washGain.gain.value = 1.3;
+    wash.connect(washFilter).connect(washGain).connect(chop);
+    const thump = ctx.createOscillator();
+    thump.type = 'triangle';
+    thump.frequency.value = 54;
+    thump.start();
+    const thumpGain = ctx.createGain();
+    thumpGain.gain.value = 0.9;
+    thump.connect(thumpGain).connect(chop);
+    const whine = ctx.createOscillator();
+    whine.type = 'sawtooth';
+    whine.frequency.value = 170;
+    whine.start();
+    const whineFilter = ctx.createBiquadFilter();
+    whineFilter.type = 'lowpass';
+    whineFilter.frequency.value = 900;
+    const whineGain = ctx.createGain();
+    whineGain.gain.value = 0.05;
+    whine.connect(whineFilter).connect(whineGain).connect(out);
+    this.rotor = { out, beat, whine };
+  }
+
+  setRotor(level) {
+    if (!this.rotor) return;
+    const t = this.ctx.currentTime;
+    this.rotor.out.gain.setTargetAtTime(0.3 * level, t, 0.2);
+    this.rotor.beat.frequency.setTargetAtTime(7 + 10 * level, t, 0.3);
+    this.rotor.whine.frequency.setTargetAtTime(170 + 130 * level, t, 0.3);
   }
 
   buildFlame() {

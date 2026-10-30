@@ -97,6 +97,7 @@ function adaptResolution(dt) {
   }
 }
 
+const ROTOR_SOUND_START = 0.55;
 const fx = new Effects(scene);
 fx.camera = camera;
 const sfx = new Sfx();
@@ -1020,9 +1021,11 @@ function frame(now) {
     hud.update(race, camera, mode === 'paused' ? 0 : dt);
     sfx.listener = race.player.pos;
     sfx.setEngine(Math.abs(race.player.speed) / BASE_SPEED, mode === 'race' && state.throttle > 0 && race.player.alive, race.player.form instanceof TruckForm && race.player.formP > 0.5);
+    sfx.setRotor(mode === 'race' && race.player.alive && race.player.form?.rotor ? Math.max(0, race.player.formP - ROTOR_SOUND_START) / (1 - ROTOR_SOUND_START) : 0);
   } else {
     sfx.listener = cam.pos;
     sfx.setEngine(0, false);
+    sfx.setRotor(0);
   }
   updateSawSound();
 
