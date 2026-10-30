@@ -1,5 +1,4 @@
 import { waveHeight, isWater } from '../water.js';
-import { t as tr } from '../i18n.js';
 import { BASE_SPEED, RAIL_GAP, RAIL_SETTLE, RAIL_SWITCH_LENGTH, RAIL_WISH, RAM_MIN, RAM_REACH, SHORE_MARGIN, clamp, wrapAngle } from './shared.js';
 
 const ROCK_LAUNCH = BASE_SPEED * 0.45;
@@ -93,10 +92,6 @@ export const methods = {
       b.rail = clamp(Math.round(lateral / RAIL_GAP), -1, 1);
       b.railMove = Math.abs(lateral - b.rail * RAIL_GAP) > 0.6 ? { from: lateral, to: b.rail * RAIL_GAP, u: 0, length: RAIL_SETTLE } : null;
       b.railTurn = 0;
-    }
-    if (b.isPlayer && !b.railHinted) {
-      b.railHinted = true;
-      this.emit('warning', { text: tr('railHint') }, b);
     }
     if (steer) {
       b.railWish = -Math.sign(steer);
