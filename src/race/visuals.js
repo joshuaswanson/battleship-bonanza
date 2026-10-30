@@ -108,6 +108,7 @@ export const methods = {
     b.formP = approach(b.formP, want, dt / (want ? FORM_IN : FORM_OUT));
     b.roll += b.speed * dt;
     b.form.set(b.formP, b.roll, -b.steerVis * 0.4, this.time);
+    b.model.fire.position.y = b.form.ride;
     const body = b.model.body;
     if (track.onLand(s)) {
       b.form.scorch(b.alive ? 0 : 1);

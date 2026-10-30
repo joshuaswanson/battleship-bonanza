@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { HULL_L, halfWidth, sheer } from './boatModel.js';
+import { HULL_L, charrable, halfWidth, sheer } from './boatModel.js';
 import { toon, glow, outlined, cachedGeometry } from './toon.js';
 
 export const METAL = 0xc3cdd8;
@@ -329,13 +329,15 @@ export const morphTime = (p) => MORPH_START + p * MORPH_SPAN;
 export class HullForm {
   constructor(refs, color, spec) {
     const P = cachedGeometry(`hullParts:${spec.key}`, () => hullParts(spec));
-    const S = shared();
+    const S = { ...shared() };
+    for (const key of ['metal', 'dark', 'white', 'rubber', 'glass', 'chrome', 'deck', 'tread']) S[key] = S[key].clone();
     const paint = toon(color);
     const hoodMat = toon(0xffffff, { map: striped(color, [[0.4, 0.47], [0.53, 0.6]]) });
     const skirtMat = toon(0xffffff, { map: striped(color, [[0.42, 0.56]]) });
-    for (const m of [paint, hoodMat, skirtMat]) {
+    for (const m of [paint, hoodMat, skirtMat, S.metal, S.dark, S.white, S.rubber, S.glass, S.chrome, S.deck, S.tread]) {
       m.emissive = new THREE.Color(0xffffff);
       m.emissiveIntensity = 0;
+      charrable(m, refs.char);
       refs.materials.push(m);
     }
     this.refs = refs;

@@ -533,7 +533,7 @@ const CHAR_GLSL = /* glsl */ `
   }
 `;
 
-function charrable(material, char) {
+export function charrable(material, char) {
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uChar = char;
     shader.uniforms.uCharTime = charClock;
