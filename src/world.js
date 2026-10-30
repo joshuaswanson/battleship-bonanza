@@ -4,7 +4,7 @@ import { createWater, waveHeight } from './water.js';
 import { ellipseHit, courseBuoys } from './terrain.js';
 import { toon, outlineMaterial, mulberry32 } from './toon.js';
 import { createWaterfalls } from './waterfall.js';
-import { leafBush, fern, leafCanopy } from './foliage.js';
+import { leafBush, fern, leafCanopy, jungleClump } from './foliage.js';
 import { whirlpoolSite, Whirlpool, flumeStream } from './whirlpool.js';
 import { OUTER_LIMIT } from './race/shared.js';
 
@@ -33,6 +33,9 @@ export const COLORS = {
   vineStem: 0x3b6e2a,
   vineLeaf: 0x4cb043,
   vineLeafDark: 0x2f8a37,
+  clumpDark: 0x3c7a1c,
+  clumpMid: 0x5e9e26,
+  clumpLight: 0x8cc437,
   stripeRed: 0xff4141,
   stripeWhite: 0xf6f8ff,
   roof: 0x0e2a47,
@@ -273,7 +276,7 @@ export class Batcher {
       });
       mesh.computeBoundingSphere();
       parent.add(mesh);
-      if (outline) {
+      if (outline && !list.every((e) => NO_OUTLINE.has(e.key))) {
         const line = new THREE.InstancedMesh(source, outlineMaterial(outline), list.length);
         line.instanceMatrix = mesh.instanceMatrix;
         line.boundingSphere = mesh.boundingSphere;
@@ -298,7 +301,7 @@ export class Batcher {
   }
 }
 
-const NO_OUTLINE = new Set(['foam', 'willowCore', 'puntHull', 'caveRock', 'vineStem', 'reed', 'reedDark', 'reedStem']);
+const NO_OUTLINE = new Set(['foam', 'clumpDark', 'clumpMid', 'clumpLight', 'willowCore', 'puntHull', 'caveRock', 'vineStem', 'reed', 'reedDark', 'reedStem']);
 let whiteToon = null;
 const WHITE_TOON = () => (whiteToon ??= toon(0xffffff));
 let vertexToon = null;
@@ -358,9 +361,9 @@ const RING = new THREE.TorusGeometry(1, 0.06, 6, 40).rotateX(Math.PI / 2);
 
 const UP = new THREE.Vector3(0, 1, 0);
 const LEAF_PALETTES = [
-  [0x86de6c, 0x2c9a4c],
-  [0xa3e46a, 0x3fa845],
-  [0x6ad67f, 0x1f8548],
+  [0x9cd65a, 0x3d8a26],
+  [0xb4dc5c, 0x4f9a2c],
+  [0x86c94c, 0x2f7a22],
 ];
 const BARK = [new THREE.Color(0xd39a5c), new THREE.Color(0x9c6a3a)];
 
@@ -549,8 +552,8 @@ function paintRock(g) {
 const TOWER_ROCK = new THREE.Color(0x9f9182);
 
 const ROCK_TONES = [new THREE.Color(0xa89a8c), new THREE.Color(0x938577), new THREE.Color(0xb7aa9b)];
-const GRASS_TONE = new THREE.Color(0x6cc84f);
-const GRASS_EDGE = new THREE.Color(0x4fae4a);
+const GRASS_TONE = new THREE.Color(0x7dbd36);
+const GRASS_EDGE = new THREE.Color(0x64a82e);
 const SAND_TONE = new THREE.Color(0xf2d48f);
 
 function rockland(r, height, stretch, rot, rand) {
@@ -1470,6 +1473,70 @@ function addCaveArch(batch, site) {
         hangVine(batch, x - fx * 0.9 + fz * along, y + 0.4, z - fz * 0.9 - fx * along, -fx, -fz, 3 + rand() * 7, rand);
       }
     }
+    addMouthJungle(batch, { p, nx, nz, fx, fz, wide }, rand);
+    for (let j = 3; j <= ARCH_SIDES - 3; j++) {
+      const [x, y, z] = inner[j];
+      jungleClump(batch, x - fx * 1.6, y + LIP_RADIUS * 0.4, z - fz * 1.6, rand, 1.7 + rand() * 0.9);
+      const phi = (j / ARCH_SIDES) * Math.PI;
+      const lateral = Math.cos(phi) * wide;
+      const ox = p.x + nx * lateral;
+      const oz = p.z + nz * lateral;
+      const oy = clifftop(ox, oz) + 1;
+      const back = Math.max(oz, cliffFace(ox, oy - 2) - 0.6);
+      for (const f of [0.3, 0.55, 0.8]) {
+        if (rand() < 0.35) continue;
+        const px = x + (ox - x) * f;
+        const py = y + (oy - y) * f;
+        const pz = z + (back - z) * f;
+        jungleClump(batch, px - fx * 1.2, py - 1, pz - fz * 1.2, rand, 1.8 + rand() * 1.4);
+      }
+    }
+  }
+}
+
+function addMouthJungle(batch, { p, nx, nz, fx, fz, wide }, rand) {
+  const span = p.half + 1.5;
+  const archTop = (u) => (Math.abs(u) < span ? ARCH_SPRING + Math.sqrt(1 - (u / span) ** 2) * ARCH_RISE : ARCH_SPRING);
+  for (let u = -wide - 6; u <= wide + 6; u += 2.2 + rand() * 1.2) {
+    const x = p.x + nx * u;
+    const z0 = p.z + nz * u;
+    const top = clifftop(x, z0) + 0.6;
+    const edge = Math.max(z0, cliffFace(x, top - 2) - 0.6);
+    const size = 2.4 + rand() * 2;
+    jungleClump(batch, x - fx * 0.6, top - size * 0.35, edge - fz * 0.6, rand, size);
+    if (rand() < 0.7) jungleClump(batch, x + fx * (3 + rand() * 3), top - 0.6, edge + fz * (3 + rand() * 3), rand, size * (1 + rand() * 0.4));
+    if (rand() < 0.55) fern(batch, x - fx * 1.4, top - 0.4, edge - fz * 1.4, rand, 0.9 + rand() * 0.5, { yaw: Math.atan2(-fx, -fz), spread: 2, droop: 1.6 });
+    const vines = 2 + Math.floor(rand() * 3);
+    for (let n = 0; n < vines; n++) {
+      const along = (rand() - 0.5) * 2.4;
+      const vx = x + nx * along;
+      const reach = top - archTop(u + along) - 1.5;
+      const length = Math.max(4, reach * (0.45 + rand() * 0.55));
+      const bottom = top - length;
+      const lean = Math.max(0, edge - cliffFace(vx, Math.max(bottom, 1)) + 1.2);
+      hangVine(batch, vx - fx * 0.9, top - 0.3, edge + nz * along - fz * 0.9, -fx, -fz, length, rand, lean, 1.35);
+    }
+  }
+  for (let u = -wide - 24; u <= wide + 24; u += 3 + rand() * 3) {
+    if (Math.abs(u) < wide - 2) continue;
+    const x = p.x + nx * u;
+    const edge = mainlandEdge(x);
+    const ys = faceHeights(x);
+    for (let j = 0; j < STRATA - 1; j++) {
+      if (rand() < 0.25) continue;
+      const ledge = 0.4 + j * 3.2 + 2;
+      const y = faceRise(x, ledge);
+      if (y < ys[4 * j + 3] - 0.5) continue;
+      jungleClump(batch, x, y - 0.4, edge + ledge + faceSway(x, y) - 0.8, rand, 2.2 + rand() * 1.6);
+    }
+  }
+  for (const side of [-1, 1]) {
+    for (let k = 0; k < 4; k++) {
+      const u = side * (span + 1 + rand() * 6);
+      const x = p.x + nx * u - fx * (1 + rand() * 3);
+      const z = p.z + nz * u - fz * (1 + rand() * 3);
+      jungleClump(batch, x, 0.2 + rand() * 1.5, z, rand, 2 + rand() * 1.8);
+    }
   }
 }
 
@@ -1530,11 +1597,11 @@ function courseReach(track, site) {
   return reach;
 }
 
-const VINE_LEAF = new THREE.SphereGeometry(1, 8, 4).scale(0.45, 0.07, 1).translate(0, 0, 0.9);
+const VINE_LEAF = new THREE.SphereGeometry(1, 6, 3).scale(0.45, 0.07, 1).translate(0, 0, 0.9);
 const leafTurn = new THREE.Euler(0, 0, 0, 'YXZ');
 const leafQuat = new THREE.Quaternion();
 
-function hangVine(batch, x, y, z, ox, oz, length, rand, drift = 0) {
+function hangVine(batch, x, y, z, ox, oz, length, rand, drift = 0, leafy = 1) {
   const pts = [];
   const phase = rand() * 6;
   const swing = 0.5 + rand() * 1.1;
@@ -1547,12 +1614,12 @@ function hangVine(batch, x, y, z, ox, oz, length, rand, drift = 0) {
   }
   const curve = new THREE.CatmullRomCurve3(pts);
   batch.add('vineStem', new THREE.TubeGeometry(curve, 16, 0.08 + rand() * 0.05, 4));
-  const count = Math.max(3, Math.floor(length / 0.75));
+  const count = Math.max(3, Math.floor((length / 0.75) * leafy));
   const face = Math.atan2(ox, oz);
   for (let i = 1; i <= count; i++) {
     const t = i / (count + 1);
     const p = curve.getPointAt(t);
-    const size = (0.5 + rand() * 0.35) * (1 - 0.3 * t);
+    const size = (0.5 + rand() * 0.35) * (1 - 0.3 * t) * leafy;
     leafTurn.set(0.5 + rand() * 0.7, face + (i % 2 ? 1 : -1) * (0.6 + rand() * 0.9), 0);
     leafQuat.setFromEuler(leafTurn);
     batch.add(rand() < 0.55 ? 'vineLeaf' : 'vineLeafDark', VINE_LEAF, new THREE.Matrix4().compose(p, leafQuat, new THREE.Vector3(size, size, size)));
@@ -1819,6 +1886,7 @@ function createMarkerBuoy(kind) {
 }
 
 const BAY_SKY = { top: 0x1a78e6, horizon: SKY_HORIZON };
+const BAY_COLORS = { ...COLORS, moss: 0x6aa82c, mossDark: 0x4d8c22, jungle: 0x3d7a1d, jungleLight: 0x8cc63a, vineStem: 0x4a6a22, vineLeaf: 0x64a82a, vineLeafDark: 0x41801f };
 
 export function createWorld(scene, track, fx) {
   if (track.map.arena) return createBayArena(scene, track.map.arena, fx);
@@ -1897,7 +1965,7 @@ export function createWorld(scene, track, fx) {
 
 
   const scenery = new THREE.Group();
-  const chunks = batch.build(scenery);
+  const chunks = batch.build(scenery, 0.12, BAY_COLORS);
   scene.add(scenery);
 
   const buoys = courseBuoys(track, (idx) => !site || idx < site.mouthIdx - 10 || idx > site.holeIdx + 30);
@@ -2035,7 +2103,7 @@ function createBayArena(scene, arena, fx) {
   scene.add(waterfalls.group);
 
   const scenery = new THREE.Group();
-  const chunks = batch.build(scenery);
+  const chunks = batch.build(scenery, 0.12, BAY_COLORS);
   scene.add(scenery);
 
   const clouds = addCumulus(scene, rand, 20);
