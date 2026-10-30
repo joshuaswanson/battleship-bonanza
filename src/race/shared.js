@@ -29,7 +29,6 @@ export const HOOK_SPEED = fast(150);
 export const GRIP = 3.6;
 export const LAND_GRIP = 1.5;
 export const RAIL_GAP = 12;
-export const RAIL_SWITCH_EVERY = 240;
 export const RAIL_SWITCH_LENGTH = 84;
 export const RAIL_SETTLE = 46;
 export const RAIL_WISH = 0.8;

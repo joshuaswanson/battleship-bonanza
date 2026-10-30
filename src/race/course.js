@@ -1,6 +1,6 @@
 import { waveHeight, isWater } from '../water.js';
 import { t as tr } from '../i18n.js';
-import { BASE_SPEED, RAIL_GAP, RAIL_SETTLE, RAIL_SWITCH_EVERY, RAIL_SWITCH_LENGTH, RAIL_WISH, RAM_MIN, RAM_REACH, SHORE_MARGIN, clamp, wrapAngle } from './shared.js';
+import { BASE_SPEED, RAIL_GAP, RAIL_SETTLE, RAIL_SWITCH_LENGTH, RAIL_WISH, RAM_MIN, RAM_REACH, SHORE_MARGIN, clamp, wrapAngle } from './shared.js';
 
 const ROCK_LAUNCH = BASE_SPEED * 0.45;
 const LAND_FLIGHT = 3.2;
@@ -86,11 +86,12 @@ export const methods = {
     const t = this.track;
     const i = t.norm(b.trackIdx);
     const lateral = (b.pos.x - t.px[i]) * t.nx[i] + (b.pos.z - t.pz[i]) * t.nz[i];
-    const node = Math.floor(t.ahead(t.river.land.launch, b.trackS) / RAIL_SWITCH_EVERY);
+    const depth = t.ahead(t.river.land.launch, b.trackS);
+    const passed = b.railDepth ?? depth;
+    b.railDepth = depth;
     if (b.rail === null) {
       b.rail = clamp(Math.round(lateral / RAIL_GAP), -1, 1);
       b.railMove = Math.abs(lateral - b.rail * RAIL_GAP) > 0.6 ? { from: lateral, to: b.rail * RAIL_GAP, u: 0, length: RAIL_SETTLE } : null;
-      b.railNode = node;
       b.railTurn = 0;
     }
     if (b.isPlayer && !b.railHinted) {
@@ -102,12 +103,11 @@ export const methods = {
       b.railWishTime = RAIL_WISH;
     }
     b.railWishTime -= dt;
-    if (node !== b.railNode) {
-      b.railNode = node;
-      const next = b.rail + b.railWish;
-      if (!b.railMove && b.railWishTime > 0 && Math.abs(next) <= 1) {
-        b.railMove = { from: b.rail * RAIL_GAP, to: next * RAIL_GAP, u: 0, length: RAIL_SWITCH_LENGTH };
-        b.rail = next;
+    if (!b.railMove && b.railWishTime > 0) {
+      const taken = t.river.land.crossings.find((c) => c.at > passed && c.at <= depth && c.from === b.rail && c.to - c.from === b.railWish);
+      if (taken) {
+        b.railMove = { from: taken.from * RAIL_GAP, to: taken.to * RAIL_GAP, u: 0, length: RAIL_SWITCH_LENGTH };
+        b.rail = taken.to;
         this.sfx.play('clank', b.pos);
       }
     }

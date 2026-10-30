@@ -239,7 +239,10 @@ export class Race {
     b.morphing = morphing;
     const flying = !morphing && !!b.form && b.formP >= 1 && t.jetCruise(b.trackS);
     const railed = !morphing && !b.air && !!b.form && b.formP >= 1 && t.onRails(b.trackS);
-    if (!railed) b.rail = null;
+    if (!railed) {
+      b.rail = null;
+      b.railDepth = null;
+    }
     const steer = controllable && !morphing ? b.control.steer : 0;
     b.steerVis += (steer - b.steerVis) * (1 - Math.exp(-8 * dt));
     const speedFrac = clamp(b.speed / BASE_SPEED, 0, 1);

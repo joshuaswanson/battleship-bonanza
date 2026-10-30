@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { glow, mulberry32, toon } from './toon.js';
 import { mat, ROCK } from './world.js';
-import { RAIL_GAP, RAIL_SWITCH_EVERY, RAIL_SWITCH_LENGTH } from './race/shared.js';
+import { RAIL_GAP, RAIL_SWITCH_LENGTH } from './race/shared.js';
 
 const WHEEL_X = 2.2;
 const LANTERN_STEP = 26;
@@ -53,16 +53,13 @@ function buildRails(group, track) {
     }
   }
   const brace = [];
-  for (let node = Math.ceil((first - track.river.land.launch) / RAIL_SWITCH_EVERY); ; node++) {
-    const start = track.river.land.launch + node * RAIL_SWITCH_EVERY;
-    if (start + RAIL_SWITCH_LENGTH > last) break;
-    for (const [from, to] of [[-1, 0], [0, -1], [0, 1], [1, 0]]) {
-      for (let u = 0; u < 1; u += 0.018) {
-        const k = u * u * u * (u * (u * 6 - 15) + 10);
-        const lat = (from + (to - from) * k) * RAIL_GAP;
-        const s = start + u * RAIL_SWITCH_LENGTH;
-        for (const side of [-1, 1]) brace.push([s, lat + side * WHEEL_X, (to - from) * 30 * u * u * (1 - u) * (1 - u) * RAIL_GAP / RAIL_SWITCH_LENGTH]);
-      }
+  for (const { at, from, to } of track.river.land.crossings) {
+    const start = track.river.land.launch + at;
+    for (let u = 0; u < 1; u += 0.018) {
+      const k = u * u * u * (u * (u * 6 - 15) + 10);
+      const lat = (from + (to - from) * k) * RAIL_GAP;
+      const s = start + u * RAIL_SWITCH_LENGTH;
+      for (const side of [-1, 1]) brace.push([s, lat + side * WHEEL_X, (to - from) * 30 * u * u * (1 - u) * (1 - u) * RAIL_GAP / RAIL_SWITCH_LENGTH]);
     }
   }
   const dummy = new THREE.Object3D();
@@ -219,15 +216,11 @@ function dressMine(batch, trim, track, lanterns, rand) {
     const size = 0.5 + rand() * 0.9;
     batch.add('ore', ROCK, mat(f.x + f.nx * lat, f.y + 1 + rand() * 9, f.z + f.nz * lat, size, size, size, rand() * 3, rand() * 3, 0));
   }
-  for (let n = 1; ; n++) {
-    const s = track.river.land.launch + n * RAIL_SWITCH_EVERY - 22;
-    if (s < bars(track).first) continue;
-    if (s > last - 40) break;
-    const f = frameAt(track, s);
-    for (const lat of [-RAIL_GAP / 2, RAIL_GAP / 2]) {
-      localBox(batch, 'timberDark', f, lat, 1.6, 0, 0.3, 3.2, 0.3);
-      lantern(batch, trim, f, lat, 3.4);
-    }
+  for (const { at, from, to } of track.river.land.crossings) {
+    const f = frameAt(track, track.river.land.launch + at - 26);
+    const lat = (from + (to - from) * 0.5) * RAIL_GAP;
+    localBox(batch, 'timberDark', f, lat, 1.6, 0, 0.3, 3.2, 0.3);
+    lantern(batch, trim, f, lat, 3.4);
   }
 }
 

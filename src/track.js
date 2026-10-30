@@ -18,6 +18,8 @@ function smoothKeys(keys, f) {
 }
 
 const FORK_STEP = 4;
+const CROSSING_START = 300;
+const CROSSING_END = 190;
 const JET_SKIM = 26;
 const RAIL_START = 110;
 const MINE_START = 330;
@@ -25,6 +27,20 @@ const MINE_END = 90;
 const JET_EASE = 260;
 const STICK = 5;
 const INTENT = 14;
+
+function railCrossings(span) {
+  const pairs = [[-1, 0], [0, 1], [1, 0], [0, -1]];
+  let seed = 9173;
+  const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const list = [];
+  let bag = [];
+  for (let at = CROSSING_START + rand() * 40; at < span - CROSSING_END; at += 105 + rand() * 70) {
+    if (!bag.length) bag = [...pairs].sort(() => rand() - 0.5);
+    const [from, to] = bag.pop();
+    list.push({ at, from, to });
+  }
+  return list;
+}
 
 function relax(points, passes) {
   let pts = points.map((p) => p.clone());
@@ -331,6 +347,7 @@ export function createTrack(map) {
       const { from, to, height, kind = 'truck', dive = 6, ramp = 150, peak = 0 } = map.river.land;
       const lip = Math.abs(to * length - seam) < spacing * 2 ? seam : to * length;
       river.land = { launch: from * length, lip, span: lip - from * length, height, kind, dive, ramp, peak };
+      if (kind === 'cart') river.land.crossings = railCrossings(river.land.span);
     }
     if (map.river.fork) {
       const path = new THREE.CatmullRomCurve3(map.river.fork.map(([x, z]) => new THREE.Vector3(x, 0, z)), false, 'centripetal');
