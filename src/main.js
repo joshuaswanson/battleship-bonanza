@@ -125,6 +125,7 @@ const ARENA_BUILDERS = {
 };
 
 const TEAM_MODES = { ctf: CaptureTheFlag, cp: ControlPoints };
+const SHOW_TEAM_MODES = import.meta.env.DEV;
 const isArena = (key) => key.split(':')[0] in TEAM_MODES;
 const mapOf = (key) => (isArena(key) ? ARENAS[key.split(':')[1]] : MAPS[key]);
 
@@ -199,6 +200,7 @@ function loadSetup() {
   return { name: 'Sea Biscuit', color: PAINTS[0].value, items: ['machinegun', 'jetpack'] };
 }
 const setup = loadSetup();
+if (!SHOW_TEAM_MODES) setup.mode = 'race';
 const saveSetup = () => localStorage.setItem('bb-setup', JSON.stringify(setup));
 
 const shuffle = (xs) => {
@@ -412,6 +414,10 @@ function renderMaps() {
 function goModes() {
   if (!setup.items.every(Boolean)) return;
   if (session.role === 'guest') return goLobby();
+  if (!SHOW_TEAM_MODES) {
+    renderOnlineButton();
+    return goMaps();
+  }
   setup.mode ??= 'race';
   saveSetup();
   mode = 'modes';
@@ -544,7 +550,8 @@ $('btn-howto-close').addEventListener('click', () => {
 $('btn-back').addEventListener('click', () => wipe(goTitle));
 $('btn-start').addEventListener('click', () => wipe(goModes));
 $('btn-modes-back').addEventListener('click', () => wipe(goLoadout));
-$('btn-maps-back').addEventListener('click', () => wipe(goModes));
+$('btn-maps-back').addEventListener('click', () => wipe(SHOW_TEAM_MODES ? goModes : goLoadout));
+if (!SHOW_TEAM_MODES) document.querySelector('#screen-maps .maps-head').append($('btn-online'));
 $('btn-go').addEventListener('click', () => wipe(startRace));
 for (const art of document.querySelectorAll('[data-shot]')) art.style.backgroundImage = `url('${import.meta.env.BASE_URL}modes/${art.dataset.shot}.jpg')`;
 for (const card of document.querySelectorAll('.mode-card')) {
