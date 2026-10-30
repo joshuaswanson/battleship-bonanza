@@ -4,7 +4,7 @@ import { waveHeight } from '../../water.js';
 import { toon } from '../../toon.js';
 import { LASER_REACH, SAW_LEAK } from '../shared.js';
 
-const ICE_MELT = 0.5;
+const ICE_MELT = 0.2;
 const ICE_SHARDS = 34;
 const ICE_FLASH = 0.2;
 const ICE_SHARD = new THREE.OctahedronGeometry(1, 0).toNonIndexed();
@@ -101,7 +101,7 @@ export const methods = {
   updateIceChunks(dt) {
     for (const [tree, mark] of this.iceMarks) {
       if (this.time - tree.meltAt < 0.12) continue;
-      tree.melt -= dt * 0.6;
+      tree.melt -= dt * 0.15;
       mark.scale.multiplyScalar(Math.exp(-2 * dt));
       if (tree.melt <= 0) {
         tree.melt = 0;
