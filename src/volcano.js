@@ -1,34 +1,40 @@
 import * as THREE from 'three';
 import { toon, mulberry32 } from './toon.js';
 import { groundHit } from './terrain.js';
-import { Batcher, cullChunks, slicer, COLORS, mat, ROCK, SPHERE, trunkGeometry, createSky, createCloud, createArch, SUN_DIR } from './world.js';
+import { jungleClump } from './foliage.js';
+import { Batcher, cullChunks, slicer, COLORS, mat, ROCK, SPHERE, addPalm, trunkGeometry, createSky, createCloud, createArch, SUN_DIR } from './world.js';
 import { riverSurface, buildFalls } from './jungle.js';
 import { createWater } from './water.js';
 import { BASE_COLORS, buildBase } from './volcanoBase.js';
 import { groundMesh, noise, seaStrip, smooth } from './mapKit.js';
 
-const SKY = 0xa84e2c;
+const SKY = 0xbfe6f0;
 const RIM = 92;
 const PEAK = 236;
 const LAVA_Y = 208;
-const PLATEAU = 58;
-const CLIFF = 488;
+const PLATEAU = 34;
+const ISLAND = { x: 420, z: -20, rx: 830, rz: 1170 };
 const CANYON_HALF = 60;
-const CANYON_IN = 430;
+const CANYON_IN = 40;
 const CANYON_OUT = 720;
 const FIELD_CELL = 14;
-const WATER = { deep: 0x0d2f3a, shallow: 0x1d6668, foam: 0xa9c4c4 };
-const MIST = 0xc4e4ff;
+const WATER = { deep: 0x0f7fa8, shallow: 0x35d0d4 };
+const LAVA_START = 18;
+const LAVA_CARVE = 400;
+const LAVA_ENTRY = 9;
+const LAVA_FLOOR = 0.8;
+const BURN_CELL = 14;
+const DAY = { top: 0x2f86d8, horizon: SKY, hemiSky: 0xfff0e0, hemiGround: 0x5a6a50, hemi: 1.4, sun: 0xfff0dc, sunPower: 2.6 };
+const ASH = { top: 0x2b1c22, horizon: 0xa84e2c, hemiSky: 0xffd9c4, hemiGround: 0x4c2a26, hemi: 1.5, sun: 0xffb98c, sunPower: 2.4 };
 const BURNT_BARK = [new THREE.Color(0x151214), new THREE.Color(0x241d1e)];
 const PALETTE = {
   ...COLORS,
   ...BASE_COLORS,
-  basalt: 0x18161b,
-  basaltLight: 0x29272d,
-  ashCloud: 0x2a2629,
+  basalt: 0x25232a,
+  basaltLight: 0x3a373e,
+  ashCloud: 0x3c383c,
   ash: 0x7f7670,
-  concrete: 0x83858a,
-  concreteDark: 0x5c5e63,
+  concrete: 0xb6b8ba,
   steel: 0x6d7a88,
   steelDark: 0x2e3744,
   hazard: 0xffd23f,
@@ -37,6 +43,11 @@ const PALETTE = {
   villainDark: 0x7a1524,
   lamp: 0xfff0a0,
   screen: 0x46e0c0,
+  moss: 0x5e9e26,
+  mossDark: 0x3c7a1c,
+  bark: 0x7a5230,
+  fronds: 0x5e9e26,
+  coconut: 0x7a5230,
 };
 const SPIRE = new THREE.ConeGeometry(1, 1, 6, 4).translate(0, 0.5, 0).toNonIndexed();
 const spirePoints = SPIRE.attributes.position;
@@ -55,31 +66,32 @@ function islandHeight(x, z) {
   const cone = PEAK * Math.max(0, 1 - (r - RIM) / 400) ** 1.12 + lump;
   const crater = smooth(62, RIM, r);
   const volcano = LAVA_Y - 6 + (cone - (LAVA_Y - 6)) * crater;
-  const table = PLATEAU + 0.5 * lump;
   const sea = -16;
-  const angle = Math.atan2(z, x);
-  const south = Math.atan2(Math.sin(angle + Math.PI / 2), Math.cos(angle + Math.PI / 2));
-  const edge = CLIFF + 14 * Math.sin(angle * 7) * 0.4 + 190 * Math.exp(-((south / 0.6) ** 2));
-  return Math.max(volcano * (1 - smooth(edge + 2, edge + 12, r)) + sea * smooth(edge + 2, edge + 12, r), table + (sea - table) * smooth(edge, edge + 10, r));
+  const flank = volcano + (sea - volcano) * smooth(500, 570, r);
+  const angle = Math.atan2(z - ISLAND.z, x - ISLAND.x);
+  const reach = Math.hypot((x - ISLAND.x) / ISLAND.rx, (z - ISLAND.z) / ISLAND.rz) + 0.025 * Math.sin(angle * 7) + 0.012 * Math.sin(angle * 17);
+  const beach = 1.6 + 0.4 * lump * 0.1;
+  const table = PLATEAU + 0.5 * lump;
+  const inland = beach + (table - beach) * (1 - smooth(0.86, 0.97, reach));
+  return Math.max(flank, inland + (sea - inland) * smooth(1, 1.05, reach));
 }
 
 function groundHeight(surface, track, x, z) {
-  const { edge, s } = surface.sample(x, z);
   const base = openHeight(surface, track, x, z);
   const field = track.river.flight;
   if (!field) return base;
-  const ridge = canyonRidge(field, x, z);
-  if (ridge <= base) return base;
-  return base + (ridge - base) * (track.formAt(s) ? 1 : smooth(22, 75, edge));
+  const { edge, s } = surface.sample(x, z);
+  const weight = field.weight(x, z) * (track.formAt(s) ? 1 : smooth(22, 75, edge));
+  if (weight <= 0) return base;
+  const d = field.dist(x, z);
+  const rim = (28 + 36 * noise(x * 1.1, z * 1.1) + 14 * noise(x * 3, z * 3)) * (1 - smooth(200, 310, d));
+  const top = base + rim * weight;
+  return top + (-16 - top) * weight * (1 - smooth(CANYON_HALF + 40, CANYON_HALF + 88, d));
 }
 
 function openHeight(surface, track, x, z) {
   const { edge, s, level } = surface.sample(x, z);
-  const raw = shapedHeight(track, edge, s, level, x, z);
-  const past = track.ahead(track.river.land.launch, s);
-  if (past > 170) return raw;
-  const notch = smooth(1, 6, past) * (1 - smooth(12, 40, edge));
-  return raw + (-16 - raw) * notch;
+  return shapedHeight(track, edge, s, level, x, z);
 }
 
 const canyonFade = (s, start, end) => smooth(0, 260, s - start) * smooth(0, 300, end - s);
@@ -132,23 +144,16 @@ async function flightField(surface, track, tick) {
   return { dist: (x, z) => at(dist, x, z), weight: (x, z) => at(weight, x, z), start, end };
 }
 
-function canyonRidge(field, x, z) {
-  const d = field.dist(x, z);
-  const w = field.weight(x, z);
-  if (w <= 0 || d > 320) return -16;
-  const top = 86 + 36 * noise(x * 1.1, z * 1.1) + 14 * noise(x * 3, z * 3);
-  return -16 + (top + 16) * w * smooth(CANYON_HALF + 40, CANYON_HALF + 88, d) * (1 - smooth(200, 310, d));
-}
-
 function shapedHeight(track, edge, s, level, x, z) {
   const land = islandHeight(x, z);
   const free = track.formAt(s) ? track.landAmount(s) : 0;
-  if (free >= 1) return land + (Math.min(land, level - 10) - land) * (1 - smooth(4, 30, edge));
+  const floor = track.ahead(track.river.land.launch, s) < LAVA_CARVE ? -2 : level - 10;
+  if (free >= 1) return land + (Math.min(land, floor) - land) * (1 - smooth(4, 30, edge));
   const hw = track.halfWidth;
   const dist = edge + hw;
   const bank = smooth(hw - 6, hw + 8, dist);
   const levee = Math.max(land, level + 4 + 3 * noise(x, z));
-  const shoulder = levee + (land - levee) * smooth(hw + 14, hw + 90, dist);
+  const shoulder = levee + (land - levee) * smooth(hw + 14, hw + 170, dist);
   const carved = level - 5 + (shoulder - level + 5) * bank;
   return carved + (land - carved) * free;
 }
@@ -495,13 +500,63 @@ function fallSource(track, side, s, width, top, phase) {
 }
 
 function ashPlume(batch, rand) {
-  for (let k = 0; k < 46; k++) {
-    const t = k / 45;
-    const r = 12 + 40 * t * t + rand() * 9;
+  for (let k = 0; k < 54; k++) {
+    const t = k / 53;
+    const r = 15 + 62 * t * t + rand() * 11;
     const a = rand() * 6.3;
-    const spread = r * 0.55;
-    batch.add('ashCloud', SPHERE, mat(-96 * t * t + Math.cos(a) * spread, LAVA_Y + 24 + t * 290, 62 * t * t + Math.sin(a) * spread, r, r * (0.72 + rand() * 0.3), r));
+    const spread = r * 0.6;
+    batch.add('ashCloud', SPHERE, mat(-150 * t * t + Math.cos(a) * spread, LAVA_Y + 84 + t * 380, 90 * t * t + Math.sin(a) * spread, r, r * (0.72 + rand() * 0.3), r));
   }
+}
+
+function burnField(flows, bounds) {
+  const cols = Math.ceil((bounds.maxX - bounds.minX) / BURN_CELL) + 2;
+  const rows = Math.ceil((bounds.maxZ - bounds.minZ) / BURN_CELL) + 2;
+  const heat = new Float32Array(cols * rows);
+  for (const flow of flows) {
+    for (const { x, z, width } of flow) {
+      const reach = width + 34;
+      const span = Math.ceil(reach / BURN_CELL);
+      const c0 = Math.round((x - bounds.minX) / BURN_CELL);
+      const r0 = Math.round((z - bounds.minZ) / BURN_CELL);
+      for (let r = Math.max(0, r0 - span); r <= Math.min(rows - 1, r0 + span); r++) {
+        for (let c = Math.max(0, c0 - span); c <= Math.min(cols - 1, c0 + span); c++) {
+          const d = Math.hypot(bounds.minX + c * BURN_CELL - x, bounds.minZ + r * BURN_CELL - z);
+          heat[r * cols + c] = Math.max(heat[r * cols + c], 1 - smooth(width + 4, reach, d));
+        }
+      }
+    }
+  }
+  return (x, z) => {
+    const c = Math.round((x - bounds.minX) / BURN_CELL);
+    const r = Math.round((z - bounds.minZ) / BURN_CELL);
+    return c < 0 || r < 0 || c >= cols || r >= rows ? 0 : heat[r * cols + c];
+  };
+}
+
+function headStream(track) {
+  const { lip } = track.river.land;
+  const { end } = track.river.flight;
+  const points = [];
+  const top = lip - 232;
+  const bottom = end - 200;
+  for (let s = top; s >= bottom; s -= 3) {
+    const t = (top - s) / (top - bottom);
+    const p = track.point(track.wrap(Math.round(s / track.spacing)), 7 * Math.sin(t * 19));
+    points.push({ x: p.x, z: p.z, width: 8 + 34 * t + 2 * Math.sin(t * 27), along: t * 680 });
+  }
+  return points;
+}
+
+function fountain(material) {
+  const g = new THREE.CylinderGeometry(2, 15, 1, 14, 8, true).translate(0, 0.5, 0);
+  const uv = g.attributes.uv;
+  const flow = [];
+  for (let k = 0; k < uv.count; k++) flow.push(Math.sin(uv.getX(k) * 12.6), (1 - uv.getY(k)) * 90, smooth(0.45, 1, uv.getY(k)));
+  g.setAttribute('aFlow', new THREE.Float32BufferAttribute(flow, 3));
+  const mesh = new THREE.Mesh(g, material);
+  mesh.position.set(0, LAVA_Y - 2, 0);
+  return mesh;
 }
 
 function charredTree(batch, x, y, z, rand) {
@@ -537,7 +592,7 @@ function spires(batch, x, y, z, rand, scale) {
   }
 }
 
-async function buildCanyon(surface, batch, canyon, group, track, height, rand, tick, lavaFlow, steam) {
+async function buildCanyon(surface, batch, canyon, group, track, height, rand, tick, lavaFlow) {
   const { start, end } = track.river.flight;
   const dry = (p) => {
     const { edge, s } = surface.sample(p.x, p.z);
@@ -591,28 +646,25 @@ async function buildCanyon(surface, batch, canyon, group, track, height, rand, t
       }
     }
   }
-  for (const s of [start + 130, end - 130]) {
-    const i = track.wrap(Math.round(s / track.spacing));
-    for (let lat = -48; lat <= 48; lat += 12) steam.push({ ...track.point(i, lat), y: 0.8 });
-  }
 }
 
 function canyonLava(track, material) {
-  const { start, end } = track.river.flight;
+  const { end } = track.river.flight;
+  const { launch } = track.river.land;
   const across = 12;
   const pos = [];
   const flow = [];
   const index = [];
   let rows = 0;
-  for (let s = start; s <= end; s += 8) {
+  for (let s = launch + LAVA_START; s <= end; s += 8) {
     const i = track.wrap(Math.round(s / track.spacing));
-    const cool = FLOOR_COOL + (1 - FLOOR_COOL) * (1 - smooth(0.1, 0.45, canyonFade(s, start, end)));
+    const y = LAVA_ENTRY + (LAVA_FLOOR - LAVA_ENTRY) * smooth(40, 320, s - launch);
     for (let c = 0; c <= across; c++) {
       const u = (c / across) * 2 - 1;
       const lat = u * (cliffOut(s, Math.sign(u) || 1, 1) + 14);
       const p = track.point(i, lat);
-      pos.push(p.x, 0.8, p.z);
-      flow.push(lat / 24, s - start, cool);
+      pos.push(p.x, y, p.z);
+      flow.push(lat / 24, s - launch, FLOOR_COOL);
     }
     rows++;
   }
@@ -629,13 +681,18 @@ function canyonLava(track, material) {
   return new THREE.Mesh(g, material);
 }
 
-function cliffRocks(batch, track, s, rand) {
-  for (let k = 0; k < 26; k++) {
-    const i = track.wrap(Math.round((s - 12 + rand() * 22) / track.spacing));
-    const side = k % 2 ? 1 : -1;
-    const p = track.point(i, side * (track.hw[i] + 2 + rand() * 12));
-    const r = 3 + rand() * 6;
-    batch.add(k % 3 ? 'basalt' : 'basaltLight', ROCK, mat(p.x, track.baseLevel(s - 6) + r * 0.3, p.z, r, r * 1.2, r, rand(), rand() * 6, rand()));
+function lavaFront(batch, track, rand, steam) {
+  const { launch } = track.river.land;
+  const i = track.wrap(Math.round((launch + 20) / track.spacing));
+  const hw = track.hw[i] + 26;
+  for (let lat = -hw; lat <= hw; lat += 12) steam.push({ ...track.point(i, lat), y: track.baseLevel(launch) + 0.4 });
+  for (let k = 0; k < 90; k++) {
+    const d = 16 + rand() * 44;
+    const j = track.wrap(Math.round((launch + d) / track.spacing));
+    const p = track.point(j, (rand() * 2 - 1) * (track.hw[j] + 30));
+    const r = 3 + rand() * 4;
+    const top = LAVA_ENTRY + 1 + 3 * Math.sin(k * 2.3);
+    batch.add(k % 3 ? 'basalt' : 'basaltLight', ROCK, mat(p.x, top - r * 0.5, p.z, r * 1.5, r * 0.8, r * 1.5, rand(), rand() * 6, rand()));
   }
 }
 
@@ -661,33 +718,83 @@ function buildSource(batch, group, track, rand) {
 
 export async function createVolcano(group, track, fx) {
   const tick = slicer();
-  const fog = new THREE.Fog(SKY, 280, 1400);
-  const sky = createSky({ top: 0x2b1c22, horizon: SKY });
+  const fog = new THREE.Fog(SKY, 300, 1500);
+  const sky = createSky({ top: DAY.top, horizon: DAY.horizon });
   group.add(sky);
-  group.add(new THREE.HemisphereLight(0xffd9c4, 0x4c2a26, 1.5));
-  const sun = new THREE.DirectionalLight(0xffb98c, 2.4);
+  const hemi = new THREE.HemisphereLight(DAY.hemiSky, DAY.hemiGround, DAY.hemi);
+  group.add(hemi);
+  const sun = new THREE.DirectionalLight(DAY.sun, DAY.sunPower);
   sun.position.copy(SUN_DIR).multiplyScalar(100);
   group.add(sun);
+  const paintLight = (g) => {
+    const blend = (key, target) => target.set(DAY[key]).lerp(colorOf[key], g);
+    blend('top', sky.material.uniforms.uTop.value);
+    blend('horizon', sky.material.uniforms.uHorizon.value);
+    fog.color.copy(sky.material.uniforms.uHorizon.value);
+    blend('hemiSky', hemi.color);
+    blend('hemiGround', hemi.groundColor);
+    blend('sun', sun.color);
+    hemi.intensity = DAY.hemi + (ASH.hemi - DAY.hemi) * g;
+    sun.intensity = DAY.sunPower + (ASH.sunPower - DAY.sunPower) * g;
+  };
+  const colorOf = Object.fromEntries(['top', 'horizon', 'hemiSky', 'hemiGround', 'sun'].map((key) => [key, new THREE.Color(ASH[key])]));
 
   const surface = await riverSurface(track, tick);
   track.river.flight = await flightField(surface, track, tick);
   const height = (x, z) => groundHeight(surface, track, x, z);
-  const sand = new THREE.Color(0x1d1b1f);
+  const { launch, lip } = track.river.land;
+  const bounds = {
+    minX: Math.min(surface.bounds.minX, -640),
+    maxX: Math.max(surface.bounds.maxX, ISLAND.x + ISLAND.rx * 1.08),
+    minZ: Math.min(surface.bounds.minZ, ISLAND.z - ISLAND.rz * 1.08),
+    maxZ: Math.max(surface.bounds.maxZ, ISLAND.z + ISLAND.rz * 1.08),
+  };
+
+  const batch = new Batcher();
+  const rand = mulberry32(6660);
+  const blobs = [];
+  const steam = [];
+  lavaFront(batch, track, rand, steam);
+  const source = buildSource(batch, group, track, rand);
+  const trim = new Batcher();
+  const canyon = new Batcher();
+  const occupied = buildBase(batch, trim, track, height, launch);
+  const reachesRiver = (x, z, margin) => {
+    const { edge, s } = surface.sample(x, z);
+    return edge < margin && !track.formAt(s);
+  };
+  const flows = [headStream(track)];
+  for (const a of [0.5, 1.15, 1.9, 2.5, 3.2, 5.7, 6.05]) flows.push(streamPoints(a, (x, z) => reachesRiver(x, z, 2) || occupied(x, z)));
+  for (let s = 160; s < launch - 200; s += 190 + rand() * 170) {
+    const clearOfDrops = track.river.drops.every((d) => Math.abs(d.s - s) > 70);
+    const clearOfBridges = [0.31, 0.66].every((u) => Math.abs(u * launch - s) > 60);
+    if (!clearOfDrops || !clearOfBridges) continue;
+    const points = bankPoints(track, s, rand() < 0.5 ? -1 : 1, rand() * 6.3, occupied);
+    if (points) flows.push(points);
+  }
+  await tick();
+  const burnt = burnField(flows, bounds);
+  const scorched = (x, z) => Math.max(burnt(x, z), 1 - smooth(CANYON_HALF + 110, CANYON_HALF + 190, track.river.flight.dist(x, z) + (1 - track.river.flight.weight(x, z)) * 200));
+
+  const sand = new THREE.Color(0x2c2a2e);
+  const mossy = new THREE.Color(0x3c7a1c);
+  const grass = new THREE.Color(0x5e9e26);
   const dark = new THREE.Color(PALETTE.basalt);
   const pale = new THREE.Color(PALETTE.basaltLight);
-  const cinder = new THREE.Color(0x3a1c18);
   const ember = new THREE.Color(0xb8340f);
-  group.add(await groundMesh(surface, height, (x, y, z, n, out) => {
+  group.add(await groundMesh({ bounds }, height, (x, y, z, n, out) => {
     const r = Math.hypot(x, z);
-    if (y < 3) out.copy(sand);
+    const steep = 1 - n.y;
+    if (y < 3.6) out.copy(sand);
+    else if (steep > 0.4) out.copy(noise(x * 2, z * 2) > 0.5 ? dark : pale);
+    else if (y < 100 && r > 240) out.copy(grass).lerp(mossy, noise(x * 3, z * 3) > 0.55 ? 0.6 : 0);
     else out.copy(noise(x * 2, z * 2) > 0.52 ? dark : pale);
-    if (y >= 3 && n.y > 0.7) out.lerp(cinder, 0.7 * smooth(0.56, 0.7, noise(x * 0.8 + 9, z * 0.8)));
+    if (y >= 3.6) out.lerp(noise(x * 2, z * 2) > 0.5 ? dark : pale, smooth(0.15, 0.6, scorched(x, z) + 0.3 * (noise(x * 4, z * 4) - 0.5)));
     if (r > 66 && r < 108) out.lerp(ember, (1 - smooth(80, 108, r)) * 0.6);
   }, tick, 6));
   await tick();
 
-  const { launch, lip } = track.river.land;
-  const water = seaStrip(track, Math.round((lip - 2) / track.spacing), Math.round((launch + 2) / track.spacing) + track.N, WATER);
+  const water = seaStrip(track, Math.round((lip - 2) / track.spacing), Math.round((launch + LAVA_START + 8) / track.spacing) + track.N, WATER);
   group.add(water.mesh);
   const ocean = createWater({ size: 2600, segments: 180, amp: 0.45, ...WATER });
   ocean.mesh.position.y = 0;
@@ -695,11 +802,6 @@ export async function createVolcano(group, track, fx) {
 
   const rapids = track.river.drops.map((drop) => buildFalls(track, drop));
   for (const f of rapids) group.add(f.mesh);
-  const edgeLevel = track.baseLevel(launch - 2);
-  const bigFalls = buildFalls({ ...track, level: () => 0, halfWidth: track.halfWidth + 22 }, { s: launch, height: edgeLevel });
-  bigFalls.material.side = THREE.DoubleSide;
-  group.add(bigFalls.mesh);
-  rapids.push(bigFalls);
 
   const lavaMat = new THREE.ShaderMaterial({ uniforms: { uTime: { value: 0 }, uStream: { value: 0 } }, vertexShader: LAVA_VERT, fragmentShader: LAVA_FRAG });
   const streamMat = lavaMat.clone();
@@ -707,49 +809,31 @@ export async function createVolcano(group, track, fx) {
   streamMat.transparent = true;
   streamMat.uniforms.uStream.value = 1;
   group.add(disc(0, 0, 90, LAVA_Y - 1, lavaMat));
-
-  const batch = new Batcher();
-  const rand = mulberry32(6660);
-  const blobs = [];
-  cliffRocks(batch, track, launch, rand);
-  const source = buildSource(batch, group, track, rand);
-  const trim = new Batcher();
-  const canyon = new Batcher();
-  const occupied = buildBase(batch, trim, track, height, launch);
-  ashPlume(batch, rand);
-  const steam = [];
-  const reachesRiver = (x, z, margin) => {
-    const { edge, s } = surface.sample(x, z);
-    return edge < margin && !track.formAt(s);
-  };
-  const addFlow = (points) => {
+  const spout = fountain(streamMat);
+  group.add(spout);
+  for (const points of flows) {
     group.add(new THREE.Mesh(lavaRibbon(points, height), streamMat));
     const { x, z } = points[points.length - 1];
     if (reachesRiver(x, z, 8)) steam.push({ x, y: surface.sample(x, z).level + 0.4, z });
-  };
-  for (const a of [0.5, 1.15, 1.9, 2.5, 3.2, 5.7, 6.05]) {
-    addFlow(streamPoints(a, (x, z) => reachesRiver(x, z, 2) || occupied(x, z)));
     await tick();
   }
-  for (let s = 160; s < launch - 200; s += 190 + rand() * 170) {
-    const clearOfDrops = track.river.drops.every((d) => Math.abs(d.s - s) > 70);
-    const clearOfBridges = [0.31, 0.66].every((u) => Math.abs(u * launch - s) > 60);
-    if (!clearOfDrops || !clearOfBridges) continue;
-    const points = bankPoints(track, s, rand() < 0.5 ? -1 : 1, rand() * 6.3, occupied);
-    if (points) addFlow(points);
-    await tick();
-  }
-  for (let k = 0; k < 300; k++) {
+  ashPlume(batch, rand);
+
+  const lush = (x, z, y) => surface.sample(x, z).edge >= 18 && !occupied(x, z) && scorched(x, z) < 0.12 && y > 2.2 && y < 110;
+  for (let k = 0; k < 900; k++) {
+    const nearRiver = k % 2 === 0;
     const a = rand() * 6.3;
-    const r = 240 + rand() * 240;
-    const x = Math.cos(a) * r;
-    const z = Math.sin(a) * r;
-    const near = surface.sample(x, z);
-    if (near.edge < 34 || occupied(x, z)) continue;
-    const y = height(x, z);
-    if (y < PLATEAU - 8 || y > 130) continue;
-    if (k % 3) charredTree(batch, x, y - 0.4, z, rand);
-    else spires(batch, x, y, z, rand, 0.7 + rand() * 0.8);
+    const u = Math.sqrt(rand());
+    const spot = nearRiver
+      ? track.point(track.wrap(Math.round((rand() * launch) / track.spacing)), (rand() < 0.5 ? -1 : 1) * (50 + rand() * 170))
+      : { x: ISLAND.x + Math.cos(a) * u * ISLAND.rx, z: ISLAND.z + Math.sin(a) * u * ISLAND.rz };
+    const y = height(spot.x, spot.z);
+    if (lush(spot.x, spot.z, y)) {
+      if (k % 4 === 3) jungleClump(batch, spot.x, y - 0.3, spot.z, rand, 3.5 + rand() * 3);
+      else addPalm(batch, spot.x, y - 0.4, spot.z, rand, { height: 7 + rand() * 7, lean: rand() * 0.4, dir: rand() * 6.3 });
+    } else if (k % 3 === 0 && burnt(spot.x, spot.z) > 0.12 && y > 4 && surface.sample(spot.x, spot.z).edge >= 34 && !occupied(spot.x, spot.z)) {
+      charredTree(batch, spot.x, y - 0.4, spot.z, rand);
+    }
     if (k % 30 === 0) await tick();
   }
   for (let k = 0; k < 120; k++) {
@@ -771,7 +855,7 @@ export async function createVolcano(group, track, fx) {
     batch.add('basalt', ROCK, mat(p.x, level + 0.5, p.z, r, r * 0.9, r, rand(), rand() * 6, rand()));
     blobs.push({ x: p.x, z: p.z, rx: r * 0.9, rz: r * 0.9, rot: 0, top: level + r * 0.6, launch: true });
   }
-  await buildCanyon(surface, batch, canyon, group, track, height, rand, tick, streamMat, steam);
+  await buildCanyon(surface, batch, canyon, group, track, height, rand, tick, streamMat);
   group.add(canyonLava(track, streamMat));
   const scenery = new THREE.Group();
   const chunks = await batch.buildAsync(scenery, 0.1, PALETTE, 120, tick);
@@ -782,22 +866,23 @@ export async function createVolcano(group, track, fx) {
 
   const clouds = [];
   for (let i = 0; i < 10; i++) {
-    const cloud = createCloud(rand, 0x3b3034);
-    cloud.scale.set(3.4, 1.5, 3.4);
+    const cloud = createCloud(rand);
     const a = rand() * Math.PI * 2;
-    const d = 300 + rand() * 500;
-    cloud.position.set(Math.cos(a) * d, 330 + rand() * 90, Math.sin(a) * d);
+    const d = 300 + rand() * 700;
+    cloud.position.set(ISLAND.x + Math.cos(a) * d, 330 + rand() * 90, ISLAND.z + Math.sin(a) * d);
     clouds.push(cloud);
     group.add(cloud);
   }
 
+  let gloom = 0;
+  let lava = 0;
   return {
     fog,
     water,
     sun,
     surface,
     shores: blobs,
-    spray: { foam: MIST, tint: 0xa8d0f4, wake: MIST, glow: 0x1c1a1c },
+    spray: { foam: 0xffffff, tint: 0xbff6ff, wake: 0xe7f9ff, glow: 0x1c1a1c },
     solid(p) {
       return groundHit(height, p);
     },
@@ -810,9 +895,9 @@ export async function createVolcano(group, track, fx) {
       lavaMat.uniforms.uTime.value = t;
       for (const v of steam) {
         if (Math.random() > dt * 9 || Math.hypot(v.x - camera.position.x, v.z - camera.position.z) > 320) continue;
-        fx.puffs.emit(v.x + (Math.random() - 0.5) * 8, v.y, v.z + (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 3, 5 + Math.random() * 7, (Math.random() - 0.5) * 3, 0.9 + Math.random() * 1.4, 1.5, MIST, -0.6, 0.4, 0);
+        fx.puffs.emit(v.x + (Math.random() - 0.5) * 8, v.y, v.z + (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 3, 5 + Math.random() * 7, (Math.random() - 0.5) * 3, 1.4 + Math.random() * 2, 1.6, 0xffffff, -0.6, 0.4, 0);
       }
-      for (let k = Math.floor(dt * 34 + Math.random()); k > 0; k--) {
+      for (let k = Math.floor(dt * 34 * gloom + Math.random()); k > 0; k--) {
         const a = Math.random() * 6.3;
         const r = 14 + Math.random() * 70;
         const up = -12 + Math.random() * 44;
@@ -822,26 +907,29 @@ export async function createVolcano(group, track, fx) {
       streamMat.uniforms.uTime.value = t;
       cullChunks(chunks, camera, fog.far);
       sky.position.copy(camera.position);
+      const here = surface.sample(camera.position.x, camera.position.z);
+      const { start, end } = track.river.flight;
+      const inCanyon = canyonFade(here.s, start, end) * (1 - smooth(70, 220, here.edge));
+      gloom += (inCanyon - gloom) * (1 - Math.exp(-1.6 * dt));
+      if (Math.abs(inCanyon - lava) > 0.002 || Math.abs(gloom - lava) > 0.002) {
+        lava = gloom;
+        paintLight(gloom);
+      }
+      spout.scale.set(1 + 0.12 * Math.sin(t * 7), 62 + 26 * Math.sin(t * 1.7) + 12 * Math.sin(t * 4.3), 1 + 0.12 * Math.cos(t * 6));
       if (Math.random() < dt * 60) {
         const a = Math.random() * 6.3;
         const r = 12 + Math.random() * 22;
-        fx.puffs.emit(source.cave.x + Math.cos(a) * r, source.y + 2, source.cave.z + Math.sin(a) * r, (Math.random() - 0.5) * 6, 24 + Math.random() * 30, (Math.random() - 0.5) * 6, 2 + Math.random() * 3, 3, MIST, 8, 0.2, 0);
+        fx.puffs.emit(source.cave.x + Math.cos(a) * r, source.y + 2, source.cave.z + Math.sin(a) * r, (Math.random() - 0.5) * 6, 24 + Math.random() * 30, (Math.random() - 0.5) * 6, 2 + Math.random() * 3, 3, 0xffffff, 8, 0.2, 0);
       }
-      if (Math.random() < dt * 40) {
-        const p = bigFalls.base;
-        const lat = (Math.random() - 0.5) * 2 * (p.hw + 24);
-        fx.puffs.emit(p.x + p.nx * lat, 2, p.z + p.nz * lat, (Math.random() - 0.5) * 8, 7 + Math.random() * 12, (Math.random() - 0.5) * 8, 1.1 + Math.random() * 1.5, 1.4, MIST, 2, 0.4, 0);
-      }
-      if (Math.random() < dt * 34) {
+      if (Math.random() < dt * 24) {
         const a = Math.random() * 6.3;
         const r = Math.random() * 46;
-        fx.puffs.emit(Math.cos(a) * r, LAVA_Y + 4, Math.sin(a) * r, (Math.random() - 0.5) * 3, 22 + Math.random() * 12, (Math.random() - 0.5) * 3, 3 + Math.random() * 3, 4.5, Math.random() < 0.2 ? 0xff7a1f : 0x2c2729, -1, 0.3, 0);
+        fx.puffs.emit(Math.cos(a) * r, LAVA_Y + 4, Math.sin(a) * r, (Math.random() - 0.5) * 3, 30 + Math.random() * 16, (Math.random() - 0.5) * 3, 2.5 + Math.random() * 3, 4, Math.random() < 0.2 ? 0xff7a1f : 0x3a3538, -1, 0.3, 0);
       }
-      if (Math.random() < dt * 26) {
+      for (let k = Math.floor(dt * 70 + Math.random()); k > 0; k--) {
         const a = Math.random() * 6.3;
-        const r = 8 + Math.random() * 46;
-        const up = 26 + Math.random() * 46;
-        fx.puffs.emit(Math.cos(a) * r, LAVA_Y, Math.sin(a) * r, Math.cos(a) * 9 + (Math.random() - 0.5) * 8, up, Math.sin(a) * 9 + (Math.random() - 0.5) * 8, 0.7 + Math.random() * 1.4, 2.6, Math.random() < 0.5 ? 0xffb02e : 0xff5a1f, 26, 0, 0);
+        const spread = 10 + Math.random() * 34;
+        fx.puffs.emit(Math.cos(a) * 12, LAVA_Y + 8, Math.sin(a) * 12, Math.cos(a) * spread, 60 + Math.random() * 62, Math.sin(a) * spread, 1 + Math.random() * 2.4, 4.6, Math.random() < 0.5 ? 0xffb02e : 0xff5a1f, 34, 0, 0);
       }
     },
   };
