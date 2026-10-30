@@ -266,6 +266,7 @@ export class Race {
     b.pos.x += b.vel.x * dt;
     b.pos.z += b.vel.z * dt;
     if (railed) this.rideRail(b, dt, steer);
+    if (b.air?.lift) this.driftToCable(b, dt);
 
     if (b.air?.fall) {
       b.air.vy -= FALL_GRAVITY * dt;

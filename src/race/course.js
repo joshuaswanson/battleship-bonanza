@@ -9,6 +9,7 @@ const SURFACE_FLIGHT = 2;
 const SURFACE_PEAK = 17;
 const LIP_POP = 20;
 const LIP_SPEED = 0.75;
+const LIFT_DRIFT = 1.6;
 const JET_PEAK = 16;
 const HOLD_LOOK = 34;
 const HOLD_CENTER = 0.85;
@@ -80,6 +81,15 @@ export const methods = {
     this.sfx.play('clank', b.pos);
     this.sfx.play('transform', b.pos);
     if (b.isPlayer) this.emit('ramp', {}, b);
+  },
+
+  driftToCable(b, dt) {
+    const t = this.track;
+    const i = t.norm(b.trackIdx);
+    const lateral = (b.pos.x - t.px[i]) * t.nx[i] + (b.pos.z - t.pz[i]) * t.nz[i];
+    const shift = (b.air.lane - lateral) * (1 - Math.exp(-LIFT_DRIFT * dt));
+    b.pos.x += t.nx[i] * shift;
+    b.pos.z += t.nz[i] * shift;
   },
 
   submerged(b) {

@@ -7,6 +7,8 @@ const SPEC = { key: 'ski', hatch: false, jaws: false };
 export const SKI_RIDE = 1.5;
 const RUNNER_X = 2.7;
 const ARM_DROP = 0.86;
+const POLE_BASE = 1;
+const POLE_SECTIONS = 3;
 
 function runner() {
   const points = [[0, -0.1, -5], [0, -0.2, -2], [0, -0.2, 2], [0, -0.1, 3.8], [0, 0.35, 5], [0, 1, 5.6]].map(([x, y, z]) => new THREE.Vector3(x, y, z));
@@ -34,8 +36,8 @@ function buildParts() {
     rim: merge([new THREE.TorusGeometry(1.5, 0.11, 6, 22, Math.PI).translate(0, 0.42, 0.7), new THREE.TorusGeometry(1.5, 0.11, 6, 22, Math.PI).translate(0, 0.42, -0.72)]),
     bar: merge([tube(0.09, 1.7, 0, 0.85, 0), tube(0.09, 1.1, 0, 1.7, 0.5).rotateX(Math.PI / 2).translate(0, 1.2, 1.2)]),
     fin: merge([box(0.16, 1.5, 1.6, 0, 0.75, 0)]),
-    rod: merge([tube(0.13, LIFT_HANG - 1.6, 0, (LIFT_HANG - 1.6) / 2, 0)]),
-    grip: merge([box(1.2, 0.9, 2.2, 0, 0, 0)]),
+    poleSections: [0.27, 0.2, 0.13].map((r) => merge([tube(r, 1, 0, 0.5, 0)])),
+    poleHead: merge([box(1.1, 0.7, 2.4, 0, 0.3, 0), tube(0.34, 0.5, 0, 0.7, -0.7), tube(0.34, 0.5, 0, 0.7, 0.7)]),
     roundel: merge([new THREE.CircleGeometry(0.62, 18).rotateX(-1.08).translate(0, 1.42, 2.72)]),
   };
 }
@@ -71,18 +73,29 @@ export class SkiForm extends HullForm {
       return { bar, side };
     });
     this.hanger = new THREE.Group();
-    this.hanger.position.set(0, 1.2, 0);
-    add(P.rod, S.metal, 0.02, this.hanger);
-    const grip = add(P.grip, S.dark, 0.03, this.hanger);
-    grip.position.y = LIFT_HANG - 1.6;
+    this.hanger.position.set(0, POLE_BASE, -0.1);
+    this.poleSections = P.poleSections.map((g, k) => add(g, k ? S.metal : S.dark, 0.02, this.hanger));
+    this.poleHead = add(P.poleHead, S.dark, 0.03, this.hanger);
     this.hanger.visible = false;
     rig.add(this.hanger);
     this.fin = add(P.fin, paint, 0.03);
     this.fin.position.set(0, 0.9, -3.4);
   }
 
-  hang(on) {
-    this.hanger.visible = on;
+  hang(amount, offset, roll) {
+    this.hanger.visible = amount > 0.01;
+    if (!this.hanger.visible) return;
+    const rise = LIFT_HANG - 0.35 - this.ride - POLE_BASE;
+    const angle = Math.atan2(offset, rise);
+    const length = Math.hypot(offset, rise) * amount;
+    this.hanger.rotation.z = -angle - roll;
+    this.poleSections.forEach((section, k) => {
+      section.position.y = (length * k) / POLE_SECTIONS;
+      section.scale.y = Math.max(0.001, length / POLE_SECTIONS);
+    });
+    this.poleHead.position.y = length;
+    this.poleHead.rotation.z = angle + roll;
+    this.poleHead.scale.setScalar(Math.max(0.001, Math.min(1, amount * 2.5)));
   }
 
   carve(lean, slide) {

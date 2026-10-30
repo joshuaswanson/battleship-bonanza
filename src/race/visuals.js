@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { updateMissileTips, updateMineHolder, stepFire, HULL_L } from '../boatModel.js';
 import { waveHeight, isWater } from '../water.js';
+import { LIFT_HANG } from '../track.js';
 import { BASE_SPEED, KO_TIME, approach, clamp, wrapAngle } from './shared.js';
 
 const FORM_IN = 2.6;
@@ -15,6 +16,11 @@ const SKI_SLIDE = 0.2;
 const SKI_MAX_LEAN = 0.2;
 const SKI_LIFT = 1.2;
 const SKI_EASE = 6;
+const POLE_OUT = 0.3;
+const POLE_IN = 0.4;
+const POLE_SWAY = 0.035;
+const POLE_LEAN = 0.8;
+const POLE_MAX_LEAN = 0.36;
 
 export const methods = {
   updateVisual(b, dt) {
@@ -123,7 +129,17 @@ export const methods = {
       body.position.y += b.form.ride;
       if (track.formKind(s) === 'jet' && b.formP >= 1) this.bankJet(b, dt);
     }
-    b.form.hang?.(!!b.air?.lift);
+    if (b.form.hang) {
+      const lift = b.air?.lift;
+      b.liftHook = approach(b.liftHook ?? 0, lift ? 1 : 0, dt / (lift ? POLE_OUT : POLE_IN));
+      if (lift) {
+        const i = track.norm(b.trackIdx);
+        b.liftOffset = b.air.lane - ((b.pos.x - track.px[i]) * track.nx[i] + (b.pos.z - track.pz[i]) * track.nz[i]);
+        const reach = clamp(Math.atan2(b.liftOffset, LIFT_HANG) * POLE_LEAN, -POLE_MAX_LEAN, POLE_MAX_LEAN);
+        if (b.alive) body.rotation.z = -reach + POLE_SWAY * Math.sin(this.time * 2.1 + b.index);
+      }
+      b.form.hang(b.liftHook, b.liftOffset ?? 0, body.rotation.z);
+    }
     if (track.onSnow(s) && b.formP >= 1 && !b.air) this.carve(b, dt);
     else if (b.skiSlide) {
       b.skiSlide *= Math.exp(-SKI_EASE * dt);
