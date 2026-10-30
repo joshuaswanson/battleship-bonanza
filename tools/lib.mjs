@@ -1,6 +1,6 @@
 import puppeteer from 'puppeteer-core';
 
-export const URL = process.env.BB_URL ?? 'http://localhost:5288/';
+export const URL = process.env.BB_URL ?? 'http://localhost:5288/?all';
 export const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const CHROME = process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';

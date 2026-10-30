@@ -125,8 +125,8 @@ const ARENA_BUILDERS = {
 };
 
 const TEAM_MODES = { ctf: CaptureTheFlag, cp: ControlPoints };
-const SHOW_TEAM_MODES = import.meta.env.DEV;
-const HIDDEN_MAPS = import.meta.env.DEV ? [] : ['tuebingen'];
+const SHOW_TEAM_MODES = import.meta.env.DEV && new URLSearchParams(location.search).has('all');
+const HIDDEN_MAPS = SHOW_TEAM_MODES ? [] : ['tuebingen'];
 const isArena = (key) => key.split(':')[0] in TEAM_MODES;
 const mapOf = (key) => (isArena(key) ? ARENAS[key.split(':')[1]] : MAPS[key]);
 
