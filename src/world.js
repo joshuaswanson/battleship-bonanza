@@ -956,6 +956,7 @@ function pillarGeometry(radius, height, rand, notch = null) {
     topRadius: capRadius * 0.95,
     footprint: radius * 1.14 * Math.max(...radial) * Math.max(stretch, 1 / stretch),
     ledge: tiered ? { y: ledge * span - 2, inner: radius * shrink, outer: radius * 0.96 * Math.min(...radial) } : null,
+    rim: plain,
     spout,
   };
 }
@@ -991,6 +992,37 @@ function plantTop(batch, x, y, z, radius, rand, density = 1) {
   }
 }
 
+function drapePillar(batch, x, z, pillar, plants) {
+  const rand = mulberry32(Math.round(x * 131 + z * 977));
+  const spots = Math.floor(rand() * 3.4 * plants);
+  const drop = pillar.ledge ? pillar.top.y - pillar.ledge.y - 1 : pillar.top.y - 3;
+  for (let n = 0; n < spots; n++) {
+    const [vx, vy, vz] = pillar.rim[Math.floor(rand() * pillar.rim.length)];
+    const len = Math.hypot(vx, vz);
+    const ox = vx / len;
+    const oz = vz / len;
+    const px = x + vx;
+    const pz = z + vz;
+    const size = 2 + rand() * 1.4;
+    const steps = 2 + Math.floor(rand() * 3);
+    let y = vy - size * 0.5;
+    let s = size;
+    let side = 0;
+    for (let k = 0; k < steps && vy - y < drop; k++) {
+      const out = s * 0.5 + k * 0.3;
+      jungleClump(batch, px + ox * out - oz * side, y, pz + oz * out + ox * side, rand, s);
+      y -= s * 1.15;
+      s *= 0.82;
+      side += (rand() - 0.5) * s * 1.4;
+    }
+    const vines = 1 + Math.floor(rand() * 3);
+    for (let k = 0; k < vines; k++) {
+      const offset = (rand() - 0.5) * size * 1.6;
+      hangVine(batch, px + ox * 0.5 - oz * offset, vy - 0.8, pz + oz * 0.5 + ox * offset, ox, oz, Math.min(drop, 4 + rand() * 9), rand, 0, 1.1);
+    }
+  }
+}
+
 function addPillar(batch, x, z, rand, { radius, height, plants = 1 }) {
   const tape = [];
   const pillar = pillarGeometry(radius, height, () => {
@@ -1007,7 +1039,10 @@ function addPillar(batch, x, z, rand, { radius, height, plants = 1 }) {
   };
   batch.add('foam', RING, mat(x, 0.2, z, pillar.footprint * 1.05, 6, pillar.footprint * 1.05));
   const top = pillar.top.clone().add(new THREE.Vector3(x, 0, z));
-  if (plants) plantTop(batch, top.x, top.y, top.z, pillar.topRadius, rand, plants);
+  if (plants) {
+    plantTop(batch, top.x, top.y, top.z, pillar.topRadius, rand, plants);
+    drapePillar(batch, x, z, pillar, plants);
+  }
   if (plants && pillar.ledge) {
     const { y, inner, outer } = pillar.ledge;
     for (let k = 0; k < 3; k++) {
@@ -1149,41 +1184,90 @@ function addFarIslands(batch, rand) {
 }
 
 function archGeometry(span, height, thick, rand) {
-  const tilt = (rand() - 0.5) * 8;
-  const sag = 2 + rand() * 4;
-  const pts = [
-    new THREE.Vector3(-span * 1.08, height - tilt + 2, (rand() - 0.5) * 4),
-    new THREE.Vector3(-span * 0.55, height - tilt * 0.5 - sag * 0.5 + (rand() - 0.5) * 3, (rand() - 0.5) * 5),
-    new THREE.Vector3(0, height - sag + (rand() - 0.5) * 2, (rand() - 0.5) * 6),
-    new THREE.Vector3(span * 0.55, height + tilt * 0.5 - sag * 0.5 + (rand() - 0.5) * 3, (rand() - 0.5) * 5),
-    new THREE.Vector3(span * 1.08, height + tilt + 2, (rand() - 0.5) * 4),
-  ];
-  const curve = new THREE.CatmullRomCurve3(pts);
-  const segments = 60;
-  const radial = 12;
-  const tube = new THREE.TubeGeometry(curve, segments, 1, radial, false);
-  const pos = tube.attributes.position;
-  const lumps = Array.from({ length: 5 }, () => ({ f: 3 + rand() * 9, k: 1 + Math.floor(rand() * 4), p: rand() * 6, a: 0.08 + rand() * 0.14 }));
-  for (let i = 0; i <= segments; i++) {
-    const t = i / segments;
-    const c = curve.getPointAt(t);
-    const along = Math.abs(t - 0.5) * 2;
-    const r = thick * (0.85 + 0.5 * along ** 2 + 0.25 * Math.sin(t * 9 + lumps[0].p));
-    for (let j = 0; j <= radial; j++) {
-      const k = i * (radial + 1) + j;
-      const a = (j / radial) * Math.PI * 2;
-      let bump = 1;
-      for (const l of lumps) bump += Math.sin(t * l.f + a * l.k + l.p) * l.a;
-      const dx = pos.getX(k) - c.x;
-      const dy = pos.getY(k) - c.y;
-      const dz = pos.getZ(k) - c.z;
-      const flat = dy > 0 ? 0.55 : 1.15;
-      pos.setXYZ(k, c.x + dx * r * bump, c.y + dy * r * bump * flat, c.z + dz * r * bump * 1.6);
+  const sides = 9;
+  const rows = 26;
+  const base = -4;
+  const square = 2 + rand() * 0.3;
+  const reach = [span * (1 + rand() * 0.06), span * (1 + rand() * 0.06)];
+  const tilt = (rand() - 0.5) * 4;
+  const angles = Array.from({ length: sides }, (_, k) => ((k + (rand() - 0.5) * 0.5) / sides) * Math.PI * 2);
+  const radial = angles.map(() => 0.86 + rand() * 0.28);
+  const lumps = Array.from({ length: 3 }, () => ({ f: 4 + rand() * 10, p: rand() * 6, a: 0.07 + rand() * 0.1 }));
+  const sway = rand() * 6;
+  const flare = thick * (0.7 + rand() * 0.25);
+  const lean = (rand() - 0.5) * 0.3;
+  const knobs = Array.from({ length: 6 }, () => ({ u: 0.1 + rand() * 0.8, k: rand() * sides, amp: 0.15 + rand() * 0.2 }));
+  const e = 2 / square;
+  const centre = (u) => {
+    const th = Math.PI * (1 - u);
+    const c = Math.cos(th);
+    const s = Math.sin(th);
+    const x = Math.sign(c) * Math.abs(c) ** e * reach[c < 0 ? 0 : 1];
+    return [x, base + (height - base) * Math.abs(s) ** e + tilt * c * Math.abs(s), Math.sin(u * 5 + sway) * 1.6];
+  };
+  const ring = [];
+  const greens = [];
+  const frames = [];
+  for (let i = 0; i <= rows; i++) {
+    const u = i / rows;
+    const c = centre(u);
+    const a = centre(Math.max(0, u - 0.01));
+    const b = centre(Math.min(1, u + 0.01));
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const tx = (b[0] - a[0]) / len;
+    const ty = (b[1] - a[1]) / len;
+    const nx = -ty;
+    const ny = tx;
+    const foot = Math.abs(u * 2 - 1);
+    let bulge = 1;
+    for (const l of lumps) bulge += Math.sin(u * l.f + l.p) * l.a;
+    const flared = flare * THREE.MathUtils.smoothstep(foot, 0.72, 1);
+    const legs = 1 + lean * (u < 0.5 ? 1 : -1) * foot;
+    const w = (thick * (1 + 0.22 * foot * foot) + flared) * bulge * legs;
+    const d = (thick * 1.5 * (1 + 0.25 * foot * foot) + flared) * (2 - bulge) * legs;
+    frames.push({ c, nx, ny, w, d, u });
+    ring.push(
+      angles.map((ang, k) => {
+        let r = radial[k] * (1 + (rand() - 0.5) * 0.05);
+        for (const n of knobs) {
+          const dk = Math.min(Math.abs(k - n.k), sides - Math.abs(k - n.k));
+          r *= 1 + n.amp * Math.exp(-(((u - n.u) / 0.07) ** 2) - (dk / 1.1) ** 2);
+        }
+        const out = Math.cos(ang) * w * r * (Math.cos(ang) > 0 ? 0.78 : 1);
+        return [c[0] + nx * out, c[1] + ny * out, c[2] + Math.sin(ang) * d * r];
+      }),
+    );
+  }
+  const positions = [];
+  const tri = (p, q, r) => positions.push(...p, ...q, ...r);
+  for (let i = 0; i < rows; i++) {
+    for (let k = 0; k < sides; k++) {
+      const a = ring[i][k];
+      const b = ring[i][(k + 1) % sides];
+      const c = ring[i + 1][(k + 1) % sides];
+      const d = ring[i + 1][k];
+      tri(a, b, c);
+      tri(a, c, d);
     }
   }
-  const g = mergeVertices(tube.deleteAttribute('normal').deleteAttribute('uv'));
-  return paintPillar(g, height + thick);
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  paintPillar(g, height + thick);
+  const pos = g.attributes.position;
+  const nor = g.attributes.normal;
+  const green = g.attributes.aGreen;
+  for (let v = 0; v < nor.count; v++) {
+    const f = frames[Math.floor(v / (sides * 6))];
+    const crest = f.c[1] + f.ny * f.w * 0.6;
+    green.setX(v, THREE.MathUtils.smoothstep(nor.getY(v), 0.45, 0.7) * (f.ny > 0.35 && pos.getY(v) > crest ? 1 : 0));
+  }
+  return { geometry: g, frames };
 }
+
+// The pillar layouts that follow the arches were tuned at these stream positions.
+const advance = (rand, n) => {
+  for (let k = 0; k < n; k++) rand();
+};
 
 function addArch(batch, track, fraction, rand) {
   const idx = track.wrap(Math.round(fraction * track.N));
@@ -1193,32 +1277,45 @@ function addArch(batch, track, fraction, rand) {
 
 function addArchAt(batch, x0, z0, heading, span, rand) {
   const height = 26 + rand() * 6;
-  const thick = 5 + rand() * 1.5;
-  const p = { x: x0, z: z0 };
-  const slab = archGeometry(span, height, thick, rand).applyMatrix4(mat(p.x, 0, p.z, 1, 1, 1, 0, heading, 0));
-  batch.add('rockland', slab);
-  const nx = Math.cos(heading);
-  const nz = -Math.sin(heading);
+  const thick = 5.5 + rand() * 1.5;
+  const place = mat(x0, 0, z0, 1, 1, 1, 0, heading, 0);
+  const { geometry, frames } = archGeometry(span + 5, height, thick, rand);
+  batch.add('rockland', geometry.applyMatrix4(place));
+  const world = (x, y, z) => new THREE.Vector3(x, y, z).applyMatrix4(place);
   const tx = Math.sin(heading);
   const tz = Math.cos(heading);
-  const probe = new THREE.Mesh(slab, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
-  const ray = new THREE.Raycaster();
-  for (let k = -3; k <= 3; k++) {
-    const lat = (k / 3) * span * 0.75;
-    for (const off of [-1.5, 1.5]) {
-      const x = p.x + nx * lat + tx * off;
-      const z = p.z + nz * lat + tz * off;
-      ray.set(new THREE.Vector3(x, height + 40, z), new THREE.Vector3(0, -1, 0));
-      const hit = ray.intersectObject(probe)[0];
-      if (hit && hit.face.normal.y > 0.4) plantTop(batch, x, hit.point.y, z, 1.4, rand, 0.25);
+  const crest = (f, lean = 0) => world(f.c[0] + f.nx * f.w * 0.7, f.c[1] + f.ny * f.w * 0.7, f.c[2] + lean);
+  for (const f of frames) {
+    if (f.ny < 0.75) continue;
+    if (rand() < 0.3) {
+      const p = crest(f, (rand() - 0.5) * f.d * 0.6);
+      if (rand() < 0.35) addPalm(batch, p.x, p.y - 0.3, p.z, rand, { height: 6 + rand() * 5, lean: 0.2 + rand() * 0.4, dir: rand() * Math.PI * 2 });
+      else canopyTree(batch, p.x, p.y - 0.3, p.z, rand, 2.4 + rand() * 2);
+    }
+    for (const side of [-1, 1]) {
+      if (Math.sin(f.u * 11 + side * 2 + height) < -0.2 || rand() < 0.25) continue;
+      const edge = crest(f, side * f.d * 0.82);
+      const ox = tx * side;
+      const oz = tz * side;
+      const size = 1.8 + rand() * 1.6;
+      jungleClump(batch, edge.x + ox * 0.6, edge.y - size * 0.5, edge.z + oz * 0.6, rand, size);
+      if (rand() < 0.4) jungleClump(batch, edge.x + ox * 1.1, edge.y - size * 1.4, edge.z + oz * 1.1, rand, size * 0.7);
+      if (rand() < 0.5) hangVine(batch, edge.x + ox * 0.9, edge.y - 0.6, edge.z + oz * 0.9, ox, oz, 3 + rand() * 7, rand, 0, 1.2);
     }
   }
   const blobs = [];
-  for (const side of [-1, 1]) {
-    const lx = p.x + nx * side * (span + 2);
-    const lz = p.z + nz * side * (span + 2);
-    const anchor = addPillar(batch, lx, lz, rand, { radius: 8 + rand() * 4, height: height + 8 + rand() * 22 });
-    blobs.push(anchor.blob);
+  for (const f of [frames[0], frames.at(-1)]) {
+    const foot = world(f.c[0], 0, f.c[2]);
+    const rx = f.w * 1.12;
+    const rz = f.d * 1.12;
+    batch.add('foam', RING, mat(foot.x, 0.2, foot.z, rx * 1.05, 6, rz * 1.05, 0, heading, 0));
+    for (let k = 0; k < 7; k++) {
+      const a = rand() * Math.PI * 2;
+      const sz = 1.4 + rand() * 2.6;
+      const rock = world(f.c[0] + Math.cos(a) * rx, 0.2 + rand() * 0.6, f.c[2] + Math.sin(a) * rz);
+      batch.add('rock', ROCK, mat(rock.x, rock.y, rock.z, sz, sz * (0.6 + rand() * 0.4), sz, rand(), rand() * 6, rand()));
+    }
+    blobs.push({ x: foot.x, z: foot.z, rx, rz, rot: heading });
   }
   return blobs;
 }
@@ -2088,7 +2185,9 @@ export function createWorld(scene, track, fx) {
   const pillars = [];
   const falls = [];
   const fits = (x, z, r) => !pillars.some((o) => Math.hypot(o.x - x, o.z - z) < o.r + r + 6);
-  for (const f of [0.118, 0.743, 0.835]) shores.push(...addArch(batch, track, f, rand));
+  const archRand = mulberry32(20261031);
+  for (const f of [0.118, 0.743, 0.835]) shores.push(...addArch(batch, track, f, archRand));
+  advance(rand, 8351);
   for (const f of [0.131, 0.689, 0.817]) {
     const idx = track.wrap(Math.round(f * track.N));
     for (const side of [-1, 1]) {
@@ -2241,7 +2340,9 @@ function createBayArena(scene, arena, fx) {
     shores.push(pillar.blob);
     if (height === tallest && x !== 0) specs.push(waterfallSpec(batch, pillar, x, z, Math.atan2(-z, -x), rand));
   }
-  for (const [x, z, heading, span] of arena.arches) shores.push(...addArchAt(batch, x, z, heading, span, rand));
+  const archRand = mulberry32(20261031);
+  for (const [x, z, heading, span] of arena.arches) shores.push(...addArchAt(batch, x, z, heading, span, archRand));
+  advance(rand, 5536);
   for (const [bx, bz] of arena.bases) {
     const out = Math.sign(bx) * (arena.rx + 34);
     const home = addPillar(batch, out, bz, rand, { radius: 10, height: 36, plants: 0.5 });
