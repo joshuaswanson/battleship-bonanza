@@ -10,6 +10,7 @@ const WRECK_ROLL = 1.48;
 const WRECK_PITCH = 0.16;
 const WRECK_LIFT = 1.5;
 const FORM_OUT = 1.1;
+const SKI_LEAN = 0.12;
 
 export const methods = {
   updateVisual(b, dt) {
@@ -118,10 +119,23 @@ export const methods = {
       body.position.y += b.form.ride;
       if (track.formKind(s) === 'jet' && b.formP >= 1) this.bankJet(b, dt);
     }
+    if (track.onSnow(s) && b.formP >= 1) this.carve(b);
     if (b.rail !== null && b.alive) {
       body.position.y += Math.sin(this.time * 62) * 0.016 + Math.sin(this.time * 27 + b.index) * 0.02;
       this.railSparks(b);
     }
+  },
+
+  carve(b) {
+    if (b.alive) b.model.body.rotation.z += b.steerVis * SKI_LEAN;
+    const r = Math.random;
+    if (b.air || Math.abs(b.speed) < 15 || r() > 0.5 + Math.abs(b.steerVis) * 0.5) return;
+    const side = r() < 0.5 ? 1 : -1;
+    const fx = Math.sin(b.heading);
+    const fz = Math.cos(b.heading);
+    const x = b.pos.x + fz * side * 1.8 - fx * 3.4;
+    const z = b.pos.z - fx * side * 1.8 - fz * 3.4;
+    this.fx.puffs.emit(x, b.waterY + 0.3, z, -b.vel.x * 0.12 + (r() - 0.5) * 5 + fz * b.steerVis * 9, 2 + r() * 4, -b.vel.z * 0.12 + (r() - 0.5) * 5 - fx * b.steerVis * 9, 0.35 + r() * 0.6, 0.5, r() < 0.5 ? 0xffffff : 0xe6f2ff, 3, 1.2, 0);
   },
 
   railSparks(b) {

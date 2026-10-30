@@ -175,8 +175,9 @@ export const methods = {
       return;
     }
     if (kind === 'jet') return;
+    const dust = kind === 'ski' ? [0xffffff, 0xe6f2ff] : [0xc9a46b, 0xa98852];
     for (let k = 0; k < 12 * size; k++) {
-      this.fx.puffs.emit(x, b.waterY + 0.4, z, (Math.random() - 0.5) * 10, 2 + Math.random() * 4, (Math.random() - 0.5) * 10, 0.7 + Math.random() * 0.7, 0.7, k % 2 ? 0xc9a46b : 0xa98852, 3, 1.5, 0);
+      this.fx.puffs.emit(x, b.waterY + 0.4, z, (Math.random() - 0.5) * 10, 2 + Math.random() * 4, (Math.random() - 0.5) * 10, 0.7 + Math.random() * 0.7, 0.7, dust[k % 2], 3, 1.5, 0);
     }
   },
 

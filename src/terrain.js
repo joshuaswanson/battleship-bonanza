@@ -79,7 +79,8 @@ export async function courseSurface(track, tick, { margin = 340, cell = 3, amp =
       out.s = sAt[i] + ((x - px[i]) * tx[i] + (z - pz[i]) * tz[i]) * sScale[i];
       out.dist = Math.hypot(x - px[i], z - pz[i]);
       out.edge = out.dist - track.hw[i];
-      out.amp = amp(track.mainIndex(i));
+      out.level = track.level(out.s);
+      out.amp = track.offWater(out.s) ? 0 : amp(track.mainIndex(i));
       return out;
     },
   };
@@ -172,6 +173,8 @@ async function smoothField({ minX, minZ, cols, rows, step, heights, paint, tick,
   return new THREE.Mesh(geometry, toon(0xffffff, { vertexColors: true }));
 }
 
+const LANE_GAP = 200;
+
 export function courseBuoys(track, keep, spacing = 15) {
   const geometry = new THREE.SphereGeometry(1, 14, 10).scale(0.95, 0.8, 0.95);
   const spots = [];
@@ -179,6 +182,15 @@ export function courseBuoys(track, keep, spacing = 15) {
   const within = (seg, p) => {
     for (let i = seg.start; i <= seg.end; i += 2) {
       if (Math.hypot(p.x - track.px[i], p.z - track.pz[i]) < track.hw[i] + 0.5) return true;
+    }
+    return false;
+  };
+  const crossing = (idx, p) => {
+    const clear = Math.round(LANE_GAP / track.spacing);
+    for (let i = 0; i < track.N; i += 2) {
+      const apart = Math.abs(i - idx);
+      if (Math.min(apart, track.N - apart) < clear) continue;
+      if (Math.hypot(p.x - track.px[i], p.z - track.pz[i]) < track.hw[i] + 2) return true;
     }
     return false;
   };
@@ -190,6 +202,7 @@ export function courseBuoys(track, keep, spacing = 15) {
         if (!keep(idx, side)) continue;
         const p = track.point(idx, side * (track.hw[idx] + 1.5));
         if (track.segments.some((other) => other !== seg && within(other, p))) continue;
+        if (seg.ring && crossing(idx, p)) continue;
         spots.push({ p, red: (i + (side > 0 ? 1 : 0)) % 2 === 1, side, i, seg, n });
       }
     }

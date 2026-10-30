@@ -30,6 +30,8 @@ export const ALPS_COLORS = {
   flagPole: 0xeeeeee,
   flagRed: 0xe5332a,
   flagWhite: 0xffffff,
+  gateBlue: 0x2f7fd8,
+  liftSteel: 0x6d7a88,
   islet: 0x9a958c,
 };
 
@@ -47,6 +49,51 @@ function lakeness(f) {
   if (f > 0.26 && f < 0.31) return 1 - smooth(0.26, 0.31, f);
   if (f > 0.88 && f < 0.94) return smooth(0.88, 0.94, f);
   return 1;
+}
+
+function beam(batch, key, a, b, radius) {
+  const span = new THREE.Vector3().subVectors(b, a);
+  const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), span.clone().normalize());
+  const middle = a.clone().addScaledVector(span, 0.5);
+  batch.add(key, CYL, new THREE.Matrix4().compose(middle, q, new THREE.Vector3(radius, span.length(), radius)));
+}
+
+function slalomGate(batch, x, y, z, yaw, key) {
+  const c = Math.cos(yaw);
+  const s = Math.sin(yaw);
+  for (const side of [-1, 1]) batch.add('flagPole', CYL, mat(x + c * side * 3.4, y + 2.6, z - s * side * 3.4, 0.14, 5.2, 0.14));
+  batch.add(key, BOX, mat(x, y + 4.2, z, 6.8, 1.7, 0.1, 0, yaw));
+}
+
+function skiLift(batch, track, height, rand) {
+  const { launch, span } = track.river.land;
+  const towers = [];
+  for (let d = 260; d < span - 80; d += 118) {
+    const s = launch + d;
+    const i = track.wrap(Math.round(s / track.spacing));
+    const p = track.point(i, -(track.hw[i] + 30));
+    const base = height(p.x, p.z);
+    const top = base + 18;
+    beam(batch, 'liftSteel', new THREE.Vector3(p.x, base - 1, p.z), new THREE.Vector3(p.x, top, p.z), 0.42);
+    const arm = new THREE.Vector3(track.tz[i], 0, -track.tx[i]).multiplyScalar(4.2);
+    const point = new THREE.Vector3(p.x, top, p.z);
+    beam(batch, 'liftSteel', point.clone().sub(arm), point.clone().add(arm), 0.24);
+    towers.push({ near: point.clone().sub(arm), far: point.clone().add(arm) });
+  }
+  for (let k = 0; k < towers.length - 1; k++) {
+    for (const key of ['near', 'far']) {
+      const a = towers[k][key];
+      const b = towers[k + 1][key];
+      beam(batch, 'woodDark', a, b, 0.07);
+      for (let u = 0.2; u < 1; u += 0.3) {
+        const hook = a.clone().lerp(b, u);
+        const seat = hook.clone();
+        seat.y -= 2.8;
+        beam(batch, 'liftSteel', hook, seat, 0.06);
+        batch.add(key === 'near' ? 'flagRed' : 'gateBlue', BOX, mat(seat.x, seat.y, seat.z, 2, 0.3, 0.9, 0, rand() * 0.2));
+      }
+    }
+  }
 }
 
 function placer(batch) {
@@ -83,11 +130,28 @@ export async function createAlps(group, track, fx) {
   group.add(sun);
 
   const N = track.N;
-  const lakeAt = (idx) => lakeness(track.mainIndex(idx) / N);
+  const { span } = track.river.land;
+  const lakeAt = (idx) => {
+    const main = track.mainIndex(idx);
+    const d = track.landDepth(main * track.spacing);
+    const lake = lakeness(track.lapFraction(main));
+    return d < 0 ? lake : lake * Math.max(1 - smooth(0, 90, d), smooth(span - 30, span, d));
+  };
+  const hidden = (f) => Math.round(track.lapIndex(f));
   const surface = await courseSurface(track, tick, { amp: (i) => 0.35 + 0.35 * lakeAt(i) });
   const shoreOf = (x, z) => {
     const s = surface.sample(x, z);
     return s.edge - lakeAt(s.idx) * (32 + 40 * noise(x * 1.3 + 50, z * 1.3));
+  };
+  const carveRun = (x, z, natural) => {
+    const { s, edge, level } = surface.sample(x, z);
+    if (track.landDepth(s) < 0) return natural;
+    const flank = natural + level * (1 - smooth(30, 120, edge));
+    return level - 0.15 + (flank - level) * smooth(0, 80, edge);
+  };
+  const glacier = (x, z) => {
+    const { s, edge } = surface.sample(x, z);
+    return track.landDepth(s) < 0 ? 0 : 1 - smooth(60, 130, edge);
   };
   const height = (x, z) => {
     const shore = shoreOf(x, z);
@@ -99,7 +163,7 @@ export async function createAlps(group, track, fx) {
     const mz = z - 500;
     const pyramid = Math.max(Math.abs(mx * 0.71 + mz * 0.71), Math.abs(mx * 0.71 - mz * 0.71));
     y += Math.max(0, 280 - pyramid * 1.7) * smooth(40, 140, shore);
-    return y;
+    return carveRun(x, z, y);
   };
   const tint = new THREE.Color();
   const shades = {
@@ -110,6 +174,7 @@ export async function createAlps(group, track, fx) {
     rock: new THREE.Color(0xa49e95),
     rockHigh: new THREE.Color(0x8f8c8a),
     snow: new THREE.Color(0xf6f9ff),
+    snowShade: new THREE.Color(0xcfe2f6),
   };
   const mixed = new THREE.Color();
   const paint = (x, y, z, ny, color) => {
@@ -120,6 +185,8 @@ export async function createAlps(group, track, fx) {
     color.lerp(mixed, smooth(cliff + 0.04, cliff - 0.04, ny));
     const snowLine = 105 + 30 * noise(x * 2, z * 2);
     color.lerp(shades.snow, smooth(snowLine - 6, snowLine + 6, y) * smooth(0.35, 0.55, ny));
+    const drift = smooth(0.35, 0.7, noise(x * 1.2 + 11, z * 1.2 - 7));
+    color.lerp(mixed.copy(shades.snow).lerp(shades.snowShade, drift), glacier(x, z));
     color.lerp(shades.sand, smooth(2.2, 0.4, y));
     color.multiply(tint.setScalar(0.94 + 0.08 * noise(x * 5 + 7, z * 5)));
   };
@@ -154,7 +221,7 @@ export async function createAlps(group, track, fx) {
 
   const villageSide = 1;
   for (let f = 0.02; f < 0.22; f += 0.012) {
-    const idx = Math.round(f * N);
+    const idx = hidden(f);
     const edge = shoreline(idx, villageSide);
     if (!edge) continue;
     for (let row = 0; row < 3; row++) {
@@ -170,7 +237,7 @@ export async function createAlps(group, track, fx) {
     }
   }
   {
-    const idx = Math.round(0.035 * N);
+    const idx = hidden(0.035);
     const edge = shoreline(idx, villageSide);
     if (edge) {
       const i = track.wrap(idx);
@@ -186,7 +253,7 @@ export async function createAlps(group, track, fx) {
   }
 
   const castleAt = (() => {
-    const idx = Math.round(0.15 * N);
+    const idx = hidden(0.15);
     const edge = shoreline(idx, -villageSide);
     const i = track.wrap(idx);
     const lat = edge ? Math.min(edge.lat - 18, track.hw[i] + 26) : track.hw[i] + 26;
@@ -198,7 +265,7 @@ export async function createAlps(group, track, fx) {
 
 
   {
-    const idx = Math.round(0.62 * N);
+    const idx = hidden(0.62);
     const i = track.wrap(idx);
     const bridge = coveredBridge(batch, track, idx, height);
     const bridgeAt = track.point(i);
@@ -312,12 +379,37 @@ export async function createAlps(group, track, fx) {
   }
 
   const scenery = new THREE.Group();
+  const { launch } = track.river.land;
+  for (let d = 200, n = 0; d < span - 50; d += 7) {
+    if (++n % 40 === 0) await tick();
+    const i = track.wrap(Math.round((launch + d) / track.spacing));
+    for (const side of [-1, 1]) {
+      if (rand() > 0.6) continue;
+      const p = track.point(i, side * (track.hw[i] + 3 + rand() * 50));
+      if (free(p.x, p.z, 3)) plantTree(tree, p.x, height(p.x, p.z), p.z, 0.8 + rand() * 0.7);
+    }
+  }
+  for (let d = 280, k = 0; d < span - 150; d += 130 + rand() * 70, k++) {
+    const i = track.wrap(Math.round((launch + d) / track.spacing));
+    const lat = (k % 2 ? 1 : -1) * (0.35 + rand() * 0.4) * track.hw[i];
+    for (let n = 0; n < 3; n++) {
+      const p = track.point(i, lat + (rand() - 0.5) * 12);
+      plantTree(tree, p.x + (rand() - 0.5) * 8, track.level(launch + d), p.z + (rand() - 0.5) * 8, 0.8 + rand() * 0.5);
+    }
+  }
+  for (let d = 240, k = 0; d < span - 60; d += 84, k++) {
+    const s = launch + d;
+    const i = track.wrap(Math.round(s / track.spacing));
+    const p = track.point(i, (k % 2 ? 1 : -1) * 15);
+    slalomGate(batch, p.x, track.level(s), p.z, track.heading(i), k % 2 ? 'flagRed' : 'gateBlue');
+  }
+  skiLift(batch, track, height, rand);
   chopper.finish(ALPS_COLORS);
   const chunks = await batch.buildAsync(scenery, 0.1, ALPS_COLORS, undefined, tick);
   chunks.push(...(await herdBatch.buildAsync(scenery, 0.045, ALPS_COLORS, undefined, tick)));
   group.add(scenery);
 
-  const buoys = courseBuoys(track, (idx) => lakeAt(idx) > 0.4);
+  const buoys = courseBuoys(track, (idx) => lakeAt(idx) > 0.4 && !track.formAt(track.mainIndex(idx) * track.spacing));
   group.add(buoys);
   group.add(createArch(track, track.hw[0]));
 
@@ -343,7 +435,7 @@ export async function createAlps(group, track, fx) {
   const lane = (lat, from, to, step) => {
     const pts = [];
     for (let f = from; step > 0 ? f <= to : f >= to; f += step) {
-      const i = track.wrap(Math.round(f * N));
+      const i = track.wrap(hidden(f));
       const p = track.point(i, -villageSide * (track.hw[i] + lat));
       pts.push(new THREE.Vector3(p.x, 0, p.z));
     }

@@ -6,6 +6,7 @@ const STEP = 1.8;
 const LIFE = 26;
 const WIDTH = 0.62;
 const TRACK = 2.3;
+const SKI_GAUGE = 2.7;
 const AXLE = 3.05;
 
 const VERT = /* glsl */ `
@@ -37,9 +38,14 @@ const FRAG = /* glsl */ `
   void main() {
     float edge = 1.0 - smoothstep(0.72, 1.0, abs(vMark.y));
     float chevron = step(0.46, fract(vMark.x * 1.5 + abs(vMark.y) * 0.7));
-    float strength = vDepth * vFade * edge * mix(0.62, 1.0, chevron);
+    #ifdef SNOW
+      float strength = vDepth * vFade * edge * 0.8;
+      vec3 color = vec3(0.56, 0.7, 0.86);
+    #else
+      float strength = vDepth * vFade * edge * mix(0.62, 1.0, chevron);
+      vec3 color = mix(vec3(0.42, 0.28, 0.16), vec3(0.2, 0.13, 0.08), vDepth);
+    #endif
     if (strength < 0.04) discard;
-    vec3 color = mix(vec3(0.42, 0.28, 0.16), vec3(0.2, 0.13, 0.08), vDepth);
     gl_FragColor = vec4(color, min(0.92, strength * 1.25));
     #include <colorspace_fragment>
     #include <fog_fragment>
@@ -47,8 +53,9 @@ const FRAG = /* glsl */ `
 `;
 
 export class TireMarks {
-  constructor(scene) {
+  constructor(scene, { snow = false } = {}) {
     this.scene = scene;
+    this.gauge = snow ? SKI_GAUGE : TRACK;
     const verts = MAX_QUADS * 6;
     this.positions = new Float32Array(verts * 3);
     this.born = new Float32Array(verts).fill(-1000);
@@ -64,6 +71,7 @@ export class TireMarks {
       uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uTime: { value: 0 } }]),
       vertexShader: VERT,
       fragmentShader: FRAG,
+      defines: snow ? { SNOW: '' } : {},
       transparent: true,
       depthWrite: false,
       fog: true,
@@ -102,8 +110,8 @@ export class TireMarks {
     this.trails.set(b, trails);
     const fx = Math.sin(b.heading);
     const fz = Math.cos(b.heading);
-    const x = b.pos.x - fx * AXLE + fz * side * TRACK;
-    const z = b.pos.z - fz * AXLE - fx * side * TRACK;
+    const x = b.pos.x - fx * AXLE + fz * side * this.gauge;
+    const z = b.pos.z - fz * AXLE - fx * side * this.gauge;
     const last = trails[key];
     if (last && Math.hypot(x - last.x, z - last.z) < STEP) return;
     if (last && Math.hypot(x - last.x, z - last.z) > STEP * 4) trails[key] = null;

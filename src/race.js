@@ -7,7 +7,7 @@ import { TrackFeatures } from './features.js';
 import { Wakes } from './wake.js';
 import { TireMarks } from './tireMarks.js';
 import { t as tr } from './i18n.js';
-import { ACCEL, ARMOR_SPEED, BANK_MARGIN, BASE_SPEED, BRAKE, CART_SPEED, CIRCLE_OFFSET, COAST, FALL_GRAVITY, GRIP, HOLD_IDS, JET_ASSIST, JET_ASSIST_EASE, JET_SPEED, JET_STEER, JET_THRUST, KO_TIME, LAND_GRIP, LAPS, MAX_HP, MORPH_CLEAR, MORPH_PUSH, MORPH_SHOVE, MUD_POOL, MUD_SPEED, OFF_COURSE_SPEED, OUTER_LIMIT, RADIUS, REGEN_DELAY, REGEN_MAX, REGEN_RAMP, REGEN_START, REVERSE_SPEED, TURN_RATE, approach, clamp } from './race/shared.js';
+import { ACCEL, ARMOR_SPEED, BANK_MARGIN, BASE_SPEED, BRAKE, CART_SPEED, CIRCLE_OFFSET, COAST, FALL_GRAVITY, GRIP, HOLD_IDS, JET_ASSIST, JET_ASSIST_EASE, JET_SPEED, JET_STEER, JET_THRUST, KO_TIME, LAND_GRIP, LAPS, MAX_HP, MORPH_CLEAR, MORPH_PUSH, MORPH_SHOVE, MUD_POOL, MUD_SPEED, OFF_COURSE_SPEED, OUTER_LIMIT, RADIUS, REGEN_DELAY, REGEN_MAX, REGEN_RAMP, REGEN_START, REVERSE_SPEED, SKI_GRIP, SKI_SPEED, SKI_THRUST, TURN_RATE, approach, clamp } from './race/shared.js';
 import { Boat } from './race/boat.js';
 import { carrierSpeed } from './ctf.js';
 import * as machinegun from './race/attachments/machinegun.js';
@@ -55,7 +55,8 @@ export class Race {
     this.attract = attract;
     this.laps = attract || mode ? Infinity : laps;
     this.boats = defs.map((def, i) => new Boat(def, i, scene, track.river?.land?.kind));
-    this.tireMarks = track.river?.land?.kind === 'truck' ? new TireMarks(scene) : null;
+    const formKind = track.river?.land?.kind;
+    this.tireMarks = formKind === 'truck' || formKind === 'ski' ? new TireMarks(scene, { snow: formKind === 'ski' }) : null;
     this.jetPoint = new THREE.Vector3();
     this.ceasefire = false;
     this.player = this.boats.find((b) => b.isLocal) ?? this.boats.find((b) => b.isPlayer) ?? null;
@@ -222,6 +223,8 @@ export class Race {
     if (t.formKind(b.trackS) === 'cart') max *= CART_SPEED;
     const jetting = !!b.form && b.formP >= 1 && t.jetCruise(b.trackS);
     if (jetting) max *= JET_SPEED;
+    const skiing = !!b.form && b.formP >= 1 && t.onSnow(b.trackS);
+    if (skiing) max *= SKI_SPEED;
     if (onLand) {
       const i = t.norm(b.trackIdx);
       if (t.mudAt(b.trackS, (b.pos.x - t.px[i]) * t.nx[i] + (b.pos.z - t.pz[i]) * t.nz[i]) > MUD_POOL) max *= MUD_SPEED;
@@ -233,6 +236,7 @@ export class Race {
     if (throttle === 0) rate = COAST;
     if (b.boost > 0 && target > b.speed) rate *= 2;
     if (jetting && target > b.speed) rate *= JET_THRUST;
+    if (skiing && target > b.speed) rate *= SKI_THRUST;
     b.speed = approach(b.speed, target, rate * dt);
 
     const morphing = !!b.orbit || (!!b.form && b.formP > 0 && b.formP < 1);
@@ -253,7 +257,7 @@ export class Race {
 
     const fx = Math.sin(b.heading);
     const fz = Math.cos(b.heading);
-    const k = 1 - Math.exp(-(b.air && !morphing ? 1 : GRIP * b.grip * (onLand ? LAND_GRIP : 1)) * dt);
+    const k = 1 - Math.exp(-(b.air && !morphing ? 1 : GRIP * b.grip * (onLand ? LAND_GRIP : skiing ? SKI_GRIP : 1)) * dt);
     b.vel.x += (fx * b.speed - b.vel.x) * k;
     b.vel.z += (fz * b.speed - b.vel.z) * k;
 
