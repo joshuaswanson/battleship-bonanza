@@ -204,7 +204,9 @@ export class Batcher {
       if (!geometry.boundingSphere) geometry.computeBoundingSphere();
       r = geometry.boundingSphere.radius * matrix.getMaxScaleOnAxis() + geometry.boundingSphere.center.length();
     }
-    this.groups.get(key).push({ geometry, matrix: matrix === IDENTITY ? IDENTITY : matrix.clone(), x, z, r, tag });
+    const entry = { geometry, matrix: matrix === IDENTITY ? IDENTITY : matrix.clone(), x, z, r, tag };
+    this.groups.get(key).push(entry);
+    return entry;
   }
   build(parent, outline = 0.12, colors = COLORS, size = CHUNK) {
     const steps = this.steps(parent, outline, colors, size);
@@ -859,7 +861,29 @@ function paintPillar(g, top) {
   return g;
 }
 
-function pillarGeometry(radius, height, rand) {
+const cross2 = (ax, az, bx, bz) => ax * bz - az * bx;
+
+function grooveRing(ring, keep, at, toward, outer, inner, depth, drop) {
+  const kept = ring.filter((_, k) => keep[k]);
+  const out = kept.slice(0, at + 1);
+  const p = kept[at];
+  const q = kept[(at + 1) % kept.length];
+  const onEdge = (a) => {
+    const dx = Math.cos(a);
+    const dz = Math.sin(a);
+    const u = -cross2(p[0], p[2], dx, dz) / cross2(q[0] - p[0], q[2] - p[2], dx, dz);
+    return [p[0] + (q[0] - p[0]) * u, p[1] + (q[1] - p[1]) * u, p[2] + (q[2] - p[2]) * u];
+  };
+  const pull = (v, d, dy) => {
+    const len = Math.hypot(v[0], v[2]);
+    const k = Math.max(0.2, (len - d) / len);
+    return [v[0] * k, v[1] - dy, v[2] * k];
+  };
+  out.push(pull(onEdge(toward - outer), 0, drop * 0.3), pull(onEdge(toward - inner), depth, drop), pull(onEdge(toward + inner), depth, drop), pull(onEdge(toward + outer), 0, drop * 0.3));
+  return out.concat(kept.slice(at + 1));
+}
+
+function pillarGeometry(radius, height, rand, notch = null) {
   const sides = 6 + Math.floor(rand() * 4);
   const stretch = 0.8 + rand() * 0.4;
   const turn = rand() * Math.PI;
@@ -883,21 +907,46 @@ function pillarGeometry(radius, height, rand) {
     }),
   );
   const top = height - 2;
+  const plain = ring.at(-1);
+  const center = [plain.reduce((sum, v) => sum + v[0], 0) / sides, top + 0.3, plain.reduce((sum, v) => sum + v[2], 0) / sides];
+  let spout = null;
+  if (notch) {
+    const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+    const bearing = angles.map((a) => wrap(Math.atan2(Math.sin(a) / stretch, Math.cos(a) * stretch) + turn));
+    const capR = radius * rows.at(-1)[1] * Math.min(...radial);
+    const inner = Math.asin(Math.min(0.9, (notch.width / 2 + 0.4) / capR));
+    const outer = Math.asin(Math.min(0.95, (notch.width / 2 + 1.6) / capR));
+    const keep = bearing.map((a) => Math.abs(wrap(a - notch.toward)) > outer);
+    const kept = bearing.filter((_, k) => keep[k]);
+    let at = 0;
+    for (let k = 0; k < kept.length; k++) if (wrap(kept[k] - notch.toward) < 0 && (wrap(kept[at] - notch.toward) >= 0 || wrap(kept[k] - notch.toward) > wrap(kept[at] - notch.toward))) at = k;
+    const depth = Math.min(3, capR * 0.3);
+    const drop = Math.min(3.2, height * 0.06);
+    const from = tiered ? 4 : 2;
+    for (let r = 0; r < ring.length; r++) {
+      const cut = r >= from ? 1 : r === from - 1 ? 0.35 : 0;
+      ring[r] = grooveRing(ring[r], keep, at, notch.toward, outer, inner, depth * cut, r === ring.length - 1 ? drop : 0);
+    }
+    const lip = ring.at(-1);
+    const a = lip[at + 2];
+    const b = lip[at + 3];
+    spout = new THREE.Vector3((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2);
+  }
   const positions = [];
   const tri = (p, q, r) => positions.push(...p, ...q, ...r);
   for (let r = 0; r < rows.length - 1; r++) {
-    for (let k = 0; k < sides; k++) {
+    const n = ring[r].length;
+    for (let k = 0; k < n; k++) {
       const a = ring[r][k];
-      const b = ring[r][(k + 1) % sides];
-      const c = ring[r + 1][(k + 1) % sides];
+      const b = ring[r][(k + 1) % n];
+      const c = ring[r + 1][(k + 1) % n];
       const d = ring[r + 1][k];
       tri(a, c, b);
       tri(a, d, c);
     }
   }
   const cap = ring.at(-1);
-  const center = [cap.reduce((sum, v) => sum + v[0], 0) / sides, top + 0.3, cap.reduce((sum, v) => sum + v[2], 0) / sides];
-  for (let k = 0; k < sides; k++) tri(center, cap[(k + 1) % sides], cap[k]);
+  for (let k = 0; k < cap.length; k++) tri(center, cap[(k + 1) % cap.length], cap[k]);
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   const capRadius = radius * (tiered ? shrink * 0.9 : taper) * Math.min(...radial);
@@ -907,6 +956,7 @@ function pillarGeometry(radius, height, rand) {
     topRadius: capRadius * 0.95,
     footprint: radius * 1.14 * Math.max(...radial) * Math.max(stretch, 1 / stretch),
     ledge: tiered ? { y: ledge * span - 2, inner: radius * shrink, outer: radius * 0.96 * Math.min(...radial) } : null,
+    spout,
   };
 }
 
@@ -942,8 +992,19 @@ function plantTop(batch, x, y, z, radius, rand, density = 1) {
 }
 
 function addPillar(batch, x, z, rand, { radius, height, plants = 1 }) {
-  const pillar = pillarGeometry(radius, height, rand);
-  batch.add('rockland', pillar.geometry, mat(x, 0, z));
+  const tape = [];
+  const pillar = pillarGeometry(radius, height, () => {
+    const v = rand();
+    tape.push(v);
+    return v;
+  });
+  const entry = batch.add('rockland', pillar.geometry, mat(x, 0, z));
+  const notch = (toward, width) => {
+    let k = 0;
+    const cut = pillarGeometry(radius, height, () => tape[k++], { toward, width });
+    entry.geometry = cut.geometry;
+    return cut.spout.add(new THREE.Vector3(x, 0, z));
+  };
   batch.add('foam', RING, mat(x, 0.2, z, pillar.footprint * 1.05, 6, pillar.footprint * 1.05));
   const top = pillar.top.clone().add(new THREE.Vector3(x, 0, z));
   if (plants) plantTop(batch, top.x, top.y, top.z, pillar.topRadius, rand, plants);
@@ -963,15 +1024,16 @@ function addPillar(batch, x, z, rand, { radius, height, plants = 1 }) {
     const sz = 1.4 + rand() * 2.6;
     batch.add('rock', ROCK, mat(x + Math.cos(a) * d, 0.2 + rand() * 0.6, z + Math.sin(a) * d, sz, sz * (0.6 + rand() * 0.4), sz, rand(), rand() * 6, rand()));
   }
-  return { blob: { x, z, rx: pillar.footprint, rz: pillar.footprint, rot: 0 }, top, topRadius: pillar.topRadius, footprint: pillar.footprint };
+  return { blob: { x, z, rx: pillar.footprint, rz: pillar.footprint, rot: 0 }, top, topRadius: pillar.topRadius, footprint: pillar.footprint, notch };
 }
 
 function waterfallSpec(batch, pillar, x, z, toward, rand) {
   const dx = Math.cos(toward);
   const dz = Math.sin(toward);
-  const top = new THREE.Vector3(pillar.top.x + dx * pillar.topRadius * 0.92, pillar.top.y - 0.4, pillar.top.z + dz * pillar.topRadius * 0.92);
   const foot = new THREE.Vector3(x + dx * pillar.footprint * 1.12, 0.2, z + dz * pillar.footprint * 1.12);
   const width = 3.2 + rand() * 1.6;
+  const top = pillar.notch(toward, width);
+  top.y -= 0.2;
   batch.add('foam', RING, mat(foot.x + dx * 3, 0.25, foot.z + dz * 3, width * 1.6, 6, width * 1.6));
   return { top, foot, dx, dz, width };
 }
@@ -1214,8 +1276,7 @@ function mainlandGround(x, z) {
 
 const clifftop = (x, z) => mainlandRise(x, Math.max(FACE_DEPTH, z - mainlandEdge(x)));
 
-function carveHeight(site, x, z) {
-  if (!site) return Infinity;
+function baseCarve(site, x, z) {
   let h = Infinity;
   const a = Math.atan2(z - site.center.z, x - site.center.x);
   const r = Math.hypot(x - site.center.x, z - site.center.z) - (site.radius + 2) + Math.sin(a * 9) * 1.2 + Math.sin(a * 23 + 1) * 0.7;
@@ -1223,6 +1284,147 @@ function carveHeight(site, x, z) {
   const d = site.caveDistance(x, z);
   if (d < CAVE_WALL + 2) h = Math.min(h, CARVE_FLOOR + (Math.max(0, d) / CAVE_WALL) * 90);
   return h;
+}
+
+const GULLY_RECESS = 5;
+const GULLY_NOTCH = 6;
+const GULLY_BED = 1.4;
+const GULLY_RUN = 26;
+const GULLY_HEAD = -GULLY_RUN - GULLY_RECESS;
+const GULLY_REACH = 30;
+
+function gullyFrame(g, x, z) {
+  const ox = x - g.x;
+  const oz = z - g.z;
+  return { s: ox * g.dx + oz * g.dz, lat: oz * g.dx - ox * g.dz };
+}
+
+function carveHeight(site, x, z) {
+  if (!site) return Infinity;
+  let h = baseCarve(site, x, z);
+  for (const g of site.gullies) {
+    const { s, lat } = gullyFrame(g, x, z);
+    if (Math.abs(lat) >= g.half || s < GULLY_HEAD || s > GULLY_REACH) continue;
+    const u = 1 - THREE.MathUtils.smoothstep(Math.abs(lat), g.width / 2 + 0.6, g.half);
+    const px = x + g.dx * GULLY_RECESS * u;
+    const pz = z + g.dz * GULLY_RECESS * u;
+    const bed = GULLY_BED + (GULLY_NOTCH - GULLY_BED) * THREE.MathUtils.smoothstep(s, GULLY_HEAD, -GULLY_RECESS);
+    h = Math.min(h, baseCarve(site, px, pz), mainlandGround(px, pz), mainlandGround(x, z) - bed * u * Math.min(1, (s - GULLY_HEAD) / 3));
+  }
+  return h;
+}
+
+const groundAt = (site, x, z) => Math.min(mainlandGround(x, z), carveHeight(site, x, z));
+
+function inGully(site, x, z, margin = 0) {
+  return site.gullies.some((g) => {
+    const { s, lat } = gullyFrame(g, x, z);
+    return Math.abs(lat) < g.half + margin && s > GULLY_HEAD - margin && s < GULLY_REACH;
+  });
+}
+
+function gullyBox(g) {
+  const xs = [];
+  const zs = [];
+  for (const s of [GULLY_HEAD - 2, GULLY_REACH]) {
+    for (const lat of [-g.half - 2, g.half + 2]) {
+      xs.push(g.x + g.dx * s - g.dz * lat);
+      zs.push(g.z + g.dz * s + g.dx * lat);
+    }
+  }
+  return { x0: Math.min(...xs), x1: Math.max(...xs), z0: Math.min(...zs), z1: Math.max(...zs) };
+}
+
+function bayGullies(site) {
+  const rand = mulberry32(5150);
+  const { center, radius } = site;
+  const gullies = [];
+  const add = (x, z, dx, dz, foot, width) => gullies.push({ x, z, dx, dz, foot, width, half: width / 2 + 3 });
+  for (const a of [2.1, 3.5, 4.8]) {
+    const ox = Math.cos(a);
+    const oz = Math.sin(a);
+    const width = 4.5 + rand() * 2;
+    add(center.x + ox * (radius + 2 + CRATER_WALL), center.z + oz * (radius + 2 + CRATER_WALL), -ox, -oz, [center.x + ox * (radius - 2), center.z + oz * (radius - 2)], width);
+  }
+  const frames = caveFrames(site, false).filter((f) => Math.hypot(f.x - site.center.x, f.z - site.center.z) > site.radius + CRATER_WALL + 30);
+  [0.2, 0.5, 0.8].forEach((u, n) => {
+    const f = frames[Math.floor(frames.length * u)];
+    const side = n % 2 ? 1 : -1;
+    const rim = f.half + CAVE_WALL - 0.5;
+    add(f.x + f.nx * side * rim, f.z + f.nz * side * rim, -f.nx * side, -f.nz * side, [f.x + f.nx * side * (f.half - 3), f.z + f.nz * side * (f.half - 3)], 3.5 + rand() * 1.5);
+  });
+  for (const x of [-360, -230, 270, 395]) add(x, mainlandEdge(x) + FACE_DEPTH, 0, -1, [x, mainlandEdge(x) - 3], 3 + rand() * 1.5);
+  return gullies;
+}
+
+function gullyLip(site, g) {
+  const at = (s) => [g.x + g.dx * s, g.z + g.dz * s];
+  let s = GULLY_HEAD + 4;
+  for (; s < GULLY_REACH; s += 0.25) {
+    const [x, z] = at(s + 0.25);
+    if (groundAt(site, x, z) < mainlandGround(x, z) - GULLY_NOTCH - 0.4) break;
+  }
+  const [x, z] = at(s);
+  return { s, x, z, y: groundAt(site, x, z) };
+}
+
+function gullyFall(site, g) {
+  const lip = gullyLip(site, g);
+  const [fx, fz] = g.foot;
+  const head = GULLY_HEAD + 1.5;
+  const run = lip.s - head;
+  const drop = Math.hypot(fx - lip.x, lip.y, fz - lip.z);
+  const inside = run / (run + drop);
+  const path = (spec, t) => {
+    if (t <= inside) {
+      const s = head + run * (t / inside);
+      const x = g.x + g.dx * s;
+      const z = g.z + g.dz * s;
+      return [x, groundAt(site, x, z) + 0.5, z];
+    }
+    const k = (t - inside) / (1 - inside);
+    const out = Math.sin(Math.PI * k) * 2.2 + k * 1.5 + Math.min(1, k * 6) * 1.2;
+    return [lip.x + (fx - lip.x) * k + g.dx * out, lip.y + 0.5 - (lip.y + 0.3) * k, lip.z + (fz - lip.z) * k + g.dz * out];
+  };
+  return {
+    top: new THREE.Vector3(lip.x, lip.y, lip.z),
+    foot: new THREE.Vector3(fx, 0.2, fz),
+    dx: g.dx,
+    dz: g.dz,
+    width: g.width,
+    rows: 70,
+    bulge: () => 0,
+    path,
+  };
+}
+
+function dressGully(batch, site, g, rand) {
+  const at = (s, lat) => {
+    const x = g.x + g.dx * s - g.dz * lat;
+    const z = g.z + g.dz * s + g.dx * lat;
+    return [x, groundAt(site, x, z), z];
+  };
+  const face = Math.atan2(g.dx, g.dz);
+  for (let k = 0; k < 4; k++) {
+    const [x, y, z] = at(GULLY_HEAD - 0.5 - rand() * 2, (rand() - 0.5) * g.width * 1.4);
+    const sz = 1.6 + rand() * 1.6;
+    batch.add('rock', ROCK, mat(x, y + sz * 0.2, z, sz, sz * (0.6 + rand() * 0.3), sz, rand(), rand() * 6, rand()));
+  }
+  jungleClump(batch, ...at(GULLY_HEAD - 4, 0), rand, 3.2);
+  for (let s = GULLY_HEAD + 2; s < -GULLY_RECESS - 1; s += 3.5 + rand() * 2) {
+    for (const side of [-1, 1]) {
+      const [x, y, z] = at(s, side * (g.half + 0.5 + rand() * 1.5));
+      if (rand() < 0.5) fern(batch, x, y - 0.2, z, rand, 0.9 + rand() * 0.5, { yaw: Math.atan2(side * g.dz, -side * g.dx), spread: 2.2, droop: 1 });
+      else jungleClump(batch, x, y - 0.3, z, rand, 1.6 + rand() * 1.2);
+    }
+  }
+  const lip = gullyLip(site, g);
+  for (const side of [-1, 1]) {
+    const [x, y, z] = at(lip.s - 1.2, side * (g.width / 2 + 1.2));
+    const sz = 1.8 + rand() * 1.2;
+    batch.add('rock', ROCK, mat(x, y + sz * 0.15, z, sz, sz * 0.7, sz * 1.2, rand() * 0.4, face + rand() * 0.6, rand() * 0.4));
+    fern(batch, x + g.dx * 0.8, y + sz * 0.5, z + g.dz * 0.8, rand, 0.8 + rand() * 0.3, { yaw: face, spread: 1.6, droop: 1.5 });
+  }
 }
 
 function inCave(site, x, z) {
@@ -1276,9 +1478,21 @@ function addBlowholeCollar(batch, site) {
 }
 
 function addMainland(batch, rand, site = null) {
-  const xs = [];
+  let xs = [];
   for (let x = -1300; x <= 1300; x += site && x >= -140 && x < 220 ? 3 : 8) xs.push(x);
-  const rowsAt = site ? CARVED_ROWS : MAINLAND_ROWS;
+  let rowsAt = site ? CARVED_ROWS : MAINLAND_ROWS;
+  if (site) {
+    const extra = [];
+    for (const g of site.gullies) {
+      const { x0, x1, z0, z1 } = gullyBox(g);
+      const step = Math.abs(g.dx) > 0.35 && Math.abs(g.dz) > 0.35 ? 1.5 : 1;
+      if (Math.abs(g.dz) > 0.35) for (let x = x0; x <= x1; x += step) xs.push(x);
+      if (Math.abs(g.dx) > 0.35) for (let z = z0; z <= z1; z += step) extra.push(z - mainlandEdge(g.x));
+    }
+    const unique = (list) => list.sort((a, b) => a - b).filter((v, k, all) => k === 0 || v - all[k - 1] > 0.25);
+    xs = unique(xs);
+    rowsAt = unique([...rowsAt, ...extra.filter((d) => d > FACE_DEPTH + 1)]);
+  }
   const positions = [];
   for (const x of xs) {
     const edge = mainlandEdge(x);
@@ -1552,22 +1766,10 @@ function addCrater(batch, site, rand) {
     const z = center.z + Math.sin(a) * r;
     if (site.caveDistance(x, z) < CAVE_WALL + 3) continue;
     const y = mainlandGround(x, z);
+    if (carveHeight(site, x, z) < y - 0.5) continue;
     if (rand() < 0.4) addPalm(batch, x, y - 0.4, z, rand, { height: 9 + rand() * 8, lean: 0.2 + rand() * 0.4, dir: a + Math.PI });
     else canopyTree(batch, x, y - 0.3, z, rand, 3 + rand() * 2.5);
   }
-  return [2.1, 3.5, 4.8].map((a) => {
-    const dx = -Math.cos(a);
-    const dz = -Math.sin(a);
-    const tx = center.x - dx * (rim - 0.5);
-    const tz = center.z - dz * (rim - 0.5);
-    return {
-      top: new THREE.Vector3(tx, mainlandGround(tx, tz) - 0.4, tz),
-      foot: new THREE.Vector3(center.x - dx * (radius - 2), 0.2, center.z - dz * (radius - 2)),
-      dx,
-      dz,
-      width: 4.5 + rand() * 2,
-    };
-  });
 }
 
 function bayWaters(site) {
@@ -1694,7 +1896,6 @@ function addCaveInterior(batch, site, scene, rand) {
 
 function addGorge(batch, site, rand) {
   const frames = caveFrames(site, false).filter((f) => Math.hypot(f.x - site.center.x, f.z - site.center.z) > site.radius + CRATER_WALL + 6);
-  const specs = [];
   frames.forEach((f, k) => {
     if (k % 2) return;
     for (const side of [-1, 1]) {
@@ -1711,6 +1912,7 @@ function addGorge(batch, site, rand) {
         while (lip < f.half + CAVE_WALL + 4 && carveHeight(site, f.x + f.nx * side * lip, f.z + f.nz * side * lip) < clifftop(f.x + f.nx * side * lip, f.z + f.nz * side * lip) - 1) lip += 0.5;
         const vx = f.x + f.nx * side * lip;
         const vz = f.z + f.nz * side * lip;
+        if (inGully(site, vx, vz, 4)) continue;
         const y = Math.min(clifftop(vx, vz), carveHeight(site, vx, vz));
         const below = carveHeight(site, f.x + f.nx * side * (lip - 3), f.z + f.nz * side * (lip - 3));
         if (y - below > 45) continue;
@@ -1726,27 +1928,10 @@ function addGorge(batch, site, rand) {
       }
     }
   });
-  for (const k of [Math.floor(frames.length * 0.3), Math.floor(frames.length * 0.7)]) {
-    const f = frames[k];
-    if (!f) continue;
-    const side = k % 2 ? 1 : -1;
-    const rim = f.half + CAVE_WALL - 0.5;
-    const tx = f.x + f.nx * side * rim;
-    const tz = f.z + f.nz * side * rim;
-    specs.push({
-      top: new THREE.Vector3(tx, Math.min(clifftop(tx, tz), carveHeight(site, tx, tz)) - 0.4, tz),
-      foot: new THREE.Vector3(f.x + f.nx * side * (f.half - 3), 0.2, f.z + f.nz * side * (f.half - 3)),
-      dx: -f.nx * side,
-      dz: -f.nz * side,
-      width: 3.5 + rand() * 1.5,
-    });
-  }
-  return specs;
 }
 
 function addCliffDressing(batch, site, rand) {
-  const specs = [];
-  const clear = (x) => Math.abs(x - site.hole.x) > 26 && !site.cave.some((p) => Math.abs(p.x - x) < p.half + 12 && p.z < mainlandEdge(p.x) + 30);
+  const clear = (x) => Math.abs(x - site.hole.x) > 26 && !site.cave.some((p) => Math.abs(p.x - x) < p.half + 12 && p.z < mainlandEdge(p.x) + 30) && !inGully(site, x, mainlandEdge(x) + FACE_DEPTH, 6);
   for (let x = -460; x <= 460; x += 7 + rand() * 12) {
     if (!clear(x)) continue;
     const edge = mainlandEdge(x);
@@ -1777,17 +1962,6 @@ function addCliffDressing(batch, site, rand) {
       if (rand() < 0.5) batch.add('foam', RING, mat(x, 0.25, bz, sz * 1.4, 6, sz * 1.4));
     }
   }
-  for (const x of [-360, -230, 270, 395]) {
-    const top = faceHeights(x)[4 * STRATA] - 0.6;
-    specs.push({
-      top: new THREE.Vector3(x, top, cliffFace(x, top) - 0.4),
-      foot: new THREE.Vector3(x, 0.2, mainlandEdge(x) - 3),
-      dx: 0,
-      dz: -1,
-      width: 3 + rand() * 1.5,
-    });
-  }
-  return specs;
 }
 
 function addLighthouse(batch, x, z, baseY) {
@@ -1891,6 +2065,7 @@ const BAY_COLORS = { ...COLORS, moss: 0x6aa82c, mossDark: 0x4d8c22, jungle: 0x3d
 export function createWorld(scene, track, fx) {
   if (track.map.arena) return createBayArena(scene, track.map.arena, fx);
   const site = track.map.whirlpool ? whirlpoolSite(track, mainlandEdge, cliffFace) : null;
+  if (site) site.gullies = bayGullies(site);
   track.whirlpool = site;
   const fog = new THREE.Fog(SKY_HORIZON, 480, 950);
 
@@ -1952,7 +2127,11 @@ export function createWorld(scene, track, fx) {
     addCaveRoof(batch, site);
     addBlowholeCollar(batch, site);
     caveWater = addCaveInterior(batch, site, scene, dress);
-    specs.push(...addCrater(batch, site, rand), ...addGorge(batch, site, dress), ...addCliffDressing(batch, site, dress), flumeStream(site));
+    addCrater(batch, site, rand);
+    specs.push(...site.gullies.map((g) => gullyFall(site, g)), flumeStream(site));
+    addGorge(batch, site, dress);
+    addCliffDressing(batch, site, dress);
+    for (const g of site.gullies) dressGully(batch, site, g, dress);
   }
   const waterfalls = createWaterfalls(specs, rand);
   scene.add(waterfalls.group);
