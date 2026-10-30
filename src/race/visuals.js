@@ -6,8 +6,6 @@ import { BASE_SPEED, KO_TIME, approach, clamp, wrapAngle } from './shared.js';
 const FORM_IN = 2.6;
 const JET_BANK = 1.1;
 const JET_BANK_EASE = 4;
-const JET_ROLL_HOLD = 0.7;
-const JET_ROLL_TIME = 1;
 const WRECK_ROLL = 1.48;
 const WRECK_PITCH = 0.16;
 const WRECK_LIFT = 1.5;
@@ -125,19 +123,7 @@ export const methods = {
     const turn = wrapAngle(b.heading - (b.lastHeading ?? b.heading)) / Math.max(dt, 1e-3);
     b.lastHeading = b.heading;
     b.jetTurn = (b.jetTurn ?? 0) + (turn - (b.jetTurn ?? 0)) * (1 - Math.exp(-JET_BANK_EASE * dt));
-    b.jetHold = Math.abs(b.steerVis) > 0.8 ? (b.jetHold ?? 0) + dt : 0;
-    if (b.jetHold > JET_ROLL_HOLD && !b.jetRoll) {
-      b.jetRoll = { t: 0, side: Math.sign(b.steerVis) };
-      b.jetHold = -JET_ROLL_TIME;
-    }
-    let roll = 0;
-    if (b.jetRoll) {
-      b.jetRoll.t += dt / JET_ROLL_TIME;
-      const u = Math.min(1, b.jetRoll.t);
-      roll = u * u * (3 - 2 * u) * Math.PI * 2 * b.jetRoll.side;
-      if (u >= 1) b.jetRoll = null;
-    }
-    b.model.body.rotation.z = clamp(-b.jetTurn * JET_BANK, -0.5, 0.5) + b.steerVis * 0.14 + roll;
+    b.model.body.rotation.z = clamp(-b.jetTurn * JET_BANK, -0.5, 0.5) + b.steerVis * 0.14;
     const climb = (b.waterY - (b.lastLevel ?? b.waterY)) / Math.max(dt, 1e-3) / Math.max(30, Math.abs(b.speed));
     b.lastLevel = b.waterY;
     b.jetPitch = (b.jetPitch ?? 0) + (-Math.atan(climb) - (b.jetPitch ?? 0)) * (1 - Math.exp(-JET_BANK_EASE * dt));

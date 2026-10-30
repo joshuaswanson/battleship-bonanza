@@ -423,7 +423,7 @@ export async function createFrozen(group, track, fx) {
       const q = 1.2 + rand() * 1.8;
       batch.add(['ice', 'iceLight', 'iceDeep'][n % 3], ROCK, mat(p.x + Math.cos(a) * r * 1.5, floor + q * 0.3, p.z + Math.sin(a) * r * 1.5, q, q * 0.7, q, rand(), rand() * 6, rand()));
     }
-    blobs.push({ x: p.x, z: p.z, rx: r, rz: r, rot: 0, tree: chopper.trees.at(-1) });
+    blobs.push({ x: p.x, z: p.z, rx: r * 0.72, rz: r * 0.72, rot: 0, tree: chopper.trees.at(-1) });
   }
   for (let k = 0; k < 190; k++) {
     const s = wallS + 6 + rand() * (lidEnd - wallS - 12);
@@ -449,7 +449,6 @@ export async function createFrozen(group, track, fx) {
     if (k % 2) {
       const size = 1.2 + rand() * 2.4;
       batch.add(['ice', 'iceLight'][k % 4 === 1 ? 0 : 1], ROCK, mat(p.x, base + size * 0.2, p.z, size * 1.3, size * 0.7, size, rand(), rand() * 6, rand()));
-      if (size > 2.4) blobs.push({ x: p.x, z: p.z, rx: size, rz: size, rot: 0, top: track.level(s) + size * 0.6, launch: true });
     } else {
       for (let n = 0; n < 5; n++) {
         const size = 0.3 + rand() * 0.5;

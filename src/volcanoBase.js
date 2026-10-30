@@ -380,33 +380,6 @@ function bridge(batch, trim, track, s, level) {
   }
 }
 
-function perimeter(batch, trim, track, height, level, from, to, spots) {
-  const blocked = (s) => spots.some((o) => Math.abs(o.s - s) < o.width / 2 + 14);
-  for (let s = from, n = 0; s < to; s += 26, n++) {
-    if (blocked(s)) continue;
-    const i = track.wrap(Math.round(s / track.spacing));
-    for (const side of [-1, 1]) {
-      const p = track.point(i, side * (track.hw[i] + 7));
-      const back = track.point(i, side * (track.hw[i] + 24));
-      if (height(back.x, back.z) < level(s) - 3) continue;
-      const y = Math.max(height(p.x, p.z), level(s) + 2.5);
-      const k = kit(batch, trim, p.x, y, p.z, track.heading(i));
-      k.put('concrete', BOX, 0, 0, 0, 1.8, 7, 25);
-      k.put('concreteDark', BOX, 0, 3.7, 0, 2.4, 0.6, 25.4);
-      k.put('hazard', BOX, side * -1, 2, 0, 0.1, 0.6, 25);
-      if (n % 3 === 0) {
-        k.put('steelDark', CYL, 0, 7, 12.5, 0.26, 8, 0.26);
-        k.put('steelDark', BOX, side * -1, 11, 12.5, 2.2, 0.26, 0.4);
-        k.glow('lit', BOX, side * -1.6, 10.8, 12.5, 0.9, 0.16, 0.9);
-      }
-      if (n % 5 === 2) {
-        k.put('villain', BOX, side * -1.05, 1, 0, 0.2, 7, 4.5);
-        k.glow('emblem', WEDGE, side * -1.2, 1.4, 0, 1.5, 0.1, 1.5, 0, side * Math.PI / 2, Math.PI / 2);
-      }
-    }
-  }
-}
-
 export function buildBase(batch, trim, track, height, riverEnd) {
   const spots = stationSpots(track, riverEnd, height);
   const level = (s) => track.level(s);
@@ -418,6 +391,5 @@ export function buildBase(batch, trim, track, height, riverEnd) {
     TYPES[spot.type].build(k, 0.3);
   }
   for (const u of [0.31, 0.66]) bridge(batch, trim, track, u * riverEnd, track.level(u * riverEnd));
-  perimeter(batch, trim, track, height, level, riverEnd * 0.08, riverEnd * 0.96, spots);
   return (x, z) => spots.some((o) => Math.hypot(x - o.x, z - o.z) < Math.max(o.depth, o.width) * 0.75);
 }

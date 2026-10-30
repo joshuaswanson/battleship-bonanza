@@ -3,7 +3,7 @@ import { toon, mulberry32 } from './toon.js';
 import { groundHit } from './terrain.js';
 import { jungleClump } from './foliage.js';
 import { Batcher, cullChunks, slicer, COLORS, mat, ROCK, addPalm, createSky, createCloud, createArch, SUN_DIR } from './world.js';
-import { riverSurface, buildFalls } from './jungle.js';
+import { riverSurface, buildFalls, fallMaterial } from './jungle.js';
 import { createWater } from './water.js';
 import { BASE_COLORS, buildBase } from './volcanoBase.js';
 import { groundMesh, noise, seaStrip, smooth } from './mapKit.js';
@@ -128,7 +128,7 @@ function canyonRidge(field, x, z) {
   const w = field.weight(x, z);
   if (w <= 0 || d > 320) return -16;
   const top = 86 + 36 * noise(x * 1.1, z * 1.1) + 14 * noise(x * 3, z * 3);
-  return -16 + (top + 16) * w * smooth(CANYON_HALF + 8, CANYON_HALF + 46, d) * (1 - smooth(200, 310, d));
+  return -16 + (top + 16) * w * smooth(CANYON_HALF + 40, CANYON_HALF + 88, d) * (1 - smooth(200, 310, d));
 }
 
 function shapedHeight(track, edge, s, level, x, z) {
@@ -252,33 +252,185 @@ function disc(x, z, radius, y, material) {
   return mesh;
 }
 
-const COLUMN = new THREE.CylinderGeometry(1, 1, 1, 6).toNonIndexed();
-COLUMN.deleteAttribute('uv');
-COLUMN.computeVertexNormals();
+const ROCK_BANDS = [0x7a5d4c, 0x5f4b45, 0x93755c, 0x6c5148, 0x4e4143, 0x866852].map((c) => new THREE.Color(c));
+const LEDGE_MOSS = new THREE.Color(0x5e9e26);
+const LEDGE_DEEP = new THREE.Color(0x3c7a1c);
+const WET_ROCK = new THREE.Color(0x2f3438);
+const STRATUM = 11;
 
-async function buildCanyon(batch, canyon, track, height, rand, tick) {
-  const { start, end } = track.river.flight;
-  const tiers = [[4, 15, 34], [12, 34, 62], [21, 60, 96]];
-  let n = 0;
-  for (let s = start + 40; s < end - 40; s += 10.5) {
-    if (++n % 24 === 0) await tick();
+function strata(s, side, y) {
+  return (y + 5 * Math.sin(s * 0.017 + side) + 3 * Math.sin(s * 0.043 - side * 2)) / STRATUM;
+}
+
+function cliffOut(s, side, y) {
+  const band = strata(s, side, y);
+  const bottom = Math.floor(band);
+  const terrace = bottom + smooth(0.6, 0.92, band - bottom);
+  const lean = 0.75 + 0.9 * noise(s * 1.2, side * 90);
+  const bulge = (noise(s * 1.7, side * 300) - 0.5) * 26;
+  const chip = 3 * (noise(s * 6.3, y * 6 + side * 40) - 0.5) + 1.4 * Math.sin(s * 0.37 + y * 0.29) + 0.8 * Math.sin(s * 0.91 - y * 0.53);
+  return Math.max(CANYON_HALF + 1.5, CANYON_HALF + 8 + bulge + Math.max(0, terrace) * 3.4 * lean + chip);
+}
+
+function cliffBack(surface, track, i, side) {
+  for (let out = CANYON_HALF + 96; out > CANYON_HALF + 44; out -= 6) {
+    const p = track.point(i, side * out);
+    const { edge, s } = surface.sample(p.x, p.z);
+    if (track.formAt(s) || edge > 16) return p;
+  }
+  return track.point(i, side * (CANYON_HALF + 44));
+}
+
+function cliffMesh(surface, track, height, side, from, to) {
+  const rows = 24;
+  const step = 8;
+  const pos = [];
+  const col = [];
+  const a = new THREE.Vector3();
+  const b = new THREE.Vector3();
+  const c = new THREE.Vector3();
+  const n = new THREE.Vector3();
+  const tint = new THREE.Color();
+  const grid = [];
+  for (let s = from; s <= to + 0.1; s += step) {
     const i = track.wrap(Math.round(s / track.spacing));
-    const fade = canyonFade(s, start, end);
-    for (const side of [-1, 1]) {
-      const wave = Math.sin(s * 0.013 + side) * 3 + Math.sin(s * 0.041) * 1.6;
-      for (const [out, low, high] of tiers) {
-        const p = track.point(i, side * (CANYON_HALF + out + wave + rand() * 2.5));
-        const r = 5.4 + rand() * 2.2;
-        const h = (low + rand() * (high - low)) * fade;
-        const yaw = rand() * 1;
-        if (h < 3) continue;
-        canyon.add(rand() < 0.55 ? 'basalt' : 'basaltLight', COLUMN, mat(p.x, (h - 18) / 2, p.z, r, h + 18, r, 0, yaw, 0));
-        canyon.add(rand() < 0.5 ? 'ash' : 'basaltLight', COLUMN, mat(p.x, h + 0.35, p.z, r * 0.94, 0.7, r * 0.94, 0, yaw, 0));
-        if (out > 12 && rand() < 0.42) canyon.add('moss', COLUMN, mat(p.x, h + 0.9, p.z, r * 0.8, 0.5, r * 0.8, 0, yaw, 0));
-        if (out > 12 && rand() < 0.1) jungleClump(batch, p.x, h + 0.4, p.z, rand, 3 + rand() * 2.4);
+    const back = cliffBack(surface, track, i, side);
+    const top = Math.max(-6, height(back.x, back.z) + 0.8);
+    const column = [];
+    for (let k = 0; k <= rows; k++) {
+      const y = -8 + ((top + 8) * k) / rows;
+      const p = track.point(i, side * cliffOut(s, side, y));
+      column.push([p.x, y, p.z, s]);
+    }
+    const shelf = track.point(i, side * (Math.max(cliffOut(s, side, top), CANYON_HALF + 40) + 14));
+    column.push([shelf.x, top + 0.4, shelf.z, s]);
+    column.push([back.x, top - 3, back.z, s]);
+    grid.push(column);
+  }
+  const face = (p, q, r) => {
+    a.set(p[0], p[1], p[2]);
+    b.set(q[0], q[1], q[2]);
+    c.set(r[0], r[1], r[2]);
+    n.subVectors(b, a).cross(c.clone().sub(a)).normalize();
+    if (n.y < -0.98) n.negate();
+    const y = (p[1] + q[1] + r[1]) / 3;
+    const mid = (p[3] + q[3] + r[3]) / 3;
+    const band = Math.floor(strata(mid, side, y));
+    tint.copy(ROCK_BANDS[((band % 6) + 6) % 6]);
+    tint.multiplyScalar(0.92 + 0.18 * noise(mid * 7, y * 7));
+    if (y < 3.5) tint.lerp(WET_ROCK, 1 - smooth(0, 3.5, y));
+    if (n.y > 0.8 && y > 4) tint.copy(noise(a.x * 4, a.z * 4) > 0.5 ? LEDGE_MOSS : LEDGE_DEEP);
+    for (const v of [a, b, c]) {
+      pos.push(v.x, v.y, v.z);
+      col.push(tint.r, tint.g, tint.b);
+    }
+  };
+  for (let i = 0; i < grid.length - 1; i++) {
+    for (let k = 0; k < grid[i].length - 1; k++) {
+      const p = grid[i][k];
+      const q = grid[i + 1][k];
+      const r = grid[i + 1][k + 1];
+      const t = grid[i][k + 1];
+      if (side > 0) {
+        face(p, q, r);
+        face(p, r, t);
+      } else {
+        face(p, r, q);
+        face(p, t, r);
       }
     }
   }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.computeVertexNormals();
+  return new THREE.Mesh(g, toon(0xffffff, { vertexColors: true, side: THREE.DoubleSide }));
+}
+
+function cliffFall(track, side, s, width, top, material) {
+  const pos = [];
+  const uv = [];
+  const index = [];
+  const rows = 14;
+  const cols = 4;
+  for (let r = 0; r <= rows; r++) {
+    const u = r / rows;
+    const y = top + (0.2 - top) * u;
+    for (let c = 0; c <= cols; c++) {
+      const along = s + (c / cols - 0.5) * width;
+      const i = track.wrap(Math.round(along / track.spacing));
+      const p = track.point(i, side * (cliffOut(along, side, y) - 5));
+      pos.push(p.x, y, p.z);
+      uv.push(c / cols, u);
+    }
+  }
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const a = r * (cols + 1) + c;
+      index.push(a, a + cols + 1, a + 1, a + 1, a + cols + 1, a + cols + 2);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(index);
+  return new THREE.Mesh(g, material);
+}
+
+async function buildCanyon(surface, batch, canyon, group, track, height, rand, tick) {
+  const { start, end } = track.river.flight;
+  const dry = (p) => {
+    const { edge, s } = surface.sample(p.x, p.z);
+    return track.formAt(s) ? p : edge > 16 ? p : null;
+  };
+  const length = 420;
+  for (const side of [-1, 1]) {
+    for (let s = start; s < end; s += length) {
+      group.add(cliffMesh(surface, track, height, side, s, Math.min(end, s + length)));
+      await tick();
+    }
+  }
+  const falls = [];
+  const material = fallMaterial();
+  falls.push({ material });
+  for (let s = start + 360, k = 0; s < end - 360; s += 300 + rand() * 170, k++) {
+    const side = k % 2 ? 1 : -1;
+    const i = track.wrap(Math.round(s / track.spacing));
+    const back = cliffBack(surface, track, i, side);
+    const top = height(back.x, back.z);
+    if (top < 40) continue;
+    group.add(cliffFall(track, side, s, 15 + rand() * 12, top, material));
+  }
+  for (let s = start + 120, n = 0; s < end - 120; s += 7) {
+    if (++n % 30 === 0) await tick();
+    const i = track.wrap(Math.round(s / track.spacing));
+    const fade = canyonFade(s, start, end);
+    for (const side of [-1, 1]) {
+      if (fade > 0.2 && rand() < 0.5) {
+        const r = 1.5 + rand() * 4.5;
+        const p = track.point(i, side * (cliffOut(s, side, 1) - 1 + rand() * 4));
+        canyon.add(rand() < 0.5 ? 'basalt' : 'basaltLight', ROCK, mat(p.x, r * 0.25, p.z, r, r * 0.8, r, rand() * 3, rand() * 6, rand() * 3));
+      }
+      if (fade > 0.4 && rand() < 0.2) {
+        const y = 12 + rand() * 60;
+        const band = Math.floor(strata(s, side, y));
+        const ledge = (band + 1) * STRATUM - 5 * Math.sin(s * 0.017 + side) - 3 * Math.sin(s * 0.043 - side * 2);
+        const p = track.point(i, side * (cliffOut(s, side, ledge) + 1.5));
+        const back = cliffBack(surface, track, i, side);
+        const top = height(back.x, back.z);
+        if (dry(p) && ledge < top - 6 && ledge > 6) jungleClump(batch, p.x, ledge - 0.4, p.z, rand, 2.4 + rand() * 2.6);
+      }
+      if (fade > 0.5 && rand() < 0.12) {
+        const p = track.point(i, side * (CANYON_HALF + 74 + rand() * 18));
+        const y = height(p.x, p.z);
+        if (y > 30 && dry(p)) {
+          if (rand() < 0.55) addPalm(batch, p.x, y - 0.4, p.z, rand, { height: 8 + rand() * 7, lean: rand() * 0.4, dir: rand() * 6.3 });
+          else jungleClump(batch, p.x, y - 0.3, p.z, rand, 3.5 + rand() * 3);
+        }
+      }
+    }
+  }
+  return falls;
 }
 
 function canyonFoam(track) {
@@ -288,12 +440,11 @@ function canyonFoam(track) {
   let row = 0;
   for (const side of [-1, 1]) {
     const first = row;
-    for (let s = start + 40; s < end - 40; s += 9) {
+    for (let s = start + 40; s < end - 40; s += 8) {
       const i = track.wrap(Math.round(s / track.spacing));
-      const wave = Math.sin(s * 0.013 + side) * 3 + Math.sin(s * 0.041) * 1.6;
-      const inner = CANYON_HALF + wave - 4 - 2.4 * Math.sin(s * 0.31 + side);
-      const a = track.point(i, side * inner);
-      const b = track.point(i, side * (CANYON_HALF + wave + 5));
+      const edge = cliffOut(s, side, 0.5);
+      const a = track.point(i, side * (edge - 3.5 - 2 * Math.abs(Math.sin(s * 0.31 + side))));
+      const b = track.point(i, side * (edge + 2));
       positions.push(a.x, 0.5, a.z, b.x, 0.5, b.z);
       if (row > first) {
         const k = row * 2;
@@ -408,7 +559,7 @@ export async function createVolcano(group, track, fx) {
     const x = Math.cos(a) * r;
     const z = Math.sin(a) * r;
     const near = surface.sample(x, z);
-    if (near.edge < 8 || occupied(x, z)) continue;
+    if (near.edge < 16 || occupied(x, z)) continue;
     const y = height(x, z);
     if (y < PLATEAU - 8 || y > 130) continue;
     addPalm(batch, x, y - 0.4, z, rand, { height: 7 + rand() * 7, lean: rand() * 0.4, dir: rand() * 6.3 });
@@ -419,7 +570,7 @@ export async function createVolcano(group, track, fx) {
     const r = 110 + rand() * 360;
     const x = Math.cos(a) * r;
     const z = Math.sin(a) * r;
-    if (surface.sample(x, z).edge < 6 || occupied(x, z)) continue;
+    if (surface.sample(x, z).edge < 14 || occupied(x, z)) continue;
     const s = 3 + rand() * 7;
     batch.add(k % 2 ? 'basalt' : 'basaltLight', ROCK, mat(x, height(x, z) + s * 0.2, z, s, s * 0.8, s, rand(), rand() * 6, rand()));
   }
@@ -433,7 +584,7 @@ export async function createVolcano(group, track, fx) {
     batch.add('basalt', ROCK, mat(p.x, level + 0.5, p.z, r, r * 0.9, r, rand(), rand() * 6, rand()));
     blobs.push({ x: p.x, z: p.z, rx: r * 0.9, rz: r * 0.9, rot: 0, top: level + r * 0.6, launch: true });
   }
-  await buildCanyon(batch, canyon, track, height, rand, tick);
+  rapids.push(...(await buildCanyon(surface, batch, canyon, group, track, height, rand, tick)));
   const scenery = new THREE.Group();
   const chunks = await batch.buildAsync(scenery, 0.1, PALETTE, 120, tick);
   chunks.push(...(await trim.buildAsync(scenery, 0, PALETTE, 120, tick)));

@@ -4,7 +4,7 @@ import { waveHeight } from '../../water.js';
 import { toon, outlined } from '../../toon.js';
 import { LASER_REACH, SAW_LEAK } from '../shared.js';
 
-const ICE_MELT = 1.1;
+const ICE_MELT = 0.5;
 const ICE_BLOCK = new THREE.DodecahedronGeometry(1, 0);
 const ICE_TONES = [0xd6f6ff, 0x9fdcf4, 0x6cc7ec];
 const iceMaterials = [];
@@ -141,7 +141,13 @@ export const methods = {
       dir.normalize();
       let origin = pointLaserGun(b.model, dir, new THREE.Vector3());
       const reach = LASER_REACH * Math.hypot(1, drop);
-      const ahead = this.chopper?.trunkAhead(origin, dir, LASER_REACH);
+      const ice = this.chopper?.iceTarget(origin, dir, LASER_REACH, b.iceLock);
+      b.iceLock = ice;
+      if (ice && !this.raycastBoats(origin, dir, reach, b)) {
+        dir.set(ice.x - origin.x, 0, ice.z - origin.z).normalize();
+        origin = pointLaserGun(b.model, dir, origin);
+      }
+      const ahead = ice ? null : this.chopper?.trunkAhead(origin, dir, LASER_REACH);
       if (ahead && !this.raycastBoats(origin, dir, reach, b)) {
         for (const up of [1.2, 2.5, 4, 6, ahead.height * 0.45]) {
           const toward = new THREE.Vector3(ahead.x, ahead.base + Math.min(up, ahead.height * 0.45) + wobble.lift * 4, ahead.z).sub(origin);
