@@ -5,7 +5,7 @@ import { jungleClump } from './foliage.js';
 import { Batcher, cullChunks, slicer, COLORS, mat, ROCK, SPHERE, addPalm, trunkGeometry, createSky, createCloud, createArch, SUN_DIR } from './world.js';
 import { riverSurface, buildFalls } from './jungle.js';
 import { createWater } from './water.js';
-import { BASE_COLORS, buildBase } from './volcanoBase.js';
+import { BASE_COLORS, BRIDGES, buildBase } from './volcanoBase.js';
 import { groundMesh, noise, seaStrip, smooth } from './mapKit.js';
 
 const SKY = 0xbfe6f0;
@@ -793,7 +793,7 @@ export async function createVolcano(group, track, fx) {
   for (const a of [0.5, 1.15, 1.9, 2.5, 3.2, 5.7, 6.05]) flows.push(streamPoints(a, (x, z) => reachesRiver(x, z, 2) || occupied(x, z)));
   for (let s = 160; s < launch - 200; s += 190 + rand() * 170) {
     const clearOfDrops = track.river.drops.every((d) => Math.abs(d.s - s) > 70);
-    const clearOfBridges = [0.31, 0.66].every((u) => Math.abs(u * launch - s) > 60);
+    const clearOfBridges = BRIDGES.every((u) => Math.abs(u * launch - s) > 60);
     if (!clearOfDrops || !clearOfBridges) continue;
     const points = bankPoints(track, s, rand() < 0.5 ? -1 : 1, rand() * 6.3, occupied);
     if (points) flows.push(points);
@@ -822,7 +822,7 @@ export async function createVolcano(group, track, fx) {
 
   const water = seaStrip(track, Math.round((lip - 2) / track.spacing), Math.round((launch + LAVA_START + 8) / track.spacing) + track.N, WATER);
   group.add(water.mesh);
-  const ocean = createWater({ size: 2600, segments: 180, amp: 0.45, ...WATER });
+  const ocean = createWater({ size: 2600, segments: 180, amp: 0.45, scatter: true, ...WATER });
   ocean.mesh.position.y = 0;
   group.add(ocean.mesh);
 
@@ -878,7 +878,7 @@ export async function createVolcano(group, track, fx) {
   for (let k = 0; k < 30; k++) {
     const s = 120 + rand() * (launch - 240);
     const i = track.wrap(Math.round(s / track.spacing));
-    const lat = (rand() < 0.5 ? -1 : 1) * (track.hw[i] * 0.3 + rand() * track.hw[i] * 0.5);
+    const lat = (rand() < 0.5 ? -1 : 1) * track.hw[i] * (0.68 + rand() * 0.24);
     const p = track.point(i, lat);
     const level = track.level(s);
     const r = 2.8 + rand() * 2.2;

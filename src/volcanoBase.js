@@ -15,6 +15,8 @@ const VAULT_END = new THREE.CircleGeometry(1, 18, 0, Math.PI).rotateY(Math.PI);
 const SLOPE = new THREE.CylinderGeometry(0.72, 1, 1, 4).rotateY(Math.PI / 4);
 const DISH = new THREE.LatheGeometry([[0.001, -0.08], [0.3, -0.03], [0.6, 0.12], [0.86, 0.34], [1.03, 0.54], [1, 0.56], [0.85, 0.42], [0.6, 0.24], [0.3, 0.1], [0.001, 0.06]].map(([r, y]) => new THREE.Vector2(r, y)), 22);
 
+export const BRIDGES = [0.38, 0.66];
+
 export const BASE_COLORS = {
   panel: 0x8f9aa6,
   panelLight: 0xc9ced3,
@@ -368,13 +370,6 @@ function bridge(batch, trim, track, s, level) {
     k.glow('beacon', BALL, x, deck + 9, 4.2, 0.5);
     k.glow('beacon', BALL, x, deck + 9, -4.2, 0.5);
   }
-  for (const x of [-15, 15]) {
-    for (const z of [4.8, -4.8]) {
-      k.put('villain', BOX, x, deck - 2.4, z, 6, 4.6, 0.25);
-      k.glow('hazardDark', BOX, x, deck - 4.8, z, 6, 0.5, 0.3);
-      k.glow('emblem', BOX, x, deck - 1.2, z + Math.sign(z) * 0.14, 4.6, 0.32, 0.1);
-    }
-  }
 }
 
 export function buildBase(batch, trim, track, height, riverEnd) {
@@ -387,6 +382,6 @@ export function buildBase(batch, trim, track, height, riverEnd) {
     foundation(k, spot, 0.3);
     TYPES[spot.type].build(k, 0.3);
   }
-  for (const u of [0.31, 0.66]) bridge(batch, trim, track, u * riverEnd, track.level(u * riverEnd));
+  for (const u of BRIDGES) bridge(batch, trim, track, u * riverEnd, track.level(u * riverEnd));
   return (x, z) => spots.some((o) => Math.hypot(x - o.x, z - o.z) < Math.max(o.depth, o.width) * 0.75);
 }
