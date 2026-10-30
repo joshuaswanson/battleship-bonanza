@@ -13,7 +13,6 @@ const VAULT = new THREE.CylinderGeometry(1, 1, 1, 18, 1, false, -Math.PI / 2, Ma
 const RIB = new THREE.TorusGeometry(1, 0.03, 6, 18, Math.PI);
 const VAULT_END = new THREE.CircleGeometry(1, 18, 0, Math.PI).rotateY(Math.PI);
 const SLOPE = new THREE.CylinderGeometry(0.72, 1, 1, 4).rotateY(Math.PI / 4);
-const WEDGE = new THREE.CylinderGeometry(1, 1, 1, 3).rotateY(Math.PI / 6);
 const DISH = new THREE.LatheGeometry([[0.001, -0.08], [0.3, -0.03], [0.6, 0.12], [0.86, 0.34], [1.03, 0.54], [1, 0.56], [0.85, 0.42], [0.6, 0.24], [0.3, 0.1], [0.001, 0.06]].map(([r, y]) => new THREE.Vector2(r, y)), 22);
 
 export const BASE_COLORS = {
@@ -56,9 +55,7 @@ function hazardBand(k, lx, ly, lz, width, axisZ = false) {
 function emblem(k, lx, ly, lz, size) {
   k.put('villain', BOX, lx, ly, lz, size * 1.1, size * 2, 0.3);
   k.put('villainDark', BOX, lx, ly + size * 1.08, lz, size * 1.3, 0.4, 0.5);
-  k.glow('hazardDark', WEDGE, lx, ly + size * 0.2, lz + 0.17, size * 0.46, 0.1, size * 0.46, Math.PI / 2);
-  k.glow('emblem', WEDGE, lx, ly + size * 0.06, lz + 0.2, size * 0.2, 0.1, size * 0.2, Math.PI / 2);
-  k.glow('emblem', BOX, lx, ly - size * 0.5, lz + 0.18, size * 0.7, size * 0.09, 0.1);
+  for (const stripe of [0.45, 0, -0.45]) k.glow('emblem', BOX, lx, ly + size * stripe, lz + 0.18, size * 0.7, size * 0.09, 0.1);
 }
 
 function lampPost(k, lx, ly, lz, h = 13, lean = 1) {
@@ -375,7 +372,7 @@ function bridge(batch, trim, track, s, level) {
     for (const z of [4.8, -4.8]) {
       k.put('villain', BOX, x, deck - 2.4, z, 6, 4.6, 0.25);
       k.glow('hazardDark', BOX, x, deck - 4.8, z, 6, 0.5, 0.3);
-      k.glow('emblem', WEDGE, x, deck - 2.2, z + Math.sign(z) * 0.14, 1.5, 0.1, 1.5, Math.PI / 2);
+      k.glow('emblem', BOX, x, deck - 1.2, z + Math.sign(z) * 0.14, 4.6, 0.32, 0.1);
     }
   }
 }

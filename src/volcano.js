@@ -812,8 +812,8 @@ export async function createVolcano(group, track, fx) {
     const r = Math.hypot(x, z);
     const steep = 1 - n.y;
     if (y < 3.6) out.copy(sand);
-    else if (steep > 0.4) out.copy(noise(x * 2, z * 2) > 0.5 ? dark : pale);
     else if (y < 100 && r > 240) out.copy(grass).lerp(mossy, noise(x * 3, z * 3) > 0.55 ? 0.6 : 0);
+    else if (steep > 0.62) out.copy(noise(x * 2, z * 2) > 0.5 ? dark : pale);
     else out.copy(noise(x * 2, z * 2) > 0.52 ? dark : pale);
     if (y >= 3.6) out.lerp(noise(x * 2, z * 2) > 0.5 ? dark : pale, smooth(0.15, 0.6, scorched(x, z) + 0.3 * (noise(x * 4, z * 4) - 0.5)));
     if (r > 66 && r < 108) out.lerp(ember, (1 - smooth(80, 108, r)) * 0.6);
