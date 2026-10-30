@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import { ITEMS } from '../items.js';
 import { buildBoat, newHeat } from '../boatModel.js';
 import { createAI } from '../ai.js';
+import { TruckForm } from '../truck.js';
+import { JetForm } from '../jetForm.js';
+import { SubForm } from '../subForm.js';
 import { AXIS_HALF, HOLD_IDS, MAX_HP, clamp } from './shared.js';
 
 let shadowTexture;
@@ -22,8 +25,10 @@ function shadowMaterial() {
 }
 const SHADOW_GEOMETRY = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
 
+const FORMS = { truck: TruckForm, jet: JetForm, sub: SubForm };
+
 export class Boat {
-  constructor(def, index, scene) {
+  constructor(def, index, scene, formKind = null) {
     this.index = index;
     this.name = def.name;
     this.color = def.color;
@@ -33,6 +38,10 @@ export class Boat {
     this.team = def.team ?? null;
     this.flag = null;
     this.model = buildBoat(def.color, def.items);
+    this.form = FORMS[formKind] ? new FORMS[formKind](this.model, def.color) : null;
+    this.formP = 0;
+    this.orbit = null;
+    this.roll = 0;
     scene.add(this.model.root);
     this.turrets = this.model.swivels
       .filter((s) => s.id !== 'saw' && s.id !== 'jetpack')
@@ -108,7 +117,7 @@ export class Boat {
   local(x, y, z, out = new THREE.Vector3()) {
     const c = Math.cos(this.heading);
     const s = Math.sin(this.heading);
-    return out.set(this.pos.x + c * x + s * z, this.waterY + 0.35 + this.yOffset + y, this.pos.z - s * x + c * z);
+    return out.set(this.pos.x + c * x + s * z, this.waterY + 0.35 + this.yOffset + (this.form?.ride ?? 0) + y, this.pos.z - s * x + c * z);
   }
 
   center(out = new THREE.Vector3()) {
@@ -118,7 +127,7 @@ export class Boat {
   distanceToAxis(point) {
     const fx = Math.sin(this.heading);
     const fz = Math.cos(this.heading);
-    const cy = this.waterY + 0.35 + this.yOffset + 0.9;
+    const cy = this.waterY + 0.35 + this.yOffset + (this.form?.ride ?? 0) + 0.9;
     const dx = point.x - this.pos.x;
     const dy = point.y - cy;
     const dz = point.z - this.pos.z;

@@ -17,6 +17,8 @@ function smoothKeys(keys, f) {
   return a[1] + (b[1] - a[1]) * u * u * (3 - 2 * u);
 }
 
+const FORK_STEP = 4;
+const JET_SKIM = 26;
 const STICK = 5;
 const INTENT = 14;
 
@@ -319,17 +321,102 @@ export function createTrack(map) {
       tunnelIn,
       seam,
       tunnelOut,
-      top: map.river.slope * length + drops.reduce((sum, d) => sum + d.height, 0),
+      top: map.river.top ?? map.river.slope * length + drops.reduce((sum, d) => sum + d.height, 0),
     };
+    if (map.river.land) {
+      const { from, to, height, kind = 'truck', dive = 6, ramp = 150, peak = 0 } = map.river.land;
+      river.land = { launch: from * length, lip: to * length, span: (to - from) * length, height, kind, dive, ramp, peak };
+    }
+    if (map.river.fork) {
+      const path = new THREE.CatmullRomCurve3(map.river.fork.map(([x, z]) => new THREE.Vector3(x, 0, z)), false, 'centripetal');
+      const count = Math.round(path.getLength() / FORK_STEP);
+      river.fork = { samples: path.getSpacedPoints(count), step: path.getLength() / count, halfWidth: map.halfWidth };
+    }
   }
 
-  function level(s, lap = 0) {
+  const landDepth = (s) => {
+    const land = river?.land;
+    if (!land) return -1;
+    const d = ahead(land.launch, s);
+    return d < land.span ? d : -1;
+  };
+
+  const landSmooth = (d, a, b) => {
+    const t = Math.min(1, Math.max(0, (d - a) / (b - a)));
+    return t * t * (3 - 2 * t);
+  };
+
+  function landRise(s) {
+    const d = landDepth(s);
+    if (d < 0) return 0;
+    const { kind, height, dive, ramp, span } = river.land;
+    if (kind === 'sub') return -height * landSmooth(d, dive, dive + ramp) * (1 - landSmooth(d, span - ramp, span)) * (0.92 + 0.08 * Math.sin(d * 0.03));
+    if (kind === 'jet') {
+      const start = baseLevel(river.land.launch - 2);
+      const finish = baseLevel(river.land.lip + 2);
+      const dive = start + (JET_SKIM - start) * landSmooth(d, 0, 340);
+      const climb = landSmooth(d, span - 1000, span - 260) * (river.land.peak - JET_SKIM);
+      const settle = landSmooth(d, span - 150, span - 6) * (finish + height - river.land.peak);
+      return dive + climb + settle + 2.4 * Math.sin(d * 0.016) * landSmooth(d, 340, 500) * (1 - landSmooth(d, span - 1100, span - 900)) - baseLevel(s);
+    }
+    return landSmooth(d, 8, 34) * (height + 1.6 * Math.sin(d * 0.035) + 0.8 * Math.sin(d * 0.09 + 1));
+  }
+
+  const landAmount = (s) => {
+    const d = landDepth(s);
+    return d < 0 ? 0 : landSmooth(d, 6, 22);
+  };
+
+  const onLand = (s) => river?.land?.kind === 'truck' && landDepth(s) >= 6;
+  const offWater = (s) => landDepth(s) >= (river?.land?.dive ?? 0);
+  const formAt = (s) => landDepth(s) >= 0;
+  const formKind = (s) => (landDepth(s) >= 0 ? river.land.kind : null);
+
+  function nearestMain(x, z) {
+    let best = 0;
+    let bestD = Infinity;
+    for (let i = 0; i < N; i++) {
+      const d = (x - px[i]) ** 2 + (z - pz[i]) ** 2;
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    }
+    return best;
+  }
+
+  function baseLevel(s, lap = 0) {
     if (!river) return 0;
     const d = ahead(river.seam, s) + lap * length;
     let h = river.top - river.slope * d;
     for (const drop of river.drops) if (d > ahead(river.seam, drop.s)) h -= drop.height;
     return h;
   }
+
+  const level = (s, lap = 0) => baseLevel(s, lap) + landRise(s);
+
+  if (river?.fork) {
+    const { x, z } = river.fork.samples[0];
+    river.fork.level = baseLevel(nearestMain(x, z) * spacing);
+  }
+
+  function branchNear(x, z) {
+    const fork = river?.fork;
+    if (!fork) return null;
+    let best = Infinity;
+    let along = 0;
+    for (let k = 0; k < fork.samples.length; k++) {
+      const p = fork.samples[k];
+      const d = (x - p.x) ** 2 + (z - p.z) ** 2;
+      if (d < best) {
+        best = d;
+        along = k;
+      }
+    }
+    return { dist: Math.sqrt(best), along, level: fork.level - river.slope * along * fork.step };
+  }
+
+  const mudAt = (s, lat) => 0.5 + 0.26 * Math.sin(s * 0.047 + 1.3) * Math.sin(lat * 0.19 + 0.7) + 0.16 * Math.sin(s * 0.113 + lat * 0.09 + 2.1) + 0.08 * Math.sin(s * 0.23 - lat * 0.27);
 
   function inTunnel(s) {
     return !!river && ahead(river.tunnelIn, s) < ahead(river.tunnelIn, river.tunnelOut);
@@ -373,6 +460,14 @@ export function createTrack(map) {
     map,
     river,
     level,
+    baseLevel,
+    branchNear,
+    mudAt,
+    landAmount,
+    onLand,
+    offWater,
+    formAt,
+    formKind,
     inTunnel,
     pastSeam,
     ahead,

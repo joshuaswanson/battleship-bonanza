@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { waveHeight } from './water.js';
 import { BASE_SPEED, COUNTDOWN } from './race.js';
 
+const ORBIT_START = 0.04;
+const ORBIT_END = 0.86;
 const RIVER_SHOTS = ['chase', 'lead', 'bank', 'chase', 'lead'];
 const CANAL_SHOTS = ['chase', 'lead', 'bank', 'high', 'chase', 'lead'];
 const lerpAngle = (a, b, k) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * k;
@@ -78,6 +80,7 @@ export class Director {
       const back = 11 + speedFrac * 2;
       const chase = new THREE.Vector3(b.pos.x - fx * back, b.waterY + 6 + Math.max(0, b.yOffset) * (b.air?.fall ? 0.95 : 0.6), b.pos.z - fz * back);
       let desired = chase;
+      if (b.orbit) desired = this.flightShot(b, chase);
       if (race.state === 'countdown') {
         const u = Math.min(1, Math.max(0, (COUNTDOWN - race.countdown) / (COUNTDOWN - 1)));
         const e = u * u * (3 - 2 * u);
@@ -90,7 +93,8 @@ export class Director {
         );
       }
       this.pos.lerp(desired, k(race.state === 'countdown' ? 20 : 12));
-      this.look.lerp(new THREE.Vector3(b.pos.x + fx * 9, b.pos.y + 2, b.pos.z + fz * 9), k(10));
+      const lead = b.orbit ? 1 - Math.sin(Math.min(1, b.orbit.t / b.orbit.dur) * Math.PI) : 1;
+      this.look.lerp(new THREE.Vector3(b.pos.x + fx * 9 * lead, b.pos.y + 2, b.pos.z + fz * 9 * lead), k(10));
       fov = 60 + speedFrac * 10;
     }
     this.snap = false;
@@ -110,6 +114,18 @@ export class Director {
     }
   }
 
+  flightShot(b, chase) {
+    const u = Math.min(1, b.orbit.t / b.orbit.dur);
+    const sweep = Math.min(1, Math.max(0, (u - ORBIT_START) / (ORBIT_END - ORBIT_START)));
+    const a = sweep * sweep * (3 - 2 * sweep) * Math.PI * 2;
+    const blend = Math.min(1, Math.min(u, ORBIT_END + 0.04 - Math.min(u, ORBIT_END + 0.04)) * 8);
+    const fx = Math.sin(b.heading);
+    const fz = Math.cos(b.heading);
+    const radius = 14;
+    const shot = new THREE.Vector3(b.pos.x + (-fx * Math.cos(a) + fz * Math.sin(a)) * radius, b.pos.y + 3, b.pos.z + (-fz * Math.cos(a) - fx * Math.sin(a)) * radius);
+    return shot.lerp(chase, 1 - blend);
+  }
+
   riverShot(race, dt, k) {
     const t = race.track;
     this.focusTime -= dt;
@@ -117,13 +133,13 @@ export class Director {
     const hit = t.project(b.pos.x, b.pos.z, this.focusTime > 0 ? this.idx ?? -1 : -1);
     this.idx = hit.idx;
     const big = t.river.drops.find((d) => d.height > 8);
-    const toFalls = t.ahead(hit.s, big.s);
+    const toFalls = big ? t.ahead(hit.s, big.s) : Infinity;
     if (this.focusTime <= 0 || (this.shot !== 'falls' && toFalls < 45 && toFalls > 25)) {
       this.focus = Math.random() < 0.6 ? race.boats.indexOf(race.player) : Math.floor(Math.random() * race.boats.length);
       const focus = race.boats[this.focus];
       const at = t.project(focus.pos.x, focus.pos.z);
       this.idx = at.idx;
-      const nearFalls = t.ahead(at.s, big.s) < 45;
+      const nearFalls = !!big && t.ahead(at.s, big.s) < 45;
       this.shot = nearFalls ? 'falls' : RIVER_SHOTS[Math.floor(Math.random() * RIVER_SHOTS.length)];
       this.focusTime = nearFalls ? 3.5 : 5 + Math.random() * 3;
       this.side = Math.random() < 0.5 ? -1 : 1;

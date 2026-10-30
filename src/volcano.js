@@ -1,0 +1,423 @@
+import * as THREE from 'three';
+import { toon, glow, mulberry32 } from './toon.js';
+import { groundHit } from './terrain.js';
+import { Batcher, cullChunks, slicer, COLORS, mat, CONE, ROCK, CYLINDER, SPHERE, addPalm, createSky, createCloud, createArch, SUN_DIR } from './world.js';
+import { riverSurface, buildFalls } from './jungle.js';
+import { createWater } from './water.js';
+import { BOX, groundMesh, noise, seaStrip, smooth } from './mapKit.js';
+
+const SKY = 0xf0c8a0;
+const RIM = 92;
+const PEAK = 236;
+const LAVA_Y = 208;
+const PLATEAU = 58;
+const CLIFF = 488;
+const PALETTE = {
+  ...COLORS,
+  basalt: 0x3d3a3f,
+  basaltLight: 0x5c565a,
+  ash: 0x7f7670,
+  concrete: 0xb6b8ba,
+  steel: 0x6d7a88,
+  steelDark: 0x2e3744,
+  hazard: 0xffd23f,
+  hazardDark: 0x20262e,
+  villain: 0xc62838,
+  villainDark: 0x7a1524,
+  lamp: 0xfff0a0,
+  screen: 0x46e0c0,
+  moss: 0x5e9e26,
+  mossDark: 0x3c7a1c,
+  bark: 0x7a5230,
+  fronds: 0x5e9e26,
+  coconut: 0x7a5230,
+};
+
+function islandHeight(x, z) {
+  const r = Math.hypot(x, z);
+  const lump = 8 * noise(x * 1.3, z * 1.3) + 4 * noise(x * 3.1 + 50, z * 3.1);
+  const cone = PEAK * Math.max(0, 1 - (r - RIM) / 400) ** 1.12 + lump;
+  const crater = smooth(62, RIM, r);
+  const volcano = LAVA_Y - 6 + (cone - (LAVA_Y - 6)) * crater;
+  const table = PLATEAU + 0.5 * lump;
+  const sea = -16;
+  const edge = CLIFF + 14 * Math.sin(Math.atan2(z, x) * 7) * 0.4;
+  return Math.max(volcano * (1 - smooth(edge + 2, edge + 12, r)) + sea * smooth(edge + 2, edge + 12, r), table + (sea - table) * smooth(edge, edge + 10, r));
+}
+
+function groundHeight(surface, track, x, z) {
+  const { edge, s, level } = surface.sample(x, z);
+  const raw = shapedHeight(track, edge, s, level, x, z);
+  const past = track.ahead(track.river.land.launch, s);
+  if (past > 170) return raw;
+  const notch = smooth(1, 6, past) * (1 - smooth(12, 40, edge));
+  return raw + (-16 - raw) * notch;
+}
+
+function shapedHeight(track, edge, s, level, x, z) {
+  const land = islandHeight(x, z);
+  const free = track.formAt(s) ? track.landAmount(s) : 0;
+  if (free >= 1) return land + (Math.min(land, level - 10) - land) * (1 - smooth(4, 30, edge));
+  const hw = track.halfWidth;
+  const dist = edge + hw;
+  const bank = smooth(hw - 6, hw + 8, dist);
+  const levee = Math.max(land, level + 4 + 3 * noise(x, z));
+  const shoulder = levee + (land - levee) * smooth(hw + 14, hw + 90, dist);
+  const carved = level - 5 + (shoulder - level + 5) * bank;
+  return carved + (land - carved) * free;
+}
+
+const LAVA_VERT = /* glsl */ `
+  attribute vec2 aFlow;
+  varying vec3 vWorld;
+  varying vec2 vFlow;
+  void main() {
+    vFlow = aFlow;
+    vec4 world = modelMatrix * vec4(position, 1.0);
+    vWorld = world.xyz;
+    gl_Position = projectionMatrix * viewMatrix * world;
+  }
+`;
+
+const LAVA_FRAG = /* glsl */ `
+  uniform float uTime;
+  uniform float uStream;
+  varying vec3 vWorld;
+  varying vec2 vFlow;
+  float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  float noise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+  }
+  float fbm(vec2 p) { return noise(p) * 0.5 + noise(p * 2.1 + 3.0) * 0.3 + noise(p * 4.3 + 7.0) * 0.2; }
+  vec3 cells(vec2 p, float t) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    float first = 8.0;
+    float second = 8.0;
+    float id = 0.0;
+    for (int y = -1; y <= 1; y++) {
+      for (int x = -1; x <= 1; x++) {
+        vec2 g = vec2(float(x), float(y));
+        vec2 o = vec2(hash(i + g), hash(i + g + 19.0));
+        o = 0.5 + 0.42 * sin(t + 6.28 * o);
+        float d = length(g + o - f);
+        if (d < first) {
+          second = first;
+          first = d;
+          id = hash(i + g + 41.0);
+        } else if (d < second) second = d;
+      }
+    }
+    return vec3(first, second - first, id);
+  }
+  vec3 ramp(float heat) {
+    vec3 c = mix(vec3(0.13, 0.03, 0.04), vec3(0.72, 0.08, 0.03), smoothstep(0.1, 0.45, heat));
+    c = mix(c, vec3(1.0, 0.42, 0.05), smoothstep(0.4, 0.7, heat));
+    c = mix(c, vec3(1.0, 0.84, 0.25), smoothstep(0.68, 0.9, heat));
+    return mix(c, vec3(1.0, 0.98, 0.78), smoothstep(0.9, 1.0, heat));
+  }
+  void main() {
+    vec2 p = uStream > 0.5 ? vec2(vFlow.x * 2.2, vFlow.y * 0.05 - uTime * 0.55) : vWorld.xz * 0.05;
+    vec2 warp = vec2(fbm(p * 0.8 + uTime * 0.05), fbm(p * 0.8 + 11.0 - uTime * 0.04)) - 0.5;
+    vec2 q = p + warp * 1.4;
+    vec3 crust = cells(q, uTime * 0.3);
+    vec3 fine = cells(q * 2.6 + 4.0, uTime * 0.45);
+    float seam = 1.0 - smoothstep(0.0, 0.2, crust.y);
+    float thin = 1.0 - smoothstep(0.0, 0.1, fine.y);
+    float plate = crust.z * 0.2 + fbm(q * 3.0) * 0.18;
+    float pulse = 0.5 + 0.5 * sin(uTime * 1.4 + crust.z * 18.0);
+    float heat = plate + seam * 0.95 + thin * 0.22 + pulse * 0.08;
+    if (uStream > 0.5) heat += 0.4 * (1.0 - smoothstep(0.1, 0.95, abs(vFlow.x)));
+    if (uStream < 0.5) heat += 0.3 * (1.0 - smoothstep(10.0, 76.0, length(vWorld.xz)));
+    gl_FragColor = vec4(ramp(heat), 1.0);
+    #include <colorspace_fragment>
+  }
+`;
+
+function lavaStream(angle, height, tick) {
+  const steps = 54;
+  const pos = [];
+  const flow = [];
+  const index = [];
+  for (let k = 0; k <= steps; k++) {
+    const t = k / steps;
+    const r = 84 + t * 150;
+    const a = angle + 0.16 * Math.sin(t * 7 + angle * 3) * t + 0.05 * Math.sin(t * 19);
+    const width = 3 + 4 * t + 1.2 * Math.sin(t * 11 + angle);
+    const nx = -Math.sin(a);
+    const nz = Math.cos(a);
+    for (const side of [-1, -0.45, 0, 0.45, 1]) {
+      const x = Math.cos(a) * r + nx * width * side;
+      const z = Math.sin(a) * r + nz * width * side;
+      pos.push(x, height(x, z) + 0.7 - Math.abs(side) * 0.4, z);
+      flow.push(side, t * 150);
+    }
+  }
+  for (let k = 0; k < steps; k++) {
+    for (let l = 0; l < 4; l++) {
+      const a = k * 5 + l;
+      index.push(a, a + 5, a + 1, a + 1, a + 5, a + 6);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('aFlow', new THREE.Float32BufferAttribute(flow, 2));
+  g.setIndex(index);
+  return g;
+}
+
+function disc(x, z, radius, y, material) {
+  const mesh = new THREE.Mesh(new THREE.CircleGeometry(radius, 48).rotateX(-Math.PI / 2), material);
+  mesh.position.set(x, y, z);
+  return mesh;
+}
+
+function radar(batch, x, y, z, rand) {
+  batch.add('steelDark', CYLINDER, mat(x, y + 3, z, 1.6, 6, 1.6));
+  batch.add('concrete', SPHERE, mat(x, y + 8, z, 7, 2.2, 7, 0.7, rand() * 6, 0));
+  batch.add('steelDark', CYLINDER, mat(x, y + 10, z, 0.25, 4, 0.25, 0.7, 0, 0));
+}
+
+function bunker(batch, x, y, z, yaw) {
+  batch.add('concrete', BOX, mat(x, y + 2.2, z, 16, 4.4, 10, 0, yaw, 0));
+  batch.add('steelDark', BOX, mat(x + Math.sin(yaw) * 5.1, y + 2.6, z + Math.cos(yaw) * 5.1, 11, 0.9, 0.3, 0, yaw, 0));
+  batch.add('villain', BOX, mat(x, y + 4.7, z, 16.6, 0.6, 10.6, 0, yaw, 0));
+}
+
+function fuelTanks(batch, x, y, z) {
+  for (let k = 0; k < 3; k++) {
+    batch.add('concrete', CYLINDER, mat(x + k * 9, y + 4, z, 4, 8, 4));
+    batch.add('villain', CYLINDER, mat(x + k * 9, y + 4.5, z, 4.08, 1, 4.08));
+    batch.add('steel', SPHERE, mat(x + k * 9, y + 8, z, 4, 1.2, 4));
+  }
+}
+
+function hangar(batch, x, y, z, yaw) {
+  batch.add('steel', CYLINDER, mat(x, y + 2, z, 13, 26, 13, Math.PI / 2, yaw, 0));
+  batch.add('steelDark', BOX, mat(x + Math.sin(yaw) * 13.2, y + 4, z + Math.cos(yaw) * 13.2, 18, 11, 0.5, 0, yaw, 0));
+  batch.add('hazard', BOX, mat(x + Math.sin(yaw) * 13.5, y + 9.8, z + Math.cos(yaw) * 13.5, 18, 0.5, 0.3, 0, yaw, 0));
+}
+
+function rocket(batch, x, y, z) {
+  batch.add('concrete', CYLINDER, mat(x, y + 15, z, 3, 30, 3));
+  batch.add('villain', CONE, mat(x, y + 34, z, 3.05, 8, 3.05));
+  batch.add('villain', CYLINDER, mat(x, y + 18, z, 3.06, 2, 3.06));
+  for (let k = 0; k < 4; k++) {
+    const a = (k / 4) * Math.PI * 2;
+    batch.add('steelDark', BOX, mat(x + Math.cos(a) * 3.4, y + 3.6, z + Math.sin(a) * 3.4, 3, 7, 0.5, 0, -a, 0));
+  }
+  batch.add('steelDark', BOX, mat(x + 6, y + 15, z, 1, 32, 1));
+  batch.add('steelDark', BOX, mat(x + 3.5, y + 24, z, 5, 0.6, 0.6));
+}
+
+function blastDoor(batch, x, y, z, yaw) {
+  batch.add('steelDark', BOX, mat(x, y + 11, z, 34, 22, 4, 0, yaw, 0));
+  for (const side of [-1, 1]) batch.add('steel', BOX, mat(x + Math.cos(yaw) * side * 7.8, y + 10, z - Math.sin(yaw) * side * 7.8, 15, 19, 4.8, 0, yaw, 0));
+  batch.add('hazard', BOX, mat(x, y + 21, z, 35, 1.2, 5, 0, yaw, 0));
+  batch.add('villain', BOX, mat(x + Math.sin(yaw) * 2.6, y + 10, z + Math.cos(yaw) * 2.6, 1, 19, 0.3, 0, yaw, 0));
+}
+
+function cliffRocks(batch, track, s, rand) {
+  for (let k = 0; k < 26; k++) {
+    const i = track.wrap(Math.round((s - 12 + rand() * 22) / track.spacing));
+    const side = k % 2 ? 1 : -1;
+    const p = track.point(i, side * (track.hw[i] + 2 + rand() * 12));
+    const r = 3 + rand() * 6;
+    batch.add(k % 3 ? 'basalt' : 'basaltLight', ROCK, mat(p.x, track.baseLevel(s - 6) + r * 0.3, p.z, r, r * 1.2, r, rand(), rand() * 6, rand()));
+  }
+}
+
+function buildSource(batch, group, track, rand) {
+  const lakeIdx = track.wrap(Math.round((track.river.land.lip + 26) / track.spacing));
+  const lake = track.point(lakeIdx, 0);
+  const top = track.river.top;
+  const back = new THREE.Vector3(track.nx[lakeIdx], 0, track.nz[lakeIdx]);
+  const cave = new THREE.Vector3(lake.x + back.x * 92, 0, lake.z + back.z * 92);
+  for (let k = 0; k < 34; k++) {
+    const a = (k / 34) * Math.PI;
+    const r = 10 + rand() * 7;
+    const lat = Math.cos(a) * 30;
+    const up = Math.sin(a) * 34;
+    batch.add(k % 2 ? 'basalt' : 'basaltLight', ROCK, mat(cave.x - back.z * lat, top + up + 4, cave.z + back.x * lat, r, r, r, rand(), rand() * 6, rand()));
+  }
+  const sheet = new THREE.Mesh(new THREE.CylinderGeometry(26, 34, 44, 28, 1, true, 0, Math.PI), new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.9 }));
+  sheet.position.set(cave.x, top + 20, cave.z);
+  sheet.rotation.y = Math.atan2(back.x, back.z) + Math.PI / 2;
+  group.add(sheet);
+  return { x: lake.x, y: top, z: lake.z, cave, back };
+}
+
+export async function createVolcano(group, track, fx) {
+  const tick = slicer();
+  const fog = new THREE.Fog(SKY, 300, 1500);
+  const sky = createSky({ top: 0x3f7fc8, horizon: SKY });
+  group.add(sky);
+  group.add(new THREE.HemisphereLight(0xfff0e0, 0x5a4a50, 1.4));
+  const sun = new THREE.DirectionalLight(0xffe0c0, 2.6);
+  sun.position.copy(SUN_DIR).multiplyScalar(100);
+  group.add(sun);
+
+  const surface = await riverSurface(track, tick);
+  const height = (x, z) => groundHeight(surface, track, x, z);
+  const sand = new THREE.Color(0x4a4448);
+  const mossy = new THREE.Color(0x3c7a1c);
+  const grass = new THREE.Color(0x5e9e26);
+  const dark = new THREE.Color(PALETTE.basalt);
+  const pale = new THREE.Color(PALETTE.basaltLight);
+  const ember = new THREE.Color(0xff5a1f);
+  group.add(await groundMesh(surface, height, (x, y, z, n, out) => {
+    const r = Math.hypot(x, z);
+    const steep = 1 - n.y;
+    if (y < 3) out.copy(sand);
+    else if (steep > 0.3) out.copy(noise(x * 2, z * 2) > 0.5 ? dark : pale);
+    else if (y < 100 && r > 200) out.copy(grass).lerp(mossy, noise(x * 3, z * 3) > 0.55 ? 0.6 : 0);
+    else out.copy(noise(x * 2, z * 2) > 0.52 ? dark : pale);
+    if (r > 66 && r < 108) out.lerp(ember, (1 - smooth(80, 108, r)) * 0.6);
+  }, tick, 6));
+  await tick();
+
+  const { launch, lip } = track.river.land;
+  const water = seaStrip(track, Math.round((lip - 2) / track.spacing), Math.round((launch + 2) / track.spacing) + track.N, { deep: 0x0f7fa8, shallow: 0x35d0d4 });
+  group.add(water.mesh);
+  const ocean = createWater({ size: 2600, segments: 180, amp: 0.45 });
+  ocean.mesh.position.y = 0;
+  group.add(ocean.mesh);
+
+  const rapids = track.river.drops.map((drop) => buildFalls(track, drop));
+  for (const f of rapids) group.add(f.mesh);
+  const edgeLevel = track.baseLevel(launch - 2);
+  const bigFalls = buildFalls({ ...track, level: () => 0, halfWidth: track.halfWidth + 22 }, { s: launch, height: edgeLevel });
+  bigFalls.material.side = THREE.DoubleSide;
+  group.add(bigFalls.mesh);
+  rapids.push(bigFalls);
+
+  const lavaMat = new THREE.ShaderMaterial({ uniforms: { uTime: { value: 0 }, uStream: { value: 0 } }, vertexShader: LAVA_VERT, fragmentShader: LAVA_FRAG });
+  const streamMat = lavaMat.clone();
+  streamMat.side = THREE.DoubleSide;
+  streamMat.uniforms.uStream.value = 1;
+  group.add(disc(0, 0, 90, LAVA_Y - 1, lavaMat));
+  for (const a of [0.5, 1.15, 1.9, 2.5, 3.2, 5.7, 6.05]) {
+    group.add(new THREE.Mesh(lavaStream(a, height, tick), streamMat));
+    await tick();
+  }
+
+  const batch = new Batcher();
+  const rand = mulberry32(6660);
+  const blobs = [];
+  cliffRocks(batch, track, launch, rand);
+  const source = buildSource(batch, group, track, rand);
+  const riverF = launch / track.length;
+  const onCourse = (u, lat) => {
+    const i = track.wrap(Math.round(u * riverF * track.N));
+    const p = track.point(i, lat);
+    return { ...p, y: height(p.x, p.z), yaw: track.heading(i) };
+  };
+  for (const [u, lat, build] of [
+    [0.16, 66, (p) => radar(batch, p.x, p.y, p.z, rand)],
+    [0.24, 60, (p) => bunker(batch, p.x, p.y, p.z, p.yaw)],
+    [0.33, 72, (p) => fuelTanks(batch, p.x, p.y, p.z)],
+    [0.42, 64, (p) => hangar(batch, p.x, p.y, p.z, p.yaw)],
+    [0.5, 78, (p) => rocket(batch, p.x, p.y, p.z)],
+    [0.57, 60, (p) => bunker(batch, p.x, p.y, p.z, p.yaw)],
+    [0.64, 84, (p) => radar(batch, p.x, p.y, p.z, rand)],
+    [0.71, 66, (p) => hangar(batch, p.x, p.y, p.z, p.yaw)],
+    [0.78, 70, (p) => rocket(batch, p.x, p.y, p.z)],
+    [0.85, 62, (p) => fuelTanks(batch, p.x, p.y, p.z)],
+    [0.92, 60, (p) => bunker(batch, p.x, p.y, p.z, p.yaw)],
+  ]) {
+    build(onCourse(u, lat));
+    await tick();
+  }
+  for (let k = 0; k < 420; k++) {
+    const a = rand() * 6.3;
+    const r = 240 + rand() * 240;
+    const x = Math.cos(a) * r;
+    const z = Math.sin(a) * r;
+    const near = surface.sample(x, z);
+    if (near.edge < 8) continue;
+    const y = height(x, z);
+    if (y < PLATEAU - 8 || y > 130) continue;
+    addPalm(batch, x, y - 0.4, z, rand, { height: 7 + rand() * 7, lean: rand() * 0.4, dir: rand() * 6.3 });
+    if (k % 30 === 0) await tick();
+  }
+  for (let k = 0; k < 120; k++) {
+    const a = rand() * 6.3;
+    const r = 110 + rand() * 360;
+    const x = Math.cos(a) * r;
+    const z = Math.sin(a) * r;
+    if (surface.sample(x, z).edge < 6) continue;
+    const s = 3 + rand() * 7;
+    batch.add(k % 2 ? 'basalt' : 'basaltLight', ROCK, mat(x, height(x, z) + s * 0.2, z, s, s * 0.8, s, rand(), rand() * 6, rand()));
+  }
+  for (let k = 0; k < 30; k++) {
+    const s = 120 + rand() * (launch - 240);
+    const i = track.wrap(Math.round(s / track.spacing));
+    const lat = (rand() < 0.5 ? -1 : 1) * (track.hw[i] * 0.3 + rand() * track.hw[i] * 0.5);
+    const p = track.point(i, lat);
+    const level = track.level(s);
+    const r = 2.8 + rand() * 2.2;
+    batch.add('basalt', ROCK, mat(p.x, level + 0.5, p.z, r, r * 0.9, r, rand(), rand() * 6, rand()));
+    blobs.push({ x: p.x, z: p.z, rx: r * 0.9, rz: r * 0.9, rot: 0, top: level + r * 0.6, launch: true });
+  }
+  const scenery = new THREE.Group();
+  const chunks = await batch.buildAsync(scenery, 0.1, PALETTE, 120, tick);
+  group.add(scenery);
+  group.add(createArch(track, track.halfWidth));
+
+  const clouds = [];
+  for (let i = 0; i < 10; i++) {
+    const cloud = createCloud(rand);
+    const a = rand() * Math.PI * 2;
+    const d = 300 + rand() * 500;
+    cloud.position.set(Math.cos(a) * d, 150 + rand() * 80, Math.sin(a) * d);
+    clouds.push(cloud);
+    group.add(cloud);
+  }
+
+  return {
+    fog,
+    water,
+    sun,
+    surface,
+    shores: blobs,
+    spray: { foam: 0xffffff, tint: 0xbff6ff, wake: 0xe7f9ff, glow: 0x1c1a1c },
+    solid(p) {
+      return groundHit(height, p);
+    },
+    update(t, dt, camera) {
+      water.update(t);
+      ocean.update(t);
+      ocean.mesh.position.x = Math.round(camera.position.x / 30) * 30;
+      ocean.mesh.position.z = Math.round(camera.position.z / 30) * 30;
+      for (const f of rapids) f.material.uniforms.uTime.value = t;
+      lavaMat.uniforms.uTime.value = t;
+      streamMat.uniforms.uTime.value = t;
+      cullChunks(chunks, camera, fog.far);
+      sky.position.copy(camera.position);
+      if (Math.random() < dt * 60) {
+        const a = Math.random() * 6.3;
+        const r = 12 + Math.random() * 22;
+        fx.puffs.emit(source.cave.x + Math.cos(a) * r, source.y + 2, source.cave.z + Math.sin(a) * r, (Math.random() - 0.5) * 6, 24 + Math.random() * 30, (Math.random() - 0.5) * 6, 2 + Math.random() * 3, 3, 0xffffff, 8, 0.2, 0);
+      }
+      if (Math.random() < dt * 40) {
+        const p = bigFalls.base;
+        const lat = (Math.random() - 0.5) * 2 * (p.hw + 24);
+        fx.puffs.emit(p.x + p.nx * lat, 2, p.z + p.nz * lat, (Math.random() - 0.5) * 8, 7 + Math.random() * 12, (Math.random() - 0.5) * 8, 2.4 + Math.random() * 3, 1.6, 0xffffff, 2, 0.4, 0);
+      }
+      if (Math.random() < dt * 34) {
+        const a = Math.random() * 6.3;
+        const r = Math.random() * 46;
+        fx.puffs.emit(Math.cos(a) * r, LAVA_Y + 4, Math.sin(a) * r, (Math.random() - 0.5) * 3, 22 + Math.random() * 12, (Math.random() - 0.5) * 3, 3 + Math.random() * 3, 4.5, Math.random() < 0.2 ? 0xff7a1f : 0x4a4448, -1, 0.3, 0);
+      }
+      if (Math.random() < dt * 26) {
+        const a = Math.random() * 6.3;
+        const r = 8 + Math.random() * 46;
+        const up = 26 + Math.random() * 46;
+        fx.puffs.emit(Math.cos(a) * r, LAVA_Y, Math.sin(a) * r, Math.cos(a) * 9 + (Math.random() - 0.5) * 8, up, Math.sin(a) * 9 + (Math.random() - 0.5) * 8, 0.7 + Math.random() * 1.4, 2.6, Math.random() < 0.5 ? 0xffb02e : 0xff5a1f, 26, 0, 0);
+      }
+    },
+  };
+}

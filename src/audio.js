@@ -290,12 +290,12 @@ export class Sfx {
     this.saw.grind.gain.setTargetAtTime(0.22 * grinding, t, 0.04);
   }
 
-  setEngine(speedFraction, active) {
+  setEngine(speedFraction, active, truck = false) {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
-    this.engine.frequency.setTargetAtTime(55 + speedFraction * 70, t, 0.1);
-    this.engineFilter.frequency.setTargetAtTime(300 + speedFraction * 500, t, 0.1);
-    this.engineGain.gain.setTargetAtTime(active ? 0.05 + speedFraction * 0.05 : 0, t, 0.2);
+    this.engine.frequency.setTargetAtTime((truck ? 36 : 55) + speedFraction * (truck ? 52 : 70), t, 0.1);
+    this.engineFilter.frequency.setTargetAtTime((truck ? 420 : 300) + speedFraction * (truck ? 760 : 500), t, 0.1);
+    this.engineGain.gain.setTargetAtTime(active ? (0.05 + speedFraction * 0.05) * (truck ? 1.7 : 1) : 0, t, 0.2);
   }
 
   volumeAt(pos) {
@@ -346,9 +346,9 @@ export class Sfx {
     osc.stop(t + dur + 0.02);
   }
 
-  noise(dur, { vol = 0.3, freq = 1000, type = 'lowpass', to = null } = {}) {
+  noise(dur, { vol = 0.3, freq = 1000, type = 'lowpass', to = null, delay = 0 } = {}) {
     const ctx = this.ctx;
-    const t = ctx.currentTime;
+    const t = ctx.currentTime + delay;
     const src = ctx.createBufferSource();
     src.buffer = this.noiseBuffer;
     const filter = ctx.createBiquadFilter();
@@ -361,6 +361,22 @@ export class Sfx {
     src.connect(filter).connect(gain).connect(this.master);
     src.start(t);
     src.stop(t + dur + 0.02);
+  }
+
+  clank(delay, v, pitch = 1) {
+    this.tone(2300 * pitch, 0.1, { type: 'triangle', vol: 0.1 * v, delay });
+    this.tone(3400 * pitch, 0.06, { type: 'square', vol: 0.03 * v, delay });
+    this.tone(320 * pitch, 0.16, { type: 'square', vol: 0.16 * v, to: 95, delay });
+    this.noise(0.08, { vol: 0.28 * v, freq: 2800, type: 'bandpass', to: 900, delay });
+  }
+
+  hiss(delay, v, dur = 0.3) {
+    this.noise(dur, { vol: 0.22 * v, freq: 5200, type: 'highpass', to: 1500, delay });
+  }
+
+  backfire(delay, v) {
+    this.noise(0.14, { vol: 0.42 * v, freq: 1500, to: 180, delay });
+    this.tone(150, 0.14, { type: 'square', vol: 0.2 * v, to: 48, delay });
   }
 
   play(name, pos, pitch = 1000) {
@@ -424,6 +440,46 @@ export class Sfx {
         break;
       case 'whoosh':
         this.noise(0.6, { vol: 0.3 * v, freq: 400, type: 'bandpass', to: 2400 });
+        break;
+      case 'transform':
+        if (v < 0.15) break;
+        this.hiss(0, v, 0.4);
+        this.tone(170, 1.75, { type: 'sawtooth', vol: 0.07 * v, to: 980 });
+        this.tone(340, 1.75, { type: 'square', vol: 0.03 * v, to: 1960 });
+        this.noise(1.7, { vol: 0.09 * v, freq: 500, type: 'bandpass', to: 3200 });
+        for (const delay of [0.22, 0.3, 0.38, 0.46]) this.clank(delay, v * 0.7, 0.8 + delay);
+        for (let k = 0; k < 10; k++) this.tone(1500 + k * 90, 0.03, { type: 'square', vol: 0.05 * v, delay: 0.42 + k * 0.042 });
+        this.hiss(0.68, v, 0.35);
+        for (const delay of [0.84, 0.9, 0.96, 1.02]) {
+          this.tone(120, 0.14, { type: 'sine', vol: 0.32 * v, to: 300, delay });
+          this.noise(0.09, { vol: 0.2 * v, freq: 800, delay });
+        }
+        this.tone(90, 0.5, { type: 'sawtooth', vol: 0.09 * v, to: 240, delay: 1.02 });
+        this.clank(1.24, v, 0.72);
+        this.clank(1.3, v, 0.66);
+        this.hiss(1.34, v, 0.22);
+        this.clank(1.55, v, 1.05);
+        this.clank(1.68, v * 1.2, 0.55);
+        this.tone(58, 0.32, { type: 'sine', vol: 0.5 * v, to: 34, delay: 1.68 });
+        this.tone(55, 0.5, { type: 'sawtooth', vol: 0.16 * v, to: 210, delay: 1.76 });
+        this.backfire(1.86, v);
+        this.backfire(2.02, v * 0.8);
+        break;
+      case 'untransform':
+        if (v < 0.15) break;
+        this.hiss(0, v, 0.3);
+        this.tone(900, 0.75, { type: 'sawtooth', vol: 0.06 * v, to: 170 });
+        this.tone(1800, 0.75, { type: 'square', vol: 0.025 * v, to: 340 });
+        for (const delay of [0.1, 0.22, 0.34, 0.46]) this.clank(delay, v * 0.75, 1.1 - delay);
+        this.hiss(0.5, v, 0.25);
+        this.clank(0.68, v, 0.6);
+        break;
+      case 'truckLand':
+        this.tone(64, 0.42, { type: 'sine', vol: 0.6 * v, to: 30 });
+        this.noise(0.3, { vol: 0.38 * v, freq: 900, to: 120 });
+        this.tone(340, 0.2, { type: 'square', vol: 0.07 * v, to: 620, delay: 0.1 });
+        this.tone(620, 0.24, { type: 'square', vol: 0.05 * v, to: 300, delay: 0.3 });
+        this.clank(0.06, v * 0.7, 0.7);
         break;
       case 'missile':
         this.noise(0.12, { vol: 0.45 * v, freq: 900, to: 200 });

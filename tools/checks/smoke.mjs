@@ -1,6 +1,6 @@
 import { launch, startRace, waitForGo, autopilot, check } from '../lib.mjs';
 
-for (const map of (process.argv[2] ?? 'bay,jungle,alps,venice,midway,canyon,docks,tuebingen,ctf:bay,ctf:fjord,ctf:lagoon,ctf:harbor,cp:lagoon').split(',')) {
+for (const map of (process.argv[2] ?? 'bay,jungle,frozen,volcano,alps,venice,midway,canyon,docks,tuebingen,ctf:bay,ctf:fjord,ctf:lagoon,ctf:harbor,cp:lagoon').split(',')) {
   const t0 = Date.now();
   const { browser, page } = await launch({ width: 640, height: 400 });
   await startRace(page, { map });

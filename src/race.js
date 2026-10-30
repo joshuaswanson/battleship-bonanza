@@ -5,8 +5,9 @@ import { waveHeight } from './water.js';
 import { driveAI } from './ai.js';
 import { TrackFeatures } from './features.js';
 import { Wakes } from './wake.js';
+import { TireMarks } from './tireMarks.js';
 import { t as tr } from './i18n.js';
-import { ACCEL, ARMOR_SPEED, BANK_MARGIN, BASE_SPEED, BRAKE, CIRCLE_OFFSET, COAST, FALL_GRAVITY, GRIP, HOLD_IDS, KO_TIME, LAPS, MAX_HP, OFF_COURSE_SPEED, OUTER_LIMIT, RADIUS, REGEN_DELAY, REGEN_MAX, REGEN_RAMP, REGEN_START, REVERSE_SPEED, TURN_RATE, approach, clamp } from './race/shared.js';
+import { ACCEL, ARMOR_SPEED, BANK_MARGIN, BASE_SPEED, BRAKE, CIRCLE_OFFSET, COAST, FALL_GRAVITY, GRIP, HOLD_IDS, JET_SPEED, JET_THRUST, KO_TIME, LAND_GRIP, LAPS, MAX_HP, MUD_POOL, MUD_SPEED, OFF_COURSE_SPEED, OUTER_LIMIT, RADIUS, REGEN_DELAY, REGEN_MAX, REGEN_RAMP, REGEN_START, REVERSE_SPEED, TURN_RATE, approach, clamp } from './race/shared.js';
 import { Boat } from './race/boat.js';
 import { carrierSpeed } from './ctf.js';
 import * as machinegun from './race/attachments/machinegun.js';
@@ -49,7 +50,8 @@ export class Race {
     this.sfx = sfx;
     this.attract = attract;
     this.laps = attract || mode ? Infinity : laps;
-    this.boats = defs.map((def, i) => new Boat(def, i, scene));
+    this.boats = defs.map((def, i) => new Boat(def, i, scene, track.river?.land?.kind));
+    this.tireMarks = track.river?.land?.kind === 'truck' ? new TireMarks(scene) : null;
     this.player = this.boats.find((b) => b.isLocal) ?? this.boats.find((b) => b.isPlayer) ?? null;
     this.bullets = [];
     this.missiles = [];
@@ -67,7 +69,8 @@ export class Race {
 
     const streak = new THREE.CylinderGeometry(1, 1, 1, 8, 1, true).rotateX(Math.PI / 2).translate(0, 0, -0.5);
     const tracer = (color) => new THREE.MeshBasicMaterial({ color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
-    this.bulletMesh = new THREE.InstancedMesh(streak, tracer(0xffe066), 400);
+    this.bulletMesh = new THREE.InstancedMesh(streak, tracer(0xffffff), 400);
+    this.bulletMesh.setColorAt(0, new THREE.Color(0xffe066));
     this.bulletOutline = new THREE.InstancedMesh(streak, tracer(0xffffff), 400);
     for (const mesh of [this.bulletMesh, this.bulletOutline]) {
       mesh.frustumCulled = false;
@@ -148,6 +151,7 @@ export class Race {
     this.updateLasers(dt);
     this.updateFlames(dt);
     this.features.update(this, dt, this.time);
+    this.tireMarks?.update(this.boats, this.time);
     this.hazards?.play(this, dt);
     this.mode?.play(this, dt);
     this.blasts.length = 0;
@@ -184,7 +188,8 @@ export class Race {
       b.vel.multiplyScalar(damp);
       b.speed *= damp;
       b.pos.addScaledVector(b.vel, dt);
-      if (Math.random() < 0.6) this.fx.bubbles(b.pos.x, b.waterY + 0.2, b.pos.z);
+      if (t.onLand(b.trackS) || t.formKind(b.trackS) === 'jet') this.wreckSmoke(b);
+      else if (Math.random() < 0.6) this.fx.bubbles(b.pos.x, b.waterY + 0.2, b.pos.z);
       if (b.ko <= 0) this.respawn(b);
       return;
     }
@@ -204,23 +209,33 @@ export class Race {
     if (b.flag) max *= carrierSpeed(b.flag, this.time);
     if (this.isTethered(b)) max *= 0.8;
     if (b.offCourse > 0) max *= OFF_COURSE_SPEED;
+    const onLand = t.onLand(b.trackS);
+    const jetting = !!b.form && b.formP >= 1 && t.formKind(b.trackS) === 'jet';
+    if (jetting) max *= JET_SPEED;
+    if (onLand) {
+      const i = t.norm(b.trackIdx);
+      if (t.mudAt(b.trackS, (b.pos.x - t.px[i]) * t.nx[i] + (b.pos.z - t.pz[i]) * t.nz[i]) > MUD_POOL) max *= MUD_SPEED;
+    }
 
     const throttle = controllable ? b.control.throttle : 0;
     const target = throttle >= 0 ? throttle * max : throttle * REVERSE_SPEED;
     let rate = target > b.speed ? ACCEL : BRAKE;
     if (throttle === 0) rate = COAST;
     if (b.boost > 0 && target > b.speed) rate *= 2;
+    if (jetting && target > b.speed) rate *= JET_THRUST;
     b.speed = approach(b.speed, target, rate * dt);
 
-    const steer = controllable ? b.control.steer : 0;
+    const morphing = !!b.orbit || (!!b.form && b.formP > 0 && b.formP < 1);
+    const steer = controllable && !morphing ? b.control.steer : 0;
     b.steerVis += (steer - b.steerVis) * (1 - Math.exp(-8 * dt));
     const speedFrac = clamp(b.speed / BASE_SPEED, 0, 1);
-    const turn = clamp(Math.abs(b.speed) / 14, 0.25, 1) * (b.air ? 0.6 : 1) * (1 - 0.2 * speedFrac);
+    const turn = clamp(Math.abs(b.speed) / 14, 0.25, 1) * (b.air ? 0.6 : onLand ? 1.25 : 1) * (1 - 0.2 * speedFrac);
     b.heading -= steer * TURN_RATE * turn * dt * (b.speed < -0.5 ? -1 : 1);
+    if (morphing) this.holdCourse(b, dt);
 
     const fx = Math.sin(b.heading);
     const fz = Math.cos(b.heading);
-    const k = 1 - Math.exp(-(b.air ? 1 : GRIP * b.grip) * dt);
+    const k = 1 - Math.exp(-(b.air && !morphing ? 1 : GRIP * b.grip * (onLand ? LAND_GRIP : 1)) * dt);
     b.vel.x += (fx * b.speed - b.vel.x) * k;
     b.vel.z += (fz * b.speed - b.vel.z) * k;
 
@@ -246,16 +261,27 @@ export class Race {
       b.air.t += dt;
       const u = b.air.t / b.air.dur;
       b.yOffset = b.air.peak * 4 * u * (1 - u);
+      if (b.air.plunge && b.waterY + b.yOffset < 0.2) {
+        b.air.plunge = false;
+        b.bump(6);
+        this.fx.splash(b.pos.x, 0.2, b.pos.z, 2.6);
+        this.sfx.play('splash', b.pos);
+        if (b.isPlayer) this.emit('lockShake', { amount: 1.2 }, b);
+      }
       if (u >= 1) {
         b.yOffset = 0;
         b.air = null;
         b.bump(5);
-        this.fx.splash(b.pos.x, b.waterY, b.pos.z, 1.5);
-        this.fx.splash(b.pos.x + Math.sin(b.heading) * 3, b.waterY, b.pos.z + Math.cos(b.heading) * 3, 0.8);
-        this.sfx.play('splash', b.pos);
+        this.groundHit(b, b.pos.x, b.pos.z, 1.5);
+        this.groundHit(b, b.pos.x + Math.sin(b.heading) * 3, b.pos.z + Math.cos(b.heading) * 3, 0.8);
+        this.sfx.play(onLand ? 'truckLand' : 'splash', b.pos);
       }
     }
     if (b.spinTime > 0) b.spinTime -= dt;
+    if (b.orbit) {
+      b.orbit.t += dt;
+      if (b.orbit.t >= b.orbit.dur) b.orbit = null;
+    }
 
     if (this.mode) {
       this.collideShores(b);
@@ -301,7 +327,7 @@ export class Race {
         if (vn > 9) {
           b.speed *= 0.85;
           b.bump(3);
-          this.fx.splash(b.pos.x, b.waterY, b.pos.z, 0.6);
+          this.groundHit(b, b.pos.x, b.pos.z, 0.6);
           this.sfx.play('boing', b.pos);
         }
       }
@@ -401,8 +427,9 @@ export class Race {
       b.trackIdx = spot.idx;
     }
     b.model.body.rotation.set(0, 0, 0);
+    b.formP = t.formAt(b.trackS) ? 1 : 0;
     b.bump(6);
-    this.fx.splash(spot.x, b.waterY, spot.z, 1);
+    this.groundHit(b, spot.x, spot.z, 1);
   }
 
   collideBoats() {
@@ -585,7 +612,7 @@ export class Race {
       this.sfx.play('pop', b.pos);
     }
     this.emit('feed', { kind, item: KIND_ITEM[kind], killer: source, victim: b });
-    if (b.isPlayer) this.emit('ko', { source: source.name }, b);
+    if (b.isPlayer) this.emit('ko', { source: source.name, land: this.track.onLand(b.trackS) || this.track.formKind(b.trackS) === 'jet' }, b);
   }
 
   useItem(b, slot) {
@@ -662,6 +689,7 @@ export class Race {
     this.scene.remove(this.bulletMesh, this.bulletOutline);
     this.features.dispose();
     this.wakes.dispose();
+    this.tireMarks?.dispose();
     this.mode?.dispose();
   }
 }

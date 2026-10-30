@@ -131,7 +131,7 @@ export async function riverSurface(track, tick) {
       out.s = s;
       out.idx = i;
       out.level = track.level(s);
-      out.amp = track.inTunnel(s) ? 0.2 : RIVER_AMP;
+      out.amp = track.offWater(s) ? 0 : track.inTunnel(s) ? 0.2 : RIVER_AMP;
       out.dist = Math.hypot(x - px[i], z - pz[i]);
       out.edge = out.dist - track.hw[i];
       return out;
@@ -171,14 +171,49 @@ function tikiSpots(track) {
   return [-1, 1].map((side) => track.point(ahead, side * (track.hw[ahead] + 9.5)));
 }
 
+const FORK_REACH = 46;
+const FLIGHT_BEFORE = 30;
+const FLIGHT_SPAN = 270;
+const FLIGHT_CLEAR = 34;
+
+function forkBounds(track) {
+  const fork = track.river.fork;
+  if (!fork) return null;
+  if (!fork.box) {
+    const xs = fork.samples.map((p) => p.x);
+    const zs = fork.samples.map((p) => p.z);
+    fork.box = { minX: Math.min(...xs) - FORK_REACH, maxX: Math.max(...xs) + FORK_REACH, minZ: Math.min(...zs) - FORK_REACH, maxZ: Math.max(...zs) + FORK_REACH };
+  }
+  return fork.box;
+}
+
+function forkAt(track, x, z) {
+  const box = forkBounds(track);
+  if (!box || x < box.minX || x > box.maxX || z < box.minZ || z > box.maxZ) return null;
+  const near = track.branchNear(x, z);
+  return near.dist < FORK_REACH ? near : null;
+}
+
 function terrainHeight(surface, track, x, z) {
+  const height = rawHeight(surface, track, x, z);
+  const fork = forkAt(track, x, z);
+  if (!fork) return height;
+  const hw = track.river.fork.halfWidth;
+  const bed = fork.level - 4 + smooth(hw - 4, hw + 7, fork.dist) * 8.5 + smooth(hw + 7, FORK_REACH, fork.dist) * 7;
+  const { edge, s } = surface.sample(x, z);
+  const keep = track.landAmount(s) > 0 ? 1 - smooth(1, 9, edge) : 0;
+  return height + (Math.min(height, bed) - height) * (1 - keep);
+}
+
+function rawHeight(surface, track, x, z) {
   const { level, edge, s } = surface.sample(x, z);
   const hw = track.halfWidth;
   const dist = edge + hw;
   const bank = smooth(hw - 4, hw + 7, dist);
   const hills = smooth(hw + 7, hw + 70, dist) * (2 + 7 * noise(x, z));
   const mountains = smooth(140, 330, dist) * 70 * (0.5 + 0.6 * noise(x * 1.7 + 300, z * 1.7));
-  const normal = level - 4 + bank * 8.5 + hills + mountains;
+  const land = track.landAmount(s);
+  const normal = level - 4 * (1 - land) + bank * (4.5 + 4 * (1 - land)) + hills + mountains;
   const mask = tunnelMask(track, s);
   if (mask <= 0) return normal;
   const ledges = 2.2 * Math.round(Math.sin(x * 0.09 + z * 0.07) * 1.5 + noise(x * 4, z * 4) * 2) + 3 * noise(x * 6.1, z * 6.1);
@@ -208,7 +243,9 @@ async function buildTerrain(surface, track, tick) {
       heights[r * cols + c] = terrainHeight(surface, track, x, z);
       const sampled = surface.sample(x, z);
       levels[r * cols + c] = sampled.level;
-      shade[r * cols + c] = smooth(track.halfWidth + 9, track.halfWidth + 26, sampled.dist);
+      const fork = forkAt(track, x, z);
+      if (fork) levels[r * cols + c] = Math.min(sampled.level, fork.level);
+      shade[r * cols + c] = smooth(9, 26, sampled.edge) * smooth(track.river.fork ? track.river.fork.halfWidth + 2 : -1, track.river.fork ? track.river.fork.halfWidth + 18 : 0, fork ? fork.dist : 99);
       holes[r * cols + c] = isHole(surface, track, x, z) ? 1 : 0;
     }
   }
@@ -294,6 +331,206 @@ export function ribbon(track, from, to, levelAt, positions, shades, shadeAt = ()
   }
 }
 
+function forkRibbon(track, positions, shades, flow) {
+  const { samples, step, level, halfWidth } = track.river.fork;
+  const hw = halfWidth + 8;
+  const lanes = 10;
+  const rows = samples.map((p, k) => {
+    const a = samples[Math.max(0, k - 1)];
+    const b = samples[Math.min(samples.length - 1, k + 1)];
+    const len = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+    return { x: p.x, z: p.z, nx: (b.z - a.z) / len, nz: -(b.x - a.x) / len, y: level - track.river.slope * k * step - 0.04, s: k * step };
+  });
+  const at = (row, lane) => {
+    const u = lane / lanes;
+    const lat = -hw + 2 * hw * u;
+    return [row.x + row.nx * lat, row.y, row.z + row.nz * lat, row.s, u * 2 - 1];
+  };
+  for (let k = 0; k < rows.length - 1; k++) {
+    for (let lane = 0; lane < lanes; lane++) {
+      for (const [row, l] of [[k, lane], [k + 1, lane], [k, lane + 1], [k, lane + 1], [k + 1, lane], [k + 1, lane + 1]]) {
+        const [x, y, z, s, lat] = at(rows[row], l);
+        positions.push(x, y, z);
+        shades.push(1, 1, 1);
+        flow.push(s, lat);
+      }
+    }
+  }
+}
+
+const TRAIL_VERT = /* glsl */ `
+  attribute vec3 aTrail;
+  varying vec3 vTrail;
+  varying vec3 vWorld;
+  #include <common>
+  #include <fog_pars_vertex>
+  void main() {
+    vTrail = aTrail;
+    vec4 world = modelMatrix * vec4(position, 1.0);
+    vWorld = world.xyz;
+    vec4 mvPosition = viewMatrix * world;
+    gl_Position = projectionMatrix * mvPosition;
+    #include <fog_vertex>
+  }
+`;
+
+const TRAIL_FRAG = /* glsl */ `
+  uniform float uTime;
+  varying vec3 vTrail;
+  varying vec3 vWorld;
+  float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  float noise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+  }
+  float fbm(vec2 p) { return noise(p) * 0.55 + noise(p * 2.1 + 3.0) * 0.3 + noise(p * 4.3 + 7.0) * 0.15; }
+  vec3 cells(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    float first = 8.0;
+    float second = 8.0;
+    float id = 0.0;
+    for (int y = -1; y <= 1; y++) {
+      for (int x = -1; x <= 1; x++) {
+        vec2 g = vec2(float(x), float(y));
+        vec2 o = vec2(hash(i + g), hash(i + g + 19.0));
+        float d = length(g + o - f);
+        if (d < first) {
+          second = first;
+          first = d;
+          id = hash(i + g + 41.0);
+        } else if (d < second) second = d;
+      }
+    }
+    return vec3(first, second - first, id);
+  }
+  float mudField(float s, float lat) {
+    return 0.5 + 0.26 * sin(s * 0.047 + 1.3) * sin(lat * 0.19 + 0.7) + 0.16 * sin(s * 0.113 + lat * 0.09 + 2.1) + 0.08 * sin(s * 0.23 - lat * 0.27);
+  }
+  #include <common>
+  #include <fog_pars_fragment>
+  void main() {
+    float s = vTrail.x;
+    float lat = vTrail.y;
+    float half_ = vTrail.z;
+    vec2 p = vec2(lat, s);
+    float big = fbm(p * 0.085);
+    float fine = fbm(p * 0.6);
+    vec3 dark = vec3(0.56, 0.38, 0.22);
+    vec3 mid = vec3(0.72, 0.52, 0.31);
+    vec3 pale = vec3(0.86, 0.68, 0.44);
+    vec3 color = mix(dark, mid, smoothstep(0.38, 0.43, big));
+    color = mix(color, pale, smoothstep(0.55, 0.59, big + fine * 0.1));
+    color *= 0.95 + 0.1 * step(0.52, noise(p * 2.7));
+
+    vec3 crack = cells(p * 0.42);
+    float dry = smoothstep(0.5, 0.6, big);
+    color = mix(color, vec3(0.42, 0.28, 0.17), (1.0 - smoothstep(0.02, 0.07, crack.y)) * dry * 0.8);
+
+    float sway = 2.4 * sin(s * 0.021) + 1.3 * sin(s * 0.053 + 1.0);
+    float rut = 0.0;
+    float treadMark = 0.0;
+    float lip = 0.0;
+    for (int k = -1; k <= 1; k++) {
+      float center = float(k) * half_ * 0.5 + sway * (1.0 - 0.3 * abs(float(k)));
+      for (int w = -1; w <= 1; w += 2) {
+        float x = lat - center - float(w) * 2.3 + 0.18 * sin(s * 0.4 + float(k));
+        float groove = 1.0 - smoothstep(0.6, 0.86, abs(x));
+        rut = max(rut, groove);
+        treadMark = max(treadMark, groove * step(0.5, fract(s * 1.05 + abs(x) * 1.4)));
+        lip = max(lip, smoothstep(0.86, 1.0, abs(x)) * (1.0 - smoothstep(1.0, 1.45, abs(x))) * step(0.42, noise(vec2(s * 0.7, x * 2.0))));
+      }
+    }
+    color = mix(color, pale * 1.04, lip * 0.75);
+    color = mix(color, vec3(0.43, 0.29, 0.17), rut * 0.85);
+    color = mix(color, vec3(0.31, 0.2, 0.12), treadMark * 0.7);
+
+    float swerve = lat - (half_ * 0.28 * sin(s * 0.016 + 2.0) + 6.0 * sin(s * 0.043));
+    float skid = (1.0 - smoothstep(0.3, 0.75, abs(swerve))) * smoothstep(0.55, 0.6, noise(vec2(s * 0.024, 3.0)));
+    color = mix(color, vec3(0.27, 0.17, 0.1), skid * 0.75);
+
+    vec3 stone = cells(p * 1.5);
+    float pebble = (1.0 - smoothstep(0.11, 0.15, stone.x)) * step(0.72, stone.z);
+    color = mix(color, mix(vec3(0.75, 0.72, 0.66), vec3(0.47, 0.44, 0.4), step(0.86, stone.z)), pebble * (1.0 - rut));
+    vec3 grit = cells(p * 5.0);
+    color *= 1.0 - (1.0 - smoothstep(0.1, 0.16, grit.x)) * step(0.55, grit.z) * 0.22;
+
+    float mud = mudField(s, lat) + (fine - 0.5) * 0.09;
+    float wet = smoothstep(0.585, 0.605, mud);
+    float gloss = sin(lat * 0.9 + sin(s * 0.5) * 1.4) * sin(s * 0.8 + sin(lat * 0.7) * 1.5);
+    vec3 muck = mix(vec3(0.33, 0.21, 0.13), vec3(0.47, 0.32, 0.2), step(0.5, fine));
+    muck = mix(muck, vec3(0.74, 0.62, 0.48), smoothstep(0.62, 0.7, gloss) * 0.55);
+    color = mix(color, vec3(0.38, 0.25, 0.15), smoothstep(0.55, 0.585, mud) * 0.6);
+    color = mix(color, muck, wet);
+    float pool = smoothstep(0.685, 0.7, mud);
+    if (pool > 0.0) {
+      vec2 q = p * 0.72;
+      float a = sin(q.y * 1.7 + uTime * 1.1) * 1.4;
+      float b = sin(q.x * 1.9 - uTime * 0.9) * 1.4;
+      float ripple = sin(q.x * 2.6 + a + uTime * 0.8) * sin(q.y * 2.6 + b - uTime * 0.7);
+      vec3 sky = mix(vec3(0.24, 0.2, 0.13), vec3(0.4, 0.42, 0.28), smoothstep(0.3, 0.7, noise(q * 0.5 + uTime * 0.06)));
+      vec3 pond = mix(sky, vec3(0.78, 0.84, 0.7), smoothstep(0.74, 0.82, ripple) * 0.6);
+      pond = mix(pond, vec3(0.6, 0.47, 0.31), 1.0 - smoothstep(0.7, 0.722, mud));
+      color = mix(color, pond, pool);
+    }
+
+    float litter = step(0.9, grit.z) * (1.0 - smoothstep(0.14, 0.2, grit.x)) * smoothstep(0.55, 0.95, abs(lat) / half_);
+    color = mix(color, step(0.95, grit.z) > 0.5 ? vec3(0.9, 0.62, 0.2) : vec3(0.42, 0.62, 0.2), litter);
+
+    float shade = noise(vWorld.xz * 0.05 + vec2(uTime * 0.018, -uTime * 0.012)) + noise(vWorld.xz * 0.13 - uTime * 0.02) * 0.3;
+    color *= mix(0.8, 1.0, smoothstep(0.62, 0.68, shade));
+
+    gl_FragColor = vec4(color, 1.0);
+    #include <colorspace_fragment>
+    #include <fog_fragment>
+  }
+`;
+
+function buildTrail(track) {
+  const { launch, lip } = track.river.land;
+  const k0 = Math.round((launch + 20) / track.spacing);
+  const k1 = Math.round(lip / track.spacing);
+  const lanes = 14;
+  const positions = [];
+  const trail = [];
+  const index = [];
+  for (let k = k0; k <= k1; k++) {
+    const i = track.wrap(k);
+    const s = k * track.spacing;
+    const half = track.hw[i] - 1;
+    const y = track.level(s) + 0.1;
+    for (let lane = 0; lane <= lanes; lane++) {
+      const lat = -half + (2 * half * lane) / lanes;
+      positions.push(track.px[i] + track.nx[i] * lat, y, track.pz[i] + track.nz[i] * lat);
+      trail.push(s, lat, half);
+    }
+  }
+  const row = lanes + 1;
+  for (let k = 0; k < k1 - k0; k++) {
+    for (let lane = 0; lane < lanes; lane++) {
+      const a = k * row + lane;
+      index.push(a, a + row, a + 1, a + 1, a + row, a + row + 1);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('aTrail', new THREE.Float32BufferAttribute(trail, 3));
+  geometry.setIndex(index);
+  const material = new THREE.ShaderMaterial({
+    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uTime: { value: 0 } }]),
+    vertexShader: TRAIL_VERT,
+    fragmentShader: TRAIL_FRAG,
+    fog: true,
+  });
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.userData.update = (t) => {
+    material.uniforms.uTime.value = t;
+  };
+  return mesh;
+}
+
 function routeRibbon(track, route, positions, shades, flow = null) {
   const chain = [route.from];
   for (let i = route.first; i <= route.last; i++) chain.push(i);
@@ -350,10 +587,15 @@ export function buildRiver(track, { deep = 0x1c8f86, shallow = 0x4fd6b4, flowSpe
   const shades = [];
   const flow = [];
   const ends = [kIn, kOut];
-  ribbon(track, kOut, kIn + N, (s) => track.level(s), positions, shades, undefined, flow);
+  const base = (s) => track.baseLevel(s);
+  if (river.land) {
+    ribbon(track, kOut, Math.round((river.land.launch + 16) / spacing) + N, base, positions, shades, undefined, flow);
+    ribbon(track, Math.round(river.land.lip / spacing) - 1 + N, kIn + N, base, positions, shades, undefined, flow);
+  } else ribbon(track, kOut, kIn + N, base, positions, shades, undefined, flow);
   ribbon(track, kIn, kOut, lowLevel(track), positions, shades, caveWaterShade(caveTorches(track, kIn, kOut, lowLevel(track)), ends), flow);
   ribbon(track, kSeam - GHOST, kOut, copyLevel(track), positions, shades, caveWaterShade(caveTorches(track, kIn, kOut, copyLevel(track)), ends), flow);
   for (const r of track.routes) routeRibbon(track, r, positions, shades, flow);
+  if (river.fork) forkRibbon(track, positions, shades, flow);
   const foam = [];
   for (let k = 0; k < flow.length; k += 2) foam.push(foamAt(flow[k] % track.length, flow[k + 1]));
   const geometry = new THREE.BufferGeometry();
@@ -1281,6 +1523,147 @@ export function addFern(batch, x, y, z, rand) {
   }
 }
 
+const LOG = new THREE.CylinderGeometry(1, 1, 1, 10);
+const LOG_KEYS = ['bark', 'barkLight', 'barkPale'];
+
+function log(batch, key, a, b, r) {
+  const span = b.clone().sub(a);
+  const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), span.clone().normalize());
+  batch.add(key, LOG, new THREE.Matrix4().compose(a.clone().add(b).multiplyScalar(0.5), q, new THREE.Vector3(r, span.length(), r)));
+}
+
+function plate(batch, key, center, xAxis, yAxis, zAxis, w, h, d) {
+  const m = new THREE.Matrix4().makeBasis(xAxis.clone().multiplyScalar(w), yAxis.clone().multiplyScalar(h), zAxis.clone().multiplyScalar(d));
+  m.setPosition(center);
+  batch.add(key, BOX, m);
+}
+
+function chevronSign(batch, x, y, z, heading) {
+  const facing = new THREE.Vector3(-Math.sin(heading), 0, -Math.cos(heading));
+  const up = new THREE.Vector3(0, 1, 0);
+  const toward = new THREE.Vector3().crossVectors(up, facing).normalize();
+  const center = new THREE.Vector3(x, y, z);
+  const at = (u, v) => center.clone().addScaledVector(toward, u).addScaledVector(up, v).addScaledVector(facing, 0.2);
+  plate(batch, 'railDark', center.clone().addScaledVector(facing, -0.1), toward, up, facing, 8.2, 4.6, 0.25);
+  plate(batch, 'railYellow', center, toward, up, facing, 7.8, 4.2, 0.25);
+  for (const u of [-2.3, 0.2, 2.7]) {
+    for (const v of [1, -1]) {
+      const dir = toward.clone().multiplyScalar(1.3).addScaledVector(up, -v * 1.75).normalize();
+      plate(batch, 'railDark', at(u - 0.65, v * 0.88), dir.clone().cross(facing).normalize(), dir, facing, 0.85, 2.3, 0.1);
+    }
+  }
+  for (const side of [-3, 3]) {
+    const base = center.clone().addScaledVector(toward, side).addScaledVector(facing, -0.3);
+    plate(batch, 'railDark', base.clone().setY(y - 3.8), new THREE.Vector3(1, 0, 0), up, new THREE.Vector3(0, 0, 1), 0.34, 4.4, 0.34);
+  }
+}
+
+function buildBlockade(batch, track, rand) {
+  const level = track.baseLevel(track.river.land.launch);
+  const launch = track.river.land.launch;
+  const from = track.wrap(Math.round((launch - 36) / track.spacing));
+  const to = track.wrap(Math.round((launch + 33) / track.spacing));
+  const pointAt = (i, lat, y) => {
+    const p = track.point(i, lat);
+    return new THREE.Vector3(p.x, y, p.z);
+  };
+  let key = 0;
+  for (let i = from; i < to; i += 2) {
+    const lat = track.hw[i] - 0.5;
+    const stripe = key++ % 4 < 2 ? 'paintRed' : 'flowerWhite';
+    log(batch, stripe, pointAt(i, lat, level + 0.75), pointAt(i + 2, lat, level + 0.75), 1.15);
+    if (i % 3 === 0) log(batch, LOG_KEYS[Math.floor(rand() * 3)], pointAt(i - 3, lat + 3.2, level + 0.5 + rand() * 0.3), pointAt(i + 5, lat + 3 + rand(), level + 0.5 + rand() * 0.3), 0.8 + rand() * 0.4);
+    if (i % 24 === 0) {
+      const s = 1.6 + rand() * 1.2;
+      const p = pointAt(i, lat + 6 + rand() * 4, 0);
+      batch.add('rock', ROCK, mat(p.x, level + s * 0.2, p.z, s, s * 0.7, s, rand(), rand(), rand()));
+    }
+  }
+  const facing = track.heading(track.wrap(Math.round((launch - 49) / track.spacing)));
+  for (const along of [-23, -6, 10]) {
+    const i = track.wrap(Math.round((launch + along) / track.spacing));
+    const p = pointAt(i, track.hw[i] + 2.5, 0);
+    chevronSign(batch, p.x, level + 6.3, p.z, facing);
+  }
+}
+
+function dressTrail(batch, under, track, rand, ground, blobs) {
+  const { launch, lip } = track.river.land;
+  for (let k = 0; k < 150; k++) {
+    const s = launch + 45 + rand() * (lip - launch - 60);
+    const i = track.wrap(Math.round(s / track.spacing));
+    const side = rand() < 0.5 ? -1 : 1;
+    const lat = side * track.hw[i] * (0.7 + rand() * 0.3);
+    const p = track.point(i, lat);
+    const y = track.level(s);
+    if (k % 3 === 0) {
+      const r = 0.4 + rand() * 1.1;
+      batch.add('rock', ROCK, mat(p.x, y + r * 0.25, p.z, r, r * 0.65, r, rand() * 3, rand() * 3, rand() * 3));
+    } else if (k % 3 === 1) addReeds(under, p.x, y, p.z, rand, { x: rand() - 0.5, z: rand() - 0.5 });
+    else addFern(under, p.x, y, p.z, rand);
+  }
+  for (let k = 0; k < 9; k++) {
+    const s = launch + 150 + ((lip - launch - 190) * k) / 9 + rand() * 12;
+    const i = track.wrap(Math.round(s / track.spacing));
+    const lat = (k % 2 ? 1 : -1) * track.hw[i] * (0.28 + rand() * 0.42);
+    const p = track.point(i, lat);
+    const y = track.level(s);
+    const r = 2.2 + rand() * 1.6;
+    batch.add('rock', ROCK, mat(p.x, y + r * 0.3, p.z, r, r * 0.8, r, rand() * 3, rand() * 3, rand() * 3));
+    blobs.push({ x: p.x, z: p.z, rx: r * 0.8, rz: r * 0.8, rot: 0, top: y + r * 0.6, launch: true });
+  }
+}
+
+function dressFork(batch, under, track, rand, ground, clear) {
+  const { samples, halfWidth } = track.river.fork;
+  samples.forEach((p, k) => {
+    if (k < 8) return;
+    for (const side of [-1, 1]) {
+      const a = samples[Math.max(0, k - 1)];
+      const b = samples[Math.min(samples.length - 1, k + 1)];
+      const len = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+      const nx = (b.z - a.z) / len;
+      const nz = -(b.x - a.x) / len;
+      for (let n = 0; n < 3; n++) {
+        const lat = side * (halfWidth + 1 + rand() * 13);
+        const x = p.x + nx * lat + (rand() - 0.5) * 4;
+        const z = p.z + nz * lat + (rand() - 0.5) * 4;
+        const y = ground(x, z);
+        const roll = rand();
+        if (roll < 0.3) addBush(under, x, y - 0.2, z, rand, { x: -side * nx, z: -side * nz });
+        else if (roll < 0.55) addBanana(under, x, y - 0.2, z, rand, rand() < 0.4);
+        else if (roll < 0.75) addReeds(under, x, y - 0.2, z, rand, { x: -side * nx, z: -side * nz });
+        else if (clear(x, z)) addBush(under, x, y - 0.2, z, rand, { x: -side * nx, z: -side * nz });
+        else if (roll < 0.92) addBroadleaf(batch, x, y, z, rand, 0.9 + rand() * 0.4);
+        else addGiant(batch, x, y, z, rand, 0.9 + rand() * 0.3);
+      }
+    }
+  });
+}
+
+function buildLogJam(batch, track, rand) {
+  const { launch } = track.river.land;
+  const level = track.baseLevel(launch);
+  const at = (along, lateral, y) => {
+    const idx = track.wrap(Math.round((launch + along) / track.spacing));
+    const p = track.point(idx, lateral);
+    return new THREE.Vector3(p.x, y, p.z);
+  };
+  const width = track.halfWidth + 7;
+  for (let k = 0; k < 11; k++) {
+    const along = -2 + k * 1.5;
+    const y = level + 0.1 + k * 0.42;
+    log(batch, LOG_KEYS[k % 3], at(along, -width, y), at(along, track.halfWidth + 0.5, y), 0.85);
+  }
+  for (let k = 0; k < 34; k++) {
+    const along = 14 + rand() * 16;
+    const lateral = -width + rand() * (width + track.halfWidth - 10);
+    const lean = (rand() - 0.5) * 18;
+    const y = level + 3 + rand() * 3.5;
+    log(batch, LOG_KEYS[k % 3], at(along - lean * 0.3, lateral - 8, y - rand() * 2), at(along + lean * 0.3, lateral + 8, y + rand() * 2), 0.7 + rand() * 0.5);
+  }
+}
+
 const UNDER_CHUNK = 120;
 const DISCARD = { add() {} };
 const UNDER_FAR = 300;
@@ -1300,6 +1683,8 @@ export async function createJungle(group, track, fx) {
   for (const p of tikiSpots(track)) tikiHollows.push({ x: p.x, z: p.z, r: 16 });
   group.add(await buildTerrain(surface, track, tick));
   await tick();
+  const trail = track.river.land ? buildTrail(track) : null;
+  if (trail) group.add(trail);
   const water = buildRiver(track);
   group.add(water.mesh);
   const falls = track.river.drops.map((drop) => buildFalls(track, drop));
@@ -1321,6 +1706,16 @@ export async function createJungle(group, track, fx) {
   const rand = mulberry32(7203);
   const hw = track.halfWidth;
   const { minX, maxX, minZ, maxZ } = surface.bounds;
+  const flightZone = (x, z) => {
+    const land = track.river.land;
+    if (!land) return false;
+    const { s, edge } = surface.sample(x, z);
+    return track.ahead(land.launch - FLIGHT_BEFORE, s) < FLIGHT_SPAN && edge < FLIGHT_CLEAR;
+  };
+  const inFork = (x, z) => {
+    const near = forkAt(track, x, z);
+    return !!near && near.dist < hw + 2;
+  };
   const steep = (x, z) => {
     const h = terrainHeight(surface, track, x, z);
     return Math.max(
@@ -1336,18 +1731,18 @@ export async function createJungle(group, track, fx) {
   const bankSpot = (from, to) => {
     const idx = pickIdx();
     const side = rand() < 0.5 ? -1 : 1;
-    const p = track.point(idx, side * (hw + from + rand() * (to - from)));
-    const { dist, s } = surface.sample(p.x, p.z);
-    if (dist < hw + from - 0.5 || tunnelMask(track, s) > 0 || steep(p.x, p.z)) return null;
     const i = track.norm(idx);
+    const p = track.point(idx, side * (track.hw[i] + from + rand() * (to - from)));
+    const { edge, s } = surface.sample(p.x, p.z);
+    if (edge < from - 0.5 || tunnelMask(track, s) > 0 || steep(p.x, p.z) || inFork(p.x, p.z)) return null;
     p.river = { x: -side * track.nx[i], z: -side * track.nz[i] };
     return p;
   };
-  const place = async (count, from, to, plant) => {
+  const place = async (count, from, to, plant, tall = false) => {
     for (let n = 0, tries = 0; n < count && tries < count * 6; tries++) {
       await tick();
       const p = bankSpot(from, to);
-      if (!p) continue;
+      if (!p || (tall && flightZone(p.x, p.z))) continue;
       const sliver = surface.sample(p.x - p.river.x * 8, p.z - p.river.z * 8).edge < 0;
       plant(p.x, terrainHeight(surface, track, p.x, p.z), p.z, p.river, sliver);
       n++;
@@ -1355,18 +1750,18 @@ export async function createJungle(group, track, fx) {
   };
   const chopper = new Chopper(group);
   batch.chopper = chopper;
-  const choppable = (x, y, z, height, radius, build) => build(surface.sample(x, z).dist > hw + 22 ? batch : chopper.plant(batch, { x, z, base: y - 1, height, radius }));
-  await place(300, 9, 50, (x, y, z, river) => choppable(x, y, z, 24, 1.7, (b) => addGiant(b, x, y, z, rand, 1, river)));
-  await place(850, 6, 40, (x, y, z, river) => choppable(x, y, z, 12, 1, (b) => addBroadleaf(b, x, y, z, rand, 0.9 + rand() * 0.5, river)));
+  const choppable = (x, y, z, height, radius, build) => build(surface.sample(x, z).edge > 22 ? batch : chopper.plant(batch, { x, z, base: y - 1, height, radius }));
+  await place(300, 9, 50, (x, y, z, river) => choppable(x, y, z, 24, 1.7, (b) => addGiant(b, x, y, z, rand, 1, river)), true);
+  await place(850, 6, 40, (x, y, z, river) => choppable(x, y, z, 12, 1, (b) => addBroadleaf(b, x, y, z, rand, 0.9 + rand() * 0.5, river)), true);
   await place(500, 6, 45, (x, y, z, river, sliver) => addBanana(sliver ? DISCARD : batch, x, y, z, rand, true));
   await place(180, 5, 30, (x, y, z) => {
     const height = 4 + rand() * 4;
     choppable(x, y, z, height, 0.8, (b) => addPalm(b, x, y - 0.5, z, rand, { height, lean: rand() * 0.2, dir: rand() * Math.PI * 2 }));
-  });
+  }, true);
   await place(160, 6, 30, (x, y, z) => {
     const height = 11 + rand() * 8;
     choppable(x, y, z, height, 0.9, (b) => addPalm(b, x, y - 0.5, z, rand, { height, lean: rand() * 0.5, dir: rand() * Math.PI * 2 }));
-  });
+  }, true);
   await place(800, 3, 22, (x, y, z, river, sliver) => addBanana(sliver ? DISCARD : under, x, y, z, rand));
   await place(700, 3.5, 16, (x, y, z, river, sliver) => addBush(sliver ? DISCARD : under, x, y, z, rand));
   await place(400, 5, 30, (x, y, z, river, sliver) => addFern(sliver ? DISCARD : under, x, y, z, rand));
@@ -1377,12 +1772,13 @@ export async function createJungle(group, track, fx) {
       const i = track.norm(k);
       const out = { x: side * track.nx[i], z: side * track.nz[i] };
       for (let n = 0; n < 2; n++) {
-        const lat = side * (hw - 0.5 + rand() * 4.5);
+        const edge0 = track.formAt(track.sAt[i]) ? 2.5 : -0.5;
+        const lat = side * (track.hw[i] + edge0 + rand() * 4.5);
         const along = (rand() - 0.5) * track.spacing;
         const x = track.px[i] + track.nx[i] * lat + track.tx[i] * along;
         const z = track.pz[i] + track.nz[i] * lat + track.tz[i] * along;
         const { s, edge } = surface.sample(x, z);
-        if (tunnelMask(track, s) > 0 || track.river.drops.some((d) => Math.abs(track.ahead(d.s, s) - 2) < 10 || track.ahead(s, d.s) < 6)) continue;
+        if (inFork(x, z) || tunnelMask(track, s) > 0 || track.river.drops.some((d) => Math.abs(track.ahead(d.s, s) - 2) < 10 || track.ahead(s, d.s) < 6)) continue;
         const ground = Math.max(terrainHeight(surface, track, x, z), track.level(s) - 0.3);
         const roll = rand();
         const sliver = surface.sample(x + out.x * 8, z + out.z * 8).edge < 0;
@@ -1398,9 +1794,17 @@ export async function createJungle(group, track, fx) {
     const x = minX + rand() * (maxX - minX);
     const z = minZ + rand() * (maxZ - minZ);
     const { dist } = surface.sample(x, z);
-    if (dist < hw + 42 || dist > 260 || steep(x, z)) continue;
+    if (dist < hw + 42 || dist > 260 || steep(x, z) || inFork(x, z) || flightZone(x, z)) continue;
     addGiant(batch, x, terrainHeight(surface, track, x, z), z, rand, 1 + rand() * 0.3);
     n++;
+  }
+  if (track.river.land) {
+    const blobs = tunnel.userData.blobs;
+    const ground = (x, z) => terrainHeight(surface, track, x, z);
+    buildLogJam(batch, track, rand);
+    buildBlockade(batch, track, rand);
+    dressTrail(batch, under, track, rand, ground, blobs);
+    dressFork(batch, under, track, rand, ground, flightZone);
   }
   const big = falls.find((f) => f.big);
   const li = big.lip.i;
@@ -1454,6 +1858,7 @@ export async function createJungle(group, track, fx) {
     },
     update(t, dt, camera) {
       water.update(t);
+      trail?.userData.update(t);
       cullChunks(chunks, camera, fog.far);
       cullChunks(undergrowth, camera, UNDER_FAR);
       cullChunks(tunnel.userData.chunks, camera, fog.far);

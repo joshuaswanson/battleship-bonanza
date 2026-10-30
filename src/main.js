@@ -9,6 +9,7 @@ import { createTrack } from './track.js';
 import { createWorld, buildBudget } from './world.js';
 import { MAPS } from './maps.js';
 import { ARENAS } from './arenas.js';
+import { TruckForm } from './truck.js';
 import { CaptureTheFlag, TEAMS } from './ctf.js';
 import { ControlPoints } from './controlPoints.js';
 import { Recorder, Replay } from './replay.js';
@@ -110,6 +111,8 @@ function venue(id) {
 
 const BUILDERS = {
   jungle: () => import('./jungle.js').then((m) => m.createJungle),
+  frozen: () => import('./frozen.js').then((m) => m.createFrozen),
+  volcano: () => import('./volcano.js').then((m) => m.createVolcano),
   alps: () => import('./alps.js').then((m) => m.createAlps),
   venice: () => import('./venice.js').then((m) => m.createVenice),
   midway: () => import('./midway.js').then((m) => m.createMidway),
@@ -362,7 +365,7 @@ function goLoadout() {
 
 const wipe = createWipe($('wipe'), sfx);
 
-const MAP_CHOICES = ['canyon', 'jungle', 'bay', 'docks', 'alps', 'venice', 'midway', 'tuebingen', 'random'].filter((id) => !HIDDEN_MAPS.includes(id));
+const MAP_CHOICES = ['canyon', 'jungle', 'bay', 'frozen', 'volcano', 'docks', 'alps', 'venice', 'midway', 'tuebingen', 'random'].filter((id) => !HIDDEN_MAPS.includes(id));
 const die = (pips, cls) => `<svg class="die ${cls}" viewBox="0 0 40 40"><rect x="3" y="3" width="34" height="34" rx="9" fill="#fff" stroke="#0E2A47" stroke-width="3.5"/>${pips.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="3.6" fill="#0E2A47"/>`).join('')}</svg>`;
 const DICE = die([[12, 12], [20, 20], [28, 28]], 'die-a') + die([[12, 12], [28, 12], [12, 28], [28, 28], [20, 20]], 'die-b');
 function renderModes() {
@@ -1016,7 +1019,7 @@ function frame(now) {
   if (race.player && !race.attract && mode !== 'replay') {
     hud.update(race, camera, mode === 'paused' ? 0 : dt);
     sfx.listener = race.player.pos;
-    sfx.setEngine(Math.abs(race.player.speed) / BASE_SPEED, mode === 'race' && state.throttle > 0 && race.player.alive);
+    sfx.setEngine(Math.abs(race.player.speed) / BASE_SPEED, mode === 'race' && state.throttle > 0 && race.player.alive, race.player.form instanceof TruckForm && race.player.formP > 0.5);
   } else {
     sfx.listener = cam.pos;
     sfx.setEngine(0, false);

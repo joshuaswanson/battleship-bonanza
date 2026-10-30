@@ -4,6 +4,11 @@ import { waveHeight } from '../../water.js';
 import { BULLET_SPEED, HIT_RADIUS } from '../shared.js';
 
 const BULLET_DROP = 40;
+const WET_SPEED = 0.42;
+const WET_LIFE = 1;
+const WET_BUBBLES = 40;
+const WET_TRACER = new THREE.Color(0x7ff4ff);
+const DRY_TRACER = new THREE.Color(0xffe066);
 
 export const methods = {
   updateGun(b, dt) {
@@ -28,11 +33,14 @@ export const methods = {
     dir.y += (Math.random() - 0.35) * 0.1;
     dir.z += (Math.random() - 0.5) * 0.34;
     dir.normalize();
-    const vel = dir.clone().multiplyScalar(BULLET_SPEED).add(b.vel);
-    this.bullets.push({ pos: origin, prev: origin.clone(), start: origin.clone(), vel, owner: b, life: 0.48 });
-    this.ejectCasing(b.model, b.vel);
+    const wet = this.submerged(b);
+    if (wet) dir.y = 0;
+    const vel = dir.clone().multiplyScalar(BULLET_SPEED * (wet ? WET_SPEED : 1)).add(b.vel);
+    this.bullets.push({ pos: origin, prev: origin.clone(), start: origin.clone(), vel, owner: b, life: wet ? WET_LIFE : 0.48, wet });
+    if (!wet) this.ejectCasing(b.model, b.vel);
     flashGun(b.model);
-    this.fx.sparkBurst(origin.x, origin.y, origin.z, Math.random() < 0.5 ? 0xffe066 : 0xffffff, 4);
+    if (wet) this.fx.bubbles(origin.x, origin.y, origin.z);
+    else this.fx.sparkBurst(origin.x, origin.y, origin.z, Math.random() < 0.5 ? 0xffe066 : 0xffffff, 4);
     if (Math.random() < 0.15) this.fx.puffs.emit(origin.x + dir.x * 1.5, origin.y + 0.2, origin.z + dir.z * 1.5, b.vel.x * 0.6 + dir.x * 3, 1.2, b.vel.z * 0.6 + dir.z * 3, 0.28, 0.45, 0xdfe6ee, -0.5, 2, 0);
     this.sfx.play('shoot', b.pos);
   },
@@ -57,7 +65,8 @@ export const methods = {
     this.bullets = this.bullets.filter((bullet) => {
       bullet.life -= dt;
       bullet.prev.copy(bullet.pos);
-      bullet.vel.y -= BULLET_DROP * dt;
+      if (!bullet.wet) bullet.vel.y -= BULLET_DROP * dt;
+      else if (Math.random() < dt * WET_BUBBLES) this.fx.bubbles(bullet.pos.x, bullet.pos.y, bullet.pos.z);
       bullet.pos.addScaledVector(bullet.vel, dt);
       seg.subVectors(bullet.pos, bullet.prev);
       const len = seg.length();
@@ -84,7 +93,7 @@ export const methods = {
         return false;
       }
       if (bullet.life <= 0) return false;
-      if (bullet.pos.y < waveHeight(bullet.pos.x, bullet.pos.z, this.time)) {
+      if (!bullet.wet && bullet.pos.y < waveHeight(bullet.pos.x, bullet.pos.z, this.time)) {
         const y = waveHeight(bullet.pos.x, bullet.pos.z, this.time);
         this.fx.splash(bullet.pos.x, y, bullet.pos.z, 0.35);
         for (let i = 0; i < 2; i++) this.fx.droplet(bullet.pos.x, y, bullet.pos.z, (Math.random() - 0.5) * 2, 7 + Math.random() * 5, (Math.random() - 0.5) * 2, 0.32);
@@ -93,9 +102,12 @@ export const methods = {
       if (n < 400) {
         dir.copy(bullet.vel).normalize();
         q.setFromUnitVectors(z, dir);
-        s.z = core.z = Math.min(9, bullet.pos.distanceTo(bullet.start));
+        const reach = bullet.pos.distanceTo(bullet.start);
+        s.set(bullet.wet ? 0.34 : 0.12, bullet.wet ? 0.34 : 0.12, Math.min(bullet.wet ? 3 : 9, reach));
+        core.set(bullet.wet ? 0.16 : 0.05, bullet.wet ? 0.16 : 0.05, s.z);
         m.compose(bullet.pos, q, s);
         this.bulletMesh.setMatrixAt(n, m);
+        this.bulletMesh.setColorAt(n, bullet.wet ? WET_TRACER : DRY_TRACER);
         m.compose(bullet.pos, q, core);
         this.bulletOutline.setMatrixAt(n++, m);
       }
@@ -105,5 +117,6 @@ export const methods = {
     this.bulletOutline.count = this.bulletMesh.count;
     this.bulletOutline.instanceMatrix.needsUpdate = true;
     this.bulletMesh.instanceMatrix.needsUpdate = true;
+    if (this.bulletMesh.instanceColor) this.bulletMesh.instanceColor.needsUpdate = true;
   },
 };

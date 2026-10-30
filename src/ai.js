@@ -91,7 +91,7 @@ function avoidRocks(race, b, ai) {
   const fz = Math.cos(b.heading);
   for (const rock of race.shores) {
     const r = Math.max(rock.rx, rock.rz);
-    if (r > 12) continue;
+    if (r > 12 || rock.tree?.cut) continue;
     const dx = rock.x - b.pos.x;
     const dz = rock.z - b.pos.z;
     const ahead = dx * fx + dz * fz;
@@ -126,6 +126,7 @@ function avoidMines(race, b, ai) {
   const fx = Math.sin(b.heading);
   const fz = Math.cos(b.heading);
   for (const mine of race.mines) {
+    if (mine.floating) continue;
     const dx = mine.pos.x - b.pos.x;
     const dz = mine.pos.z - b.pos.z;
     const ahead = dx * fx + dz * fz;

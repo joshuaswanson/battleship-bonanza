@@ -1,7 +1,13 @@
 import * as THREE from 'three';
 import { updateMissileTips, updateMineHolder, stepFire, HULL_L } from '../boatModel.js';
 import { waveHeight, isWater } from '../water.js';
-import { BASE_SPEED, KO_TIME, clamp } from './shared.js';
+import { BASE_SPEED, KO_TIME, approach, clamp } from './shared.js';
+
+const FORM_IN = 2.6;
+const WRECK_ROLL = 1.48;
+const WRECK_PITCH = 0.16;
+const WRECK_LIFT = 1.5;
+const FORM_OUT = 1.1;
 
 export const methods = {
   updateVisual(b, dt) {
@@ -43,8 +49,10 @@ export const methods = {
       body.rotation.z += (targetRoll - body.rotation.z) * ease;
     } else {
       const k = Math.min(1.6, ((b.koTime ?? KO_TIME) - b.ko) / KO_TIME);
-      body.rotation.z += (Math.PI * 0.95 - body.rotation.z) * ease;
-      root.position.y -= Math.max(0, k - 0.3) * 4;
+      const wrecked = this.track.onLand(b.trackS);
+      body.rotation.z += ((wrecked ? WRECK_ROLL : Math.PI * 0.95) - body.rotation.z) * ease;
+      if (wrecked) body.rotation.x += (WRECK_PITCH - body.rotation.x) * ease;
+      else root.position.y -= Math.max(0, k - 0.3) * 4;
     }
 
     b.squashVel += (-b.squash * 220 - b.squashVel * 11) * dt;
@@ -52,8 +60,9 @@ export const methods = {
     const sq = clamp(b.squash * 0.12, -0.35, 0.35);
     body.scale.set(1 - sq * 0.6, 1 + sq, 1 - sq * 0.6);
     body.position.y = Math.sin(t * 3 + b.index) * 0.05;
+    if (b.form) this.updateForm(b, dt);
 
-    const burning = !!(b.burn && b.alive);
+    const burning = !!(b.burn && b.alive) || (!b.alive && this.track.onLand(b.trackS));
     b.model.char.value = burning ? 1 : 0;
     stepFire(b.model, burning, t);
     if (b.flash > 0 || materials[0].emissiveIntensity > 0) {
@@ -88,6 +97,24 @@ export const methods = {
     b.shadow.material.opacity = 1 / (1 + h * 0.15);
   },
 
+  updateForm(b, dt) {
+    const track = this.track;
+    const s = track.sAt[track.norm(b.trackIdx)];
+    const want = track.formAt(s) ? 1 : 0;
+    b.formP = approach(b.formP, want, dt / (want ? FORM_IN : FORM_OUT));
+    b.roll += b.speed * dt;
+    b.form.set(b.formP, b.roll, -b.steerVis * 0.4, this.time);
+    const body = b.model.body;
+    if (track.onLand(s)) {
+      b.form.scorch(b.alive ? 0 : 1);
+      body.position.y += b.form.ride * (1 + b.squash * 0.02) + (b.alive ? 0 : WRECK_LIFT * Math.abs(Math.sin(body.rotation.z)));
+    } else {
+      b.form.scorch(0);
+      body.position.y += b.form.ride;
+      if (track.formKind(s) === 'jet' && b.formP >= 1) body.rotation.z += b.steerVis * 0.5;
+    }
+  },
+
   boatTrail(b, dt) {
     const fx = Math.sin(b.heading);
     const fz = Math.cos(b.heading);
@@ -95,6 +122,26 @@ export const methods = {
       if (!flame.visible) continue;
       const p = flame.getWorldPosition(new THREE.Vector3());
       this.fx.flame(p.x - fx * 0.6, p.y, p.z - fz * 0.6, -fx * 10, -1, -fz * 10);
+    }
+    if (b.alive && !b.air && Math.abs(b.speed) > 8 && this.track.onLand(b.trackS)) {
+      b.wakeTimer -= dt;
+      if (b.wakeTimer <= 0) {
+        b.wakeTimer = 0.05;
+        const t = this.track;
+        const i = t.norm(b.trackIdx);
+        const mud = t.mudAt(t.sAt[i], (b.pos.x - t.px[i]) * t.nx[i] + (b.pos.z - t.pz[i]) * t.nz[i]);
+        const r = Math.random;
+        for (const side of [1, -1]) {
+          const x = b.pos.x - fx * 3 + fz * side * 2.3;
+          const z = b.pos.z - fz * 3 - fx * side * 2.3;
+          if (mud > 0.6) {
+            for (let k = 0; k < 3; k++) this.fx.puffs.emit(x, b.waterY + 0.4, z, -b.vel.x * 0.1 + (r() - 0.5) * 7 + fz * side * 4, 4 + r() * 7, -b.vel.z * 0.1 + (r() - 0.5) * 7 - fx * side * 4, 0.28 + r() * 0.38, 0.6, mud > 0.685 ? 0x8d9a78 : 0x4a3220, 24, 0.5, 1);
+          } else {
+            this.fx.puffs.emit(x, b.waterY + 0.5, z, -b.vel.x * 0.12 + (r() - 0.5) * 3, 1.5 + r() * 2.5, -b.vel.z * 0.12 + (r() - 0.5) * 3, 0.8 + r() * 0.8, 0.6, 0xc9a46b, 3, 1.5, 0);
+            if (r() < 0.5) this.fx.puffs.emit(x, b.waterY + 0.3, z, -b.vel.x * 0.16 + (r() - 0.5) * 5, 3 + r() * 5, -b.vel.z * 0.16 + (r() - 0.5) * 5, 0.14 + r() * 0.16, 0.5, 0x5e4128, 24, 0.5, 1);
+          }
+        }
+      }
     }
     if (b.alive && !b.air && Math.abs(b.speed) > 5 && isWater(b.pos.x, b.pos.z)) {
       b.wakeTimer -= dt;

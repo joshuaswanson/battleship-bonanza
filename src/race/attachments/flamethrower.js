@@ -7,6 +7,7 @@ export const methods = {
   updateFlames(dt) {
     for (const b of this.boats) {
       if (!b.has('flamethrower')) continue;
+      if (this.submerged(b)) b.heat.flamethrower.trigger = false;
       const { spraying } = this.stepHold(b, 'flamethrower', stepFlame, b.model.flameMount, dt);
       if (!spraying) continue;
       b.lastFired = this.time;
@@ -40,7 +41,7 @@ export const methods = {
 
   updateBurn(b, dt) {
     if (!b.burn) return;
-    if (!b.alive) {
+    if (!b.alive || this.submerged(b)) {
       b.burn = null;
       return;
     }

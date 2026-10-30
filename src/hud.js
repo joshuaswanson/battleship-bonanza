@@ -281,7 +281,7 @@ export class Hud {
         this.hurtFlash();
         break;
       case 'ko':
-        this.pop(t('sunk'), 'ko');
+        this.pop(t(e.land ? 'wrecked' : 'sunk'), 'ko');
         break;
       case 'warning':
         this.setWarning(e.text);

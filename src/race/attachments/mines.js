@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import { buildMine, launchMine } from '../../boatModel.js';
 import { waveHeight } from '../../water.js';
 
+const MINE_RISE = 7;
+const MINE_POP = -1;
+
 export const methods = {
   removeMine(mine, puff = false) {
     this.scene.remove(mine.mesh);
@@ -12,6 +15,17 @@ export const methods = {
   updateMines(dt) {
     for (const mine of [...this.mines]) {
       mine.age += dt;
+      if (mine.floating) {
+        mine.vel.multiplyScalar(Math.exp(-2.4 * dt));
+        mine.pos.addScaledVector(mine.vel, dt);
+        mine.pos.y += MINE_RISE * dt;
+        mine.mesh.position.copy(mine.pos);
+        mine.mesh.rotation.x += dt * 0.8;
+        mine.mesh.rotation.z += dt * 0.5;
+        if (Math.random() < dt * 8) this.fx.bubbles(mine.pos.x, mine.pos.y, mine.pos.z);
+        if (mine.pos.y > MINE_POP) this.removeMine(mine);
+        continue;
+      }
       const water = waveHeight(mine.pos.x, mine.pos.z, this.time);
       if (!mine.settled) {
         mine.vel.y -= 25 * dt;
@@ -65,7 +79,7 @@ export const actions = {
     const carry = front ? 1 : 0.4;
     const vel = new THREE.Vector3(Math.sin(yaw) * push + b.vel.x * carry, 10, Math.cos(yaw) * push + b.vel.z * carry);
     launchMine(b.model);
-    this.mines.push({ pos, vel, owner: b, age: 0, settled: false, mesh });
+    this.mines.push({ pos, vel, owner: b, age: 0, settled: false, mesh, floating: this.submerged(b) });
     const own = this.mines.filter((m) => m.owner === b);
     if (own.length > 4) this.removeMine(own[0], true);
     this.sfx.play('plop', b.pos);
