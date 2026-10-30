@@ -369,7 +369,7 @@ const LEAF_PALETTES = [
 ];
 const BARK = [new THREE.Color(0xd39a5c), new THREE.Color(0x9c6a3a)];
 
-function trunkGeometry(points, baseRadius) {
+export function trunkGeometry(points, baseRadius, bark = BARK) {
   const curve = new THREE.CatmullRomCurve3(points);
   const segments = 48;
   const radial = 9;
@@ -384,7 +384,7 @@ function trunkGeometry(points, baseRadius) {
     curve.getPointAt(t, center);
     const band = (t * bands) % 1;
     const r = baseRadius * (1 - 0.42 * t) * (1 + 0.6 * Math.pow(1 - t, 8)) * (1 + 0.08 * band);
-    const c = band > 0.6 ? BARK[1] : BARK[0];
+    const c = band > 0.6 ? bark[1] : bark[0];
     for (let j = 0; j <= radial; j++) {
       const k = i * (radial + 1) + j;
       v.fromBufferAttribute(pos, k).sub(center).multiplyScalar(r).add(center);

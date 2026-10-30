@@ -1,14 +1,13 @@
 import * as THREE from 'three';
 import { toon, mulberry32 } from './toon.js';
 import { groundHit } from './terrain.js';
-import { jungleClump } from './foliage.js';
-import { Batcher, cullChunks, slicer, COLORS, mat, ROCK, addPalm, createSky, createCloud, createArch, SUN_DIR } from './world.js';
-import { riverSurface, buildFalls, fallMaterial } from './jungle.js';
+import { Batcher, cullChunks, slicer, COLORS, mat, ROCK, SPHERE, trunkGeometry, createSky, createCloud, createArch, SUN_DIR } from './world.js';
+import { riverSurface, buildFalls } from './jungle.js';
 import { createWater } from './water.js';
 import { BASE_COLORS, buildBase } from './volcanoBase.js';
 import { groundMesh, noise, seaStrip, smooth } from './mapKit.js';
 
-const SKY = 0xf0c8a0;
+const SKY = 0xa84e2c;
 const RIM = 92;
 const PEAK = 236;
 const LAVA_Y = 208;
@@ -18,13 +17,18 @@ const CANYON_HALF = 60;
 const CANYON_IN = 430;
 const CANYON_OUT = 720;
 const FIELD_CELL = 14;
+const WATER = { deep: 0x0d2f3a, shallow: 0x1d6668, foam: 0xa9c4c4 };
+const MIST = 0xc4e4ff;
+const BURNT_BARK = [new THREE.Color(0x151214), new THREE.Color(0x241d1e)];
 const PALETTE = {
   ...COLORS,
   ...BASE_COLORS,
-  basalt: 0x3d3a3f,
-  basaltLight: 0x5c565a,
+  basalt: 0x18161b,
+  basaltLight: 0x29272d,
+  ashCloud: 0x2a2629,
   ash: 0x7f7670,
-  concrete: 0xb6b8ba,
+  concrete: 0x83858a,
+  concreteDark: 0x5c5e63,
   steel: 0x6d7a88,
   steelDark: 0x2e3744,
   hazard: 0xffd23f,
@@ -33,12 +37,17 @@ const PALETTE = {
   villainDark: 0x7a1524,
   lamp: 0xfff0a0,
   screen: 0x46e0c0,
-  moss: 0x5e9e26,
-  mossDark: 0x3c7a1c,
-  bark: 0x7a5230,
-  fronds: 0x5e9e26,
-  coconut: 0x7a5230,
 };
+const SPIRE = new THREE.ConeGeometry(1, 1, 6, 4).translate(0, 0.5, 0).toNonIndexed();
+const spirePoints = SPIRE.attributes.position;
+for (let k = 0; k < spirePoints.count; k++) {
+  const x = spirePoints.getX(k);
+  const y = spirePoints.getY(k);
+  const z = spirePoints.getZ(k);
+  const shove = 0.8 * (1 - y) * (noise(x * 40 + y * 60, z * 40) - 0.5);
+  spirePoints.setXYZ(k, x + shove, y, z - shove);
+}
+SPIRE.computeVertexNormals();
 
 function islandHeight(x, z) {
   const r = Math.hypot(x, z);
@@ -145,9 +154,9 @@ function shapedHeight(track, edge, s, level, x, z) {
 }
 
 const LAVA_VERT = /* glsl */ `
-  attribute vec2 aFlow;
+  attribute vec3 aFlow;
   varying vec3 vWorld;
-  varying vec2 vFlow;
+  varying vec3 vFlow;
   void main() {
     vFlow = aFlow;
     vec4 world = modelMatrix * vec4(position, 1.0);
@@ -160,7 +169,7 @@ const LAVA_FRAG = /* glsl */ `
   uniform float uTime;
   uniform float uStream;
   varying vec3 vWorld;
-  varying vec2 vFlow;
+  varying vec3 vFlow;
   float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
   float noise(vec2 p) {
     vec2 i = floor(p);
@@ -209,31 +218,29 @@ const LAVA_FRAG = /* glsl */ `
     float heat = plate + seam * 0.95 + thin * 0.22 + pulse * 0.08;
     if (uStream > 0.5) heat += 0.4 * (1.0 - smoothstep(0.1, 0.95, abs(vFlow.x)));
     if (uStream < 0.5) heat += 0.3 * (1.0 - smoothstep(10.0, 76.0, length(vWorld.xz)));
-    gl_FragColor = vec4(ramp(heat), 1.0);
+    gl_FragColor = vec4(ramp(heat * (1.0 - vFlow.z * 0.85)), 1.0 - smoothstep(0.7, 1.0, vFlow.z));
     #include <colorspace_fragment>
   }
 `;
 
-function lavaStream(angle, height, tick) {
-  const steps = 54;
+function lavaRibbon(points, height) {
   const pos = [];
   const flow = [];
   const index = [];
-  for (let k = 0; k <= steps; k++) {
-    const t = k / steps;
-    const r = 84 + t * 150;
-    const a = angle + 0.16 * Math.sin(t * 7 + angle * 3) * t + 0.05 * Math.sin(t * 19);
-    const width = 3 + 4 * t + 1.2 * Math.sin(t * 11 + angle);
-    const nx = -Math.sin(a);
-    const nz = Math.cos(a);
+  points.forEach(({ x, z, width, along, cool = 0 }, k) => {
+    const prev = points[Math.max(0, k - 1)];
+    const next = points[Math.min(points.length - 1, k + 1)];
+    const length = Math.hypot(next.x - prev.x, next.z - prev.z);
+    const nx = -(next.z - prev.z) / length;
+    const nz = (next.x - prev.x) / length;
     for (const side of [-1, -0.45, 0, 0.45, 1]) {
-      const x = Math.cos(a) * r + nx * width * side;
-      const z = Math.sin(a) * r + nz * width * side;
-      pos.push(x, height(x, z) + 0.7 - Math.abs(side) * 0.4, z);
-      flow.push(side, t * 150);
+      const px = x + nx * width * side;
+      const pz = z + nz * width * side;
+      pos.push(px, height(px, pz) + 0.7 - Math.abs(side) * 0.4, pz);
+      flow.push(side, along, cool);
     }
-  }
-  for (let k = 0; k < steps; k++) {
+  });
+  for (let k = 0; k < points.length - 1; k++) {
     for (let l = 0; l < 4; l++) {
       const a = k * 5 + l;
       index.push(a, a + 5, a + 1, a + 1, a + 5, a + 6);
@@ -241,9 +248,40 @@ function lavaStream(angle, height, tick) {
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  g.setAttribute('aFlow', new THREE.Float32BufferAttribute(flow, 2));
+  g.setAttribute('aFlow', new THREE.Float32BufferAttribute(flow, 3));
   g.setIndex(index);
   return g;
+}
+
+function streamPoints(angle, blocked) {
+  const points = [];
+  for (let k = 0; k <= 130; k++) {
+    const t = k / 54;
+    const r = 84 + t * 150;
+    const a = angle + 0.16 * Math.sin(t * 7 + angle * 3) * Math.min(t, 1) + 0.05 * Math.sin(t * 19);
+    const x = Math.cos(a) * r;
+    const z = Math.sin(a) * r;
+    if (blocked(x, z)) break;
+    points.push({ x, z, width: 3 + 4 * Math.min(t, 1.3) + 1.2 * Math.sin(t * 11 + angle), along: t * 150 });
+  }
+  points.slice(-9).forEach((p, k) => {
+    p.cool = (k + 1) / 9;
+  });
+  return points;
+}
+
+function bankPoints(track, s, side, phase, blocked) {
+  const points = [];
+  const i = track.wrap(Math.round(s / track.spacing));
+  const hw = track.hw[i];
+  for (let k = 0; k <= 34; k++) {
+    const t = k / 34;
+    const along = s + (1 - t) * 34 * Math.sin(phase) + 7 * Math.sin(t * 6 + phase);
+    const p = track.point(track.wrap(Math.round(along / track.spacing)), side * (hw + 88 - t * 91));
+    if (blocked(p.x, p.z)) return null;
+    points.push({ x: p.x, z: p.z, width: 2.6 + 3.4 * t + 0.9 * Math.sin(t * 13 + phase), along: t * 100, cool: 1 - smooth(0, 0.16, t) });
+  }
+  return points;
 }
 
 function disc(x, z, radius, y, material) {
@@ -252,11 +290,14 @@ function disc(x, z, radius, y, material) {
   return mesh;
 }
 
-const ROCK_BANDS = [0x7a5d4c, 0x5f4b45, 0x93755c, 0x6c5148, 0x4e4143, 0x866852].map((c) => new THREE.Color(c));
-const LEDGE_MOSS = new THREE.Color(0x5e9e26);
-const LEDGE_DEEP = new THREE.Color(0x3c7a1c);
-const WET_ROCK = new THREE.Color(0x2f3438);
+const ROCK_BANDS = [0x141216, 0x1e1b20, 0x100f13, 0x26222a, 0x18161a, 0x211e24].map((c) => new THREE.Color(c));
+const LEDGE_ASH = new THREE.Color(0x35323a);
+const LEDGE_CINDER = new THREE.Color(0x26232a);
+const LIT_ROCK = new THREE.Color(0x6e1e0c);
+const HOT_ROCK = new THREE.Color(0xff7a22);
 const STRATUM = 11;
+const VEIN_COOL = 0.42;
+const FLOOR_COOL = 0.2;
 
 function strata(s, side, y) {
   return (y + 5 * Math.sin(s * 0.017 + side) + 3 * Math.sin(s * 0.043 - side * 2)) / STRATUM;
@@ -281,16 +322,9 @@ function cliffBack(surface, track, i, side) {
   return track.point(i, side * (CANYON_HALF + 44));
 }
 
-function cliffMesh(surface, track, height, side, from, to) {
+function cliffGrid(surface, track, height, side, from, to) {
   const rows = 24;
   const step = 8;
-  const pos = [];
-  const col = [];
-  const a = new THREE.Vector3();
-  const b = new THREE.Vector3();
-  const c = new THREE.Vector3();
-  const n = new THREE.Vector3();
-  const tint = new THREE.Color();
   const grid = [];
   for (let s = from; s <= to + 0.1; s += step) {
     const i = track.wrap(Math.round(s / track.spacing));
@@ -307,6 +341,17 @@ function cliffMesh(surface, track, height, side, from, to) {
     column.push([back.x, top - 3, back.z, s]);
     grid.push(column);
   }
+  return grid;
+}
+
+function cliffMesh(grid, side) {
+  const pos = [];
+  const col = [];
+  const a = new THREE.Vector3();
+  const b = new THREE.Vector3();
+  const c = new THREE.Vector3();
+  const n = new THREE.Vector3();
+  const tint = new THREE.Color();
   const face = (p, q, r) => {
     a.set(p[0], p[1], p[2]);
     b.set(q[0], q[1], q[2]);
@@ -318,8 +363,9 @@ function cliffMesh(surface, track, height, side, from, to) {
     const band = Math.floor(strata(mid, side, y));
     tint.copy(ROCK_BANDS[((band % 6) + 6) % 6]);
     tint.multiplyScalar(0.92 + 0.18 * noise(mid * 7, y * 7));
-    if (y < 3.5) tint.lerp(WET_ROCK, 1 - smooth(0, 3.5, y));
-    if (n.y > 0.8 && y > 4) tint.copy(noise(a.x * 4, a.z * 4) > 0.5 ? LEDGE_MOSS : LEDGE_DEEP);
+    if (n.y > 0.8 && y > 4) tint.copy(noise(a.x * 4, a.z * 4) > 0.5 ? LEDGE_ASH : LEDGE_CINDER);
+    tint.lerp(LIT_ROCK, 0.75 * (1 - smooth(1, 20, y)) ** 2);
+    if (y < 4) tint.lerp(HOT_ROCK, 1 - smooth(0.5, 4, y));
     for (const v of [a, b, c]) {
       pos.push(v.x, v.y, v.z);
       col.push(tint.r, tint.g, tint.b);
@@ -347,9 +393,67 @@ function cliffMesh(surface, track, height, side, from, to) {
   return new THREE.Mesh(g, toon(0xffffff, { vertexColors: true, side: THREE.DoubleSide }));
 }
 
+function cliffVeins(grid, track, side, rand, material) {
+  const pos = [];
+  const flow = [];
+  const index = [];
+  const rows = 24;
+  const onCliff = (u, k) => {
+    const i = Math.min(grid.length - 2, Math.max(0, Math.floor(u)));
+    const f = u - i;
+    const p = grid[i][k];
+    const q = grid[i + 1][k];
+    const inward = track.wrap(Math.round(p[3] / track.spacing));
+    return {
+      x: p[0] + (q[0] - p[0]) * f - side * track.nx[inward] * 0.9,
+      y: p[1] + (q[1] - p[1]) * f,
+      z: p[2] + (q[2] - p[2]) * f - side * track.nz[inward] * 0.9,
+      ax: track.tx[inward],
+      az: track.tz[inward],
+    };
+  };
+  const strand = (cells) => {
+    const first = pos.length / 3;
+    cells.forEach(({ x, y, z, ax, az, width, flat }, k) => {
+      pos.push(x - (flat ? 0 : ax * width), y - (flat ? width : 0), z - (flat ? 0 : az * width));
+      pos.push(x + (flat ? 0 : ax * width), y + (flat ? width : 0), z + (flat ? 0 : az * width));
+      flow.push(-1, k * 4, VEIN_COOL, 1, k * 4, VEIN_COOL);
+      if (k > 0) {
+        const a = first + (k - 1) * 2;
+        index.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
+      }
+    });
+  };
+  for (let u = 4 + rand() * 12; u < grid.length - 4; u += 14 + rand() * 22) {
+    let drift = u;
+    const cells = [];
+    const peak = Math.floor(14 + rand() * (rows - 15));
+    for (let k = peak; k >= 0; k--) {
+      drift += (rand() - 0.5) * 0.9;
+      cells.push({ ...onCliff(drift + 0.3 * Math.sin(k * 1.9), k), width: 0.9 + 1.5 * (1 - k / peak) + rand() * 0.7, flat: false });
+    }
+    strand(cells);
+  }
+  for (let u = 6 + rand() * 18; u < grid.length - 14; u += 22 + rand() * 26) {
+    let row = 3 + rand() * (rows - 8);
+    const cells = [];
+    const reach = 7 + Math.floor(rand() * 8);
+    for (let k = 0; k <= reach; k++) {
+      row += (rand() - 0.5) * 0.9;
+      cells.push({ ...onCliff(u + k, Math.max(0, Math.min(rows, Math.round(row)))), width: 0.6 + 1.1 * Math.sin((k / reach) * Math.PI), flat: true });
+    }
+    strand(cells);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('aFlow', new THREE.Float32BufferAttribute(flow, 3));
+  g.setIndex(index);
+  return new THREE.Mesh(g, material);
+}
+
 function cliffFall(track, side, s, width, top, material) {
   const pos = [];
-  const uv = [];
+  const flow = [];
   const index = [];
   const rows = 14;
   const cols = 4;
@@ -357,11 +461,12 @@ function cliffFall(track, side, s, width, top, material) {
     const u = r / rows;
     const y = top + (0.2 - top) * u;
     for (let c = 0; c <= cols; c++) {
-      const along = s + (c / cols - 0.5) * width;
+      const across = c / cols - 0.5;
+      const along = s + across * width;
       const i = track.wrap(Math.round(along / track.spacing));
       const p = track.point(i, side * (cliffOut(along, side, y) - 5));
       pos.push(p.x, y, p.z);
-      uv.push(c / cols, u);
+      flow.push(across * 2, u * top * 0.6, 0);
     }
   }
   for (let r = 0; r < rows; r++) {
@@ -372,12 +477,67 @@ function cliffFall(track, side, s, width, top, material) {
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setAttribute('aFlow', new THREE.Float32BufferAttribute(flow, 3));
   g.setIndex(index);
   return new THREE.Mesh(g, material);
 }
 
-async function buildCanyon(surface, batch, canyon, group, track, height, rand, tick) {
+function fallSource(track, side, s, width, top, phase) {
+  const points = [];
+  const start = cliffOut(s, side, top) - 6;
+  for (let k = 0; k <= 30; k++) {
+    const t = k / 30;
+    const along = s + 26 * t * Math.sin(phase + t * 3);
+    const p = track.point(track.wrap(Math.round(along / track.spacing)), side * (start + t * 96));
+    points.unshift({ x: p.x, z: p.z, width: width * (0.5 - 0.3 * t), along: (1 - t) * 90, cool: smooth(0.8, 1, t) });
+  }
+  return points;
+}
+
+function ashPlume(batch, rand) {
+  for (let k = 0; k < 46; k++) {
+    const t = k / 45;
+    const r = 12 + 40 * t * t + rand() * 9;
+    const a = rand() * 6.3;
+    const spread = r * 0.55;
+    batch.add('ashCloud', SPHERE, mat(-96 * t * t + Math.cos(a) * spread, LAVA_Y + 24 + t * 290, 62 * t * t + Math.sin(a) * spread, r, r * (0.72 + rand() * 0.3), r));
+  }
+}
+
+function charredTree(batch, x, y, z, rand) {
+  const height = 6 + rand() * 9;
+  const dir = rand() * 6.3;
+  const lean = 0.08 + rand() * 0.2;
+  const trunk = [];
+  for (let k = 0; k <= 4; k++) {
+    const t = k / 4;
+    trunk.push(new THREE.Vector3(x + Math.cos(dir) * lean * height * t * t, y + height * t, z + Math.sin(dir) * lean * height * t * t));
+  }
+  const radius = 0.32 + height * 0.025;
+  batch.add('trunk', trunkGeometry(trunk, radius, BURNT_BARK));
+  const limbs = 2 + Math.floor(rand() * 3);
+  for (let k = 0; k < limbs; k++) {
+    const from = trunk[2 + (k % 2)];
+    const heading = rand() * 6.3;
+    const reach = 1.8 + rand() * 2.6;
+    const bend = 0.8 + rand() * 1.2;
+    const limb = [0, 0.5, 1].map((t) => new THREE.Vector3(from.x + Math.cos(heading) * reach * t, from.y + reach * bend * t * t, from.z + Math.sin(heading) * reach * t));
+    batch.add('trunk', trunkGeometry(limb, radius * 0.42, BURNT_BARK));
+  }
+}
+
+function spires(batch, x, y, z, rand, scale) {
+  const count = 2 + Math.floor(rand() * 3);
+  for (let k = 0; k < count; k++) {
+    const h = scale * (11 + rand() * 24);
+    const r = h * (0.13 + rand() * 0.09);
+    const a = rand() * 6.3;
+    const off = k * scale * (2.4 + rand() * 3);
+    batch.add(k % 2 ? 'basaltLight' : 'basalt', SPIRE, mat(x + Math.cos(a) * off, y - 1.5, z + Math.sin(a) * off, r, h, r, (rand() - 0.5) * 0.26, rand() * 6, (rand() - 0.5) * 0.26));
+  }
+}
+
+async function buildCanyon(surface, batch, canyon, group, track, height, rand, tick, lavaFlow, steam) {
   const { start, end } = track.river.flight;
   const dry = (p) => {
     const { edge, s } = surface.sample(p.x, p.z);
@@ -386,20 +546,21 @@ async function buildCanyon(surface, batch, canyon, group, track, height, rand, t
   const length = 420;
   for (const side of [-1, 1]) {
     for (let s = start; s < end; s += length) {
-      group.add(cliffMesh(surface, track, height, side, s, Math.min(end, s + length)));
+      const grid = cliffGrid(surface, track, height, side, s, Math.min(end, s + length));
+      group.add(cliffMesh(grid, side));
+      group.add(cliffVeins(grid, track, side, rand, lavaFlow));
       await tick();
     }
   }
-  const falls = [];
-  const material = fallMaterial();
-  falls.push({ material });
-  for (let s = start + 360, k = 0; s < end - 360; s += 300 + rand() * 170, k++) {
+  for (let s = start + 340, k = 0; s < end - 340; s += 200 + rand() * 130, k++) {
     const side = k % 2 ? 1 : -1;
     const i = track.wrap(Math.round(s / track.spacing));
     const back = cliffBack(surface, track, i, side);
     const top = height(back.x, back.z);
     if (top < 40) continue;
-    group.add(cliffFall(track, side, s, 15 + rand() * 12, top, material));
+    const width = 15 + rand() * 12;
+    group.add(cliffFall(track, side, s, width, top, lavaFlow));
+    group.add(new THREE.Mesh(lavaRibbon(fallSource(track, side, s, width, top, rand() * 6.3), height), lavaFlow));
   }
   for (let s = start + 120, n = 0; s < end - 120; s += 7) {
     if (++n % 30 === 0) await tick();
@@ -411,53 +572,61 @@ async function buildCanyon(surface, batch, canyon, group, track, height, rand, t
         const p = track.point(i, side * (cliffOut(s, side, 1) - 1 + rand() * 4));
         canyon.add(rand() < 0.5 ? 'basalt' : 'basaltLight', ROCK, mat(p.x, r * 0.25, p.z, r, r * 0.8, r, rand() * 3, rand() * 6, rand() * 3));
       }
-      if (fade > 0.4 && rand() < 0.2) {
+      if (fade > 0.4 && rand() < 0.1) {
         const y = 12 + rand() * 60;
         const band = Math.floor(strata(s, side, y));
         const ledge = (band + 1) * STRATUM - 5 * Math.sin(s * 0.017 + side) - 3 * Math.sin(s * 0.043 - side * 2);
         const p = track.point(i, side * (cliffOut(s, side, ledge) + 1.5));
         const back = cliffBack(surface, track, i, side);
         const top = height(back.x, back.z);
-        if (dry(p) && ledge < top - 6 && ledge > 6) jungleClump(batch, p.x, ledge - 0.4, p.z, rand, 2.4 + rand() * 2.6);
+        if (dry(p) && ledge < top - 6 && ledge > 6) charredTree(batch, p.x, ledge - 0.4, p.z, rand);
       }
-      if (fade > 0.5 && rand() < 0.12) {
+      if (fade > 0.5 && rand() < 0.16) {
         const p = track.point(i, side * (CANYON_HALF + 74 + rand() * 18));
         const y = height(p.x, p.z);
         if (y > 30 && dry(p)) {
-          if (rand() < 0.55) addPalm(batch, p.x, y - 0.4, p.z, rand, { height: 8 + rand() * 7, lean: rand() * 0.4, dir: rand() * 6.3 });
-          else jungleClump(batch, p.x, y - 0.3, p.z, rand, 3.5 + rand() * 3);
+          if (rand() < 0.4) charredTree(batch, p.x, y - 0.4, p.z, rand);
+          else spires(batch, p.x, y, p.z, rand, 1.1);
         }
       }
     }
   }
-  return falls;
+  for (const s of [start + 130, end - 130]) {
+    const i = track.wrap(Math.round(s / track.spacing));
+    for (let lat = -48; lat <= 48; lat += 12) steam.push({ ...track.point(i, lat), y: 0.8 });
+  }
 }
 
-function canyonFoam(track) {
+function canyonLava(track, material) {
   const { start, end } = track.river.flight;
-  const positions = [];
+  const across = 12;
+  const pos = [];
+  const flow = [];
   const index = [];
-  let row = 0;
-  for (const side of [-1, 1]) {
-    const first = row;
-    for (let s = start + 40; s < end - 40; s += 8) {
-      const i = track.wrap(Math.round(s / track.spacing));
-      const edge = cliffOut(s, side, 0.5);
-      const a = track.point(i, side * (edge - 3.5 - 2 * Math.abs(Math.sin(s * 0.31 + side))));
-      const b = track.point(i, side * (edge + 2));
-      positions.push(a.x, 0.5, a.z, b.x, 0.5, b.z);
-      if (row > first) {
-        const k = row * 2;
-        if (side > 0) index.push(k - 2, k, k - 1, k - 1, k, k + 1);
-        else index.push(k - 2, k - 1, k, k - 1, k + 1, k);
-      }
-      row++;
+  let rows = 0;
+  for (let s = start; s <= end; s += 8) {
+    const i = track.wrap(Math.round(s / track.spacing));
+    const cool = FLOOR_COOL + (1 - FLOOR_COOL) * (1 - smooth(0.1, 0.45, canyonFade(s, start, end)));
+    for (let c = 0; c <= across; c++) {
+      const u = (c / across) * 2 - 1;
+      const lat = u * (cliffOut(s, Math.sign(u) || 1, 1) + 14);
+      const p = track.point(i, lat);
+      pos.push(p.x, 0.8, p.z);
+      flow.push(lat / 24, s - start, cool);
+    }
+    rows++;
+  }
+  for (let r = 0; r < rows - 1; r++) {
+    for (let c = 0; c < across; c++) {
+      const a = r * (across + 1) + c;
+      index.push(a, a + across + 1, a + 1, a + 1, a + across + 1, a + across + 2);
     }
   }
   const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('aFlow', new THREE.Float32BufferAttribute(flow, 3));
   g.setIndex(index);
-  return new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.72, side: THREE.DoubleSide }));
+  return new THREE.Mesh(g, material);
 }
 
 function cliffRocks(batch, track, s, rand) {
@@ -492,38 +661,35 @@ function buildSource(batch, group, track, rand) {
 
 export async function createVolcano(group, track, fx) {
   const tick = slicer();
-  const fog = new THREE.Fog(SKY, 300, 1500);
-  const sky = createSky({ top: 0x3f7fc8, horizon: SKY });
+  const fog = new THREE.Fog(SKY, 280, 1400);
+  const sky = createSky({ top: 0x2b1c22, horizon: SKY });
   group.add(sky);
-  group.add(new THREE.HemisphereLight(0xfff0e0, 0x5a4a50, 1.4));
-  const sun = new THREE.DirectionalLight(0xffe0c0, 2.6);
+  group.add(new THREE.HemisphereLight(0xffd9c4, 0x4c2a26, 1.5));
+  const sun = new THREE.DirectionalLight(0xffb98c, 2.4);
   sun.position.copy(SUN_DIR).multiplyScalar(100);
   group.add(sun);
 
   const surface = await riverSurface(track, tick);
   track.river.flight = await flightField(surface, track, tick);
   const height = (x, z) => groundHeight(surface, track, x, z);
-  const sand = new THREE.Color(0x4a4448);
-  const mossy = new THREE.Color(0x3c7a1c);
-  const grass = new THREE.Color(0x5e9e26);
+  const sand = new THREE.Color(0x1d1b1f);
   const dark = new THREE.Color(PALETTE.basalt);
   const pale = new THREE.Color(PALETTE.basaltLight);
-  const ember = new THREE.Color(0xff5a1f);
+  const cinder = new THREE.Color(0x3a1c18);
+  const ember = new THREE.Color(0xb8340f);
   group.add(await groundMesh(surface, height, (x, y, z, n, out) => {
     const r = Math.hypot(x, z);
-    const steep = 1 - n.y;
     if (y < 3) out.copy(sand);
-    else if (steep > 0.3) out.copy(noise(x * 2, z * 2) > 0.5 ? dark : pale);
-    else if (y < 100 && r > 200) out.copy(grass).lerp(mossy, noise(x * 3, z * 3) > 0.55 ? 0.6 : 0);
     else out.copy(noise(x * 2, z * 2) > 0.52 ? dark : pale);
+    if (y >= 3 && n.y > 0.7) out.lerp(cinder, 0.7 * smooth(0.56, 0.7, noise(x * 0.8 + 9, z * 0.8)));
     if (r > 66 && r < 108) out.lerp(ember, (1 - smooth(80, 108, r)) * 0.6);
   }, tick, 6));
   await tick();
 
   const { launch, lip } = track.river.land;
-  const water = seaStrip(track, Math.round((lip - 2) / track.spacing), Math.round((launch + 2) / track.spacing) + track.N, { deep: 0x0f7fa8, shallow: 0x35d0d4 });
+  const water = seaStrip(track, Math.round((lip - 2) / track.spacing), Math.round((launch + 2) / track.spacing) + track.N, WATER);
   group.add(water.mesh);
-  const ocean = createWater({ size: 2600, segments: 180, amp: 0.45 });
+  const ocean = createWater({ size: 2600, segments: 180, amp: 0.45, ...WATER });
   ocean.mesh.position.y = 0;
   group.add(ocean.mesh);
 
@@ -538,12 +704,9 @@ export async function createVolcano(group, track, fx) {
   const lavaMat = new THREE.ShaderMaterial({ uniforms: { uTime: { value: 0 }, uStream: { value: 0 } }, vertexShader: LAVA_VERT, fragmentShader: LAVA_FRAG });
   const streamMat = lavaMat.clone();
   streamMat.side = THREE.DoubleSide;
+  streamMat.transparent = true;
   streamMat.uniforms.uStream.value = 1;
   group.add(disc(0, 0, 90, LAVA_Y - 1, lavaMat));
-  for (const a of [0.5, 1.15, 1.9, 2.5, 3.2, 5.7, 6.05]) {
-    group.add(new THREE.Mesh(lavaStream(a, height, tick), streamMat));
-    await tick();
-  }
 
   const batch = new Batcher();
   const rand = mulberry32(6660);
@@ -553,16 +716,40 @@ export async function createVolcano(group, track, fx) {
   const trim = new Batcher();
   const canyon = new Batcher();
   const occupied = buildBase(batch, trim, track, height, launch);
-  for (let k = 0; k < 420; k++) {
+  ashPlume(batch, rand);
+  const steam = [];
+  const reachesRiver = (x, z, margin) => {
+    const { edge, s } = surface.sample(x, z);
+    return edge < margin && !track.formAt(s);
+  };
+  const addFlow = (points) => {
+    group.add(new THREE.Mesh(lavaRibbon(points, height), streamMat));
+    const { x, z } = points[points.length - 1];
+    if (reachesRiver(x, z, 8)) steam.push({ x, y: surface.sample(x, z).level + 0.4, z });
+  };
+  for (const a of [0.5, 1.15, 1.9, 2.5, 3.2, 5.7, 6.05]) {
+    addFlow(streamPoints(a, (x, z) => reachesRiver(x, z, 2) || occupied(x, z)));
+    await tick();
+  }
+  for (let s = 160; s < launch - 200; s += 190 + rand() * 170) {
+    const clearOfDrops = track.river.drops.every((d) => Math.abs(d.s - s) > 70);
+    const clearOfBridges = [0.31, 0.66].every((u) => Math.abs(u * launch - s) > 60);
+    if (!clearOfDrops || !clearOfBridges) continue;
+    const points = bankPoints(track, s, rand() < 0.5 ? -1 : 1, rand() * 6.3, occupied);
+    if (points) addFlow(points);
+    await tick();
+  }
+  for (let k = 0; k < 300; k++) {
     const a = rand() * 6.3;
     const r = 240 + rand() * 240;
     const x = Math.cos(a) * r;
     const z = Math.sin(a) * r;
     const near = surface.sample(x, z);
-    if (near.edge < 16 || occupied(x, z)) continue;
+    if (near.edge < 34 || occupied(x, z)) continue;
     const y = height(x, z);
     if (y < PLATEAU - 8 || y > 130) continue;
-    addPalm(batch, x, y - 0.4, z, rand, { height: 7 + rand() * 7, lean: rand() * 0.4, dir: rand() * 6.3 });
+    if (k % 3) charredTree(batch, x, y - 0.4, z, rand);
+    else spires(batch, x, y, z, rand, 0.7 + rand() * 0.8);
     if (k % 30 === 0) await tick();
   }
   for (let k = 0; k < 120; k++) {
@@ -584,21 +771,22 @@ export async function createVolcano(group, track, fx) {
     batch.add('basalt', ROCK, mat(p.x, level + 0.5, p.z, r, r * 0.9, r, rand(), rand() * 6, rand()));
     blobs.push({ x: p.x, z: p.z, rx: r * 0.9, rz: r * 0.9, rot: 0, top: level + r * 0.6, launch: true });
   }
-  rapids.push(...(await buildCanyon(surface, batch, canyon, group, track, height, rand, tick)));
+  await buildCanyon(surface, batch, canyon, group, track, height, rand, tick, streamMat, steam);
+  group.add(canyonLava(track, streamMat));
   const scenery = new THREE.Group();
   const chunks = await batch.buildAsync(scenery, 0.1, PALETTE, 120, tick);
   chunks.push(...(await trim.buildAsync(scenery, 0, PALETTE, 120, tick)));
   chunks.push(...(await canyon.buildAsync(scenery, 0.12, PALETTE, 280, tick)));
-  group.add(canyonFoam(track));
   group.add(scenery);
   group.add(createArch(track, track.halfWidth));
 
   const clouds = [];
   for (let i = 0; i < 10; i++) {
-    const cloud = createCloud(rand);
+    const cloud = createCloud(rand, 0x3b3034);
+    cloud.scale.set(3.4, 1.5, 3.4);
     const a = rand() * Math.PI * 2;
     const d = 300 + rand() * 500;
-    cloud.position.set(Math.cos(a) * d, 150 + rand() * 80, Math.sin(a) * d);
+    cloud.position.set(Math.cos(a) * d, 330 + rand() * 90, Math.sin(a) * d);
     clouds.push(cloud);
     group.add(cloud);
   }
@@ -609,7 +797,7 @@ export async function createVolcano(group, track, fx) {
     sun,
     surface,
     shores: blobs,
-    spray: { foam: 0xffffff, tint: 0xbff6ff, wake: 0xe7f9ff, glow: 0x1c1a1c },
+    spray: { foam: MIST, tint: 0xa8d0f4, wake: MIST, glow: 0x1c1a1c },
     solid(p) {
       return groundHit(height, p);
     },
@@ -620,23 +808,34 @@ export async function createVolcano(group, track, fx) {
       ocean.mesh.position.z = Math.round(camera.position.z / 30) * 30;
       for (const f of rapids) f.material.uniforms.uTime.value = t;
       lavaMat.uniforms.uTime.value = t;
+      for (const v of steam) {
+        if (Math.random() > dt * 9 || Math.hypot(v.x - camera.position.x, v.z - camera.position.z) > 320) continue;
+        fx.puffs.emit(v.x + (Math.random() - 0.5) * 8, v.y, v.z + (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 3, 5 + Math.random() * 7, (Math.random() - 0.5) * 3, 0.9 + Math.random() * 1.4, 1.5, MIST, -0.6, 0.4, 0);
+      }
+      for (let k = Math.floor(dt * 34 + Math.random()); k > 0; k--) {
+        const a = Math.random() * 6.3;
+        const r = 14 + Math.random() * 70;
+        const up = -12 + Math.random() * 44;
+        const hot = Math.random() < 0.6;
+        fx.puffs.emit(camera.position.x + Math.cos(a) * r, Math.max(1, camera.position.y + up), camera.position.z + Math.sin(a) * r, 3 * (Math.random() - 0.5), hot ? 2 + Math.random() * 5 : -2, 3 * (Math.random() - 0.5), hot ? 0.07 + Math.random() * 0.09 : 0.1 + Math.random() * 0.1, 2.6, hot ? 0xff8a2a : 0x241f22, 0, 0, 1);
+      }
       streamMat.uniforms.uTime.value = t;
       cullChunks(chunks, camera, fog.far);
       sky.position.copy(camera.position);
       if (Math.random() < dt * 60) {
         const a = Math.random() * 6.3;
         const r = 12 + Math.random() * 22;
-        fx.puffs.emit(source.cave.x + Math.cos(a) * r, source.y + 2, source.cave.z + Math.sin(a) * r, (Math.random() - 0.5) * 6, 24 + Math.random() * 30, (Math.random() - 0.5) * 6, 2 + Math.random() * 3, 3, 0xffffff, 8, 0.2, 0);
+        fx.puffs.emit(source.cave.x + Math.cos(a) * r, source.y + 2, source.cave.z + Math.sin(a) * r, (Math.random() - 0.5) * 6, 24 + Math.random() * 30, (Math.random() - 0.5) * 6, 2 + Math.random() * 3, 3, MIST, 8, 0.2, 0);
       }
       if (Math.random() < dt * 40) {
         const p = bigFalls.base;
         const lat = (Math.random() - 0.5) * 2 * (p.hw + 24);
-        fx.puffs.emit(p.x + p.nx * lat, 2, p.z + p.nz * lat, (Math.random() - 0.5) * 8, 7 + Math.random() * 12, (Math.random() - 0.5) * 8, 2.4 + Math.random() * 3, 1.6, 0xffffff, 2, 0.4, 0);
+        fx.puffs.emit(p.x + p.nx * lat, 2, p.z + p.nz * lat, (Math.random() - 0.5) * 8, 7 + Math.random() * 12, (Math.random() - 0.5) * 8, 1.1 + Math.random() * 1.5, 1.4, MIST, 2, 0.4, 0);
       }
       if (Math.random() < dt * 34) {
         const a = Math.random() * 6.3;
         const r = Math.random() * 46;
-        fx.puffs.emit(Math.cos(a) * r, LAVA_Y + 4, Math.sin(a) * r, (Math.random() - 0.5) * 3, 22 + Math.random() * 12, (Math.random() - 0.5) * 3, 3 + Math.random() * 3, 4.5, Math.random() < 0.2 ? 0xff7a1f : 0x4a4448, -1, 0.3, 0);
+        fx.puffs.emit(Math.cos(a) * r, LAVA_Y + 4, Math.sin(a) * r, (Math.random() - 0.5) * 3, 22 + Math.random() * 12, (Math.random() - 0.5) * 3, 3 + Math.random() * 3, 4.5, Math.random() < 0.2 ? 0xff7a1f : 0x2c2729, -1, 0.3, 0);
       }
       if (Math.random() < dt * 26) {
         const a = Math.random() * 6.3;
