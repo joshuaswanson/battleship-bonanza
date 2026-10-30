@@ -33,8 +33,8 @@ export const ALPS_COLORS = {
   flagWhite: 0xffffff,
   gateBlue: 0x2f7fd8,
   liftSteel: 0x6d7a88,
-  crag: 0x6a6460,
-  cragDark: 0x4e4a48,
+  crag: 0xa49e95,
+  cragDark: 0x8f8c8a,
   islet: 0x9a958c,
 };
 
@@ -51,8 +51,8 @@ const CRAG_ROCKS = 26;
 const CRAG_LIFT = 34;
 const RIDGE_LEDGE = 8;
 const LIFT_CLEARANCE = 15;
-const HORN = { x: 110, z: 500, tip: 26, tower: 128, apron: 236, crest: 15, leanX: 18, leanZ: 5 };
-const HORN_SLOPES = { tip: 1.55, tower: 1.02, apron: 0.42 };
+const HORN = { x: 110, z: 500, tip: 44, tower: 100, apron: 170, crest: 9, leanX: 34, leanZ: 7, round: 0.16 };
+const HORN_SLOPES = { tip: 1.75, tower: 1.4, apron: 1.15 };
 const HORN_HEIGHT = HORN.tip * HORN_SLOPES.tip + (HORN.tower - HORN.tip) * HORN_SLOPES.tower + (HORN.apron - HORN.tower) * HORN_SLOPES.apron;
 const HORN_FACES = [[-0.77, -0.64, 1.14], [0.66, -0.75, 0.86], [0.72, 0.69, 1], [-0.7, 0.71, 0.92]];
 const roofShape = new THREE.Shape([new THREE.Vector2(-1, 0), new THREE.Vector2(1, 0), new THREE.Vector2(0, 1)]);
@@ -60,7 +60,8 @@ const ROOF = new THREE.ExtrudeGeometry(roofShape, { depth: 1, bevelEnabled: fals
 
 function hornReach(dx, dz) {
   const across = Math.sign(dx) * Math.max(0, Math.abs(dx) - HORN.crest);
-  return HORN_FACES.reduce((far, [nx, nz, width]) => Math.max(far, (across * nx + dz * nz) / width), -Infinity);
+  const facet = HORN_FACES.reduce((far, [nx, nz, width]) => Math.max(far, (across * nx + dz * nz) / width), -Infinity);
+  return facet + (Math.hypot(across, dz) * 0.8 - facet) * HORN.round;
 }
 
 function hornRise(d) {
@@ -80,7 +81,7 @@ function matterhorn(x, z) {
   const sz = dz - HORN.leanZ * bend;
   const d = hornReach(sx, sz);
   const away = Math.hypot(sx, sz) || 1;
-  const shoulders = 13 * Math.exp(-(((d - 70) / 20) ** 2)) * (Math.max(0, -sx / away) ** 4 + 0.7 * Math.max(0, sx / away) ** 4);
+  const shoulders = 24 * Math.exp(-(((d - 58) / 14) ** 2)) * Math.max(0, -sx / away) ** 3 + 12 * Math.exp(-(((d - 112) / 16) ** 2)) * Math.max(0, sx / away) ** 4;
   return { rise: hornRise(d) + shoulders, rho: d / HORN.apron };
 }
 
@@ -262,7 +263,7 @@ export async function createAlps(group, track, fx) {
     rockHigh: new THREE.Color(0x8f8c8a),
     snow: new THREE.Color(0xf6f9ff),
     snowShade: new THREE.Color(0xcfe2f6),
-    hornRock: new THREE.Color(0x4e4a48),
+    hornRock: new THREE.Color(0xa49e95),
   };
   const mixed = new THREE.Color();
   const paint = (x, y, z, ny, color) => {
@@ -274,12 +275,12 @@ export async function createAlps(group, track, fx) {
     const snowLine = 105 + 30 * noise(x * 2, z * 2);
     const { rise, rho } = matterhorn(x, z);
     const onHorn = rho < 1 ? 1 - smooth(0.86, 1, rho) : 0;
-    const ledges = smooth(0.7, 0.86, Math.sin(y * 0.42 + 5 * noise(x * 2.6, z * 2.6)));
-    const streaks = ledges * smooth(0.46, 0.6, noise(x * 6, z * 6));
-    const towerEnd = HORN.tower / HORN.apron;
-    const field = smooth(towerEnd - 0.05, towerEnd - 0.01, rho) * (1 - smooth(towerEnd + 0.16, towerEnd + 0.22, rho + 0.14 * (noise(x * 3, z * 3) - 0.5)));
-    const hornSnow = Math.max(field, streaks * 0.9) * smooth(62, 84, y);
+    const snowCap = HORN_HEIGHT * 0.56 + 24 * (noise(x * 3.2, z * 3.2) - 0.5) + 12 * Math.sin(y * 0.1 + x * 0.03);
+    const cap = smooth(snowCap - 3, snowCap + 3, rise);
+    const ledges = smooth(0.66, 0.82, Math.sin(y * 0.38 + 5 * noise(x * 2.6, z * 2.6))) * smooth(0.44, 0.58, noise(x * 6, z * 6));
+    const hornSnow = Math.max(cap, ledges * 0.9 * smooth(84, 120, y));
     color.lerp(shades.hornRock, onHorn);
+    color.lerp(shades.rockHigh, onHorn * 0.5 * smooth(0.4, 0.6, noise(x * 2.4 + 9, z * 2.4)));
     color.lerp(shades.snow, Math.max(smooth(snowLine - 6, snowLine + 6, y) * smooth(0.35, 0.55, ny) * (1 - onHorn), hornSnow * onHorn));
     const drift = smooth(0.35, 0.7, noise(x * 1.2 + 11, z * 1.2 - 7));
     color.lerp(mixed.copy(shades.snow).lerp(shades.snowShade, drift), glacier(x, z, y, ny));
