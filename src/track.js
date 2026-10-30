@@ -525,7 +525,7 @@ export function createTrack(map) {
     heading,
     halfWidth: map.halfWidth,
     widthAt,
-    banked: !!(map.river || map.banked),
+    banked: map.banked ?? !!map.river,
     map,
     river,
     level,

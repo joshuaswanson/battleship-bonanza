@@ -9,6 +9,7 @@ const SURFACE_FLIGHT = 2;
 const SURFACE_PEAK = 17;
 const LIP_POP = 20;
 const LIP_SPEED = 0.75;
+const TANK_PEAK = 15;
 const LIFT_DRIFT = 1.6;
 const JET_PEAK = 16;
 const HOLD_LOOK = 34;
@@ -64,7 +65,8 @@ export const methods = {
     b.boost = Math.max(b.boost, 1);
     this.fx.splash(b.pos.x, b.waterY, b.pos.z, 1.4);
     this.sfx.play('transform', b.pos);
-    b.air = { t: 0, dur: LAND_FLIGHT, peak: land.kind === 'jet' ? JET_PEAK : LAND_PEAK, jet: false, plunge: land.kind === 'sub' };
+    b.air = { t: 0, dur: LAND_FLIGHT, peak: land.form === 'tank' ? TANK_PEAK : land.kind === 'jet' ? JET_PEAK : LAND_PEAK, jet: false, plunge: land.kind === 'sub' };
+    if (land.form === 'tank') this.fx.explosion(b.pos.x, b.waterY + 0.5, b.pos.z, 1.8);
     b.stats.jumps++;
     this.sfx.play('whoosh', b.pos);
     if (b.isPlayer) this.emit('ramp', {}, b);
@@ -207,8 +209,9 @@ export const methods = {
     }
     if (kind === 'jet') return;
     const dust = kind === 'ski' ? [0xffffff, 0xe6f2ff] : [0xc9a46b, 0xa98852];
+    const pool = this.track.river.land.form === 'tank' ? this.fx.soot : this.fx.puffs;
     for (let k = 0; k < 12 * size; k++) {
-      this.fx.puffs.emit(x, b.waterY + 0.4, z, (Math.random() - 0.5) * 10, 2 + Math.random() * 4, (Math.random() - 0.5) * 10, 0.7 + Math.random() * 0.7, 0.7, dust[k % 2], 3, 1.5, 0);
+      pool.emit(x, b.waterY + 0.4, z, (Math.random() - 0.5) * 10, 2 + Math.random() * 4, (Math.random() - 0.5) * 10, 0.7 + Math.random() * 0.7, 0.7, dust[k % 2], 3, 1.5, 0);
     }
   },
 

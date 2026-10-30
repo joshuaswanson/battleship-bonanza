@@ -603,6 +603,21 @@ export class Effects {
     this.ring(x, y, z, 0xffd23f, 1, 9 * power, 0.35);
   }
 
+  groundBlast(x, y, z, power, sand, dark) {
+    const r = Math.random;
+    for (let i = 0; i < 26 * power; i++) {
+      const dir = new THREE.Vector3(r() - 0.5, r() * 0.8 + 0.2, r() - 0.5).normalize();
+      const sp = (6 + r() * 10) * power;
+      this.sparks.emit(x, y, z, dir.x * sp, dir.y * sp, dir.z * sp, (0.6 + r() * 0.8) * power, 0.3 + r() * 0.3, [0xffe066, 0xffa62b, 0xff5e3a][i % 3], 4, 3, 0);
+    }
+    for (let i = 0; i < 30 * power; i++) {
+      const a = r() * 6.3;
+      const sp = 2 + r() * 6;
+      this.soot.emit(x, y + 0.5, z, Math.cos(a) * sp, 10 + r() * 16, Math.sin(a) * sp, 0.7 + r() * 1.3, 1, i % 2 ? sand : dark, 24, 0.7, 0);
+    }
+    this.ring(x, y + 0.2, z, 0xffd23f, 1, 9 * power, 0.35);
+  }
+
   sparkBurst(x, y, z, color = 0xffe066, count = 8) {
     const r = Math.random;
     for (let i = 0; i < count; i++) {

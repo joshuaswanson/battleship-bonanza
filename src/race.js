@@ -225,7 +225,7 @@ export class Race {
     if (jetting) max *= JET_SPEED;
     const skiing = !!b.form && b.formP >= 1 && t.onSnow(b.trackS);
     if (skiing) max *= SKI_SPEED;
-    if (onLand) {
+    if (onLand && t.river.land.form !== 'tank') {
       const i = t.norm(b.trackIdx);
       if (t.mudAt(b.trackS, (b.pos.x - t.px[i]) * t.nx[i] + (b.pos.z - t.pz[i]) * t.nz[i]) > MUD_POOL) max *= MUD_SPEED;
     }

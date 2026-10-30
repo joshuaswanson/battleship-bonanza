@@ -3,13 +3,15 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { createWater } from './water.js';
 import { toon, glow, outlineMaterial, mulberry32 } from './toon.js';
-import { Batcher, cullChunks, COLORS, createSky, createCloud, createArch, SUN_DIR } from './world.js';
-import { courseBuoys, ellipseHit } from './terrain.js';
+import { Batcher, cullChunks, slicer, COLORS, createSky, createCloud, createArch, SUN_DIR } from './world.js';
+import { courseBuoys, courseSurface, ellipseHit } from './terrain.js';
+import { BEACH_COLORS, buildBeach, bunkerFire, onIsland } from './invasion.js';
 import { frame } from './alpine.js';
 import { bigBattleship } from './battleship.js';
 import { destroyer as newDestroyer, carrier as newCarrier } from './warships.js';
 
 const NAVY = {
+  ...BEACH_COLORS,
   ...COLORS,
   hull: 0x6b7785,
   hullDark: 0x4d5763,
@@ -257,9 +259,12 @@ export async function createMidway(group, track, fx) {
   const water = createWater({ deep: 0x0f3f5c, shallow: 0x2f7590 });
   group.add(water.mesh);
 
+  const tick = slicer();
+  const surface = await courseSurface(track, tick, { amp: () => 1 });
   const rand = mulberry32(19420604);
   const batch = new Batcher();
   const shores = [];
+  const hedgehogs = [];
   const fires = [];
   const guns = [];
   const ships = [];
@@ -272,10 +277,11 @@ export async function createMidway(group, track, fx) {
       const near = track.project(px, pz);
       if (near.distance < track.hw[near.idx] + B / 2 + margin) return false;
     }
+    if (onIsland(x, z, L / 2 + 40)) return false;
     return ships.every((s) => Math.hypot(s.x - x, s.z - z) > (s.L + L) / 2 + 10);
   };
   const place = (f, side, gap, L, B, angle, build) => {
-    const idx = track.wrap(Math.round(f * track.N));
+    const idx = track.wrap(Math.round(track.lapIndex(f)));
     const yaw = track.heading(idx) + angle;
     for (let lat = half + B / 2 + gap; lat < half + 400; lat += 6) {
       const p = track.point(idx, side * lat);
@@ -405,6 +411,7 @@ export async function createMidway(group, track, fx) {
 
   group.userData.burningCarrier = burningCarrier;
   const scenery = new THREE.Group();
+  const beach = await buildBeach({ group, batch, track, surface, tick, rand, shores: hedgehogs });
   const chunks = batch.build(scenery, 0.1, NAVY);
   scenery.updateMatrixWorld(true);
   const decks = deckProfiles(shores, chunks.map((c) => c.group));
@@ -425,7 +432,10 @@ export async function createMidway(group, track, fx) {
   };
   group.add(scenery);
 
-  const buoys = courseBuoys(track, () => true);
+  const buoys = courseBuoys(track, (idx, side) => {
+    const p = track.point(idx, side * (track.hw[track.wrap(idx)] + 1.5));
+    return !track.formAt(track.mainIndex(idx) * track.spacing) && !onIsland(p.x, p.z, 26);
+  });
   group.add(buoys);
   group.add(createArch(track, half));
 
@@ -583,6 +593,7 @@ export async function createMidway(group, track, fx) {
   group.add(shellMesh);
   const shells = [];
   const events = [];
+  const shellBeach = bunkerFire({ guns: beach.guns, track, fx, surface, events, height: beach.height, tracers: (from, to) => tracers.fire(from, to, 260, 0.02, 3, 0.05) });
   const GRAVITY = 26;
   const SHELL_SPEED = 125;
   const muzzle = new THREE.Vector3();
@@ -870,7 +881,8 @@ export async function createMidway(group, track, fx) {
     fog,
     water,
     sun,
-    shores,
+    surface,
+    shores: [...shores, ...hedgehogs],
     events,
     solid(p) {
       return ellipseHit(shores, p, 45);
@@ -885,6 +897,7 @@ export async function createMidway(group, track, fx) {
         if (cloud.position.x > 800) cloud.position.x = -800;
       }
       update(t, dt);
+      shellBeach(dt, camera);
     },
   };
 }
