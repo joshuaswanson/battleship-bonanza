@@ -1,5 +1,6 @@
 import { waveHeight, isWater } from '../water.js';
-import { BASE_SPEED, SHORE_MARGIN, wrapAngle } from './shared.js';
+import { t as tr } from '../i18n.js';
+import { BASE_SPEED, RAIL_GAP, RAIL_SWITCH_EVERY, RAIL_SWITCH_LENGTH, RAIL_WISH, RAM_MIN, RAM_REACH, SHORE_MARGIN, clamp, wrapAngle } from './shared.js';
 
 const ROCK_LAUNCH = BASE_SPEED * 0.45;
 const LAND_FLIGHT = 3.2;
@@ -79,6 +80,82 @@ export const methods = {
     const diff = wrapAngle(Math.atan2(a.x + (c.x - a.x) * u - b.pos.x, a.z + (c.z - a.z) * u - b.pos.z) - b.heading);
     b.holdTurn = (b.holdTurn ?? 0) + (diff * rate - (b.holdTurn ?? 0)) * (1 - Math.exp(-HOLD_EASE * dt));
     b.heading += b.holdTurn * dt;
+  },
+
+  rideRail(b, dt, steer) {
+    const t = this.track;
+    const i = t.norm(b.trackIdx);
+    const lateral = (b.pos.x - t.px[i]) * t.nx[i] + (b.pos.z - t.pz[i]) * t.nz[i];
+    const node = Math.floor(t.ahead(t.river.land.launch, b.trackS) / RAIL_SWITCH_EVERY);
+    if (b.rail === null) {
+      b.rail = clamp(Math.round(lateral / RAIL_GAP), -1, 1);
+      b.railMove = null;
+      b.railNode = node;
+    }
+    if (b.isPlayer && !b.railHinted) {
+      b.railHinted = true;
+      this.emit('warning', { text: tr('railHint') }, b);
+    }
+    if (steer) {
+      b.railWish = -Math.sign(steer);
+      b.railWishTime = RAIL_WISH;
+    }
+    b.railWishTime -= dt;
+    if (node !== b.railNode) {
+      b.railNode = node;
+      const next = b.rail + b.railWish;
+      if (!b.railMove && b.railWishTime > 0 && Math.abs(next) <= 1) {
+        b.railMove = { from: b.rail, to: next, u: 0 };
+        b.rail = next;
+        this.sfx.play('clank', b.pos);
+      }
+    }
+    let lat = b.rail * RAIL_GAP;
+    let slip = 0;
+    if (b.railMove) {
+      const move = b.railMove;
+      move.u = Math.min(1, move.u + (Math.abs(b.speed) * dt) / RAIL_SWITCH_LENGTH);
+      const u = move.u * move.u * (3 - 2 * move.u);
+      lat = (move.from + (move.to - move.from) * u) * RAIL_GAP;
+      slip = Math.atan2((move.to - move.from) * RAIL_GAP * 6 * move.u * (1 - move.u), RAIL_SWITCH_LENGTH);
+      if (move.u >= 1) b.railMove = null;
+    }
+    const shift = lat - lateral;
+    b.pos.x += t.nx[i] * shift;
+    b.pos.z += t.nz[i] * shift;
+    b.heading = t.heading(i) + slip;
+    b.vel.set(Math.sin(b.heading) * b.speed, 0, Math.cos(b.heading) * b.speed);
+  },
+
+  ramOnRails(a, b) {
+    const fx = Math.sin(a.heading);
+    const fz = Math.cos(a.heading);
+    const dx = b.pos.x - a.pos.x;
+    const dz = b.pos.z - a.pos.z;
+    const along = dx * fx + dz * fz;
+    if (Math.abs(dx * fz - dz * fx) > 5.2 || Math.abs(along) > RAM_REACH) return;
+    const [rear, ahead] = along >= 0 ? [a, b] : [b, a];
+    const gap = RAM_REACH - Math.abs(along);
+    rear.pos.x -= fx * gap * 0.5;
+    rear.pos.z -= fz * gap * 0.5;
+    ahead.pos.x += fx * gap * 0.5;
+    ahead.pos.z += fz * gap * 0.5;
+    const closing = rear.speed - ahead.speed;
+    if (closing <= 0) return;
+    const hitter = Math.abs(rear.speed) >= Math.abs(ahead.speed) ? rear : ahead;
+    const victim = hitter === rear ? ahead : rear;
+    rear.speed -= closing * 0.72;
+    ahead.speed += closing * 0.62;
+    if (closing < RAM_MIN) return;
+    const blow = clamp(closing * 0.55, 6, 24);
+    this.damage(victim, blow, hitter, 'ram');
+    this.damage(hitter, blow * 0.2, victim, 'ram');
+    rear.bump(5);
+    ahead.bump(5);
+    this.fx.sparkBurst((rear.pos.x + ahead.pos.x) / 2, rear.waterY + 2, (rear.pos.z + ahead.pos.z) / 2, 0xffd23f, 26);
+    this.sfx.play('clank', rear.pos);
+    this.sfx.play('hit', rear.pos);
+    for (const o of [rear, ahead]) if (o.isPlayer) this.emit('lockShake', { amount: 1.1 }, o);
   },
 
   rigidForm(b) {

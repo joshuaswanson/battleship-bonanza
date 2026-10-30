@@ -28,11 +28,16 @@ import {
   CAVE_HALF,
   TORCH_EVERY,
 } from './jungle.js';
+import { MINE_COLORS, buildGoldMine } from './goldMine.js';
 import { PROP_COLORS, town, waterTower, oreCart, rails, trestle, train, sign } from './canyonProps.js';
 
 const SKY = 0xf3d9b4;
 
 const CANYON_COLORS = {
+  ...MINE_COLORS,
+  sandstone: 0xc28144,
+  sandstoneDark: 0x8f5a30,
+  oreGlow: 0xffe9a0,
   ...COLORS,
   ...PROP_COLORS,
   caveRock: 0x9a5a3a,
@@ -114,7 +119,8 @@ function canyonHeight(surface, track, x, z) {
     const top = Math.floor((cliff - floor) / 9) * 9 + floor + smooth(0.6, 1, ((cliff - floor) / 9) % 1) * 9;
     return Math.max(floor, top);
   }
-  const floor = level - 4 + smooth(hw - 4, hw + 6, dist) * 6.5;
+  const land = track.landAmount(s);
+  const floor = level - 4 * (1 - land) - 0.8 * land + smooth(hw - 4, hw + 6, dist) * 6.5;
   const top = Math.max(floor + 14, rim(track, x, z));
   const across = smooth(hw + 5, hw + 95 + 30 * noise(x * 1.3, z * 1.3), dist);
   const steps = 5;
@@ -376,6 +382,7 @@ export async function createCanyon(group, track, fx) {
 
   const rand = mulberry32(1849);
   const batch = new Batcher();
+  const trim = new Batcher();
   const hw = track.halfWidth;
   const shores = [];
   const nearDrop = (s, before, after) => track.river.drops.some((d) => track.ahead(s, d.s) < before || track.ahead(d.s, s) < after);
@@ -384,7 +391,7 @@ export async function createCanyon(group, track, fx) {
   for (let n = 0, tries = 0; n < 12 && tries < 900; tries++) {
     const idx = Math.floor(rand() * track.N);
     const s = idx * track.spacing;
-    if (tunnelMask(track, s) > 0 || nearDrop(s, 70, 70) || startClear(s) || rapidsAt(s) > 0.15) continue;
+    if (tunnelMask(track, s) > 0 || track.formAt(s) || nearDrop(s, 70, 70) || startClear(s) || rapidsAt(s) > 0.15) continue;
     const size = 2.2 + rand() * 2.4;
     const room = hw - 2.5 - size - 8;
     if (room < 5) continue;
@@ -488,8 +495,18 @@ export async function createCanyon(group, track, fx) {
     group.add(mesh);
   }
 
+  const gold = buildGoldMine(batch, trim, group, track, rand);
+  const { launch, span } = track.river.land;
+  const mineIn = Math.round((launch + 330) / track.spacing);
+  const mineOut = Math.round((launch + span - 90) / track.spacing);
+  const railLevel = (at) => track.level(at);
+  group.add(buildMouth(track, mineIn, railLevel, track.level(launch + 330) + LID + 24, 0xffffff, sandstoneTexture()));
+  group.add(buildMouth(track, mineOut, railLevel, track.level(launch + span - 90) + LID + 24, 0xffffff, sandstoneTexture()));
+  minePortal(batch, track, mineIn, railLevel);
+  minePortal(batch, track, mineOut, railLevel);
   const scenery = new THREE.Group();
   const chunks = await batch.buildAsync(scenery, 0.1, CANYON_COLORS, undefined, tick);
+  chunks.push(...(await trim.buildAsync(scenery, 0, CANYON_COLORS, undefined, tick)));
   group.add(scenery);
   group.add(createArch(track, hw));
 
@@ -505,6 +522,7 @@ export async function createCanyon(group, track, fx) {
   }
 
   const big = falls.filter((f) => f.big);
+  const daylight = { color: fog.color.clone(), near: fog.near, far: fog.far };
   return {
     fog,
     water,
@@ -514,9 +532,9 @@ export async function createCanyon(group, track, fx) {
     solid(p) {
       const { s, dist, idx, level } = surface.sample(p.x, p.z);
       const pastExit = track.ahead(track.river.tunnelOut, s);
-      if ((track.inTunnel(s) || pastExit < 12) && dist < track.halfWidth + 6) return null;
+      if ((track.inTunnel(s) || track.inMine(s) || pastExit < 12) && dist < track.halfWidth + 6) return null;
       if (pastExit < 120 && p.y < level - 12) return null;
-      if (track.inTunnel(s)) {
+      if (track.inTunnel(s) || track.inMine(s)) {
         const i = track.norm(idx);
         const side = (p.x - track.px[i]) * track.nx[i] + (p.z - track.pz[i]) * track.nz[i] > 0 ? 1 : -1;
         return p.y >= level + ARCH_TOP - 4 ? new THREE.Vector3(0, -1, 0) : new THREE.Vector3(-track.nx[i] * side, 0, -track.nz[i] * side);
@@ -526,6 +544,7 @@ export async function createCanyon(group, track, fx) {
     update(t, dt, camera) {
       water.update(t);
       runTrain(t, dt);
+      gold.update(camera, surface, fog, daylight, sky);
       cullChunks(chunks, camera, fog.far);
       cullChunks(mine.userData.chunks, camera, fog.far);
       mine.userData.torches.userData.update(t);

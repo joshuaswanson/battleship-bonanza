@@ -51,7 +51,7 @@ export const methods = {
       body.rotation.z += (targetRoll - body.rotation.z) * ease;
     } else {
       const k = Math.min(1.6, ((b.koTime ?? KO_TIME) - b.ko) / KO_TIME);
-      const wrecked = this.track.onLand(b.trackS);
+      const wrecked = this.track.grounded(b.trackS);
       body.rotation.z += ((wrecked ? WRECK_ROLL : Math.PI * 0.95) - body.rotation.z) * ease;
       if (wrecked) body.rotation.x += (WRECK_PITCH - body.rotation.x) * ease;
       else root.position.y -= Math.max(0, k - 0.3) * 4;
@@ -64,7 +64,7 @@ export const methods = {
     body.position.y = Math.sin(t * 3 + b.index) * 0.05;
     if (b.form) this.updateForm(b, dt);
 
-    const burning = !!(b.burn && b.alive) || (!b.alive && this.track.onLand(b.trackS));
+    const burning = !!(b.burn && b.alive) || (!b.alive && this.track.grounded(b.trackS));
     b.model.char.value = burning ? 1 : 0;
     stepFire(b.model, burning, t);
     if (b.flash > 0 || materials[0].emissiveIntensity > 0) {
@@ -110,7 +110,7 @@ export const methods = {
     b.form.set(b.formP, b.roll, -b.steerVis * 0.4, this.time);
     b.model.fire.position.y = b.form.ride;
     const body = b.model.body;
-    if (track.onLand(s)) {
+    if (track.grounded(s)) {
       b.form.scorch(b.alive ? 0 : 1);
       body.position.y += b.form.ride * (1 + b.squash * 0.02) + (b.alive ? 0 : WRECK_LIFT * Math.abs(Math.sin(body.rotation.z)));
     } else {
@@ -118,6 +118,22 @@ export const methods = {
       body.position.y += b.form.ride;
       if (track.formKind(s) === 'jet' && b.formP >= 1) this.bankJet(b, dt);
     }
+    if (b.rail !== null && b.alive) {
+      body.position.y += Math.sin(this.time * 62) * 0.016 + Math.sin(this.time * 27 + b.index) * 0.02;
+      this.railSparks(b);
+    }
+  },
+
+  railSparks(b) {
+    const r = Math.random;
+    if (r() > 0.45 || Math.abs(b.speed) < 15) return;
+    const side = r() < 0.5 ? 1 : -1;
+    const along = r() < 0.5 ? 2.1 : -2.6;
+    const fx = Math.sin(b.heading);
+    const fz = Math.cos(b.heading);
+    const x = b.pos.x + fz * side * 2.2 + fx * along;
+    const z = b.pos.z - fx * side * 2.2 + fz * along;
+    this.fx.puffs.emit(x, b.waterY + 0.2, z, -b.vel.x * 0.14 + (r() - 0.5) * 4, 2 + r() * 4, -b.vel.z * 0.14 + (r() - 0.5) * 4, 0.1 + r() * 0.1, 0.32, r() < 0.6 ? 0xffd23f : 0xff8a2a, 20, 0.2, 1);
   },
 
   bankJet(b, dt) {

@@ -7,7 +7,7 @@ import { TrackFeatures } from './features.js';
 import { Wakes } from './wake.js';
 import { TireMarks } from './tireMarks.js';
 import { t as tr } from './i18n.js';
-import { ACCEL, ARMOR_SPEED, BANK_MARGIN, BASE_SPEED, BRAKE, CIRCLE_OFFSET, COAST, FALL_GRAVITY, GRIP, HOLD_IDS, JET_ASSIST, JET_ASSIST_EASE, JET_SPEED, JET_STEER, JET_THRUST, KO_TIME, LAND_GRIP, LAPS, MAX_HP, MORPH_CLEAR, MORPH_PUSH, MORPH_SHOVE, MUD_POOL, MUD_SPEED, OFF_COURSE_SPEED, OUTER_LIMIT, RADIUS, REGEN_DELAY, REGEN_MAX, REGEN_RAMP, REGEN_START, REVERSE_SPEED, TURN_RATE, approach, clamp } from './race/shared.js';
+import { ACCEL, ARMOR_SPEED, BANK_MARGIN, BASE_SPEED, BRAKE, CART_SPEED, CIRCLE_OFFSET, COAST, FALL_GRAVITY, GRIP, HOLD_IDS, JET_ASSIST, JET_ASSIST_EASE, JET_SPEED, JET_STEER, JET_THRUST, KO_TIME, LAND_GRIP, LAPS, MAX_HP, MORPH_CLEAR, MORPH_PUSH, MORPH_SHOVE, MUD_POOL, MUD_SPEED, OFF_COURSE_SPEED, OUTER_LIMIT, RADIUS, REGEN_DELAY, REGEN_MAX, REGEN_RAMP, REGEN_START, REVERSE_SPEED, TURN_RATE, approach, clamp } from './race/shared.js';
 import { Boat } from './race/boat.js';
 import { carrierSpeed } from './ctf.js';
 import * as machinegun from './race/attachments/machinegun.js';
@@ -28,7 +28,7 @@ export { LAPS, MAX_HP, BASE_SPEED } from './race/shared.js';
 export const COUNTDOWN = 3.7;
 const FALL_OVER_BANK = 40;
 const DIVIDER = 24;
-const KIND_ITEM = { bullet: 'machinegun', saw: 'saw', laser: 'laser', reflect: 'saw', flame: 'flamethrower', fire: 'flamethrower', propane: 'flamethrower', missile: 'missiles', mine: 'mines', spikes: 'spikes' };
+const KIND_ITEM = { ram: 'spikes', bullet: 'machinegun', saw: 'saw', laser: 'laser', reflect: 'saw', flame: 'flamethrower', fire: 'flamethrower', propane: 'flamethrower', missile: 'missiles', mine: 'mines', spikes: 'spikes' };
 
 const MODULES = [machinegun, missiles, mines, grapple, emp, jetpack, laser, flamethrower, saw, spikes, aiming, course, visuals];
 
@@ -197,7 +197,7 @@ export class Race {
       b.vel.multiplyScalar(damp);
       b.speed *= damp;
       b.pos.addScaledVector(b.vel, dt);
-      if (t.onLand(b.trackS) || t.formKind(b.trackS) === 'jet') this.wreckSmoke(b);
+      if (t.grounded(b.trackS) || t.formKind(b.trackS) === 'jet') this.wreckSmoke(b);
       else if (Math.random() < 0.6) this.fx.bubbles(b.pos.x, b.waterY + 0.2, b.pos.z);
       if (b.ko <= 0) this.respawn(b);
       return;
@@ -219,6 +219,7 @@ export class Race {
     if (this.isTethered(b)) max *= 0.8;
     if (b.offCourse > 0) max *= OFF_COURSE_SPEED;
     const onLand = t.onLand(b.trackS);
+    if (t.formKind(b.trackS) === 'cart') max *= CART_SPEED;
     const jetting = !!b.form && b.formP >= 1 && t.jetCruise(b.trackS);
     if (jetting) max *= JET_SPEED;
     if (onLand) {
@@ -237,11 +238,13 @@ export class Race {
     const morphing = !!b.orbit || (!!b.form && b.formP > 0 && b.formP < 1);
     b.morphing = morphing;
     const flying = !morphing && !!b.form && b.formP >= 1 && t.jetCruise(b.trackS);
+    const railed = !morphing && !b.air && !!b.form && b.formP >= 1 && t.onRails(b.trackS);
+    if (!railed) b.rail = null;
     const steer = controllable && !morphing ? b.control.steer : 0;
     b.steerVis += (steer - b.steerVis) * (1 - Math.exp(-8 * dt));
     const speedFrac = clamp(b.speed / BASE_SPEED, 0, 1);
     const turn = clamp(Math.abs(b.speed) / 14, 0.25, 1) * (b.air ? 0.6 : onLand ? 1.25 : 1) * (1 - 0.2 * speedFrac) * (flying ? JET_STEER : 1);
-    b.heading -= steer * TURN_RATE * turn * dt * (b.speed < -0.5 ? -1 : 1);
+    if (!railed) b.heading -= steer * TURN_RATE * turn * dt * (b.speed < -0.5 ? -1 : 1);
     if (morphing) this.holdCourse(b, dt);
     else if (flying) this.holdCourse(b, dt, JET_ASSIST * (1 - Math.abs(b.steerVis) * JET_ASSIST_EASE));
 
@@ -255,6 +258,7 @@ export class Race {
 
     b.pos.x += b.vel.x * dt;
     b.pos.z += b.vel.z * dt;
+    if (railed) this.rideRail(b, dt, steer);
 
     if (b.air?.fall) {
       b.air.vy -= FALL_GRAVITY * dt;
@@ -286,7 +290,7 @@ export class Race {
         b.bump(5);
         this.groundHit(b, b.pos.x, b.pos.z, 1.5);
         this.groundHit(b, b.pos.x + Math.sin(b.heading) * 3, b.pos.z + Math.cos(b.heading) * 3, 0.8);
-        this.sfx.play(onLand ? 'truckLand' : 'splash', b.pos);
+        this.sfx.play(t.grounded(b.trackS) ? 'truckLand' : 'splash', b.pos);
       }
     }
     if (b.spinTime > 0) b.spinTime -= dt;
@@ -440,6 +444,8 @@ export class Race {
     }
     b.model.body.rotation.set(0, 0, 0);
     b.formP = t.formAt(b.trackS) ? 1 : 0;
+    b.rail = null;
+    b.railMove = null;
     b.bump(6);
     this.groundHit(b, spot.x, spot.z, 1);
   }
@@ -477,6 +483,10 @@ export class Race {
         const b = boats[j];
         if (!b.alive) continue;
         if (a.morphing || b.morphing) continue;
+        if (a.rail !== null && b.rail !== null) {
+          this.ramOnRails(a, b);
+          continue;
+        }
         if (Math.abs(a.yOffset - b.yOffset) > 2.5) continue;
         let best = null;
         for (const oa of [-CIRCLE_OFFSET, CIRCLE_OFFSET]) {
@@ -653,7 +663,7 @@ export class Race {
       this.sfx.play('pop', b.pos);
     }
     this.emit('feed', { kind, item: KIND_ITEM[kind], killer: source, victim: b });
-    if (b.isPlayer) this.emit('ko', { source: source.name, land: this.track.onLand(b.trackS) || this.track.formKind(b.trackS) === 'jet' }, b);
+    if (b.isPlayer) this.emit('ko', { source: source.name, land: this.track.grounded(b.trackS) || this.track.formKind(b.trackS) === 'jet' }, b);
   }
 
   useItem(b, slot) {

@@ -19,6 +19,9 @@ function smoothKeys(keys, f) {
 
 const FORK_STEP = 4;
 const JET_SKIM = 26;
+const RAIL_START = 110;
+const MINE_START = 330;
+const MINE_END = 90;
 const JET_EASE = 260;
 const STICK = 5;
 const INTENT = 14;
@@ -370,6 +373,19 @@ export function createTrack(map) {
   };
 
   const onLand = (s) => river?.land?.kind === 'truck' && landDepth(s) >= 6;
+  const onRails = (s) => river?.land?.kind === 'cart' && landDepth(s) >= RAIL_START;
+  const grounded = (s) => onLand(s) || onRails(s);
+  const inMine = (s) => {
+    if (river?.land?.kind !== 'cart') return false;
+    const d = landDepth(s);
+    return d >= MINE_START && d < river.land.span - MINE_END;
+  };
+  const mineMask = (s) => {
+    if (river?.land?.kind !== 'cart') return 0;
+    const d = landDepth(s);
+    if (d < 0) return 0;
+    return landSmooth(d, MINE_START - 60, MINE_START) * (1 - landSmooth(d, river.land.span - MINE_END, river.land.span - MINE_END + 60));
+  };
   const offWater = (s) => landDepth(s) >= (river?.land?.dive ?? 0);
   const formAt = (s) => landDepth(s) >= 0;
   const formKind = (s) => (landDepth(s) >= 0 ? river.land.kind : null);
@@ -468,6 +484,10 @@ export function createTrack(map) {
     mudAt,
     landAmount,
     onLand,
+    onRails,
+    grounded,
+    inMine,
+    mineMask,
     offWater,
     formAt,
     formKind,

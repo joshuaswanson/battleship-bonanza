@@ -5,6 +5,7 @@ import { createAI } from '../ai.js';
 import { TruckForm } from '../truck.js';
 import { JetForm } from '../jetForm.js';
 import { SubForm } from '../subForm.js';
+import { CartForm } from '../cartForm.js';
 import { AXIS_HALF, HOLD_IDS, MAX_HP, clamp } from './shared.js';
 
 let shadowTexture;
@@ -25,7 +26,7 @@ function shadowMaterial() {
 }
 const SHADOW_GEOMETRY = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
 
-const FORMS = { truck: TruckForm, jet: JetForm, sub: SubForm };
+const FORMS = { truck: TruckForm, jet: JetForm, sub: SubForm, cart: CartForm };
 
 export class Boat {
   constructor(def, index, scene, formKind = null) {
@@ -42,6 +43,10 @@ export class Boat {
     this.formP = 0;
     this.orbit = null;
     this.morphing = false;
+    this.rail = null;
+    this.railMove = null;
+    this.railWish = 0;
+    this.railWishTime = 0;
     this.roll = 0;
     scene.add(this.model.root);
     this.turrets = this.model.swivels

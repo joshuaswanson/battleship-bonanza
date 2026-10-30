@@ -154,12 +154,12 @@ export function tunnelMask(track, s) {
   const r = track.river;
   const toEntrance = track.ahead(s, r.tunnelIn);
   const fromExit = track.ahead(r.tunnelOut, s);
-  return Math.max(0, 1 - smooth(0, 60, toEntrance), 1 - smooth(0, 60, fromExit));
+  return Math.max(0, 1 - smooth(0, 60, toEntrance), 1 - smooth(0, 60, fromExit), track.mineMask(s));
 }
 
 export function isHole(surface, track, x, z) {
   const { s, dist } = surface.sample(x, z);
-  return track.inTunnel(s) && dist < track.halfWidth + 10;
+  return (track.inTunnel(s) || track.inMine(s)) && dist < track.halfWidth + 10;
 }
 
 const tikiHollows = [];
