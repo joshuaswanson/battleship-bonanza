@@ -16,9 +16,8 @@ const SKI_SLIDE = 0.2;
 const SKI_MAX_LEAN = 0.2;
 const SKI_LIFT = 1.2;
 const SKI_EASE = 6;
-const CAR_ROLL = 0.14;
-const CAR_SLIDE = 0.4;
-const CAR_SMOKE_FROM = 0.1;
+const CAR_ROLL = 0.05;
+const CAR_SMOKE_FROM = 0.45;
 const SCREW_BUBBLE_RATE = 170;
 const SCREW_BUBBLE_RANGE = 220;
 const POLE_OUT = 0.3;
@@ -195,14 +194,9 @@ export const methods = {
     b.lastHeading = b.heading;
     b.skiTurn = (b.skiTurn ?? 0) + (turn - (b.skiTurn ?? 0)) * (1 - Math.exp(-SKI_EASE * dt));
     const pace = clamp(Math.abs(b.speed) / BASE_SPEED, 0, 1.4);
-    b.skiLean = clamp(-b.skiTurn * CAR_ROLL * pace, -0.1, 0.1);
-    b.skiSlide = clamp(b.skiTurn * CAR_SLIDE * pace, -0.38, 0.38);
-    const body = b.model.body;
-    if (b.alive) {
-      body.rotation.z = b.skiLean;
-      body.rotation.y = b.skiSlide;
-    }
-    const smoke = Math.max(0, Math.abs(b.skiSlide) - CAR_SMOKE_FROM) / 0.38;
+    b.skiLean = clamp(-b.skiTurn * CAR_ROLL * pace, -0.05, 0.05);
+    if (b.alive) b.model.body.rotation.z = b.skiLean;
+    const smoke = Math.max(0, Math.abs(b.skiTurn) - CAR_SMOKE_FROM);
     const r = Math.random;
     if (r() > smoke * 2.4 || Math.abs(b.speed) < 15) return;
     const fx = Math.sin(b.heading);

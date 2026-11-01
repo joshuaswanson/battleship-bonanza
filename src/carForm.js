@@ -254,7 +254,7 @@ export class CarForm extends HullForm {
     for (const t of this.turrets) {
       const front = t.slot === 0;
       const seat = smooth(seg(m, front ? 2.7 : 2.6, front ? 3.15 : 3.05));
-      this.placeTurret(t, mix(this.riseOf(t, m), front ? 1.74 : 0.86, seat), mix(t.rest.z, front ? -0.7 : -3.2, seat), mix(1, 0.6, seat), 1 - seg(m, 2.8, 3.1), m, seat > 0.99);
+      this.placeTurret(t, mix(this.riseOf(t, m), front ? 1.74 : 0.86, seat), mix(t.rest.z, front ? -0.7 : -3.2, seat), 1, 1 - seg(m, 2.8, 3.1), m, seat > 0.99);
     }
   }
 
