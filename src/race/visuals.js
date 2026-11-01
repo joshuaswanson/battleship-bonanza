@@ -145,6 +145,7 @@ export const methods = {
     }
     if (track.onSnow(s) && b.formP >= 1 && !b.air) this.carve(b, dt);
     else if (b.skiSlide) {
+      b.skiLean = 0;
       b.skiSlide *= Math.exp(-SKI_EASE * dt);
       if (Math.abs(b.skiSlide) < 0.002) b.skiSlide = 0;
       body.rotation.y = b.skiSlide;
@@ -168,6 +169,7 @@ export const methods = {
       body.rotation.y = b.skiSlide;
       body.position.y += Math.abs(lean) * SKI_LIFT;
     }
+    b.skiLean = lean;
     b.form.carve(lean, b.skiSlide);
     const r = Math.random;
     const bite = Math.abs(lean) / SKI_MAX_LEAN;

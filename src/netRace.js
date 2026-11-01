@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { boatNodes, boatMaterials, writeNode, readNode, readMat, writeMat, STRIDE } from './replay.js';
+import { FORM_SLOTS, boatNodes, boatMaterials, poseForm, writeForm, writeNode, readNode, readMat, writeMat, STRIDE } from './replay.js';
 import { buildMissile, buildMine, buildHook } from './boatModel.js';
 import { ROPE_GEOMETRY, ROPE_MATERIAL } from './race/attachments/grapple.js';
 import { HOLD_IDS } from './race/shared.js';
@@ -9,7 +9,8 @@ const DELAY = 0.12;
 const FX_METHODS = ['splash', 'explosion', 'sparkBurst', 'grind', 'mist', 'smoke', 'flame', 'blaze', 'ember', 'column', 'blackSmoke', 'bubbles', 'ring', 'followRing', 'shell', 'flameSpray', 'impact', 'scorch', 'droplet', 'spray', 'casing', 'bolt', 'arcTo', 'beam', 'orbArc', 'wake'];
 const FX_POOLS = ['puffs', 'sparks', 'soot', 'fire', 'fireMid', 'fireCore'];
 const MUTED = ['whitecaps', 'boatTrail'];
-const REST = 9;
+const BOAT_REST = 9;
+const REST = BOAT_REST + FORM_SLOTS;
 const STATUS = 30 + HOLD_IDS.length * 4;
 const LOOSE = { missile: 0, mine: 1, hook: 2 };
 
@@ -260,6 +261,7 @@ export class Streamer {
     for (const m of this.mats) rest[o++] = readMat(m);
     for (const b of race.boats) {
       rest.set([b.pos.x, b.pos.y, b.pos.z, b.waterY, b.heading, b.speed, (b.alive ? 1 : 0) + (b.air ? 2 : 0), b.yOffset, b.trackIdx], o);
+      writeForm(rest, o + BOAT_REST, b);
       o += REST;
     }
     const loose = [];
@@ -397,6 +399,7 @@ export class Mirror {
       boat.air = flags >= 2 ? boat.air ?? {} : null;
       boat.yOffset = lerp(7);
       boat.trackIdx = a.rest[o + 8];
+      poseForm(boat, a.rest, b.rest, o + BOAT_REST, k, race.time);
       o += REST;
     }
     this.poseLoose(a, b, k);

@@ -4,6 +4,7 @@ const RATE = 1 / 30;
 export const STRIDE = 11;
 const EMIT = 16;
 const EMIT_CHUNK = 4096;
+const BOAT_REST = 7;
 
 export function boatNodes(b) {
   const m = b.model;
@@ -68,6 +69,30 @@ export function writeNode(out, o, node) {
   out[o + 10] = node.visible ? 1 : 0;
 }
 
+export const FORM_SLOTS = 8;
+
+export function writeForm(out, o, b) {
+  out[o] = b.formP;
+  out[o + 1] = b.roll ?? 0;
+  out[o + 2] = -b.steerVis * 0.4;
+  out[o + 3] = b.form?.scorched ?? 0;
+  out[o + 4] = b.liftHook ?? 0;
+  out[o + 5] = b.liftOffset ?? 0;
+  out[o + 6] = b.skiLean ?? 0;
+  out[o + 7] = b.skiSlide ?? 0;
+}
+
+export function poseForm(boat, a, b, o, k, time) {
+  const { form } = boat;
+  if (!form) return;
+  const lerp = (i) => a[o + i] + (b[o + i] - a[o + i]) * k;
+  const p = lerp(0);
+  form.set(p, lerp(1), lerp(2), time);
+  form.scorch(a[o + 3]);
+  form.hang?.(lerp(4), lerp(5), boat.model.body.rotation.z);
+  if (p >= 1) form.carve?.(lerp(6), lerp(7));
+}
+
 const qa = new THREE.Quaternion();
 const qb = new THREE.Quaternion();
 export function readNode(node, a, b, o, k) {
@@ -99,7 +124,7 @@ export class Recorder {
     this.start = null;
     this.nodes = race.boats.flatMap((b) => boatNodes(b));
     this.mats = race.boats.flatMap((b) => boatMaterials(b));
-    this.rest = this.mats.length + race.boats.length * 7;
+    this.rest = this.mats.length + race.boats.length * (BOAT_REST + FORM_SLOTS);
     this.state = new Float32Array(this.nodes.length * STRIDE);
     this.scratch = new Float32Array(STRIDE);
     this.changed = new Uint16Array(this.nodes.length);
@@ -185,6 +210,8 @@ export class Recorder {
       rest[o++] = b.heading;
       rest[o++] = b.speed;
       rest[o++] = (b.alive ? 1 : 0) + (b.air ? 2 : 0);
+      writeForm(rest, o, b);
+      o += FORM_SLOTS;
     }
     const loose = [];
     const add = (node) => {
@@ -272,7 +299,8 @@ export class Replay {
       const flags = a.rest[o + 6];
       boat.ko = flags % 2 === 1 ? 0 : 1;
       boat.air = flags >= 2 ? {} : null;
-      o += 7;
+      poseForm(boat, a.rest, b.rest, o + BOAT_REST, k, this.time);
+      o += BOAT_REST + FORM_SLOTS;
     }
 
     const live = new Set();
