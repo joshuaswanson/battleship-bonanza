@@ -4,12 +4,14 @@ import { createWater } from './water.js';
 import { toon, mulberry32 } from './toon.js';
 import { Batcher, cullChunks, slicer, COLORS, mat, createSky, createArch } from './world.js';
 import { DockHazards, SEARCH_BEAM, SEARCH_POOL } from './docksHazards.js';
+import { CITY_COLORS, buildCity } from './neonCity.js';
 import { courseSurface, buildHeightfield, courseBuoys, noise } from './terrain.js';
 import { DOCK_COLORS, GLOW_COLORS, CONTAINER, Decals, containerStack, quayCrane, goliathCrane, cargoShip, warehouse, oilTank, floodMast, bollard, drums, pallets, chimney, pipeBridge } from './docksProps.js';
 
-const COLORS_ALL = { ...COLORS, ...DOCK_COLORS, ...GLOW_COLORS };
+const COLORS_ALL = { ...COLORS, ...DOCK_COLORS, ...GLOW_COLORS, ...CITY_COLORS };
 const QUAY_TOP = 2.2;
 const WALK = 5;
+const SLIP_DROP = 1.6;
 export const SKY_TOP = 0x04061a;
 export const SKY_HORIZON = 0x1b1530;
 export const HAZE = 0x0f0f1e;
@@ -260,9 +262,16 @@ export async function createDocks(group, track, fx) {
 
   const N = track.N;
   const surface = await courseSurface(track, tick, { margin: 230, amp: () => 0.3 });
-  const height = (x, z) => (surface.sample(x, z).edge < 1.5 ? -4 : QUAY_TOP - 0.05);
+  const height = (x, z) => {
+    const { edge, s, level } = surface.sample(x, z);
+    const depth = track.landDepth(s);
+    if (depth >= 0 && edge < 6) return level - 0.25 - SLIP_DROP * (1 - Math.min(1, depth / 26));
+    return edge < 1.5 ? -4 : QUAY_TOP - 0.05;
+  };
+  const inCity = (x, z) => track.landDepth(surface.sample(x, z).s) >= 0;
   const paint = (x, y, z, ny, color) => {
     if (y < 0) return color.set(0x2b3324);
+    if (inCity(x, z)) return color.set(0x1c1d26).multiplyScalar(0.9 + 0.2 * noise(x * 3, z * 3));
     const edge = surface.sample(x, z).edge;
     const tile = (Math.floor(x / 7) + Math.floor(z / 7)) % 2 ? 0x6b6c70 : 0x626367;
     color.set(tile).multiplyScalar(0.9 + 0.2 * noise(x * 3, z * 3));
@@ -272,7 +281,7 @@ export async function createDocks(group, track, fx) {
   group.add(await buildHeightfield({ bounds: surface.bounds, step: 3, height, paint, tick }));
   const landAt = (i, side) => {
     const p = track.point(i, side * (track.hw[i] + WALK + 1));
-    return surface.sample(p.x, p.z).edge > 1.5;
+    return !track.formAt(track.mainIndex(i) * track.spacing) && surface.sample(p.x, p.z).edge > 1.5;
   };
   group.add(quayWalls(track, landAt));
 
@@ -302,6 +311,7 @@ export async function createDocks(group, track, fx) {
   }
   const nearRouteEnd = (x, z, d) => track.routes.some((r) => [r.from, r.to].some((k) => Math.hypot(track.px[k] - x, track.pz[k] - z) < d));
   const clearOfWater = (x, z, r) => {
+    if (inCity(x, z)) return false;
     for (let a = 0; a < 6; a++) {
       const ang = (a / 6) * Math.PI * 2;
       if (surface.sample(x + Math.cos(ang) * r, z + Math.sin(ang) * r).edge < WALK) return false;
@@ -310,7 +320,7 @@ export async function createDocks(group, track, fx) {
   };
 
   {
-    const i = track.wrap(Math.round(0.985 * N));
+    const i = track.wrap(Math.round(track.lapIndex(0.985)));
     const side = -1;
     const p = track.point(i, side * (track.hw[i] - 8));
     shores.push(cargoShip(batch, glow, p.x, p.z, track.heading(i), rand, { length: 104, beam: 15, decals }));
@@ -326,7 +336,7 @@ export async function createDocks(group, track, fx) {
 
   const sweepers = [];
   for (const [f, side] of [[0.1, -1], [0.27, -1], [0.45, 1], [0.66, -1], [0.79, 1], [0.93, 1]]) {
-    const i = Math.round(f * N);
+    const i = Math.round(track.lapIndex(f));
     const p = quayPoint(i, side, WALK + 2);
     if (!free(p.x, p.z, 3) || surface.sample(p.x, p.z).edge < 2) continue;
     batch.add('steelDark', TOWER, mat(p.x, QUAY_TOP + 15, p.z, 1, 30, 1));
@@ -340,7 +350,7 @@ export async function createDocks(group, track, fx) {
   }
 
   for (const f of [0.135, 0.17, 0.225, 0.26, 0.64, 0.675]) {
-    const i = Math.round(f * N);
+    const i = Math.round(track.lapIndex(f));
     const side = 1;
     if (!landAt(i, side) || !straightAt(i)) continue;
     const q = quayPoint(i, side, WALK + 9);
@@ -353,7 +363,7 @@ export async function createDocks(group, track, fx) {
 
   const gantries = [];
   for (const f of [0.5, 0.585]) {
-    const i = Math.round(f * N);
+    const i = Math.round(track.lapIndex(f));
     const half = track.hw[i] + WALK + 4;
     const p = track.point(i);
     const crane = goliathCrane(batch, glow, p.x, QUAY_TOP, p.z, track.heading(i), half, 44, { decals, moving: true });
@@ -376,7 +386,7 @@ export async function createDocks(group, track, fx) {
   }
 
   {
-    const i = Math.round(0.74 * N);
+    const i = Math.round(track.lapIndex(0.74));
     const side = 1;
     const base = quayPoint(i, side, WALK + 70);
     for (let k = 0; k < 9; k++) {
@@ -390,7 +400,7 @@ export async function createDocks(group, track, fx) {
 
   const smoke = [];
   {
-    const i = Math.round(0.36 * N);
+    const i = Math.round(track.lapIndex(0.36));
     const side = -1;
     const base = quayPoint(i, side, WALK + 60);
     for (let k = 0; k < 3; k++) {
@@ -474,7 +484,7 @@ export async function createDocks(group, track, fx) {
       const x = gx + (rand() - 0.5) * 6;
       const z = gz + (rand() - 0.5) * 6;
       const s = surface.sample(x, z);
-      if (s.edge < 22 || rand() < 0.12) continue;
+      if (s.edge < 22 || rand() < 0.12 || track.formAt(s.s)) continue;
       const yaw = track.heading(s.idx) + (rand() < 0.5 ? 0 : Math.PI / 2);
       const rows = 3 + Math.floor(rand() * 4);
       const bays = 1 + Math.floor(rand() * 2);
@@ -493,7 +503,7 @@ export async function createDocks(group, track, fx) {
     const x = minX + rand() * (maxX - minX);
     const z = minZ + rand() * (maxZ - minZ);
     const s = surface.sample(x, z);
-    if (s.edge < 30 || !free(x, z, 3)) continue;
+    if (s.edge < 30 || !free(x, z, 3) || track.formAt(s.s)) continue;
     const mast = floodMast(batch, glow, x, QUAY_TOP, z, 26 + rand() * 10, rand);
     lights.pool(x, QUAY_TOP + 0.1, z, 22 + rand() * 8, rand() < 0.5 ? WARM : COOL, 0.75);
     if (rand() < 0.5) {
@@ -531,6 +541,7 @@ export async function createDocks(group, track, fx) {
     }
   }
 
+  const city = await buildCity({ group, batch, glow, lights, warm: WARM, track, rand, tick, top: QUAY_TOP });
   const scenery = new THREE.Group();
   const chunks = await batch.buildAsync(scenery, 0.1, COLORS_ALL, undefined, tick);
   const glowGroup = new THREE.Group();
@@ -546,12 +557,12 @@ export async function createDocks(group, track, fx) {
   blinkMesh.computeBoundingSphere();
   group.add(blinkMesh);
 
-  const buoys = courseBuoys(track, (idx, side) => !landAt(idx, side));
+  const buoys = courseBuoys(track, (idx, side) => !landAt(idx, side) && !track.formAt(track.mainIndex(idx) * track.spacing));
   group.add(buoys);
   group.add(createArch(track, track.hw[0]));
 
   const collider = new Collider();
-  await collider.addObject(group, new Set([sky, water.mesh, buoys, lights.beamMesh, lights.poolMesh, blinkMesh, glowGroup, labels, hazards.group]), tick);
+  await collider.addObject(group, new Set([sky, water.mesh, buoys, lights.beamMesh, lights.poolMesh, blinkMesh, glowGroup, labels, hazards.group, ...city.soft]), tick);
 
   let puffClock = 0;
   return {

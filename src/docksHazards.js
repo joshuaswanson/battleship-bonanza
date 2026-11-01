@@ -116,7 +116,7 @@ export class DockHazards {
   spot(f, lateral, routeId) {
     const t = this.track;
     const route = t.routes[routeId];
-    const idx = route ? route.first + Math.round(f * route.count) : t.wrap(Math.round(f * t.N));
+    const idx = route ? route.first + Math.round(f * route.count) : t.wrap(Math.round(t.lapIndex(f)));
     return { idx, p: t.point(idx, lateral * t.hw[idx]) };
   }
 
@@ -156,7 +156,7 @@ export class DockHazards {
     for (let k = 0; k < 9; k++) {
       const f = (k + 0.3 + rand() * 0.4) / 9;
       const lateral = (rand() - 0.5) * 1.3;
-      const idx = t.wrap(Math.round(f * t.N));
+      const idx = t.wrap(Math.round(t.lapIndex(f)));
       const base = t.point(idx, lateral * t.hw[idx]);
       const count = 1 + Math.floor(rand() * 3);
       for (let n = 0; n < count; n++) {

@@ -7,6 +7,7 @@ const LIFE = 26;
 const WIDTH = 0.62;
 const TRACK = 2.3;
 const SKI_GAUGE = 2.7;
+const CAR_GAUGE = 2.16;
 const AXLE = 3.05;
 
 const VERT = /* glsl */ `
@@ -41,6 +42,9 @@ const FRAG = /* glsl */ `
     #ifdef SNOW
       float strength = vDepth * vFade * edge * 0.8;
       vec3 color = vec3(0.56, 0.7, 0.86);
+    #elif defined(ASPHALT)
+      float strength = vDepth * vFade * edge * 0.75;
+      vec3 color = vec3(0.02, 0.02, 0.03);
     #else
       float strength = vDepth * vFade * edge * mix(0.62, 1.0, chevron);
       vec3 color = mix(vec3(0.42, 0.28, 0.16), vec3(0.2, 0.13, 0.08), vDepth);
@@ -53,9 +57,9 @@ const FRAG = /* glsl */ `
 `;
 
 export class TireMarks {
-  constructor(scene, { snow = false } = {}) {
+  constructor(scene, { tone = 'dirt' } = {}) {
     this.scene = scene;
-    this.gauge = snow ? SKI_GAUGE : TRACK;
+    this.gauge = tone === 'snow' ? SKI_GAUGE : tone === 'asphalt' ? CAR_GAUGE : TRACK;
     const verts = MAX_QUADS * 6;
     this.positions = new Float32Array(verts * 3);
     this.born = new Float32Array(verts).fill(-1000);
@@ -71,7 +75,7 @@ export class TireMarks {
       uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uTime: { value: 0 } }]),
       vertexShader: VERT,
       fragmentShader: FRAG,
-      defines: snow ? { SNOW: '' } : {},
+      defines: { snow: { SNOW: '' }, asphalt: { ASPHALT: '' }, dirt: {} }[tone],
       transparent: true,
       depthWrite: false,
       fog: true,

@@ -16,6 +16,9 @@ const SKI_SLIDE = 0.2;
 const SKI_MAX_LEAN = 0.2;
 const SKI_LIFT = 1.2;
 const SKI_EASE = 6;
+const CAR_ROLL = 0.14;
+const CAR_SLIDE = 0.4;
+const CAR_SMOKE_FROM = 0.1;
 const SCREW_BUBBLE_RATE = 170;
 const SCREW_BUBBLE_RANGE = 220;
 const POLE_OUT = 0.3;
@@ -144,6 +147,7 @@ export const methods = {
       b.form.hang(b.liftHook, b.liftOffset ?? 0, body.rotation.z);
     }
     if (track.onSnow(s) && b.formP >= 1 && !b.air) this.carve(b, dt);
+    else if (b.form.drift && track.onLand(s) && b.formP >= 1 && !b.air) this.drift(b, dt);
     else if (b.skiSlide) {
       b.skiLean = 0;
       b.skiSlide *= Math.exp(-SKI_EASE * dt);
@@ -183,6 +187,30 @@ export const methods = {
       const z = b.pos.z + fx * outer * 2.7 + fz * u;
       const throwOut = 3 + bite * 15 * r();
       this.fx.puffs.emit(x, b.waterY + 0.3, z, -b.vel.x * 0.1 - fz * outer * throwOut, 2 + r() * (3 + bite * 7), -b.vel.z * 0.1 + fx * outer * throwOut, 0.3 + r() * (0.4 + bite * 0.6), 0.55, r() < 0.5 ? 0xffffff : 0xe6f2ff, 8, 1, 0);
+    }
+  },
+
+  drift(b, dt) {
+    const turn = wrapAngle(b.heading - (b.lastHeading ?? b.heading)) / Math.max(dt, 1e-3);
+    b.lastHeading = b.heading;
+    b.skiTurn = (b.skiTurn ?? 0) + (turn - (b.skiTurn ?? 0)) * (1 - Math.exp(-SKI_EASE * dt));
+    const pace = clamp(Math.abs(b.speed) / BASE_SPEED, 0, 1.4);
+    b.skiLean = clamp(-b.skiTurn * CAR_ROLL * pace, -0.1, 0.1);
+    b.skiSlide = clamp(b.skiTurn * CAR_SLIDE * pace, -0.38, 0.38);
+    const body = b.model.body;
+    if (b.alive) {
+      body.rotation.z = b.skiLean;
+      body.rotation.y = b.skiSlide;
+    }
+    const smoke = Math.max(0, Math.abs(b.skiSlide) - CAR_SMOKE_FROM) / 0.38;
+    const r = Math.random;
+    if (r() > smoke * 2.4 || Math.abs(b.speed) < 15) return;
+    const fx = Math.sin(b.heading);
+    const fz = Math.cos(b.heading);
+    for (const side of [1, -1]) {
+      const x = b.pos.x + fz * side * 2.1 - fx * 3;
+      const z = b.pos.z - fx * side * 2.1 - fz * 3;
+      this.fx.soot.emit(x, b.waterY + 0.3, z, -b.vel.x * 0.12 + (r() - 0.5) * 3, 1.2 + r() * 2.4, -b.vel.z * 0.12 + (r() - 0.5) * 3, 0.25 + r() * 0.45, 0.7, r() < 0.5 ? 0xb9bdc8 : 0x8d919c, -1.5, 1.2, 0);
     }
   },
 
@@ -252,6 +280,7 @@ export const methods = {
         for (const side of [1, -1]) {
           const x = b.pos.x - fx * 3 + fz * side * 2.3;
           const z = b.pos.z - fz * 3 - fx * side * 2.3;
+          if (t.river.land.form === 'car') continue;
           if (t.river.land.form === 'tank') {
             this.fx.soot.emit(x, b.waterY + 0.5, z, -b.vel.x * 0.12 + (r() - 0.5) * 4, 1.5 + r() * 3, -b.vel.z * 0.12 + (r() - 0.5) * 4, 0.4 + r() * 0.5, 0.6, r() < 0.5 ? 0xd2bd8a : 0xb6a26f, 2, 1.4, 0);
           } else if (mud > 0.6) {
