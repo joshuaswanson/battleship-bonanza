@@ -155,7 +155,7 @@ export class SkiForm extends HullForm {
     for (const t of this.turrets) {
       const front = t.slot === 0;
       const seat = smooth(seg(m, front ? 2.75 : 2.65, front ? 3.2 : 3.1));
-      this.placeTurret(t, mix(this.riseOf(t, m), front ? 1.72 : 1.36, seat), mix(t.rest.z, front ? 1.3 : -2, seat), 0.85, 1, m, seat > 0.99);
+      this.placeTurret(t, mix(this.riseOf(t, m), front ? 1.72 : 1.36, seat), mix(t.rest.z, front ? 1.3 : -2, seat), 1, 1, m, seat > 0.99);
     }
   }
 }

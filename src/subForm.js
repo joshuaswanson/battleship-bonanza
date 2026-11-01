@@ -143,7 +143,7 @@ export class SubForm extends HullForm {
       const front = t.slot === 0;
       const seat = smooth(seg(m, front ? 2.7 : 2.6, front ? 3.05 : 2.95));
       const z = front ? 1.75 : -2.75;
-      this.placeTurret(t, mix(this.riseOf(t, m), deckPoint(z, 0).y + 0.05, seat), mix(t.rest.z, z, seat), 0.92, 1, m, seat > 0.99);
+      this.placeTurret(t, mix(this.riseOf(t, m), deckPoint(z, 0).y + 0.05, seat), mix(t.rest.z, z, seat), 1, 1, m, seat > 0.99);
     }
   }
 

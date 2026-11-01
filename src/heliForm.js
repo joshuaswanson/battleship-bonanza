@@ -7,12 +7,11 @@ const SPEC = { key: 'heli', doors: [{ z0: -2.9, z1: 1.1 }] };
 const ROTOR_BLADES = 4;
 const ROTOR_RADIUS = 7;
 const BOOM_LENGTH = 7.4;
-const MAST = 3.7;
+const MAST = 4.9;
 const STRUT_LENGTH = 2;
 const STRUT_LEAN = 0.73;
-const STUB_Y = 1.4;
+const STUB_Y = 0.9;
 const STUB_X = 2.4;
-const WEAPON_SCALE = 0.62;
 
 function skid() {
   const points = [[0, -0.1, -3.8], [0, -0.1, 2.6], [0, 0.1, 3.6], [0, 0.55, 4.2]].map(([x, y, z]) => new THREE.Vector3(x, y, z));
@@ -165,7 +164,7 @@ export class HeliForm extends HullForm {
     for (const turret of this.turrets) {
       const front = turret.slot === 0;
       const go = smooth(seg(m, front ? 2.7 : 2.8, front ? 3.3 : 3.2));
-      this.placeTurret(turret, mix(this.riseOf(turret, m), STUB_Y, go), mix(turret.rest.z, -0.2, go), mix(1, WEAPON_SCALE, go), 1 - seg(m, 2.85, 3.15), m, done);
+      this.placeTurret(turret, mix(this.riseOf(turret, m), STUB_Y, go), mix(turret.rest.z, -0.2, go), 1, 1 - seg(m, 2.85, 3.15), m, done);
       turret.group.position.x = (front ? 1 : -1) * STUB_X * go;
     }
   }

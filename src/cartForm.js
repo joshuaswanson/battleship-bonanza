@@ -142,7 +142,7 @@ export class CartForm extends HullForm {
     for (const t of this.turrets) {
       const front = t.slot === 0;
       const seat = smooth(seg(m, front ? 2.75 : 2.65, front ? 3.2 : 3.1));
-      this.placeTurret(t, mix(this.riseOf(t, m), 1.75, seat), mix(t.rest.z, front ? 1.1 : -2.5, seat), 0.9, 1, m, seat > 0.99);
+      this.placeTurret(t, mix(this.riseOf(t, m), 1.75, seat), mix(t.rest.z, front ? 1.1 : -2.5, seat), 1, 1, m, seat > 0.99);
     }
     this.refs.flag.visible = true;
   }

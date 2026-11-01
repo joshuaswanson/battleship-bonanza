@@ -211,7 +211,7 @@ export class TruckForm extends HullForm {
       const go = smooth(seg(m, front ? 2.75 : 2.85, front ? 3.42 : 3.32));
       const yEnd = front ? 2.86 : deckPoint(-2.8, 0).y + 0.12;
       const y = mix(this.riseOf(t, m), yEnd, go) + (front ? Math.sin(go * Math.PI) * 0.6 : 0);
-      this.placeTurret(t, y, mix(t.rest.z, front ? -0.62 : -2.8, go), front ? mix(1, 0.86, go) : 1, front ? 1 - seg(m, 2.9, 3.2) : 1, m, done);
+      this.placeTurret(t, y, mix(t.rest.z, front ? -0.62 : -2.8, go), 1, front ? 1 - seg(m, 2.9, 3.2) : 1, m, done);
     }
   }
 }
