@@ -38,6 +38,34 @@ const OUTLINE_FRAG = /* glsl */ `
   }
 `;
 
+const FALLEN_OUTLINE_VERT = /* glsl */ `
+  uniform float uThickness;
+  #include <common>
+  #include <fog_pars_vertex>
+  #include <clipping_planes_pars_vertex>
+  void main() {
+    vec4 world = modelMatrix * vec4(position, 1.0);
+    world.xyz += normalize(mat3(modelMatrix) * normal) * uThickness;
+    vec4 mvPosition = viewMatrix * world;
+    gl_Position = projectionMatrix * mvPosition;
+    #include <clipping_planes_vertex>
+    #include <fog_vertex>
+  }
+`;
+
+const FALLEN_OUTLINE_FRAG = /* glsl */ `
+  uniform vec3 uColor;
+  #include <common>
+  #include <fog_pars_fragment>
+  #include <clipping_planes_pars_fragment>
+  void main() {
+    #include <clipping_planes_fragment>
+    gl_FragColor = vec4(uColor, 1.0);
+    #include <colorspace_fragment>
+    #include <fog_fragment>
+  }
+`;
+
 export class Chopper {
   constructor(group) {
     this.group = group;
@@ -96,6 +124,7 @@ export class Chopper {
   }
 
   outline(thickness) {
+    this.thickness = thickness;
     return new THREE.ShaderMaterial({
       uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uThickness: { value: thickness }, uColor: { value: new THREE.Color(INK) }, uCuts: this.uniform }]),
       vertexShader: OUTLINE_VERT,
@@ -151,6 +180,18 @@ export class Chopper {
     return toon(painted ? 0xffffff : this.colors[key] ?? 0xffffff, { clippingPlanes: [clip], side: THREE.DoubleSide, vertexColors: painted });
   }
 
+  fallenOutline(clip) {
+    return new THREE.ShaderMaterial({
+      uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uThickness: { value: this.thickness }, uColor: { value: new THREE.Color(INK) } }]),
+      vertexShader: FALLEN_OUTLINE_VERT,
+      fragmentShader: FALLEN_OUTLINE_FRAG,
+      side: THREE.BackSide,
+      fog: true,
+      clipping: true,
+      clippingPlanes: [clip],
+    });
+  }
+
   chop(id, cutY, dir) {
     const tree = this.trees[id];
     if (!tree || tree.cut) return;
@@ -165,6 +206,7 @@ export class Chopper {
     const inverse = new THREE.Matrix4().makeTranslation(-pivot.x, -pivot.y, -pivot.z);
     const clip = new THREE.Plane(new THREE.Vector3(0, 1, 0), -top);
     const materials = new Map();
+    const line = this.thickness ? this.fallenOutline(clip) : null;
     for (const part of tree.parts) {
       const box = part.geometry.boundingBox.clone().applyMatrix4(part.matrix);
       if (box.max.y <= top) continue;
@@ -175,6 +217,12 @@ export class Chopper {
       mesh.matrixAutoUpdate = false;
       mesh.matrix.multiplyMatrices(inverse, part.matrix);
       holder.add(mesh);
+      if (line) {
+        const shell = new THREE.Mesh(part.geometry, line);
+        shell.matrixAutoUpdate = false;
+        shell.matrix.copy(mesh.matrix);
+        holder.add(shell);
+      }
     }
     this.group.add(holder);
     const flat = new THREE.Vector3(dir.x, 0, dir.z).normalize();
