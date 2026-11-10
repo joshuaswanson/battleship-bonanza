@@ -32,7 +32,19 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - dev: "bay,jungle,frozen,volcano"
+            prod: "bay,jungle,frozen"
+          - dev: "alps,venice,midway,canyon"
+            prod: "volcano,alps"
+          - dev: "docks,tuebingen,ctf:bay,ctf:fjord"
+            prod: "venice,midway"
+          - dev: "ctf:lagoon,ctf:harbor,cp:lagoon"
+            prod: "canyon,docks"
     env:
       CHROME_PATH: /usr/bin/google-chrome
     steps:
@@ -46,13 +58,13 @@ jobs:
         run: npx vite --port 5288 > /tmp/vite.log 2>&1 &
       - run: for i in $(seq 60); do curl -sf http://localhost:5288/ > /dev/null && break; sleep 1; done
       - name: Race on every course
-        run: node tools/checks/smoke.mjs
+        run: node tools/checks/smoke.mjs "${{ matrix.dev }}"
       - run: npm run build
       - name: Start the production preview
         run: npx vite preview --port 5291 > /tmp/preview.log 2>&1 &
       - run: for i in $(seq 60); do curl -sf http://localhost:5291/battleship-bonanza/ > /dev/null && break; sleep 1; done
       - name: Start a race from the menus on every course
-        run: node tools/checks/prodsmoke.mjs
+        run: node tools/checks/prodsmoke.mjs "${{ matrix.prod }}"
         env:
           BB_URL: http://localhost:5291/battleship-bonanza/
 
