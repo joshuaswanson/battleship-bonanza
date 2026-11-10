@@ -5,7 +5,7 @@ import { waveHeight } from './water.js';
 class ParticlePool {
   constructor(scene, material, max) {
     this.max = max;
-    this.mesh = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 10, 8), material, max);
+    this.mesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), material, max);
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.mesh.frustumCulled = false;
     this.mesh.setColorAt(0, new THREE.Color(1, 1, 1));
