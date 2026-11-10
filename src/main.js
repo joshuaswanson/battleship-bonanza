@@ -6,7 +6,7 @@ import '@fontsource/saira-condensed/900.css';
 import './style.css';
 import * as THREE from 'three';
 import { createTrack } from './track.js';
-import { createWorld, buildBudget } from './world.js';
+import { createWorld, buildBudget, detail } from './world.js';
 import { MAPS } from './maps.js';
 import { ARENAS } from './arenas.js';
 import { TruckForm } from './truck.js';
@@ -83,6 +83,9 @@ function adaptResolution(dt) {
   if (avg > 1 / 50 && quality.ratio > 0.75) {
     next = Math.max(0.75, quality.ratio - 0.25);
     quality.calm = 0;
+  } else if (avg > 1 / 50 && detail.level < detail.max) {
+    detail.level++;
+    quality.calm = 0;
   } else if (avg < 1 / 58 && quality.ratio < MAX_RATIO) {
     quality.calm++;
     if (quality.calm >= 4) {
@@ -95,6 +98,19 @@ function adaptResolution(dt) {
     renderer.setPixelRatio(next);
     resize();
   }
+}
+
+const fpsReadout = new URLSearchParams(location.search).has('fps') ? document.body.appendChild(document.createElement('div')) : null;
+if (fpsReadout) fpsReadout.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:99;padding:4px 8px;border-radius:6px;background:#000a;color:#fff;font:600 13px/1.3 monospace;pointer-events:none';
+const fpsWindow = { frames: 0, total: 0 };
+function showFps(dt) {
+  fpsWindow.frames++;
+  fpsWindow.total += dt;
+  if (fpsWindow.total < 0.5) return;
+  const { calls, triangles } = renderer.info.render;
+  fpsReadout.textContent = `${Math.round(fpsWindow.frames / fpsWindow.total)} fps  res ${quality.ratio}  detail ${detail.level}  ${calls} calls  ${(triangles / 1e6).toFixed(1)}M tris`;
+  fpsWindow.frames = 0;
+  fpsWindow.total = 0;
 }
 
 const ROTOR_SOUND_START = 0.55;
@@ -172,6 +188,7 @@ function disposeVenue(id) {
   venues.bay = { track, world: createWorld(group, track, fx), group };
 }
 let current = venue('bay');
+let currentKey = 'bay';
 const hud = new Hud(current.track, sfx);
 
 function useVenue(id) {
@@ -184,12 +201,21 @@ function useVenue(id) {
   fx.setWater(next.world.spray);
   setSurface(next.world.surface ?? null);
   hud.setTrack(next.track);
+  if (id !== currentKey) detail.level = 0;
   current = next;
+  currentKey = id;
+}
+
+function dropOtherVenues(keep) {
+  for (const id of Object.keys(venues)) {
+    if (id === keep || (id === 'bay' && isArena(keep))) continue;
+    disposeVenue(id);
+  }
 }
 
 function pickMap(attract) {
   if (import.meta.env.DEV && window.__bb?.map) return window.__bb.map;
-  if (attract) return 'bay';
+  if (attract) return venues.bay ? 'bay' : currentKey;
   if (setup.mode in TEAM_MODES) return `${setup.mode}:${ARENAS[setup.arena] ? setup.arena : Object.keys(ARENAS)[0]}`;
   if (MAPS[setup.map]) return setup.map;
   const ids = Object.keys(MAPS).filter((id) => !HIDDEN_MAPS.includes(id));
@@ -455,7 +481,7 @@ async function startRace() {
   if (venues[map]) await prepareVenue(map);
   else await showLoading(map, prepareVenue(map));
   newRace(false, map);
-  for (const id of Object.keys(venues)) if (id !== 'bay' && id !== map) disposeVenue(id);
+  dropOtherVenues(map);
   mode = 'race';
   resultsTimer = 0;
   hud.setup(race);
@@ -773,7 +799,7 @@ async function startOnline() {
     online.remote.set(i, { throttle: 0, steer: 0, hold0: false, hold1: false, pending0: 0, pending1: 0, use0: false, use1: false });
     if (!session.guests.has(d.peer)) race.boats[i].isPlayer = false;
   });
-  for (const id of Object.keys(venues)) if (id !== 'bay' && id !== map) disposeVenue(id);
+  dropOtherVenues(map);
   enterRace();
 }
 
@@ -790,7 +816,7 @@ async function guestStart(msg) {
   else await showLoading(key, prepareVenue(key));
   if (session.role !== 'guest') return;
   newRace(false, key, defs, true);
-  for (const id of Object.keys(venues)) if (id !== 'bay' && id !== key) disposeVenue(id);
+  dropOtherVenues(key);
   enterRace();
   session.send({ t: 'ready' });
 }
@@ -1033,6 +1059,7 @@ function frame(now) {
   if (gloom !== lastGloom) $('gloom').style.opacity = (lastGloom = gloom).toFixed(3);
   if (!(import.meta.env.DEV && window.__bb?.skipRender)) renderer.render(scene, camera);
   adaptResolution(dt);
+  if (fpsReadout) showFps(dt);
   if (mode === 'loadout') loadout.render(dt);
   requestAnimationFrame(frame);
 }
@@ -1064,6 +1091,7 @@ if (import.meta.env.DEV) {
     scene,
     THREE,
     renderer,
+    detail,
     camera,
     cam,
     get recorder() {

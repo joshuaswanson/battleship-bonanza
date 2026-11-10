@@ -329,9 +329,19 @@ function outlineMesh(geometry, material) {
 }
 
 const OUTLINE_FAR = 250;
+const DETAIL_STEPS = [
+  { reach: 1, lines: 1 },
+  { reach: 0.85, lines: 0.5 },
+  { reach: 0.7, lines: 0.28 },
+  { reach: 0.55, lines: 0 },
+];
+export const detail = { level: 0, max: DETAIL_STEPS.length - 1 };
 
 export function cullChunks(chunks, camera, far) {
   const { x, z } = camera.position;
+  const step = DETAIL_STEPS[detail.level];
+  const reach = far * step.reach;
+  const inked = OUTLINE_FAR * step.lines;
   for (const c of chunks) {
     if (c.group.matrixWorldAutoUpdate) {
       c.group.updateWorldMatrix(true, true);
@@ -339,8 +349,8 @@ export function cullChunks(chunks, camera, far) {
       c.lines = c.group.children.filter((o) => o.userData.outline);
     }
     const gap = Math.hypot(c.x - x, c.z - z) - c.radius;
-    c.group.visible = gap < far;
-    for (const line of c.lines) line.visible = gap < OUTLINE_FAR;
+    c.group.visible = gap < reach;
+    for (const line of c.lines) line.visible = gap < inked;
   }
 }
 
