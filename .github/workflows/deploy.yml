@@ -24,6 +24,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Check translations, course clearance and turns after transformations
+        run: node tools/checks/all.mjs i18n,clearline,afterturn
       - run: npm run build
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
