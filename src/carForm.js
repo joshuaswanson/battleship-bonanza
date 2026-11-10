@@ -130,6 +130,8 @@ const glowMap = () => cachedGeometry('carGlowMap', glowTexture);
 const brake = () => cachedGeometry('carBrake', () => glow(0xff2a2a));
 
 export class CarForm extends HullForm {
+  engine = 'car';
+
   constructor(refs, color) {
     const parts = carParts();
     super(refs, color, SPEC);

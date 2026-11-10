@@ -14,6 +14,13 @@ function track(file, volume, preload = 'auto') {
   return audio;
 }
 
+const ENGINE_VOICES = {
+  boat: { pitch: 55, rev: 70, tone: 300, bright: 500, gain: 1 },
+  truck: { pitch: 36, rev: 52, tone: 420, bright: 760, gain: 1.7 },
+  car: { pitch: 75, rev: 110, tone: 700, bright: 1500, gain: 1.3 },
+  tank: { pitch: 30, rev: 26, tone: 240, bright: 320, gain: 2.2 },
+};
+
 export class Sfx {
   constructor() {
     this.ctx = null;
@@ -345,12 +352,13 @@ export class Sfx {
     this.saw.grind.gain.setTargetAtTime(0.22 * grinding, t, 0.04);
   }
 
-  setEngine(speedFraction, active, truck = false) {
+  setEngine(speedFraction, active, voice = 'boat') {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
-    this.engine.frequency.setTargetAtTime((truck ? 36 : 55) + speedFraction * (truck ? 52 : 70), t, 0.1);
-    this.engineFilter.frequency.setTargetAtTime((truck ? 420 : 300) + speedFraction * (truck ? 760 : 500), t, 0.1);
-    this.engineGain.gain.setTargetAtTime(active ? (0.05 + speedFraction * 0.05) * (truck ? 1.7 : 1) : 0, t, 0.2);
+    const v = ENGINE_VOICES[voice] ?? ENGINE_VOICES.boat;
+    this.engine.frequency.setTargetAtTime(v.pitch + speedFraction * v.rev, t, 0.1);
+    this.engineFilter.frequency.setTargetAtTime(v.tone + speedFraction * v.bright, t, 0.1);
+    this.engineGain.gain.setTargetAtTime(active ? (0.05 + speedFraction * 0.05) * v.gain : 0, t, 0.2);
   }
 
   volumeAt(pos) {

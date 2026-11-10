@@ -68,6 +68,8 @@ const tankParts = () => cachedGeometry('tankParts', buildParts);
 const linkMaterial = () => cachedGeometry('tankLink', () => toon(0x33373c));
 
 export class TankForm extends HullForm {
+  engine = 'tank';
+
   constructor(refs, color) {
     super(refs, color, SPEC);
     const P = tankParts();
