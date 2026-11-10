@@ -7,8 +7,9 @@ import { TrackFeatures } from './features.js';
 import { Wakes } from './wake.js';
 import { TireMarks } from './tireMarks.js';
 import { t as tr } from './i18n.js';
-import { ACCEL, ARMOR_SPEED, BANK_MARGIN, BASE_SPEED, BRAKE, CART_SPEED, CIRCLE_OFFSET, COAST, FALL_GRAVITY, GRIP, HOLD_IDS, JET_ASSIST, JET_ASSIST_EASE, JET_SPEED, JET_STEER, JET_THRUST, KO_TIME, CAR_GRIP, CAR_SPEED_BOOST, CAR_THRUST, LAND_GRIP, LAPS, LIFT_SPEED, MAX_HP, MORPH_CLEAR, MORPH_PUSH, MORPH_SHOVE, MUD_POOL, MUD_SPEED, OFF_COURSE_SPEED, OUTER_LIMIT, RADIUS, REGEN_DELAY, REGEN_MAX, REGEN_RAMP, REGEN_START, REVERSE_SPEED, SKI_GRIP, SKI_SPEED, SKI_THRUST, TURN_RATE, approach, clamp } from './race/shared.js';
+import { ACCEL, ARMOR_SPEED, BANK_MARGIN, BASE_SPEED, BRAKE, CIRCLE_OFFSET, COAST, FALL_GRAVITY, GRIP, HOLD_IDS, JET_ASSIST, JET_ASSIST_EASE, JET_STEER, KO_TIME, LAND_GRIP, LAPS, LIFT_SPEED, MAX_HP, MORPH_CLEAR, MORPH_PUSH, MORPH_SHOVE, MUD_POOL, MUD_SPEED, OFF_COURSE_SPEED, OUTER_LIMIT, RADIUS, REGEN_DELAY, REGEN_MAX, REGEN_RAMP, REGEN_START, REVERSE_SPEED, TURN_RATE, approach, clamp } from './race/shared.js';
 import { Boat } from './race/boat.js';
+import { vehicleOf } from './vehicles.js';
 import { carrierSpeed } from './ctf.js';
 import * as machinegun from './race/attachments/machinegun.js';
 import * as missiles from './race/attachments/missiles.js';
@@ -56,9 +57,9 @@ export class Race {
     this.sfx = sfx;
     this.attract = attract;
     this.laps = attract || mode ? Infinity : laps;
-    this.boats = defs.map((def, i) => new Boat(def, i, scene, track.river?.land?.form ?? track.river?.land?.kind));
-    const formKind = track.river?.land?.kind;
-    this.tireMarks = formKind === 'truck' || formKind === 'ski' ? new TireMarks(scene, { tone: formKind === 'ski' ? 'snow' : track.river.land.form === 'car' ? 'asphalt' : 'dirt' }) : null;
+    this.vehicle = vehicleOf(track);
+    this.boats = defs.map((def, i) => new Boat(def, i, scene, this.vehicle));
+    this.tireMarks = this.vehicle?.marks ? new TireMarks(scene, { tone: this.vehicle.marks }) : null;
     this.jetPoint = new THREE.Vector3();
     this.ceasefire = false;
     this.player = this.boats.find((b) => b.isLocal) ?? this.boats.find((b) => b.isPlayer) ?? null;
@@ -222,14 +223,11 @@ export class Race {
     if (this.isTethered(b)) max *= 0.8;
     if (b.offCourse > 0) max *= OFF_COURSE_SPEED;
     const onLand = t.onLand(b.trackS);
-    if (t.formKind(b.trackS) === 'cart') max *= CART_SPEED;
-    const jetting = !!b.form && b.formP >= 1 && t.jetCruise(b.trackS);
-    if (jetting) max *= JET_SPEED;
-    const skiing = !!b.form && b.formP >= 1 && t.onSnow(b.trackS);
-    if (skiing) max *= SKI_SPEED;
-    const racing = onLand && t.river.land.form === 'car' && !!b.form && b.formP >= 1;
-    if (racing) max *= CAR_SPEED_BOOST;
-    if (onLand && t.river.land.form === 'truck') {
+    const vehicle = this.vehicle;
+    if (vehicle && t.formAt(b.trackS)) max *= vehicle.stretchSpeed;
+    const cruising = !!b.form && b.formP >= 1 && vehicle.cruising(t, b.trackS);
+    if (cruising) max *= vehicle.speed;
+    if (onLand && vehicle.mud) {
       const i = t.norm(b.trackIdx);
       if (t.mudAt(b.trackS, (b.pos.x - t.px[i]) * t.nx[i] + (b.pos.z - t.pz[i]) * t.nz[i]) > MUD_POOL) max *= MUD_SPEED;
     }
@@ -239,9 +237,7 @@ export class Race {
     let rate = target > b.speed ? ACCEL : BRAKE;
     if (throttle === 0) rate = COAST;
     if (b.boost > 0 && target > b.speed) rate *= 2;
-    if (jetting && target > b.speed) rate *= JET_THRUST;
-    if (skiing && target > b.speed) rate *= SKI_THRUST;
-    if (racing && target > b.speed) rate *= CAR_THRUST;
+    if (cruising && target > b.speed) rate *= vehicle.thrust;
     b.speed = b.air?.lift ? LIFT_SPEED : approach(b.speed, target, rate * dt);
 
     const morphing = !!b.orbit || (!!b.form && b.formP > 0 && b.formP < 1);
@@ -262,7 +258,7 @@ export class Race {
 
     const fx = Math.sin(b.heading);
     const fz = Math.cos(b.heading);
-    const k = 1 - Math.exp(-(b.air && !morphing ? 1 : GRIP * b.grip * (racing ? CAR_GRIP : onLand ? LAND_GRIP : skiing ? SKI_GRIP : 1)) * dt);
+    const k = 1 - Math.exp(-(b.air && !morphing ? 1 : GRIP * b.grip * (cruising ? vehicle.grip : onLand ? LAND_GRIP : 1)) * dt);
     b.vel.x += (fx * b.speed - b.vel.x) * k;
     b.vel.z += (fz * b.speed - b.vel.z) * k;
 

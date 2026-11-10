@@ -28,6 +28,8 @@ Pass or fail tests. `node tools/checks/all.mjs` runs all of them and lists the f
 | `collider.mjs [map]` | The collision index matches three.js raycasts against the drawn scenery |
 | `laserwalls.mjs [map] [spots] [tag]` | Sweeps the laser across buildings around the course and checks that every burn sits on a surface |
 | `bulletsplash.mjs` | Machine gun bullets splash into the water |
+| `afterturn.mjs` | The course stays gentle for 300 m after every transformation and after every return to a boat. Runs in Node with no browser, before each deploy |
+| `clearline.mjs [maps]` | No obstacle or solid scenery crosses the centre of the course. Runs in Node with no browser, before each deploy |
 | `chop.mjs [map]` | The laser fells trees |
 | `river.mjs` | The jungle cave lift and the waterfall jump |
 | `routes.mjs [maps]` | Boats take both routes at each fork, everyone finishes, and race progress never jumps |
@@ -52,6 +54,7 @@ Screenshots for looking at scenery and screens. Most take a tag argument that go
 | Script | What it does |
 | --- | --- |
 | `balance.mjs [races] [out] [url] [maps]` + `analyze-balance.mjs [file]` | Simulates AI only races across the courses and ranks attachments and combos |
+| `golden.mjs [seconds] [maps]` | Runs a seeded AI race on each course in Node, with no browser or dev server, and prints a hash of every boat's movement and of every effect and sound call. Run it before and after a refactor. Matching hashes mean the behaviour is unchanged |
 | `perf.mjs [maps]` | Frame rate, script time, draw calls, triangles and heap per course |
 
 ## render

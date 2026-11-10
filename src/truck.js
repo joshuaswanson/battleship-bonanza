@@ -71,8 +71,6 @@ function buildParts() {
 export const truckParts = () => cachedGeometry('truckParts', buildParts);
 
 export class TruckForm extends HullForm {
-  engine = 'truck';
-
   constructor(refs, color) {
     super(refs, color, SPEC);
     const P = truckParts();

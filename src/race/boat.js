@@ -2,14 +2,6 @@ import * as THREE from 'three';
 import { ITEMS } from '../items.js';
 import { buildBoat, newHeat } from '../boatModel.js';
 import { createAI } from '../ai.js';
-import { TruckForm } from '../truck.js';
-import { JetForm } from '../jetForm.js';
-import { HeliForm } from '../heliForm.js';
-import { TankForm } from '../tankForm.js';
-import { CarForm } from '../carForm.js';
-import { SubForm } from '../subForm.js';
-import { CartForm } from '../cartForm.js';
-import { SkiForm } from '../skiForm.js';
 import { AXIS_HALF, HOLD_IDS, MAX_HP, clamp } from './shared.js';
 
 let shadowTexture;
@@ -30,10 +22,8 @@ function shadowMaterial() {
 }
 const SHADOW_GEOMETRY = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
 
-const FORMS = { truck: TruckForm, jet: JetForm, heli: HeliForm, tank: TankForm, car: CarForm, sub: SubForm, cart: CartForm, ski: SkiForm };
-
 export class Boat {
-  constructor(def, index, scene, formKind = null) {
+  constructor(def, index, scene, vehicle = null) {
     this.index = index;
     this.name = def.name;
     this.color = def.color;
@@ -43,7 +33,7 @@ export class Boat {
     this.team = def.team ?? null;
     this.flag = null;
     this.model = buildBoat(def.color, def.items);
-    this.form = FORMS[formKind] ? new FORMS[formKind](this.model, def.color) : null;
+    this.form = vehicle ? new vehicle.Form(this.model, def.color) : null;
     this.formP = 0;
     this.orbit = null;
     this.morphing = false;

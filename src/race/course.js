@@ -1,17 +1,15 @@
 import { waveHeight, isWater } from '../water.js';
 import { LIFT_LANES, SKI_CLIMB } from '../track.js';
+import { DUST_IMPACT } from '../vehicles.js';
 import { BASE_SPEED, LIFT_SPEED, RAIL_GAP, RAIL_SETTLE, RAIL_SWITCH_LENGTH, RAIL_WISH, RAM_MIN, RAM_REACH, SHORE_MARGIN, clamp, wrapAngle } from './shared.js';
 
 const ROCK_LAUNCH = BASE_SPEED * 0.45;
 const LAND_FLIGHT = 3.2;
-const LAND_PEAK = 32;
 const SURFACE_FLIGHT = 2;
 const SURFACE_PEAK = 17;
 const LIP_POP = 20;
 const LIP_SPEED = 0.75;
-const TANK_PEAK = 15;
 const LIFT_DRIFT = 1.6;
-const JET_PEAK = 16;
 const HOLD_LOOK = 34;
 const HOLD_CENTER = 0.85;
 const HOLD_RATE = 5;
@@ -65,8 +63,8 @@ export const methods = {
     b.boost = Math.max(b.boost, 1);
     this.fx.splash(b.pos.x, b.waterY, b.pos.z, 1.4);
     this.sfx.play('transform', b.pos);
-    b.air = { t: 0, dur: LAND_FLIGHT, peak: land.form === 'tank' ? TANK_PEAK : land.kind === 'jet' ? JET_PEAK : LAND_PEAK, jet: false, plunge: land.kind === 'sub' };
-    if (land.form === 'tank') this.fx.explosion(b.pos.x, b.waterY + 0.5, b.pos.z, 1.8);
+    b.air = { t: 0, dur: LAND_FLIGHT, peak: this.vehicle.launchPeak, jet: false, plunge: this.vehicle.plunge };
+    if (this.vehicle.launchBlast) this.fx.explosion(b.pos.x, b.waterY + 0.5, b.pos.z, this.vehicle.launchBlast);
     b.stats.jumps++;
     this.sfx.play('whoosh', b.pos);
     if (b.isPlayer) this.emit('ramp', {}, b);
@@ -194,22 +192,22 @@ export const methods = {
   },
 
   rigidForm(b) {
-    return !!b.form && b.formP > 0.5 && this.track.formKind(b.trackS) !== 'truck' && this.track.formAt(b.trackS);
+    return !!b.form && b.formP > 0.5 && this.vehicle.rigid && this.track.formAt(b.trackS);
   },
 
   groundHit(b, x, z, size) {
-    const kind = this.track.formKind?.(b.trackS);
+    const impact = !this.vehicle ? DUST_IMPACT : this.track.formAt(b.trackS) ? this.vehicle.impact : this.vehicle.shoreImpact;
     if (isWater(x, z)) {
       this.fx.splash(x, b.waterY, z, size);
       return;
     }
-    if (kind === 'sub') {
+    if (impact === 'bubbles') {
       for (let k = 0; k < 8 * size; k++) this.fx.bubbles(x + (Math.random() - 0.5) * 3, b.waterY, z + (Math.random() - 0.5) * 3);
       return;
     }
-    if (kind === 'jet') return;
-    const dust = kind === 'ski' ? [0xffffff, 0xe6f2ff] : [0xc9a46b, 0xa98852];
-    const pool = this.track.river.land.form === 'tank' ? this.fx.soot : this.fx.puffs;
+    if (!impact) return;
+    const dust = impact.colors;
+    const pool = this.fx[impact.pool];
     for (let k = 0; k < 12 * size; k++) {
       pool.emit(x, b.waterY + 0.4, z, (Math.random() - 0.5) * 10, 2 + Math.random() * 4, (Math.random() - 0.5) * 10, 0.7 + Math.random() * 0.7, 0.7, dust[k % 2], 3, 1.5, 0);
     }

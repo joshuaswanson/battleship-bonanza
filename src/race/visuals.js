@@ -274,8 +274,8 @@ export const methods = {
         for (const side of [1, -1]) {
           const x = b.pos.x - fx * 3 + fz * side * 2.3;
           const z = b.pos.z - fz * 3 - fx * side * 2.3;
-          if (t.river.land.form === 'car') continue;
-          if (t.river.land.form === 'tank') {
+          if (!this.vehicle.trail) continue;
+          if (this.vehicle.trail === 'sand') {
             this.fx.soot.emit(x, b.waterY + 0.5, z, -b.vel.x * 0.12 + (r() - 0.5) * 4, 1.5 + r() * 3, -b.vel.z * 0.12 + (r() - 0.5) * 4, 0.4 + r() * 0.5, 0.6, r() < 0.5 ? 0xd2bd8a : 0xb6a26f, 2, 1.4, 0);
           } else if (mud > 0.6) {
             for (let k = 0; k < 3; k++) this.fx.puffs.emit(x, b.waterY + 0.4, z, -b.vel.x * 0.1 + (r() - 0.5) * 7 + fz * side * 4, 4 + r() * 7, -b.vel.z * 0.1 + (r() - 0.5) * 7 - fx * side * 4, 0.28 + r() * 0.38, 0.6, mud > 0.685 ? 0x8d9a78 : 0x4a3220, 24, 0.5, 1);
