@@ -10,6 +10,7 @@ import { t as tr } from './i18n.js';
 import { ACCEL, ARMOR_SPEED, BANK_MARGIN, BASE_SPEED, BRAKE, CIRCLE_OFFSET, COAST, FALL_GRAVITY, GRIP, HOLD_IDS, JET_ASSIST, JET_ASSIST_EASE, JET_STEER, KO_TIME, LAND_GRIP, LAPS, LIFT_SPEED, MAX_HP, MORPH_CLEAR, MORPH_PUSH, MORPH_SHOVE, MUD_POOL, MUD_SPEED, OFF_COURSE_SPEED, OUTER_LIMIT, RADIUS, REGEN_DELAY, REGEN_MAX, REGEN_RAMP, REGEN_START, REVERSE_SPEED, TURN_RATE, approach, clamp } from './race/shared.js';
 import { Boat } from './race/boat.js';
 import { vehicleOf } from './vehicles.js';
+import { DIFFICULTIES } from './difficulty.js';
 import { carrierSpeed } from './ctf.js';
 import * as machinegun from './race/attachments/machinegun.js';
 import * as missiles from './race/attachments/missiles.js';
@@ -38,7 +39,8 @@ const BEACH_FUNNEL = 240;
 export class Race {
   actions = Object.assign({}, ...MODULES.map((m) => m.actions ?? {}));
 
-  constructor({ scene, track, fx, sfx, defs, shores = [], solid = null, raycast = null, chopper = null, hazards = null, mode = null, attract = false, laps = LAPS }) {
+  constructor({ scene, track, fx, sfx, defs, shores = [], solid = null, raycast = null, chopper = null, hazards = null, mode = null, attract = false, laps = LAPS, difficulty = DIFFICULTIES.normal }) {
+    this.difficulty = difficulty;
     this.shores = shores;
     this.solid = solid;
     this.bankProbe = new THREE.Vector3();

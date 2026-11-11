@@ -40,7 +40,8 @@ export function driveAI(race, b, dt) {
 
   if (race.player && !race.attract && !b.isPlayer && !race.mode) {
     const gap = race.player.dist - b.dist;
-    b.skill = ai.base * clamp(1 + gap / 1000, 0.8, 1.18);
+    const { pace, catchUp } = race.difficulty;
+    b.skill = ai.base * pace * clamp(1 + gap / 1000, catchUp[0], catchUp[1]);
   } else {
     b.skill = ai.base;
   }
@@ -149,22 +150,22 @@ function useItems(race, b, ai) {
     if (ITEMS[id].hold) b.aim[id] = race.findTarget(b, { ...race.gunArc(b, id, HOLD_RANGE[id]), filter: (o) => race.willAttack(b, o) });
     if (b.items[slot] === 'machinegun') {
       const t = b.aim.machinegun;
-      b.heat.machinegun.trigger = !!t && !t.has('armor') && b.heat.machinegun.heat < 0.7 && Math.random() < ai.aggression + 0.3;
+      b.heat.machinegun.trigger = !!t && !t.has('armor') && b.heat.machinegun.heat < 0.7 && Math.random() < ai.aggression * race.difficulty.aggression + 0.3;
       continue;
     }
     if (b.items[slot] === 'flamethrower') {
       const t = b.aim.flamethrower;
-      b.heat.flamethrower.trigger = !!t && b.heat.flamethrower.heat < 0.75 && Math.random() < ai.aggression + 0.4;
+      b.heat.flamethrower.trigger = !!t && b.heat.flamethrower.heat < 0.75 && Math.random() < ai.aggression * race.difficulty.aggression + 0.4;
       continue;
     }
     if (b.items[slot] === 'saw') {
       const t = b.aim.saw;
-      b.heat.saw.trigger = !!t && !t.has('armor') && !t.has('spikes') && b.heat.saw.heat < 0.75 && Math.random() < ai.aggression + 0.4;
+      b.heat.saw.trigger = !!t && !t.has('armor') && !t.has('spikes') && b.heat.saw.heat < 0.75 && Math.random() < ai.aggression * race.difficulty.aggression + 0.4;
       continue;
     }
     if (b.items[slot] === 'laser') {
       const t = b.aim.laser;
-      b.heat.laser.trigger = !!t && b.heat.laser.heat < 0.7 && Math.random() < ai.aggression + 0.3;
+      b.heat.laser.trigger = !!t && b.heat.laser.heat < 0.7 && Math.random() < ai.aggression * race.difficulty.aggression + 0.3;
       continue;
     }
     if (b.cooldowns[slot] > 0) continue;
@@ -177,11 +178,11 @@ function shouldUse(race, b, id, ai) {
   switch (id) {
     case 'missiles': {
       const t = race.findTarget(b, { range: 170, minDot: -1, filter: (o) => !o.has('camo') && race.willAttack(b, o) });
-      return !!t && r < ai.aggression * 0.45;
+      return !!t && r < ai.aggression * race.difficulty.aggression * 0.45;
     }
     case 'grapple': {
       const t = race.findTarget(b, { ...race.hookSpec(b), minRange: 18 });
-      return !!t && !(race.sawCuts(t, b) && r < 0.8) && r < ai.aggression;
+      return !!t && !(race.sawCuts(t, b) && r < 0.8) && r < ai.aggression * race.difficulty.aggression;
     }
     case 'emp': {
       const incoming = race.missiles.some((m) => m.target === b && m.fizzle <= 0 && m.pos.distanceTo(b.pos) < 40);
@@ -199,7 +200,7 @@ function shouldUse(race, b, id, ai) {
     }
     case 'mines': {
       const t = race.findTarget(b, { ...race.gunArc(b, 'mines', 45), filter: (o) => race.willAttack(b, o) });
-      return t ? r < ai.aggression : r < 0.03;
+      return t ? r < ai.aggression * race.difficulty.aggression : r < 0.03;
     }
   }
   return false;

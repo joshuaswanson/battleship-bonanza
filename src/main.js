@@ -15,6 +15,8 @@ import { Recorder, Replay } from './replay.js';
 import { Hints } from './hints.js';
 import { Director } from './director.js';
 import { renderResults } from './results.js';
+import { DIFFICULTIES, DIFFICULTY_IDS } from './difficulty.js';
+import { recordOf, saveResult } from './records.js';
 import { createWipe } from './wipe.js';
 import { setSurface } from './water.js';
 import { Effects } from './effects.js';
@@ -232,6 +234,7 @@ function loadSetup() {
 const setup = loadSetup();
 if (!SHOW_TEAM_MODES) setup.mode = 'race';
 if (HIDDEN_MAPS.includes(setup.map)) setup.map = 'random';
+if (!DIFFICULTIES[setup.difficulty]) setup.difficulty = 'normal';
 const saveSetup = () => localStorage.setItem('bb-setup', JSON.stringify(setup));
 
 const shuffle = (xs) => {
@@ -329,7 +332,7 @@ function newRace(attract, map = pickMap(attract), given = null, guest = false) {
   const ctf = isArena(map) ? new TEAM_MODES[map.split(':')[0]]({ scene, track: current.track }) : null;
   const dealt = given ?? (ctf ? makeTeams(setup) : makeDefs(attract ? null : setup));
   const defs = ctf ? dealt.map((def) => ({ ...def, color: TEAMS[def.team].color })) : dealt;
-  race = new Race({ scene, track: current.track, fx, sfx: attract ? SILENT : sfx, shores: current.world.shores, solid: current.world.solid, raycast: current.world.raycast ?? null, chopper: current.world.chopper ?? null, hazards: current.world.hazards ?? null, mode: ctf, defs, attract });
+  race = new Race({ scene, track: current.track, fx, sfx: attract ? SILENT : sfx, shores: current.world.shores, solid: current.world.solid, raycast: current.world.raycast ?? null, chopper: current.world.chopper ?? null, hazards: current.world.hazards ?? null, mode: ctf, defs, attract, difficulty: DIFFICULTIES[attract || given ? 'normal' : setup.difficulty] });
   if (guest) online.mirror = new Mirror(race, fx, sfx);
   else if (!attract) recorder = new Recorder(race, fx);
   if (given && !guest) online.streamer = new Streamer(race, fx, current.world);
@@ -394,7 +397,28 @@ const wipe = createWipe($('wipe'), sfx);
 const MAP_CHOICES = ['bay', 'jungle', 'canyon', 'frozen', 'docks', 'volcano', 'alps', 'venice', 'midway', 'tuebingen', 'random'].filter((id) => !HIDDEN_MAPS.includes(id));
 const die = (pips, cls) => `<svg class="die ${cls}" viewBox="0 0 40 40"><rect x="3" y="3" width="34" height="34" rx="9" fill="#fff" stroke="#0E2A47" stroke-width="3.5"/>${pips.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="3.6" fill="#0E2A47"/>`).join('')}</svg>`;
 const DICE = die([[12, 12], [20, 20], [28, 28]], 'die-a') + die([[12, 12], [28, 12], [12, 28], [28, 28], [20, 20]], 'die-b');
+function renderDifficulty() {
+  $('difficulty').classList.toggle('hidden', session.active);
+  $('difficulty').innerHTML = DIFFICULTY_IDS.map((id) => `<button class="btn level" role="radio" data-level="${id}" aria-checked="${setup.difficulty === id}">${t(`level_${id}`)}</button>`).join('');
+  for (const button of document.querySelectorAll('.level')) {
+    button.addEventListener('click', () => {
+      setup.difficulty = button.dataset.level;
+      saveSetup();
+      sfx.play('pick');
+      for (const b of document.querySelectorAll('.level')) b.setAttribute('aria-checked', String(b === button));
+    });
+  }
+}
+
+function recordLine(id) {
+  const record = recordOf(id);
+  if (!record) return '';
+  const medal = record.medal ? `<i class="medal medal-${record.medal}" title="${t(`medal_${record.medal}`)}"></i>` : '';
+  return `<p class="map-record">${medal}${record.best ? t('bestTime', { time: formatTime(record.best) }) : ''}</p>`;
+}
+
 function renderModes() {
+  renderDifficulty();
   const ctf = setup.mode in TEAM_MODES;
   $('maps-title').textContent = t(ctf ? 'pickArena' : 'pickCourse');
   $('btn-go').textContent = t(ctf ? 'startMatch' : 'startRace');
@@ -428,7 +452,7 @@ function renderMaps() {
     const style = id === 'random' ? '' : ` style="${tile(id)}"`;
     return `<button class="map-card${id === 'random' ? ' surprise' : ''}" role="radio" data-map="${id}" aria-checked="${setup.map === id}" style="--i:${i}">
       <div class="${art}"${style}>${id === 'random' ? `<div class="dice">${DICE}</div>` : ''}</div>
-      <div class="map-text"><h3>${t(`map_${id}`)}</h3><p>${t(`mapBlurb_${id}`)}</p></div>
+      <div class="map-text"><h3>${t(`map_${id}`)}</h3><p>${t(`mapBlurb_${id}`)}</p>${recordLine(id)}</div>
     </button>`;
   }).join('');
   for (const card of document.querySelectorAll('.map-card')) {
@@ -522,11 +546,25 @@ function pause(on) {
   }
 }
 
+function renderRecord() {
+  const line = $('results-record');
+  const p = race.player;
+  const solo = !session.active && !race.mode && p?.finished && MAPS[currentKey];
+  line.classList.toggle('hidden', !solo);
+  if (!solo) return;
+  const result = saveResult(currentKey, setup.difficulty, p.finishOrder, p.finishTime);
+  const parts = [];
+  if (result.newMedal) parts.push(`<span class="fresh"><i class="medal medal-${result.newMedal}"></i>${t(`medal_${result.newMedal}`)}</span>`);
+  parts.push(result.newBest ? `<span class="fresh">${t('newBest', { time: formatTime(result.best) })}</span>` : `<span>${t('bestTime', { time: formatTime(result.best) })}</span>`);
+  line.innerHTML = parts.join('');
+}
+
 function showResults() {
   mode = 'results';
   $('btn-replay').classList.toggle('hidden', session.role === 'guest');
   $('btn-change-map').classList.toggle('hidden', session.active);
   showScreen('screen-results');
+  renderRecord();
   renderResults(race);
   $('btn-continue').focus();
 }
