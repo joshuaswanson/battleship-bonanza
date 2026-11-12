@@ -76,7 +76,8 @@ export class Input {
     let throttle = (this.isHeld('up') ? 1 : 0) - (this.isHeld('down') ? 1 : 0);
     let steer = (this.isHeld('right') ? 1 : 0) - (this.isHeld('left') ? 1 : 0);
 
-    const pad = navigator.getGamepads?.().find(Boolean);
+    const pad = navigator.getGamepads?.().find(Boolean) ?? null;
+    this.pad = pad;
     if (pad) {
       const stick = pad.axes[0] ?? 0;
       if (Math.abs(stick) > 0.15) steer = stick;

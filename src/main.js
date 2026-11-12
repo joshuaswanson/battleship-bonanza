@@ -16,6 +16,7 @@ import { Hints } from './hints.js';
 import { Director } from './director.js';
 import { renderResults } from './results.js';
 import { DIFFICULTIES, DIFFICULTY_IDS } from './difficulty.js';
+import { PadMenu } from './padMenu.js';
 import { recordOf, saveResult } from './records.js';
 import { Ghost, GhostRecorder, ghostsOn, loadGhost, setGhosts } from './ghost.js';
 import { createWipe } from './wipe.js';
@@ -121,6 +122,7 @@ fx.camera = camera;
 const sfx = new Sfx();
 const SILENT = { play() {} };
 const input = new Input();
+const padMenu = new PadMenu();
 
 const venues = {};
 const building = {};
@@ -1053,6 +1055,8 @@ function frame(now) {
   }
   const state = input.poll();
   const pressed = input.pressed;
+  if (mode === 'race') padMenu.rest(input.pad);
+  else padMenu.update(dt, input.pad);
 
   if (pressed.has('pause') && $('screen-howto').classList.contains('hidden')) {
     if (mode === 'race') pause(true);
