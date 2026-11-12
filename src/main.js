@@ -17,6 +17,7 @@ import { Director } from './director.js';
 import { renderResults } from './results.js';
 import { DIFFICULTIES, DIFFICULTY_IDS } from './difficulty.js';
 import { recordOf, saveResult } from './records.js';
+import { Ghost, GhostRecorder, ghostsOn, loadGhost, setGhosts } from './ghost.js';
 import { createWipe } from './wipe.js';
 import { setSurface } from './water.js';
 import { Effects } from './effects.js';
@@ -307,6 +308,8 @@ const cleanBoat = (p) => ({
 let mode = 'title';
 let race = null;
 let resultsTimer = 0;
+let ghost = null;
+let ghostRecorder = null;
 let time = 0;
 const HURT_SHAKE = { bullet: 0.25, laser: 0.3, reflect: 0.3, saw: 0.5, flame: 0, fire: 0 };
 
@@ -333,6 +336,14 @@ function newRace(attract, map = pickMap(attract), given = null, guest = false) {
   const dealt = given ?? (ctf ? makeTeams(setup) : makeDefs(attract ? null : setup));
   const defs = ctf ? dealt.map((def) => ({ ...def, color: TEAMS[def.team].color })) : dealt;
   race = new Race({ scene, track: current.track, fx, sfx: attract ? SILENT : sfx, shores: current.world.shores, solid: current.world.solid, raycast: current.world.raycast ?? null, chopper: current.world.chopper ?? null, hazards: current.world.hazards ?? null, mode: ctf, defs, attract, difficulty: DIFFICULTIES[attract || given ? 'normal' : setup.difficulty] });
+  ghost?.dispose();
+  ghost = null;
+  ghostRecorder = null;
+  if (!attract && !given && !ctf && race.player) {
+    ghostRecorder = new GhostRecorder(race.player);
+    const saved = ghostsOn() ? loadGhost(map) : null;
+    if (saved) ghost = new Ghost(scene, saved, race.vehicle);
+  }
   if (guest) online.mirror = new Mirror(race, fx, sfx);
   else if (!attract) recorder = new Recorder(race, fx);
   if (given && !guest) online.streamer = new Streamer(race, fx, current.world);
@@ -554,6 +565,7 @@ function renderRecord() {
   if (!solo) return;
   const result = saveResult(currentKey, setup.difficulty, p.finishOrder, p.finishTime);
   const parts = [];
+  if (result.newBest) ghostRecorder?.save(currentKey, p.finishTime);
   if (result.newMedal) parts.push(`<span class="fresh"><i class="medal medal-${result.newMedal}"></i>${t(`medal_${result.newMedal}`)}</span>`);
   parts.push(result.newBest ? `<span class="fresh">${t('newBest', { time: formatTime(result.best) })}</span>` : `<span>${t('bestTime', { time: formatTime(result.best) })}</span>`);
   line.innerHTML = parts.join('');
@@ -642,7 +654,13 @@ $('btn-yard-settings').addEventListener('click', () => openSettings($('btn-yard-
 function renderToggles() {
   $('toggle-sound').setAttribute('aria-checked', String(sfx.soundOn));
   $('toggle-music').setAttribute('aria-checked', String(sfx.musicOn));
+  $('toggle-ghost').setAttribute('aria-checked', String(ghostsOn()));
 }
+$('toggle-ghost').addEventListener('click', () => {
+  setGhosts(!ghostsOn());
+  sfx.play('pick');
+  renderToggles();
+});
 renderToggles();
 $('toggle-sound').addEventListener('click', () => {
   sfx.unlock();
@@ -1067,6 +1085,11 @@ function frame(now) {
       if (packet) session.send(packet);
     }
     handleEvents();
+    if (mode === 'race') ghostRecorder?.update(race.clock);
+    if (ghost) {
+      if (mode === 'replay') ghost.model.root.visible = false;
+      else ghost.pose(race.clock, race.player.pos);
+    }
     if (mode === 'race') hints.update(dt, race, state, pressed);
     fx.update(dt);
     current.world.update(time, dt, camera);

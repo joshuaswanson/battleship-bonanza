@@ -6,6 +6,7 @@ export const LANGUAGES = [
 
 const STRINGS = {
   en: {
+    ghost: 'Ghost of your best run',
     level_easy: 'Easy',
     level_normal: 'Normal',
     level_hard: 'Hard',
@@ -228,6 +229,7 @@ const STRINGS = {
     aiNames: ['Reel Deal', 'Knot Today', 'Nauti Buoy', 'Dock Holiday', 'Pier Pressure', 'Seas the Day', 'Unsinkable II', 'Liquid Asset', 'Sir Splashalot', 'Aqua Holic'],
   },
   fr: {
+    ghost: 'Fantôme de votre meilleure course',
     level_easy: 'Facile',
     level_normal: 'Normal',
     level_hard: 'Difficile',
@@ -450,6 +452,7 @@ const STRINGS = {
     aiNames: ['Mer Veilleuse', 'Coque en Stock', 'Bouée de Secours', 'Ancre Noire', "Vague à l'Âme", 'Pas de Panique', 'Le Rafiot', 'Mal de Mer', 'Capitaine Crabe', 'Insubmersible II'],
   },
   de: {
+    ghost: 'Geist deiner besten Fahrt',
     level_easy: 'Leicht',
     level_normal: 'Normal',
     level_hard: 'Schwer',
