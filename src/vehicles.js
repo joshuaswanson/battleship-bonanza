@@ -6,6 +6,7 @@ import { CarForm } from './carForm.js';
 import { SubForm } from './subForm.js';
 import { CartForm } from './cartForm.js';
 import { SkiForm } from './skiForm.js';
+import { ScooterForm } from './scooterForm.js';
 import { LAND_GRIP } from './race/shared.js';
 
 const LAND_PEAK = 32;
@@ -44,6 +45,7 @@ const flying = { cruising: inFlight, speed: 2.3, thrust: 4, launchPeak: LOW_PEAK
 export const VEHICLES = {
   truck: { ...BASE, ...wheeled, Form: TruckForm, mud: true, trail: 'dirt', engine: 'truck' },
   car: { ...BASE, ...wheeled, Form: CarForm, speed: 1.75, thrust: 2.8, grip: 4, marks: 'asphalt', engine: 'car' },
+  scooter: { ...BASE, ...wheeled, Form: ScooterForm, speed: 1.25, thrust: 2.2, grip: 3, marks: null, engine: 'scooter' },
   tank: { ...BASE, ...wheeled, Form: TankForm, launchPeak: 15, launchBlast: 1.8, trail: 'sand', impact: SOOT_IMPACT, shoreImpact: SOOT_IMPACT, engine: 'tank' },
   jet: { ...BASE, ...flying, Form: JetForm },
   heli: { ...BASE, ...flying, Form: HeliForm },

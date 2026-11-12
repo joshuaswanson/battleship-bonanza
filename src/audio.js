@@ -18,6 +18,7 @@ const ENGINE_VOICES = {
   boat: { pitch: 55, rev: 70, tone: 300, bright: 500, gain: 1 },
   truck: { pitch: 36, rev: 52, tone: 420, bright: 760, gain: 1.7 },
   car: { pitch: 75, rev: 110, tone: 700, bright: 1500, gain: 1.3 },
+  scooter: { pitch: 95, rev: 120, tone: 900, bright: 1300, gain: 1.1 },
   tank: { pitch: 30, rev: 26, tone: 240, bright: 320, gain: 2.2 },
 };
 

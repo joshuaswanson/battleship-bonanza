@@ -5,6 +5,7 @@ import { toon, glow, mulberry32 } from './toon.js';
 import { Batcher, cullChunks, slicer, COLORS, mat, createSky, createCloud, createArch, SUN_DIR } from './world.js';
 import { courseSurface, buildHeightfield, courseBuoys, noise, quayWalls } from './terrain.js';
 import { Laundry, LINE_HEIGHT, LINE_POST } from './veniceHazards.js';
+import { STREET_COLORS, buildStreet } from './veniceStreet.js';
 import { DETAIL_COLORS, building, archBridge, gondola, pole, streetLamp, dogesPalace, campanile } from './veniceDetail.js';
 
 const FACADES = ['terracotta', 'ochre', 'pink', 'salmon', 'cream', 'rose', 'butter', 'brick', 'sage'];
@@ -12,6 +13,7 @@ const FACADES = ['terracotta', 'ochre', 'pink', 'salmon', 'cream', 'rose', 'butt
 const VENICE_COLORS = {
   ...COLORS,
   ...DETAIL_COLORS,
+  ...STREET_COLORS,
   terracotta: 0xd9734e,
   ochre: 0xe8b04b,
   pink: 0xf2a7a0,
@@ -65,6 +67,11 @@ const ROOF = new THREE.ExtrudeGeometry(roofShape, { depth: 1, bevelEnabled: fals
 
 const WALL_TOP = 1.4;
 const WALK = 3.36;
+const STEP_DROP = 1.6;
+const SIDEWALK_REACH = 6;
+const BACKDROP_FROM = 55;
+const JUNCTION_GAP = 80;
+const JUNCTION_MARGIN = 14;
 const LINE_AHEAD = 35;
 
 function placer(batch) {
@@ -167,12 +174,16 @@ export async function createVenice(group, track, fx) {
 
   const N = track.N;
   const surface = await courseSurface(track, tick, { margin: 246.4, amp: () => 0.3 });
-  const island = (x, z) => ((x + 11) / 448) ** 2 + ((z - 168) / 297) ** 2 + 0.08 * (noise(x * 1.8, z * 1.8) - 0.5) < 1;
+  const oldTown = (x, z) => ((x + 11) / 448) ** 2 + ((z - 168) / 297) ** 2 + 0.08 * (noise(x * 1.8, z * 1.8) - 0.5) < 1;
+  const newQuarter = (x, z) => ((x - 250) / 520) ** 2 + ((z - 700) / 420) ** 2 + 0.08 * (noise(x * 1.8, z * 1.8) - 0.5) < 1;
+  const island = (x, z) => oldTown(x, z) || newQuarter(x, z);
   const lagoon = (x, z) => z < -54 + 11 * Math.sin(x * 0.018);
   const dry = (x, z) => island(x, z) && !lagoon(x, z);
   const height = (x, z) => {
     if (!dry(x, z)) return -4.48;
-    const edge = surface.sample(x, z).edge;
+    const { edge, s, level } = surface.sample(x, z);
+    const depth = track.landDepth(s);
+    if (depth >= 0 && edge < SIDEWALK_REACH) return level - 0.25 - STEP_DROP * (1 - Math.min(1, depth / 26));
     return edge < 1.68 ? -4.48 : WALL_TOP - 0.06;
   };
   const paint = (x, y, z, ny, color) => {
@@ -183,7 +194,7 @@ export async function createVenice(group, track, fx) {
   group.add(await buildHeightfield({ bounds: surface.bounds, step: 3, height, paint, tick }));
   const landAt = (i, side) => {
     const p = track.point(i, side * (track.hw[i] + WALK + 1.12));
-    return dry(p.x, p.z);
+    return !track.formAt(track.mainIndex(i) * track.spacing) && dry(p.x, p.z) && surface.sample(p.x, p.z).edge > 1.5;
   };
   group.add(quayWalls(track, landAt, { top: WALL_TOP, walk: WALK, stone: 0xefe8d8, algae: 0x4c7a5a, paving: VENICE_COLORS.quay }));
 
@@ -197,11 +208,18 @@ export async function createVenice(group, track, fx) {
   const free = (x, z, r) => !taken.some((o) => Math.hypot(o.x - x, o.z - z) < o.r + r);
   const shores = [];
 
+  const crossing = new Uint8Array(N);
+  for (let i = 0; i < N; i++) {
+    for (let j = i + JUNCTION_GAP; j < N - (i < JUNCTION_GAP ? JUNCTION_GAP - i : 0); j += 2) {
+      if (Math.hypot(track.px[i] - track.px[j], track.pz[i] - track.pz[j]) > Math.max(track.hw[i], track.hw[j]) + JUNCTION_MARGIN) continue;
+      crossing[i] = crossing[j] = 1;
+    }
+  }
   const landSide = landAt(0, 1) ? 1 : -1;
   const landmarkSpots = landmarks(batch, group, track, 0, landSide);
   taken.push(...landmarkSpots);
 
-  const mouth = Math.round(0.125 * N);
+  const mouth = Math.round(track.lapIndex(0.125));
   const saluteSide = -landSide;
   if (landAt(mouth, saluteSide)) {
     const p = track.point(mouth, saluteSide * (track.hw[mouth] + WALK + 17.92));
@@ -212,7 +230,7 @@ export async function createVenice(group, track, fx) {
 
   const bridges = [];
   const curvature = (f) => {
-    const i = Math.round(f * N);
+    const i = Math.round(track.lapIndex(f));
     const a = track.heading(i - 8);
     const b = track.heading(i + 8);
     return Math.abs(Math.atan2(Math.sin(b - a), Math.cos(b - a)));
@@ -222,12 +240,12 @@ export async function createVenice(group, track, fx) {
     for (let f = from; f <= to; f += 0.005) if (curvature(f) < curvature(best)) best = f;
     return best;
   };
-  const rialto = Math.round(straightest(0.24, 0.34) * N);
+  const rialto = Math.round(track.lapIndex(straightest(0.24, 0.34)));
   group.userData.rialto = rialto;
   bridges.push(archBridge(batch, track, rialto, { rise: 11.2, peak: 10.08, width: 17.92, color: 'trim', shops: true }));
-  bridges.push(archBridge(batch, track, Math.round(straightest(0.4, 0.46) * N), { rise: 8.96, peak: 9.52, width: 6.72, color: 'wood' }));
+  bridges.push(archBridge(batch, track, Math.round(track.lapIndex(straightest(0.4, 0.46))), { rise: 8.96, peak: 9.52, width: 6.72, color: 'wood' }));
   for (const [a, b] of [[0.58, 0.62], [0.66, 0.7], [0.74, 0.77], [0.8, 0.83]]) {
-    bridges.push(archBridge(batch, track, Math.round(straightest(a, b) * N), { rise: 7.84, peak: 8.4, width: 5.6, color: 'trim' }));
+    bridges.push(archBridge(batch, track, Math.round(track.lapIndex(straightest(a, b))), { rise: 7.84, peak: 8.4, width: 5.6, color: 'trim' }));
   }
   taken.push(...bridges.map((b) => ({ x: b.x, z: b.z, r: 6.72 })));
 
@@ -285,6 +303,8 @@ export async function createVenice(group, track, fx) {
     }
   }
 
+  await buildStreet({ group, batch, windows, track, rand: mulberry32(3311), tick, taken, dry, top: WALL_TOP });
+
   const { minX, maxX, minZ, maxZ } = surface.bounds;
   for (let gx = minX; gx < maxX; gx += 16.8) {
     await tick();
@@ -300,7 +320,12 @@ export async function createVenice(group, track, fx) {
       const corners = [[-1, -1], [1, -1], [-1, 1], [1, 1]].every(([a, b]) => dry(x + a * w * 0.6, z + b * d * 0.6));
       if (!corners) continue;
       const yaw = track.heading(s.idx);
-      building(batch, windows, x, z, yaw, w, d, 11.2 + rand() * 15.68, rand, { color: FACADES[Math.floor(rand() * FACADES.length)] });
+      const tall = 11.2 + rand() * 15.68;
+      const color = FACADES[Math.floor(rand() * FACADES.length)];
+      if (!oldTown(x, z) && s.edge > BACKDROP_FROM) {
+        batch.add(color, BOX, mat(x, WALL_TOP + tall / 2, z, w, tall, d, 0, yaw, 0));
+        batch.add(rand() < 0.5 ? 'roof' : 'roofDark', HIP, mat(x, WALL_TOP + tall + 0.34, z, w * 1.04, 3, d * 1.04, 0, yaw, 0));
+      } else building(batch, windows, x, z, yaw, w, d, tall, rand, { color });
       taken.push({ x, z, r: Math.max(w, d) * 0.45 });
     }
   }
@@ -310,8 +335,8 @@ export async function createVenice(group, track, fx) {
     return false;
   });
   for (let i = 0; i < N; i += 4) {
-    const f = i / N;
-    if (track.hw[i] > 34 || rand() < 0.75) continue;
+    const f = track.lapFraction(i);
+    if (track.hw[i] > 34 || rand() < 0.75 || crossing[i]) continue;
     const side = rand() < 0.5 ? -1 : 1;
     if (!landAt(i, side)) continue;
     if (bridges.some((b) => Math.hypot(b.x - track.px[i], b.z - track.pz[i]) < 15.68)) continue;
@@ -358,7 +383,7 @@ export async function createVenice(group, track, fx) {
   group.add(scenery);
   const hazards = new Laundry({ group, track, lines: laundryLines, rand: mulberry32(4207) });
 
-  const buoys = courseBuoys(track, (idx, side) => !landAt(idx, side));
+  const buoys = courseBuoys(track, (idx, side) => !landAt(idx, side) && !track.formAt(track.mainIndex(idx) * track.spacing));
   group.add(buoys);
   group.add(createArch(track, track.hw[0]));
 

@@ -351,9 +351,9 @@ export function createTrack(map) {
       top: map.river.top ?? map.river.slope * length + drops.reduce((sum, d) => sum + d.height, 0),
     };
     if (map.river.land) {
-      const { from, to, height, kind = 'truck', form = kind, fenced = false, kick = 0, dive = 6, ramp = 150, peak = 0, split = 0, added = 0 } = map.river.land;
+      const { from, to, height, kind = 'truck', form = kind, fenced = false, paved = false, kick = 0, dive = 6, ramp = 150, peak = 0, split = 0, added = 0 } = map.river.land;
       const lip = Math.abs(to * length - seam) < spacing * 2 ? seam : to * length;
-      river.land = { launch: from * length, lip, span: lip - from * length, height, kind, form, fenced, kick, dive, ramp, peak, split, added };
+      river.land = { launch: from * length, lip, span: lip - from * length, height, kind, form, fenced, paved, kick, dive, ramp, peak, split, added };
       if (kind === 'cart') river.land.crossings = railCrossings(river.land.span);
     }
     if (map.river.fork) {
@@ -394,7 +394,7 @@ export function createTrack(map) {
       const rollers = 2.2 * Math.sin(d * 0.019) * landSmooth(d, SKI_CLIMB, SKI_CLIMB + 80) * (1 - landSmooth(d, span - 160, span - 70));
       return height * climb * (1 - (1 - SKI_END_HEIGHT) * run) + rollers + SKI_KICK * landSmooth(d, span - 45, span);
     }
-    if (river.land.form === 'car') return landSmooth(d, 8, 34) * height + river.land.kick * landSmooth(d, span - 130, span);
+    if (river.land.paved) return landSmooth(d, 8, 34) * height + river.land.kick * landSmooth(d, span - 130, span);
     return landSmooth(d, 8, 34) * (height + 1.6 * Math.sin(d * 0.035) + 0.8 * Math.sin(d * 0.09 + 1));
   }
 
