@@ -134,6 +134,7 @@ export class Recorder {
     this.pools = [fx.puffs, fx.sparks, fx.soot, fx.fire, fx.fireMid, fx.fireCore, fx.casings].map((pool) => [pool, 'emit']);
     this.pools.push([fx.rings, 'take'], [fx.beams, 'take'], [fx.shells, 'take'], [fx.lightning, 'add'], [fx.decals, 'stamp']);
     if (race.chopper) this.pools.push([race.chopper, 'chop']);
+    if (race.tireMarks) this.pools.push([race.tireMarks, 'quad']);
     this.pools.forEach(([pool, name], id) => {
       const original = pool[name].bind(pool);
       pool[name] = (...args) => {
@@ -256,6 +257,7 @@ export class Replay {
     while (this.event < recorder.events.length && recorder.events[this.event].t < this.time) this.event++;
     recorder.fx.decals.clear();
     this.race.chopper?.reset();
+    this.race.tireMarks?.clear();
     this.shown = new Set();
     this.ropes = new Map();
     this.race.bulletMesh.count = 0;
@@ -341,5 +343,6 @@ export class Replay {
     if (a.hazards) this.race.hazards.restore(a.hazards, this.time);
     if (a.mode) this.race.mode.restore(a.mode);
     this.race.wakes.update(this.race.boats, this.time);
+    this.race.tireMarks?.show(this.time);
   }
 }

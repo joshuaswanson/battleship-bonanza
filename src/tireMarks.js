@@ -125,8 +125,21 @@ export class TireMarks {
     trails[key] = point;
   }
 
-  update(boats, time) {
+  clear() {
+    this.born.fill(-1000);
+    this.next = 0;
+    this.trails.clear();
+    this.dirty = true;
+  }
+
+  show(time) {
     this.material.uniforms.uTime.value = time;
+    if (!this.dirty) return;
+    this.dirty = false;
+    for (const attribute of Object.values(this.geometry.attributes)) attribute.needsUpdate = true;
+  }
+
+  update(boats, time) {
     for (const b of boats) {
       const on = b.alive && !b.air && Math.abs(b.speed) > 3 && !isWater(b.pos.x, b.pos.z);
       if (!on) {
@@ -140,9 +153,7 @@ export class TireMarks {
       this.stamp(b, 1, time, slip);
       this.stamp(b, -1, time, slip);
     }
-    if (!this.dirty) return;
-    this.dirty = false;
-    for (const attribute of Object.values(this.geometry.attributes)) attribute.needsUpdate = true;
+    this.show(time);
   }
 
   dispose() {
