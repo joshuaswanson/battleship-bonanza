@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { buildBoat, disposeBoat } from './boatModel.js';
 import { toon } from './toon.js';
+import { courseOf } from './records.js';
 
 const RATE = 1 / 6;
 const FIELDS = 15;
@@ -44,7 +45,7 @@ export class GhostRecorder {
     let text = '';
     for (let i = 0; i < bytes.length; i += 8192) text += String.fromCharCode(...bytes.subarray(i, i + 8192));
     try {
-      localStorage.setItem(keyOf(map), JSON.stringify({ time, color: this.boat.color, items: this.boat.items, data: btoa(text) }));
+      localStorage.setItem(keyOf(map), JSON.stringify({ time, course: courseOf(map), color: this.boat.color, items: this.boat.items, data: btoa(text) }));
     } catch {}
   }
 }
@@ -52,7 +53,7 @@ export class GhostRecorder {
 export function loadGhost(map) {
   try {
     const saved = JSON.parse(localStorage.getItem(keyOf(map)));
-    if (!saved?.data || !Array.isArray(saved.items)) return null;
+    if (!saved?.data || !Array.isArray(saved.items) || (saved.course ?? 1) !== courseOf(map)) return null;
     const text = atob(saved.data);
     const bytes = new Uint8Array(text.length);
     for (let i = 0; i < text.length; i++) bytes[i] = text.charCodeAt(i);
