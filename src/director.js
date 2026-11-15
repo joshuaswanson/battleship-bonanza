@@ -4,6 +4,7 @@ import { BASE_SPEED, COUNTDOWN } from './race.js';
 
 const ORBIT_START = 0.04;
 const ORBIT_END = 0.86;
+const SPOUT_VIEW = 24;
 const RIVER_SHOTS = ['chase', 'lead', 'bank', 'chase', 'lead'];
 const CANAL_SHOTS = ['chase', 'lead', 'bank', 'high', 'chase', 'lead'];
 const lerpAngle = (a, b, k) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * k;
@@ -81,6 +82,12 @@ export class Director {
       const chase = new THREE.Vector3(b.pos.x - fx * back, b.waterY + 6 + Math.max(0, b.yOffset) * (b.air?.fall ? 0.95 : 0.6), b.pos.z - fz * back);
       let desired = chase;
       if (b.orbit) desired = this.flightShot(b, chase);
+      const pool = race.track.whirlpool;
+      const rising = pool && b.vortex?.spout !== undefined;
+      if (rising) {
+        const out = Math.hypot(b.pos.x - pool.center.x, b.pos.z - pool.center.z) || 1;
+        desired = new THREE.Vector3(b.pos.x + ((b.pos.x - pool.center.x) / out) * SPOUT_VIEW, b.pos.y + 7, b.pos.z + ((b.pos.z - pool.center.z) / out) * SPOUT_VIEW);
+      }
       if (race.state === 'countdown') {
         const u = Math.min(1, Math.max(0, (COUNTDOWN - race.countdown) / (COUNTDOWN - 1)));
         const e = u * u * (3 - 2 * u);

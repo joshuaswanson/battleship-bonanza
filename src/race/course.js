@@ -54,6 +54,7 @@ export const methods = {
       return;
     }
     if (t.ahead(b.riverS, land.launch) >= step) return;
+    if (b.formP > 0.5) return;
     if (land.kind === 'ski') {
       this.hookLift(b);
       return;

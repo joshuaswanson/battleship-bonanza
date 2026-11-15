@@ -122,15 +122,78 @@ function streamGeometry(spec, seed) {
   return g;
 }
 
-export function createWaterfalls(specs, rand) {
-  const group = new THREE.Group();
-  const material = new THREE.ShaderMaterial({
+const streamMaterial = () =>
+  new THREE.ShaderMaterial({
     uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uTime: { value: 0 } }]),
     vertexShader: SHEET_VERT,
     fragmentShader: SHEET_FRAG,
     side: THREE.DoubleSide,
     fog: true,
   });
+
+const SPOUT_ROWS = 44;
+const SPOUT_CROWN = 9;
+
+export const spoutRadius = (t) => 2.4 + 5.2 * Math.pow(Math.min(1, Math.max(0, t)), 1.6);
+
+export function createSpout(bottom, top) {
+  const positions = [];
+  const flows = [];
+  const shades = [];
+  const seeds = [];
+  const indices = [];
+  const tall = top - bottom;
+  for (let r = 0; r <= SPOUT_ROWS; r++) {
+    const t = r / SPOUT_ROWS;
+    const radius = spoutRadius(t);
+    const sway = 1.6 * t * (1 - 0.4 * t);
+    const cx = Math.cos(t * 7) * sway;
+    const cz = Math.sin(t * 7) * sway;
+    for (let k = 0; k <= COLS; k++) {
+      const a = (k / COLS) * Math.PI * 2;
+      positions.push(cx + Math.cos(a) * radius, bottom + tall * t, cz + Math.sin(a) * radius);
+      flows.push(0.5 + 0.42 * Math.sin(a + t * 9), 0.2 + 0.6 * t, tall * t * 1.6);
+      shades.push(0.9 + 0.1 * Math.sin(a));
+      seeds.push(0.37);
+    }
+  }
+  for (let r = 0; r < SPOUT_ROWS; r++) {
+    for (let k = 0; k < COLS; k++) {
+      const i = r * (COLS + 1) + k;
+      indices.push(i, i + COLS + 1, i + 1, i + 1, i + COLS + 1, i + COLS + 2);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  g.setAttribute('aFlow', new THREE.Float32BufferAttribute(flows, 3));
+  g.setAttribute('aShade', new THREE.Float32BufferAttribute(shades, 1));
+  g.setAttribute('aSeed', new THREE.Float32BufferAttribute(seeds, 1));
+  g.setIndex(indices);
+  const material = streamMaterial();
+  const group = new THREE.Group();
+  group.add(new THREE.Mesh(g, material));
+  const foam = toon(0xffffff);
+  const crown = Array.from({ length: SPOUT_CROWN }, (_, k) => {
+    const puff = new THREE.Mesh(PUFF, foam);
+    const a = (k / SPOUT_CROWN) * Math.PI * 2;
+    puff.position.set(Math.cos(a) * 7.4, top + (k % 3) * 0.9, Math.sin(a) * 7.4);
+    puff.userData.size = 2.2 + (k % 4) * 0.5;
+    group.add(puff);
+    return puff;
+  });
+  return {
+    group,
+    update(t) {
+      material.uniforms.uTime.value = t;
+      group.rotation.y = -t * 2.4;
+      crown.forEach((puff, k) => puff.scale.setScalar(puff.userData.size * (1 + 0.18 * Math.sin(t * 5 + k * 1.7))));
+    },
+  };
+}
+
+export function createWaterfalls(specs, rand) {
+  const group = new THREE.Group();
+  const material = streamMaterial();
   for (const spec of specs) {
     const seed = rand();
     group.add(new THREE.Mesh(streamGeometry(spec, seed), material));

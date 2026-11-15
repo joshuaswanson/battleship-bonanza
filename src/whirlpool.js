@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { toon, INK } from './toon.js';
 import { BASE_SPEED } from './race/shared.js';
+import { createSpout, spoutRadius } from './waterfall.js';
 
 export const HOLE_Y = 26;
 const DEPTH = 44;
@@ -14,6 +15,14 @@ const LAUNCH_RISE = 8;
 const FLUME_SPEED = 72;
 const FLUME_RADIUS = 7.5;
 const DARK = 0.92;
+const HOLE_SEARCH = 14;
+const SPOUT_TIME = 3;
+const SPOUT_TURNS = 0.5;
+const SPOUT_GAP = 5.5;
+const SPOUT_AWAY = 9;
+const SPOUT_LEAVE = 0.62;
+const SPOUT_EXIT = 1.3;
+const SPOUT_CREST = 5;
 const DAWN = 18;
 
 export function funnelLevel(r, outer) {
@@ -35,10 +44,11 @@ export function whirlpoolSite(track, edgeAt, faceAt) {
   const land = track.river?.land;
   const flightFrom = land ? Math.round(land.launch / track.spacing) + FLIGHT_CLEAR : track.N;
   const landIdx = land ? Math.ceil(land.lip / track.spacing) + 1 : null;
-  const nearest = ([x, z]) => {
-    let best = 0;
+  const launchIdx = land ? Math.round(land.launch / track.spacing) : null;
+  const nearest = ([x, z], from = 0, to = flightFrom) => {
+    let best = from;
     let bestD = Infinity;
-    for (let i = 0; i < flightFrom; i++) {
+    for (let i = from; i < to; i++) {
       const d = (track.px[i] - x) ** 2 + (track.pz[i] - z) ** 2;
       if (d < bestD) {
         bestD = d;
@@ -53,13 +63,13 @@ export function whirlpoolSite(track, edgeAt, faceAt) {
   while (track.pz[mouthIdx] > edgeAt(track.px[mouthIdx]) - 6) mouthIdx--;
   const cave = [];
   for (let i = mouthIdx - 12; i <= entryIdx; i++) cave.push({ x: track.px[i], z: track.pz[i], half: track.hw[i] + 2, roofed: i <= caveEndIdx });
-  const guess = nearest(spec.hole);
+  const guess = land ? nearest(spec.hole, landIdx - HOLE_SEARCH, track.N) : nearest(spec.hole);
   const heading = track.heading(guess);
   const dx = Math.sin(heading);
   const dz = Math.cos(heading);
   const hx = track.px[guess];
   const hz = faceAt(hx, HOLE_Y) - 1;
-  const holeIdx = nearest([hx + dx * 14, hz + dz * 14]);
+  const holeIdx = land ? launchIdx : nearest([hx + dx * 14, hz + dz * 14]);
   const center = { x: spec.center[0], z: spec.center[1] };
   const radius = spec.radius;
   const route = [...spec.flume.map(([x, z, y]) => new THREE.Vector3(x, y, z)), new THREE.Vector3(hx, HOLE_Y, hz)];
@@ -88,7 +98,7 @@ export function whirlpoolSite(track, edgeAt, faceAt) {
     holeS: track.sAt[holeIdx],
     hole: { x: hx, z: hz, y: HOLE_Y, dx, dz, heading },
     flume: { curve, samples, length, lightFrom, radius: FLUME_RADIUS },
-    hidden: (i) => i > entryIdx && i < holeIdx,
+    hidden: (i) => i > entryIdx && i < (landIdx ?? holeIdx),
     caveDistance(x, z) {
       let best = Infinity;
       for (const p of cave) best = Math.min(best, Math.hypot(p.x - x, p.z - z) - p.half);
@@ -340,6 +350,12 @@ export class Whirlpool {
     this.group.add(mouth);
     this.point = new THREE.Vector3();
     this.tangent = new THREE.Vector3();
+    const land = track.river?.land;
+    if (land) {
+      this.waterspout = createSpout(-DEPTH + 1, track.level(land.launch + 1) + SPOUT_CREST);
+      this.waterspout.group.position.set(center.x, 0, center.z);
+      this.group.add(this.waterspout.group);
+    }
   }
 
   reset(race) {
@@ -356,6 +372,7 @@ export class Whirlpool {
 
   animate(t) {
     this.material.uniforms.uTime.value = t;
+    this.waterspout?.update(t);
   }
 
   darkness(b) {
@@ -372,7 +389,7 @@ export class Whirlpool {
   entering(b) {
     const { site } = this;
     const i = this.track.mainIndex(b.trackIdx);
-    if (i < site.entryIdx - 40 || i > site.entryIdx + 20) return false;
+    if (i < site.entryIdx - 40 || i > site.entryIdx + 20 || this.track.formAt?.(b.trackS)) return false;
     return Math.hypot(b.pos.x - site.center.x, b.pos.z - site.center.z) < site.radius - WALL_GAP;
   }
 
@@ -386,6 +403,7 @@ export class Whirlpool {
     b.pos.z -= b.vel.z * dt;
     b.offCourse = 0;
     b.wrongWay = 0;
+    if (b.vortex.spout !== undefined) return this.spout(race, b, dt);
     if (b.vortex.flume !== undefined) return this.ride(race, b, dt);
     if (b.vortex.drain > 0) return this.drain(race, b, dt);
     let dx = b.pos.x - center.x;
@@ -427,10 +445,71 @@ export class Whirlpool {
       }
     }
     if (now < DRAIN + 1) {
-      b.vortex.drain = dt;
+      if (race.attract || !race.layered) b.vortex.drain = dt;
+      else this.lift(race, b);
       race.sfx.play('splash', b.pos);
     }
     this.progress(b, 0.8 * Math.min(1, Math.max(0, (lim - now) / (lim - DRAIN))));
+    return true;
+  }
+
+  lift(race, b) {
+    const t = this.track;
+    const { center, holeIdx } = this.site;
+    const v = b.vortex;
+    v.spout = 0;
+    v.from = b.waterY;
+    v.turn = Math.atan2(b.pos.z - center.z, b.pos.x - center.x);
+    const exit = -t.heading(t.wrap(holeIdx + 1));
+    v.sweep = SPOUT_TURNS * Math.PI * 2 + ((((exit - v.turn) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2));
+    race.sfx.play('whoosh', b.pos);
+    race.sfx.play('transform', b.pos);
+    if (b.isPlayer) race.emit('ramp', {}, b);
+  }
+
+  spout(race, b, dt) {
+    const t = this.track;
+    const { center, holeIdx } = this.site;
+    const v = b.vortex;
+    v.spout += dt;
+    const u = Math.min(1, v.spout / SPOUT_TIME);
+    const ease = u * u * (3 - 2 * u);
+    const idx = t.wrap(holeIdx + 1);
+    const s = t.sAt[idx];
+    let ds = s - b.trackS;
+    if (ds < -t.length / 2) ds += t.length;
+    b.dist += ds;
+    b.trackS = s;
+    b.trackIdx = idx;
+    const level = t.level(s);
+    const angle = v.turn + v.sweep * (0.35 * u + 0.65 * ease);
+    const reach = spoutRadius(ease) + SPOUT_GAP;
+    const away = t.wrap(holeIdx + SPOUT_AWAY);
+    const out = t.point(away, 0);
+    const leave = THREE.MathUtils.smoothstep(u, SPOUT_LEAVE, 1);
+    b.pos.x = THREE.MathUtils.lerp(center.x + Math.cos(angle) * reach, out.x, leave);
+    b.pos.z = THREE.MathUtils.lerp(center.z + Math.sin(angle) * reach, out.z, leave);
+    const swirl = Math.atan2(-Math.sin(angle), Math.cos(angle));
+    const exit = t.heading(away);
+    b.heading = swirl + Math.atan2(Math.sin(exit - swirl), Math.cos(exit - swirl)) * leave;
+    b.surfaceLevel = level;
+    b.riverS = s;
+    b.yOffset = (v.from - level) * (1 - ease);
+    b.air = null;
+    b.spinTime = 0;
+    b.speed = BASE_SPEED * SPOUT_EXIT * Math.max(0.3, u);
+    b.vel.set(0, 0, 0);
+    if (Math.random() < dt * 30) race.fx.droplet(b.pos.x, level + b.yOffset, b.pos.z, (Math.random() - 0.5) * 10, 3 + Math.random() * 5, (Math.random() - 0.5) * 10, 0.5);
+    if (u < 1) return true;
+    b.vortex = null;
+    b.yOffset = 0;
+    b.dist += t.sAt[away] - b.trackS;
+    b.trackS = t.sAt[away];
+    b.trackIdx = away;
+    b.riverS = b.trackS;
+    b.surfaceLevel = t.level(b.trackS);
+    b.vel.set(Math.sin(b.heading) * b.speed, 0, Math.cos(b.heading) * b.speed);
+    if (b.isPlayer) race.emit('launch', {}, b);
     return true;
   }
 
