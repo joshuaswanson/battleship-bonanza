@@ -183,7 +183,7 @@ export function createWaterfalls(specs, rand) {
           const swell = Math.sin(Math.PI * life);
           const out = 1 + life * c.reach;
           const size = c.size * swell;
-          place(puffs, i++, f.foot.x + f.dx * out + tx * c.lat * w * (0.6 + life * 0.6), 0.1 + swell * c.lift, f.foot.z + f.dz * out + tz * c.lat * w * (0.6 + life * 0.6), size * 1.2, size, size * 1.2);
+          place(puffs, i++, f.foot.x + f.dx * out + tx * c.lat * w * (0.6 + life * 0.6), f.foot.y - 0.1 + swell * c.lift, f.foot.z + f.dz * out + tz * c.lat * w * (0.6 + life * 0.6), size * 1.2, size, size * 1.2);
         }
         for (const c of f.lip) {
           const bob = 1 + Math.sin(t * 3 + c.phase) * 0.12;
@@ -193,16 +193,16 @@ export function createWaterfalls(specs, rand) {
         for (const c of f.mist) {
           const life = (t * c.rate + c.phase) % 1;
           const size = f.width * c.size * (0.5 + life) * Math.sin(Math.PI * Math.min(1, life * 1.4));
-          place(veil, v++, f.foot.x + f.dx * (1.5 + life * c.drift) + tx * c.lat * w, 0.6 + life * 5, f.foot.z + f.dz * (1.5 + life * c.drift) + tz * c.lat * w, size, size * 0.8, size);
+          place(veil, v++, f.foot.x + f.dx * (1.5 + life * c.drift) + tx * c.lat * w, f.foot.y + 0.4 + life * 5, f.foot.z + f.dz * (1.5 + life * c.drift) + tz * c.lat * w, size, size * 0.8, size);
         }
         for (let r = 0; r < RIPPLES; r++) {
           const life = (t * 0.4 + r / RIPPLES) % 1;
           const size = f.width * (1 + life * 2.4);
-          place(ripples, k++, f.foot.x + f.dx * 3, 0.3 - life * 0.9, f.foot.z + f.dz * 3, size, 1 + life * 2, size);
+          place(ripples, k++, f.foot.x + f.dx * 3, f.foot.y + 0.1 - life * 0.9, f.foot.z + f.dz * 3, size, 1 + life * 2, size);
         }
         if (fx && Math.hypot(camera.position.x - f.foot.x, camera.position.z - f.foot.z) < MIST_RANGE && Math.random() < dt * 14) {
           const lat = (Math.random() - 0.5) * w;
-          fx.mist(f.foot.x + f.dx * 2.5 + tx * lat, 1, f.foot.z + f.dz * 2.5 + tz * lat);
+          fx.mist(f.foot.x + f.dx * 2.5 + tx * lat, f.foot.y + 0.8, f.foot.z + f.dz * 2.5 + tz * lat);
         }
       }
       puffs.instanceMatrix.needsUpdate = true;

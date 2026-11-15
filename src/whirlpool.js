@@ -4,7 +4,6 @@ import { BASE_SPEED } from './race/shared.js';
 
 export const HOLE_Y = 26;
 const DEPTH = 44;
-const FLIGHT_CLEAR = 6;
 const THROAT = 70;
 const DRAIN = 9;
 const STEEP = 2.4;
@@ -14,6 +13,8 @@ const LAUNCH_RISE = 8;
 const FLUME_SPEED = 72;
 const FLUME_RADIUS = 7.5;
 const DARK = 0.92;
+const RIVER_BANK = 10;
+const RIVER_CHOP = 0.25;
 const DAWN = 18;
 
 export function funnelLevel(r, outer) {
@@ -33,12 +34,12 @@ function swirlAt(k) {
 export function whirlpoolSite(track, edgeAt, faceAt) {
   const spec = track.map.whirlpool;
   const land = track.river?.land;
-  const flightFrom = land ? Math.round(land.launch / track.spacing) + FLIGHT_CLEAR : track.N;
-  const landIdx = land ? Math.ceil(land.lip / track.spacing) + 1 : null;
-  const nearest = ([x, z]) => {
-    let best = 0;
+  const lift = spec.lift ?? 0;
+  const riverFrom = land ? Math.ceil(land.lip / track.spacing) : 0;
+  const nearest = ([x, z], from = riverFrom) => {
+    let best = from;
     let bestD = Infinity;
-    for (let i = 0; i < flightFrom; i++) {
+    for (let i = from; i < track.N; i++) {
       const d = (track.px[i] - x) ** 2 + (track.pz[i] - z) ** 2;
       if (d < bestD) {
         bestD = d;
@@ -52,14 +53,14 @@ export function whirlpoolSite(track, edgeAt, faceAt) {
   let mouthIdx = entryIdx;
   while (track.pz[mouthIdx] > edgeAt(track.px[mouthIdx]) - 6) mouthIdx--;
   const cave = [];
-  for (let i = mouthIdx - 12; i <= entryIdx; i++) cave.push({ x: track.px[i], z: track.pz[i], half: track.hw[i] + 2, roofed: i <= caveEndIdx });
-  const guess = nearest(spec.hole);
+  for (let i = mouthIdx - 12; i <= entryIdx; i++) cave.push({ x: track.px[i], z: track.pz[i], half: track.hw[i] + 2, roofed: !lift && i <= caveEndIdx });
+  const guess = nearest(spec.hole, entryIdx);
   const heading = track.heading(guess);
   const dx = Math.sin(heading);
   const dz = Math.cos(heading);
   const hx = track.px[guess];
   const hz = faceAt(hx, HOLE_Y) - 1;
-  const holeIdx = nearest([hx + dx * 14, hz + dz * 14]);
+  const holeIdx = nearest([hx + dx * 14, hz + dz * 14], entryIdx);
   const center = { x: spec.center[0], z: spec.center[1] };
   const radius = spec.radius;
   const route = [...spec.flume.map(([x, z, y]) => new THREE.Vector3(x, y, z)), new THREE.Vector3(hx, HOLE_Y, hz)];
@@ -81,7 +82,7 @@ export function whirlpoolSite(track, edgeAt, faceAt) {
     entryIdx,
     caveEndIdx,
     holeIdx,
-    landIdx: landIdx ?? holeIdx,
+    lift,
     mouthIdx,
     cave,
     entryS: track.sAt[entryIdx],
@@ -97,12 +98,17 @@ export function whirlpoolSite(track, edgeAt, faceAt) {
     sample(x, z, out) {
       const r = Math.hypot(x - center.x, z - center.z);
       if (r < radius + 3) {
-        out.level = funnelLevel(r, radius + 2);
+        out.level = lift + funnelLevel(r, radius + 2);
         out.amp = funnelAmp(r, radius);
         return out;
       }
       out.level = 0;
       out.amp = 1;
+      if (lift && z > edgeAt(x) && this.caveDistance(x, z) < RIVER_BANK) {
+        out.level = lift;
+        out.amp = RIVER_CHOP;
+        return out;
+      }
       if (x < box.minX || x > box.maxX || z < box.minZ || z > box.maxZ) return out;
       if ((x - hx) * dx + (z - hz) * dz > -0.5) return out;
       let best = Infinity;
@@ -148,7 +154,7 @@ const FUNNEL_VERT = /* glsl */ `
     float swell = sin(9.0 * theta - log(r) * 12.0 - uTime * (2.0 + 5.0 * k)) * 0.5 + sin(14.0 * theta + r * 0.35 - uTime * 3.0) * 0.3;
     p.y += vWave * aAmp + swell * k * 0.5;
     vLocal = local;
-    vWorld = p;
+    vWorld = (modelMatrix * vec4(p, 1.0)).xyz;
     vDepth = position.y;
     vNormalW = normalize(normal);
     vec4 mvPosition = modelViewMatrix * vec4(p, 1.0);
@@ -325,7 +331,9 @@ export class Whirlpool {
       fragmentShader: FUNNEL_FRAG,
       fog: true,
     });
-    this.group.add(new THREE.Mesh(funnelGeometry(center, radius), this.material));
+    const funnel = new THREE.Mesh(funnelGeometry(center, radius), this.material);
+    funnel.position.y = site.lift;
+    this.group.add(funnel);
     const tube = new THREE.Mesh(new THREE.TubeGeometry(flume.curve, 120, flume.radius, 14, false), new THREE.MeshBasicMaterial({ color: 0x0b141c, side: THREE.BackSide }));
     this.group.add(tube);
     const mouth = new THREE.Group();
@@ -508,12 +516,11 @@ export class Whirlpool {
     b.yOffset = lip;
     b.air = { fall: true, y: lip, vy: LAUNCH_RISE };
     b.vortex = null;
-    const exitIdx = race.attract ? this.site.landIdx : holeIdx;
-    let ds = t.sAt[exitIdx] - b.trackS;
+    let ds = t.sAt[holeIdx] - b.trackS;
     if (ds < -t.length / 2) ds += t.length;
     b.dist += ds;
-    b.trackS = t.sAt[exitIdx];
-    b.trackIdx = exitIdx;
+    b.trackS = t.sAt[holeIdx];
+    b.trackIdx = holeIdx;
     for (let i = 0; i < 16; i++) race.fx.droplet(hole.x + hole.dx * 4, hole.y, hole.z + hole.dz * 4, hole.dx * 14 + (Math.random() - 0.5) * 8, 4 + Math.random() * 6, hole.dz * 14 + (Math.random() - 0.5) * 8, 0.5);
     race.sfx.play('splash', b.pos);
     if (b.isPlayer) race.emit('launch', {}, b);
@@ -545,9 +552,8 @@ export class Whirlpool {
       return { x: site.center.x + Math.cos(a) * r, z: site.center.z + Math.sin(a) * r, heading: -a };
     }
     const back = t.mainIndex(t.step(b.trackIdx, -10));
-    const skipsFlight = race.attract && t.formAt(t.sAt[back]);
-    if (skipsFlight || (back >= site.entryIdx - 2 && back < site.holeIdx + 30)) {
-      const idx = t.wrap((race.attract ? site.landIdx : site.holeIdx) + 40);
+    if (back >= site.entryIdx - 2 && back < site.holeIdx + 30) {
+      const idx = t.wrap(site.holeIdx + 40);
       return { ...t.point(idx, 0), heading: t.heading(idx), idx };
     }
     return null;

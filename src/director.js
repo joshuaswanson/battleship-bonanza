@@ -42,7 +42,7 @@ export class Director {
 
     if (replaying && race.track.banked) {
       this.canalShot(race, dt, k);
-    } else if (replaying && race.track.river) {
+    } else if (replaying && race.track.river && !race.track.river.land?.layered) {
       const b = race.boats[this.focus];
       if (b && this.lastY !== undefined && Math.abs(b.waterY - this.lastY) > 30) {
         const dy = b.waterY - this.lastY;

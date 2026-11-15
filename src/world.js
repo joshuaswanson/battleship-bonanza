@@ -1391,9 +1391,9 @@ function baseCarve(site, x, z) {
   let h = Infinity;
   const a = Math.atan2(z - site.center.z, x - site.center.x);
   const r = Math.hypot(x - site.center.x, z - site.center.z) - (site.radius + 2) + Math.sin(a * 9) * 1.2 + Math.sin(a * 23 + 1) * 0.7;
-  if (r < CRATER_WALL + 2) h = r < 0 ? CRATER_FLOOR : CARVE_FLOOR + (r / CRATER_WALL) * 90;
+  if (r < CRATER_WALL + 2) h = site.lift + (r < 0 ? CRATER_FLOOR : CARVE_FLOOR + (r / CRATER_WALL) * 90);
   const d = site.caveDistance(x, z);
-  if (d < CAVE_WALL + 2) h = Math.min(h, CARVE_FLOOR + (Math.max(0, d) / CAVE_WALL) * 90);
+  if (d < CAVE_WALL + 2) h = Math.min(h, site.lift + CARVE_FLOOR + (Math.max(0, d) / CAVE_WALL) * 90);
   return h;
 }
 
@@ -1450,7 +1450,7 @@ function bayGullies(site) {
   const rand = mulberry32(5150);
   const { center, radius } = site;
   const gullies = [];
-  const add = (x, z, dx, dz, foot, width) => gullies.push({ x, z, dx, dz, foot, width, half: width / 2 + 3 });
+  const add = (x, z, dx, dz, foot, width, level = site.lift) => gullies.push({ x, z, dx, dz, foot, width, level, half: width / 2 + 3 });
   for (const a of [2.1, 3.5, 4.8]) {
     const ox = Math.cos(a);
     const oz = Math.sin(a);
@@ -1464,7 +1464,7 @@ function bayGullies(site) {
     const rim = f.half + CAVE_WALL - 0.5;
     add(f.x + f.nx * side * rim, f.z + f.nz * side * rim, -f.nx * side, -f.nz * side, [f.x + f.nx * side * (f.half - 3), f.z + f.nz * side * (f.half - 3)], 3.5 + rand() * 1.5);
   });
-  for (const x of [-360, -230, 270, 395]) add(x, mainlandEdge(x) + FACE_DEPTH, 0, -1, [x, mainlandEdge(x) - 3], 3 + rand() * 1.5);
+  for (const x of [-360, -230, 270, 395]) add(x, mainlandEdge(x) + FACE_DEPTH, 0, -1, [x, mainlandEdge(x) - 3], 3 + rand() * 1.5, 0);
   return gullies;
 }
 
@@ -1484,7 +1484,7 @@ function gullyFall(site, g) {
   const [fx, fz] = g.foot;
   const head = GULLY_HEAD + 1.5;
   const run = lip.s - head;
-  const drop = Math.hypot(fx - lip.x, lip.y, fz - lip.z);
+  const drop = Math.hypot(fx - lip.x, lip.y - g.level, fz - lip.z);
   const inside = run / (run + drop);
   const path = (spec, t) => {
     if (t <= inside) {
@@ -1495,11 +1495,11 @@ function gullyFall(site, g) {
     }
     const k = (t - inside) / (1 - inside);
     const out = Math.sin(Math.PI * k) * 2.2 + k * 1.5 + Math.min(1, k * 6) * 1.2;
-    return [lip.x + (fx - lip.x) * k + g.dx * out, lip.y + 0.5 - (lip.y + 0.3) * k, lip.z + (fz - lip.z) * k + g.dz * out];
+    return [lip.x + (fx - lip.x) * k + g.dx * out, lip.y + 0.5 - (lip.y - g.level + 0.3) * k, lip.z + (fz - lip.z) * k + g.dz * out];
   };
   return {
     top: new THREE.Vector3(lip.x, lip.y, lip.z),
-    foot: new THREE.Vector3(fx, 0.2, fz),
+    foot: new THREE.Vector3(fx, g.level + 0.2, fz),
     dx: g.dx,
     dz: g.dz,
     width: g.width,
@@ -1917,14 +1917,16 @@ function bayWaters(site) {
   return { sample: (x, z) => site.sample(x, z, out) };
 }
 
+const WING_ROOM = 9;
+
 function courseReach(track, site) {
   const reach = [new Float32Array(track.total), new Float32Array(track.total)];
   for (let i = 0; i < track.total; i++) {
     for (const [k, side] of [[0, -1], [1, 1]]) {
       let lim = track.hw[i] + OUTER_LIMIT;
       const aloft = i < track.N && track.formAt(i * track.spacing);
-      if (i >= site.mouthIdx - 30 && i <= site.entryIdx) lim = track.hw[i] - 1.5;
-      else if (!aloft && (i < site.holeIdx || i > site.landIdx + 25)) {
+      if (i >= site.mouthIdx - 30 && i <= site.entryIdx) lim = track.hw[i] - (aloft ? WING_ROOM : 1.5);
+      else if (!aloft && (i < site.holeIdx || i > site.holeIdx + 25)) {
         for (let d = 0; d < lim; d += 1.5) {
           const x = track.px[i] + track.nx[i] * side * d;
           const z = track.pz[i] + track.nz[i] * side * d;
@@ -2033,6 +2035,34 @@ function addCaveInterior(batch, site, scene, rand) {
   pool.mesh.material.polygonOffsetUnits = -2;
   scene.add(pool.mesh);
   return pool;
+}
+
+function addGorgeRiver(site, scene) {
+  const frames = caveFrames(site, false).filter((f) => Math.hypot(f.x - site.center.x, f.z - site.center.z) > site.radius + 1);
+  const water = [];
+  const across = 6;
+  for (let k = 0; k < frames.length - 1; k++) {
+    const a = frames[k];
+    const b = frames[k + 1];
+    for (let j = 0; j < across; j++) {
+      const u0 = (j / across) * 2 - 1;
+      const u1 = ((j + 1) / across) * 2 - 1;
+      const at = (f, u) => [f.x + f.nx * u * (f.half + 4), site.lift + 0.12, f.z + f.nz * u * (f.half + 4)];
+      water.push(...at(a, u0), ...at(b, u0), ...at(a, u1), ...at(a, u1), ...at(b, u0), ...at(b, u1));
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(water, 3));
+  g.computeVertexNormals();
+  const river = createWater({ geometry: g, flat: true });
+  scene.add(river.mesh);
+  return river;
+}
+
+function gorgeFall(site) {
+  const [mouth] = caveFrames(site, false);
+  const edge = mainlandEdge(mouth.x);
+  return { top: new THREE.Vector3(mouth.x, site.lift - 0.4, edge + FACE_DEPTH * 0.5), foot: new THREE.Vector3(mouth.x, 0.2, edge - 7), dx: 0, dz: -1, width: mouth.half * 1.5, rows: 40 };
 }
 
 function addGorge(batch, site, rand) {
@@ -2267,9 +2297,10 @@ export function createWorld(scene, track, fx) {
   let caveWater = null;
   if (site) {
     const dress = mulberry32(7101);
-    addCaveRoof(batch, site);
+    if (!site.lift) addCaveRoof(batch, site);
     addBlowholeCollar(batch, site);
-    caveWater = addCaveInterior(batch, site, scene, dress);
+    caveWater = site.lift ? addGorgeRiver(site, scene) : addCaveInterior(batch, site, scene, dress);
+    if (site.lift) specs.push(gorgeFall(site));
     addCrater(batch, site, rand);
     specs.push(...site.gullies.map((g) => gullyFall(site, g)), flumeStream(site));
     addGorge(batch, site, dress);
@@ -2291,7 +2322,7 @@ export function createWorld(scene, track, fx) {
   const chunks = batch.build(scenery, 0.12, BAY_COLORS);
   scene.add(scenery);
 
-  const buoys = courseBuoys(track, (idx) => !site || idx < site.mouthIdx - 10 || idx > site.landIdx + 30);
+  const buoys = courseBuoys(track, (idx) => !site || ((idx < site.mouthIdx - 10 || idx > site.holeIdx + 30) && !track.formAt(track.mainIndex(idx) * track.spacing)));
   scene.add(buoys);
 
   const arch = createArch(track, half);
