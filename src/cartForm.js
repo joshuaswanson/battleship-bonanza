@@ -6,6 +6,7 @@ import { BOW_CUT, HullForm, back, box, deckPoint, hullAt, merge, mix, morphTime,
 const SPEC = { key: 'cart', hatch: false, jaws: true, teeth: false };
 export const CART_RIDE = 1.27;
 const WHEEL_X = 2.2;
+const WHEEL_SPIN = 0.18;
 const WHEEL_Z = [2.1, -2.6];
 const BANDS = [-3.5, -1.5, 0.5, 2.4];
 
@@ -134,7 +135,7 @@ export class CartForm extends HullForm {
       w.root.visible = out > 0.001;
       w.root.position.set(w.side * mix(0.5, WHEEL_X, out), mix(0.2, -0.62, out), w.z);
       w.root.scale.setScalar(Math.max(0.001, mix(0.3, 1, out)));
-      w.spin.rotation.x = roll + seg(m, 1.6, 2.6) * (time ?? 0) * 16 * (done ? 0 : 1);
+      w.spin.rotation.x = roll * WHEEL_SPIN + seg(m, 1.6, 2.6) * (time ?? 0) * 16 * (done ? 0 : 1);
       if (w.axle) w.axle.visible = out > 0.4;
     }
     const pile = back(seg(m, 2.25, 2.95), 1.8);
