@@ -40,7 +40,9 @@ export class Director {
     const k = (rate) => (this.snap ? 1 : 1 - Math.exp(-rate * dt));
     let fov = 66;
 
-    if (replaying && race.track.river) {
+    if (replaying && race.track.banked) {
+      this.canalShot(race, dt, k);
+    } else if (replaying && race.track.river) {
       const b = race.boats[this.focus];
       if (b && this.lastY !== undefined && Math.abs(b.waterY - this.lastY) > 30) {
         const dy = b.waterY - this.lastY;
@@ -50,8 +52,6 @@ export class Director {
       }
       this.riverShot(race, dt, k);
       this.lastY = race.boats[this.focus].waterY;
-    } else if (replaying && race.track.banked) {
-      this.canalShot(race, dt, k);
     } else if (race.attract || !race.player || replaying) {
       this.focusTime -= dt;
       if (this.focusTime <= 0) {
