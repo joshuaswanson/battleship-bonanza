@@ -1504,7 +1504,6 @@ function gullyFall(site, g) {
     dz: g.dz,
     width: g.width,
     rows: 70,
-    bulge: () => 0,
     path,
   };
 }

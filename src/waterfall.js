@@ -60,7 +60,9 @@ const SHEET_FRAG = /* glsl */ `
 const PUFF = new THREE.SphereGeometry(1, 12, 8);
 const RIPPLE = new THREE.TorusGeometry(1, 0.07, 5, 40).rotateX(Math.PI / 2);
 const ROWS = 26;
-const COLS = 12;
+const COLS = 14;
+const DEPTH = 0.62;
+const SINK = 0.35;
 const CHURN = 30;
 const LIP = 5;
 const MIST = 7;
@@ -68,43 +70,46 @@ const RIPPLES = 3;
 const MIST_RANGE = 260;
 
 function fallPath({ top, foot, dx, dz }, t) {
-  const out = Math.sin(Math.PI * t) * 2.2 + t * 1.5 + Math.min(1, t * 6) * 1.2 - 1;
-  return [top.x + (foot.x - top.x) * t + dx * out, top.y + 0.5 - (top.y + 0.5 - foot.y) * t, top.z + (foot.z - top.z) * t + dz * out];
+  const out = Math.min(1, t * 5) * 0.6;
+  return [top.x + (foot.x - top.x) * t + dx * out, top.y + 0.5 - (top.y + 0.5 - foot.y) * t * t, top.z + (foot.z - top.z) * t + dz * out];
 }
 
-function sheetGeometry(spec, { back = 0, seed = 0, shade = 1 } = {}) {
+function streamGeometry(spec, seed) {
   const { dx, dz } = spec;
-  const width = spec.width * (back ? 0.85 : 1);
-  const tx = -dz;
-  const tz = dx;
+  const across = new THREE.Vector3(-dz, 0, dx);
   const rows = spec.rows ?? ROWS;
+  const path = spec.path ?? fallPath;
+  const points = Array.from({ length: rows + 1 }, (_, r) => new THREE.Vector3(...path(spec, r / rows)));
   const positions = [];
   const flows = [];
   const shades = [];
   const seeds = [];
   const indices = [];
-  let along = 0;
-  let prev = null;
+  const along = new THREE.Vector3();
+  const out = new THREE.Vector3();
+  let run = 0;
   for (let r = 0; r <= rows; r++) {
     const t = r / rows;
-    const [cx, cy, cz] = (spec.path ?? fallPath)(spec, t);
-    if (prev) along += Math.hypot(cx - prev[0], cy - prev[1], cz - prev[2]);
-    prev = [cx, cy, cz];
-    const w = width * (0.75 + 0.9 * t);
-    for (let c = 0; c <= COLS; c++) {
-      const u = c / COLS - 0.5;
-      const bulge = (1 - 4 * u * u) * w * (spec.bulge ? spec.bulge(t) : 0.35);
-      if (spec.path) positions.push(cx + tx * u * w, cy + bulge, cz + tz * u * w);
-      else positions.push(cx + tx * u * w + dx * (bulge - back), cy, cz + tz * u * w + dz * (bulge - back));
-      flows.push(c / COLS, t, along);
-      shades.push((spec.shade ? spec.shade(t) : 1) * shade);
+    const c = points[r];
+    if (r) run += c.distanceTo(points[r - 1]);
+    along.subVectors(points[Math.min(rows, r + 1)], points[Math.max(0, r - 1)]).normalize();
+    out.crossVectors(across, along).normalize();
+    const w = spec.width * (0.75 + 0.9 * t) * 0.5;
+    const deep = w * DEPTH;
+    for (let k = 0; k <= COLS; k++) {
+      const a = (k / COLS) * Math.PI * 2;
+      const side = Math.cos(a) * w;
+      const lift = (Math.sin(a) + 1 - SINK) * deep;
+      positions.push(c.x + across.x * side + out.x * lift, c.y + out.y * lift, c.z + across.z * side + out.z * lift);
+      flows.push(0.5 + 0.42 * Math.sin(a), t, run);
+      shades.push((spec.shade ? spec.shade(t) : 1) * (0.86 + 0.14 * Math.sin(a)));
       seeds.push(seed);
     }
   }
   for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < COLS; c++) {
-      const a = r * (COLS + 1) + c;
-      indices.push(a, a + COLS + 1, a + 1, a + 1, a + COLS + 1, a + COLS + 2);
+    for (let k = 0; k < COLS; k++) {
+      const i = r * (COLS + 1) + k;
+      indices.push(i, i + COLS + 1, i + 1, i + 1, i + COLS + 1, i + COLS + 2);
     }
   }
   const g = new THREE.BufferGeometry();
@@ -128,8 +133,7 @@ export function createWaterfalls(specs, rand) {
   });
   for (const spec of specs) {
     const seed = rand();
-    group.add(new THREE.Mesh(sheetGeometry(spec, { seed }), material));
-    if (!spec.path) group.add(new THREE.Mesh(sheetGeometry(spec, { back: 0.9, seed: seed + 0.37, shade: 0.72 }), material));
+    group.add(new THREE.Mesh(streamGeometry(spec, seed), material));
   }
 
   const puffCount = specs.length * (CHURN + LIP);
