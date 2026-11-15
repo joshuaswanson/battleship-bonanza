@@ -1033,6 +1033,8 @@ function drapePillar(batch, x, z, pillar, plants) {
   }
 }
 
+const PILLAR_CROWN = 14;
+
 function addPillar(batch, x, z, rand, { radius, height, plants = 1 }) {
   const tape = [];
   const pillar = pillarGeometry(radius, height, () => {
@@ -1069,7 +1071,7 @@ function addPillar(batch, x, z, rand, { radius, height, plants = 1 }) {
     const sz = 1.4 + rand() * 2.6;
     batch.add('rock', ROCK, mat(x + Math.cos(a) * d, 0.2 + rand() * 0.6, z + Math.sin(a) * d, sz, sz * (0.6 + rand() * 0.4), sz, rand(), rand() * 6, rand()));
   }
-  return { blob: { x, z, rx: pillar.footprint, rz: pillar.footprint, rot: 0 }, top, topRadius: pillar.topRadius, footprint: pillar.footprint, notch };
+  return { blob: { x, z, rx: pillar.footprint, rz: pillar.footprint, rot: 0, top: height + PILLAR_CROWN }, top, topRadius: pillar.topRadius, footprint: pillar.footprint, notch };
 }
 
 function waterfallSpec(batch, pillar, x, z, toward, rand) {
@@ -1105,13 +1107,15 @@ function createCumulus(rand) {
   return cloud;
 }
 
+const CLOUD_FLOOR = 235;
+
 function addCumulus(scene, rand, count) {
   const clouds = [];
   for (let i = 0; i < count; i++) {
     const cloud = createCumulus(rand);
     const a = rand() * Math.PI * 2;
     const d = 520 + rand() * 520;
-    cloud.position.set(Math.cos(a) * d, 90 + rand() * 120, Math.sin(a) * d);
+    cloud.position.set(Math.cos(a) * d, CLOUD_FLOOR + rand() * 110, Math.sin(a) * d);
     cloud.rotation.y = rand() * Math.PI;
     cloud.userData.speed = 2 + rand() * 3;
     clouds.push(cloud);
@@ -1280,7 +1284,7 @@ const advance = (rand, n) => {
 };
 
 function addArch(batch, track, fraction, rand) {
-  const idx = track.wrap(Math.round(fraction * track.N));
+  const idx = track.wrap(Math.round(track.lapIndex(fraction)));
   const p = track.point(idx, 0);
   return addArchAt(batch, p.x, p.z, track.heading(idx), track.halfWidth + 11, rand);
 }
@@ -1863,6 +1867,36 @@ function addMouthJungle(batch, { p, nx, nz, fx, fz, wide }, rand) {
 
 const LIP_RADIUS = 1.5;
 
+const PLATEAU_VIEW = 300;
+const PLATEAU_GRID = 19;
+const PLATEAU_BACK = 82;
+
+function addPlateauJungle(batch, track, site, rand) {
+  const flight = [];
+  for (let i = 0; i < track.N; i += 4) {
+    if (track.formAt(i * track.spacing) && track.pz[i] > mainlandEdge(track.px[i])) flight.push([track.px[i], track.pz[i]]);
+  }
+  if (!flight.length) return;
+  const xs = flight.map((p) => p[0]);
+  const zs = flight.map((p) => p[1]);
+  for (let gx = Math.min(...xs) - PLATEAU_VIEW; gx <= Math.max(...xs) + PLATEAU_VIEW; gx += PLATEAU_GRID) {
+    for (let gz = Math.min(...zs) - PLATEAU_VIEW; gz <= Math.max(...zs) + PLATEAU_VIEW; gz += PLATEAU_GRID) {
+      const x = gx + (rand() - 0.5) * PLATEAU_GRID;
+      const z = gz + (rand() - 0.5) * PLATEAU_GRID;
+      const pick = rand();
+      const size = rand();
+      if (z < mainlandEdge(x) + PLATEAU_BACK || pick < 0.22) continue;
+      if (!flight.some(([fx, fz]) => Math.hypot(fx - x, fz - z) < PLATEAU_VIEW)) continue;
+      if (Math.hypot(x - site.center.x, z - site.center.z) < site.radius + CRATER_WALL + 36) continue;
+      const y = mainlandGround(x, z);
+      if (carveHeight(site, x, z) < y - 0.5 || site.caveDistance(x, z) < CAVE_WALL + 6) continue;
+      if (pick < 0.4) addPalm(batch, x, y - 0.4, z, rand, { height: 9 + size * 8, lean: 0.15 + rand() * 0.35, dir: rand() * Math.PI * 2 });
+      else if (pick < 0.8) canopyTree(batch, x, y - 0.3, z, rand, 3.2 + size * 3.2);
+      else leafBush(batch, x, y - 0.3, z, rand, 2 + size * 2.4);
+    }
+  }
+}
+
 function addCrater(batch, site, rand) {
   const { center, radius } = site;
   const rim = radius + 2 + CRATER_WALL;
@@ -1889,8 +1923,9 @@ function courseReach(track, site) {
   for (let i = 0; i < track.total; i++) {
     for (const [k, side] of [[0, -1], [1, 1]]) {
       let lim = track.hw[i] + OUTER_LIMIT;
+      const aloft = i < track.N && track.formAt(i * track.spacing);
       if (i >= site.mouthIdx - 30 && i <= site.entryIdx) lim = track.hw[i] - 1.5;
-      else if (i < site.holeIdx || i > site.holeIdx + 25) {
+      else if (!aloft && (i < site.holeIdx || i > site.landIdx + 25)) {
         for (let d = 0; d < lim; d += 1.5) {
           const x = track.px[i] + track.nx[i] * side * d;
           const z = track.pz[i] + track.nz[i] * side * d;
@@ -2199,7 +2234,7 @@ export function createWorld(scene, track, fx) {
   for (const f of [0.118, 0.743, 0.835]) shores.push(...addArch(batch, track, f, archRand));
   advance(rand, 8351);
   for (const f of [0.131, 0.689, 0.817]) {
-    const idx = track.wrap(Math.round(f * track.N));
+    const idx = track.wrap(Math.round(track.lapIndex(f)));
     for (const side of [-1, 1]) {
       const p = track.point(idx, side * (half + 9));
       pillars.push({ x: p.x, z: p.z, r: 8 });
@@ -2246,6 +2281,7 @@ export function createWorld(scene, track, fx) {
   scene.add(waterfalls.group);
   addFarIslands(batch, rand);
   addMainland(batch, rand, site);
+  if (site) addPlateauJungle(batch, track, site, mulberry32(51407));
   const whirlpool = site ? new Whirlpool({ track, site, group: scene }) : null;
   if (site) track.reach = courseReach(track, site);
   const islands = pillars.map((p) => ({ x: p.x, z: p.z, r: p.r }));
@@ -2256,7 +2292,7 @@ export function createWorld(scene, track, fx) {
   const chunks = batch.build(scenery, 0.12, BAY_COLORS);
   scene.add(scenery);
 
-  const buoys = courseBuoys(track, (idx) => !site || idx < site.mouthIdx - 10 || idx > site.holeIdx + 30);
+  const buoys = courseBuoys(track, (idx) => !site || idx < site.mouthIdx - 10 || idx > site.landIdx + 30);
   scene.add(buoys);
 
   const arch = createArch(track, half);

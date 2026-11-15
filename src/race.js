@@ -36,6 +36,9 @@ const MODULES = [machinegun, missiles, mines, grapple, emp, jetpack, laser, flam
 
 const BEACH_FUNNEL = 240;
 
+const LAYER_GAP = 25;
+const LAYER_FREE = new Set(['mine', 'missile', 'fire', 'propane']);
+
 export class Race {
   actions = Object.assign({}, ...MODULES.map((m) => m.actions ?? {}));
 
@@ -60,6 +63,7 @@ export class Race {
     this.attract = attract;
     this.laps = attract || mode ? Infinity : laps;
     this.vehicle = vehicleOf(track);
+    this.layered = !!track.river?.land?.layered;
     this.boats = defs.map((def, i) => new Boat(def, i, scene, this.vehicle));
     this.tireMarks = this.vehicle?.marks ? new TireMarks(scene, { tone: this.vehicle.marks }) : null;
     this.jetPoint = new THREE.Vector3();
@@ -504,7 +508,7 @@ export class Race {
           this.ramOnRails(a, b);
           continue;
         }
-        if (Math.abs(a.yOffset - b.yOffset) > 2.5) continue;
+        if (Math.abs(a.yOffset - b.yOffset) > 2.5 || !this.sameLayer(a, b)) continue;
         let best = null;
         for (const oa of [-CIRCLE_OFFSET, CIRCLE_OFFSET]) {
           for (const ob of [-CIRCLE_OFFSET, CIRCLE_OFFSET]) {
@@ -553,6 +557,7 @@ export class Race {
   damage(target, amount, source, kind, { knockX = 0, knockZ = 0, spin = 0, stun = 0, launch = 0 } = {}) {
     if (this.allied(source, target)) return false;
     if (!target.alive || target.invuln > 0 || (target.finished && !this.attract) || target.morphing || this.ceasefire) return false;
+    if (source?.pos && source !== target && !LAYER_FREE.has(kind) && !this.sameLayer(source, target)) return false;
     const c = target.center();
     const blocked = (target.has('armor') && (kind === 'bullet' || kind === 'spikes' || kind === 'saw')) || (target.has('spikes') && kind === 'saw');
     if (blocked) {
@@ -749,6 +754,10 @@ export class Race {
       return b.dist - a.dist;
     });
     this.order.forEach((b, i) => (b.place = i + 1));
+  }
+
+  sameLayer(a, b) {
+    return !this.layered || Math.abs(a.pos.y - b.pos.y) < LAYER_GAP;
   }
 
   dispose() {

@@ -197,7 +197,7 @@ export const methods = {
 
   groundHit(b, x, z, size) {
     const impact = !this.vehicle ? DUST_IMPACT : this.track.formAt(b.trackS) ? this.vehicle.impact : this.vehicle.shoreImpact;
-    if (isWater(x, z)) {
+    if (!b.aloft && isWater(x, z)) {
       this.fx.splash(x, b.waterY, z, size);
       return;
     }

@@ -4,6 +4,7 @@ import { BASE_SPEED } from './race/shared.js';
 
 export const HOLE_Y = 26;
 const DEPTH = 44;
+const FLIGHT_CLEAR = 6;
 const THROAT = 70;
 const DRAIN = 9;
 const STEEP = 2.4;
@@ -31,10 +32,13 @@ function swirlAt(k) {
 
 export function whirlpoolSite(track, edgeAt, faceAt) {
   const spec = track.map.whirlpool;
+  const land = track.river?.land;
+  const flightFrom = land ? Math.round(land.launch / track.spacing) + FLIGHT_CLEAR : track.N;
+  const landIdx = land ? Math.ceil(land.lip / track.spacing) + 1 : null;
   const nearest = ([x, z]) => {
     let best = 0;
     let bestD = Infinity;
-    for (let i = 0; i < track.N; i++) {
+    for (let i = 0; i < flightFrom; i++) {
       const d = (track.px[i] - x) ** 2 + (track.pz[i] - z) ** 2;
       if (d < bestD) {
         bestD = d;
@@ -77,6 +81,7 @@ export function whirlpoolSite(track, edgeAt, faceAt) {
     entryIdx,
     caveEndIdx,
     holeIdx,
+    landIdx: landIdx ?? holeIdx,
     mouthIdx,
     cave,
     entryS: track.sAt[entryIdx],
@@ -503,11 +508,12 @@ export class Whirlpool {
     b.yOffset = lip;
     b.air = { fall: true, y: lip, vy: LAUNCH_RISE };
     b.vortex = null;
-    let ds = t.sAt[holeIdx] - b.trackS;
+    const exitIdx = race.attract ? this.site.landIdx : holeIdx;
+    let ds = t.sAt[exitIdx] - b.trackS;
     if (ds < -t.length / 2) ds += t.length;
     b.dist += ds;
-    b.trackS = t.sAt[holeIdx];
-    b.trackIdx = holeIdx;
+    b.trackS = t.sAt[exitIdx];
+    b.trackIdx = exitIdx;
     for (let i = 0; i < 16; i++) race.fx.droplet(hole.x + hole.dx * 4, hole.y, hole.z + hole.dz * 4, hole.dx * 14 + (Math.random() - 0.5) * 8, 4 + Math.random() * 6, hole.dz * 14 + (Math.random() - 0.5) * 8, 0.5);
     race.sfx.play('splash', b.pos);
     if (b.isPlayer) race.emit('launch', {}, b);
@@ -539,8 +545,9 @@ export class Whirlpool {
       return { x: site.center.x + Math.cos(a) * r, z: site.center.z + Math.sin(a) * r, heading: -a };
     }
     const back = t.mainIndex(t.step(b.trackIdx, -10));
-    if (back >= site.entryIdx - 2 && back < site.holeIdx + 30) {
-      const idx = t.wrap(site.holeIdx + 40);
+    const skipsFlight = race.attract && t.formAt(t.sAt[back]);
+    if (skipsFlight || (back >= site.entryIdx - 2 && back < site.holeIdx + 30)) {
+      const idx = t.wrap((race.attract ? site.landIdx : site.holeIdx) + 40);
       return { ...t.point(idx, 0), heading: t.heading(idx), idx };
     }
     return null;

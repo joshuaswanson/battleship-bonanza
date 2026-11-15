@@ -29,7 +29,8 @@ const POLE_MAX_LEAN = 0.36;
 export const methods = {
   updateVisual(b, dt) {
     const t = this.time;
-    const w = waveHeight(b.pos.x, b.pos.z, t);
+    b.aloft = this.layered && this.track.formAt(b.trackS);
+    const w = b.aloft ? this.track.level(b.trackS) : waveHeight(b.pos.x, b.pos.z, t);
     b.waterY = w;
     const { root, body, flag, flames, spinners, materials } = b.model;
     const fx = Math.sin(b.heading);
@@ -44,13 +45,13 @@ export const methods = {
     }
     root.rotation.y = b.heading + spin;
 
-    const hF = waveHeight(b.pos.x + fx * 3.4, b.pos.z + fz * 3.4, t);
-    const hB = waveHeight(b.pos.x - fx * 3.4, b.pos.z - fz * 3.4, t);
+    const hF = b.aloft ? w : waveHeight(b.pos.x + fx * 3.4, b.pos.z + fz * 3.4, t);
+    const hB = b.aloft ? w : waveHeight(b.pos.x - fx * 3.4, b.pos.z - fz * 3.4, t);
     const slope = clamp(hF - hB, -3, 3);
     const lx = Math.cos(b.heading);
     const lz = -Math.sin(b.heading);
-    const hL = waveHeight(b.pos.x + lx * 1.8, b.pos.z + lz * 1.8, t);
-    const hR = waveHeight(b.pos.x - lx * 1.8, b.pos.z - lz * 1.8, t);
+    const hL = b.aloft ? w : waveHeight(b.pos.x + lx * 1.8, b.pos.z + lz * 1.8, t);
+    const hR = b.aloft ? w : waveHeight(b.pos.x - lx * 1.8, b.pos.z - lz * 1.8, t);
     const onWater = b.air ? 0.2 : 1;
     const speedFrac = clamp(b.speed / BASE_SPEED, -0.3, 1.3);
     const accel = (b.speed - b.prevSpeed) / Math.max(dt, 1e-3);
@@ -286,7 +287,7 @@ export const methods = {
         }
       }
     }
-    if (b.alive && !b.air && Math.abs(b.speed) > 5 && isWater(b.pos.x, b.pos.z)) {
+    if (b.alive && !b.air && !b.aloft && Math.abs(b.speed) > 5 && isWater(b.pos.x, b.pos.z)) {
       b.wakeTimer -= dt;
       if (b.wakeTimer <= 0) {
         b.wakeTimer = 0.07;

@@ -110,7 +110,7 @@ export class Wakes {
     const fz = Math.cos(b.heading);
     const x = b.pos.x - fx * (HULL_L - 0.6);
     const z = b.pos.z - fz * (HULL_L - 0.6);
-    const moving = b.alive && !b.air && Math.abs(b.speed) > 4 && isWater(x, z);
+    const moving = b.alive && !b.air && !b.aloft && Math.abs(b.speed) > 4 && isWater(x, z);
     if (!moving) {
       if (trail.length && !trail[trail.length - 1].cut) trail[trail.length - 1].cut = true;
       return;

@@ -54,7 +54,7 @@ export const methods = {
     if (b.blind > 0) return null;
     const slot = b.items.indexOf(t.id);
     const wanted = b.aim[t.id];
-    const usable = (o) => o && o !== b && o.alive && !this.allied(b, o) && this.inArc(b, slot, o.pos.x, o.pos.z) && Math.hypot(o.pos.x - b.pos.x, o.pos.z - b.pos.z) < WATCH_RANGE;
+    const usable = (o) => o && o !== b && o.alive && !this.allied(b, o) && this.sameLayer(b, o) && this.inArc(b, slot, o.pos.x, o.pos.z) && Math.hypot(o.pos.x - b.pos.x, o.pos.z - b.pos.z) < WATCH_RANGE;
     if (usable(wanted)) return wanted;
     let best = null;
     let bestD = WATCH_RANGE;

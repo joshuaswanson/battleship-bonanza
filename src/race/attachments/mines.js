@@ -5,6 +5,8 @@ import { waveHeight } from '../../water.js';
 const MINE_RISE = 7;
 const MINE_POP = -1;
 
+const MINE_REACH = 8;
+
 export const methods = {
   removeMine(mine, puff = false) {
     this.scene.remove(mine.mesh);
@@ -51,7 +53,7 @@ export const methods = {
 
       if (armed && mine.settled) {
         for (const o of this.boats) {
-          if (!o.alive || o.yOffset > 1.6 || o.morphing || this.ceasefire) continue;
+          if (!o.alive || o.yOffset > 1.6 || o.morphing || this.ceasefire || (o.aloft && o.pos.y - water > MINE_REACH)) continue;
           if (o === mine.owner && mine.age < 2.5) continue;
           if (o.distanceToAxis2D(mine.pos.x, mine.pos.z) < 4) {
             this.fx.explosion(mine.pos.x, water + 0.5, mine.pos.z, 1.2);
