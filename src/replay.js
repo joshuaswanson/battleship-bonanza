@@ -5,6 +5,7 @@ export const STRIDE = 11;
 const EMIT = 16;
 const EMIT_CHUNK = 4096;
 const BOAT_REST = 7;
+const FINISH_TAIL = 4;
 
 export function boatNodes(b) {
   const m = b.model;
@@ -153,6 +154,13 @@ export class Recorder {
     this.sfx = sfx;
   }
 
+  length() {
+    const song = this.sfx.musicLength('race');
+    const player = this.race.player;
+    if (!this.race.mode && player && !player.finished) return Infinity;
+    return Math.max(song, player?.finished ? player.finishTime + FINISH_TAIL : 0);
+  }
+
   log(id, pool, name, args) {
     if (name === 'emit' && args.length <= EMIT - 3 && args.every((a) => typeof a === 'number')) this.logEmit(id, args);
     else this.events.push({ t: this.race.time, pool, name, args: args.map(cloneArg) });
@@ -180,7 +188,7 @@ export class Recorder {
     const race = this.race;
     if (this.start === null && race.state === 'racing') this.start = race.time - 1;
     if (race.time < this.next || this.full) return;
-    if (this.start !== null && race.time > this.start + this.sfx.musicLength('race') + 3) {
+    if (this.start !== null && race.time > this.start + this.length() + 3) {
       this.full = true;
       return;
     }
@@ -243,7 +251,8 @@ export class Replay {
     this.sfx = sfx;
     this.time = recorder.start ?? recorder.frames[0]?.t ?? 0;
     this.songAt = (recorder.start ?? this.time) + 1;
-    this.end = Math.min(recorder.frames.at(-1)?.t ?? this.time, this.songAt + sfx.musicLength('race') + 1);
+    this.loops = recorder.length() > sfx.musicLength('race');
+    this.end = Math.min(recorder.frames.at(-1)?.t ?? this.time, this.songAt + recorder.length() + 1);
     this.frame = 0;
     this.cur = new Float32Array(recorder.state.length);
     this.nxt = new Float32Array(recorder.state.length);
@@ -272,7 +281,7 @@ export class Replay {
     const { frames, events, nodes, mats } = this.rec;
     this.time = Math.min(this.end, this.time + dt);
     if (this.songAt !== null && this.time >= this.songAt) {
-      this.sfx.playMusic('race', { at: this.time - this.songAt, loop: false });
+      this.sfx.playMusic('race', { at: (this.time - this.songAt) % this.sfx.musicLength('race'), loop: this.loops });
       this.songAt = null;
     }
     while (this.frame < frames.length - 2 && frames[this.frame + 1].t <= this.time) {
