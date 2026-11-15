@@ -26,6 +26,7 @@ const MINE_START = 330;
 const MINE_END = 90;
 const MINE_FADE = 170;
 const JET_EASE = 260;
+const JET_SETTLE = 150;
 export const SKI_CLIMB = 300;
 export const LIFT_LANES = [-30, -15, 0, 15, 30];
 export const LIFT_HANG = 11;
@@ -351,9 +352,9 @@ export function createTrack(map) {
       top: map.river.top ?? map.river.slope * length + drops.reduce((sum, d) => sum + d.height, 0),
     };
     if (map.river.land) {
-      const { from, to, height, kind = 'truck', form = kind, fenced = false, paved = false, kick = 0, dive = 6, ramp = 150, peak = 0, split = 0, added = 0 } = map.river.land;
+      const { from, to, height, kind = 'truck', form = kind, fenced = false, paved = false, kick = 0, settle = JET_SETTLE, dive = 6, ramp = 150, peak = 0, split = 0, added = 0 } = map.river.land;
       const lip = Math.abs(to * length - seam) < spacing * 2 ? seam : to * length;
-      river.land = { launch: from * length, lip, span: lip - from * length, height, kind, form, fenced, paved, kick, dive, ramp, peak, split, added };
+      river.land = { launch: from * length, lip, span: lip - from * length, height, kind, form, fenced, paved, kick, settle, dive, ramp, peak, split, added };
       if (kind === 'cart') river.land.crossings = railCrossings(river.land.span);
     }
     if (map.river.fork) {
@@ -385,7 +386,7 @@ export function createTrack(map) {
       const finish = baseLevel(river.land.lip + 2);
       const dive = start + (JET_SKIM - start) * landSmooth(d, 0, 340);
       const climb = landSmooth(d, span - 1000, span - 260) * (river.land.peak - JET_SKIM);
-      const settle = landSmooth(d, span - 150, span - 6) * (finish + height - river.land.peak);
+      const settle = landSmooth(d, span - river.land.settle, span - 6) * (finish + height - river.land.peak);
       return dive + climb + settle + 2.4 * Math.sin(d * 0.016) * landSmooth(d, 340, 500) * (1 - landSmooth(d, span - 1100, span - 900)) - baseLevel(s);
     }
     if (kind === 'ski') {
