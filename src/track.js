@@ -353,9 +353,9 @@ export function createTrack(map) {
       top: map.river.top ?? map.river.slope * length + drops.reduce((sum, d) => sum + d.height, 0),
     };
     if (map.river.land) {
-      const { from, to, height, kind = 'truck', form = kind, fenced = false, paved = false, kick = 0, settle = JET_SETTLE, skim = JET_SKIM, rise = JET_RISE, lift = 0, layered = false, dive = 6, ramp = 150, peak = 0, split = 0, added = 0 } = map.river.land;
+      const { from, to, height, kind = 'truck', form = kind, fenced = false, paved = false, kick = 0, settle = JET_SETTLE, skim = JET_SKIM, rise = JET_RISE, layered = false, dive = 6, ramp = 150, peak = 0, split = 0, added = 0 } = map.river.land;
       const lip = Math.abs(to * length - seam) < spacing * 2 ? seam : to * length;
-      river.land = { launch: from * length, lip, span: lip - from * length, height, kind, form, fenced, paved, kick, settle, skim, rise, lift, layered, dive, ramp, peak, split, added };
+      river.land = { launch: from * length, lip, span: lip - from * length, height, kind, form, fenced, paved, kick, settle, skim, rise, layered, dive, ramp, peak, split, added };
       if (kind === 'cart') river.land.crossings = railCrossings(river.land.span);
     }
     if (map.river.fork) {
@@ -383,7 +383,7 @@ export function createTrack(map) {
     const { kind, height, dive, ramp, span } = river.land;
     if (kind === 'sub') return -height * landSmooth(d, dive, dive + ramp) * (1 - landSmooth(d, span - ramp, span)) * (0.92 + 0.08 * Math.sin(d * 0.03));
     if (kind === 'jet') {
-      const start = baseLevel(river.land.launch - 2) + river.land.lift;
+      const start = baseLevel(river.land.launch - 2);
       const finish = baseLevel(river.land.lip + 2);
       const { skim, rise } = river.land;
       const dive = start + (skim - start) * landSmooth(d, 0, rise);
