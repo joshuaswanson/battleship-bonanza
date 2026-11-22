@@ -17,6 +17,8 @@ const DARK = 0.92;
 const RIVER_BANK = 10;
 const EXIT_AIM = 95;
 const RIM_BAND = 16;
+const RIM_REACH = 30;
+const RIM_DROP = 0.4;
 const RIVER_CHOP = 0.25;
 const DAWN = 18;
 
@@ -241,7 +243,10 @@ const FUNNEL_FRAG = /* glsl */ `
     color = mix(color, foam, step(0.55, glint) * 0.6 * (0.3 + flow));
 
     color = mix(color, vec3(0.0, 0.03, 0.06), smoothstep(-uDepth * 0.7, -uDepth - 26.0, vDepth));
-    gl_FragColor = vec4(color, smoothstep(uRadius + 2.0, uRadius + 2.0 - uRim, r));
+    vec3 plain = mix(deep, shallow, smoothstep(0.25, 0.85, h));
+    plain = mix(plain, foam, smoothstep(0.9, 0.96, h) * 0.7);
+    color = mix(plain, color, smoothstep(uRadius + 2.0, uRadius + 2.0 - uRim, r));
+    gl_FragColor = vec4(color, 1.0);
     #include <colorspace_fragment>
     #include <fog_fragment>
   }
@@ -250,13 +255,13 @@ const FUNNEL_FRAG = /* glsl */ `
 function rimGeometry(center, radius, lift) {
   const segs = 120;
   const rings = 6;
-  const inner = radius + 2 - RIM_BAND - 2;
-  const outer = radius + 6;
+  const inner = radius;
+  const outer = radius + RIM_REACH;
   const positions = [];
   const indices = [];
   for (let i = 0; i <= rings; i++) {
     const r = inner + ((outer - inner) * i) / rings;
-    const y = lift + funnelLevel(r, radius + 2) - 0.12;
+    const y = lift + Math.min(0, funnelLevel(r, radius + 2)) - RIM_DROP;
     for (let j = 0; j <= segs; j++) {
       const a = (j / segs) * Math.PI * 2;
       positions.push(center.x + Math.cos(a) * r, y, center.z + Math.sin(a) * r);
@@ -365,11 +370,9 @@ export class Whirlpool {
       vertexShader: FUNNEL_VERT,
       fragmentShader: FUNNEL_FRAG,
       fog: true,
-      transparent: true,
     });
     const funnel = new THREE.Mesh(funnelGeometry(center, radius), this.material);
     funnel.position.y = site.lift;
-    funnel.renderOrder = 2;
     this.group.add(funnel);
     this.rim = createWater({ geometry: rimGeometry(center, radius, site.lift), flat: true });
     this.group.add(this.rim.mesh);
