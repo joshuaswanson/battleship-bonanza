@@ -7,7 +7,8 @@ const LIFE = 26;
 const WIDTH = 0.62;
 const TRACK = 2.3;
 const SKI_GAUGE = 2.7;
-const CAR_GAUGE = 2.16;
+const CAR_GAUGE = 3.13;
+const CAR_AXLE = 4.42;
 const AXLE = 3.05;
 
 const VERT = /* glsl */ `
@@ -60,6 +61,7 @@ export class TireMarks {
   constructor(scene, { tone = 'dirt' } = {}) {
     this.scene = scene;
     this.gauge = tone === 'snow' ? SKI_GAUGE : tone === 'asphalt' ? CAR_GAUGE : TRACK;
+    this.axle = tone === 'asphalt' ? CAR_AXLE : AXLE;
     const verts = MAX_QUADS * 6;
     this.positions = new Float32Array(verts * 3);
     this.born = new Float32Array(verts).fill(-1000);
@@ -114,8 +116,8 @@ export class TireMarks {
     this.trails.set(b, trails);
     const fx = Math.sin(b.heading);
     const fz = Math.cos(b.heading);
-    const x = b.pos.x - fx * AXLE + fz * side * this.gauge;
-    const z = b.pos.z - fz * AXLE - fx * side * this.gauge;
+    const x = b.pos.x - fx * this.axle + fz * side * this.gauge;
+    const z = b.pos.z - fz * this.axle - fx * side * this.gauge;
     const last = trails[key];
     if (last && Math.hypot(x - last.x, z - last.z) < STEP) return;
     if (last && Math.hypot(x - last.x, z - last.z) > STEP * 4) trails[key] = null;

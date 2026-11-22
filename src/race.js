@@ -42,7 +42,7 @@ const LAYER_FREE = new Set(['mine', 'missile', 'fire', 'propane']);
 export class Race {
   actions = Object.assign({}, ...MODULES.map((m) => m.actions ?? {}));
 
-  constructor({ scene, track, fx, sfx, defs, shores = [], solid = null, raycast = null, chopper = null, hazards = null, mode = null, attract = false, laps = LAPS, difficulty = DIFFICULTIES.normal }) {
+  constructor({ scene, track, fx, sfx, defs, shores = [], solid = null, raycast = null, chopper = null, hazards = null, ground = null, mode = null, attract = false, laps = LAPS, difficulty = DIFFICULTIES.normal }) {
     this.difficulty = difficulty;
     this.shores = shores;
     this.solid = solid;
@@ -54,6 +54,7 @@ export class Race {
     this.iceFlashes = [];
     if (chopper) chopper.onShatter = (tree, dir) => this.shatterIce(tree, dir);
     this.hazards = hazards;
+    this.ground = ground;
     this.mode = mode;
     this.blasts = [];
     this.scene = scene;
@@ -510,15 +511,17 @@ export class Race {
         }
         if (Math.abs(a.yOffset - b.yOffset) > 2.5 || !this.sameLayer(a, b)) continue;
         let best = null;
-        for (const oa of [-CIRCLE_OFFSET, CIRCLE_OFFSET]) {
-          for (const ob of [-CIRCLE_OFFSET, CIRCLE_OFFSET]) {
+        const ba = a.body;
+        const bb = b.body;
+        for (const oa of [-ba.offset, ba.offset]) {
+          for (const ob of [-bb.offset, bb.offset]) {
             const dx = b.pos.x + Math.sin(b.heading) * ob - (a.pos.x + Math.sin(a.heading) * oa);
             const dz = b.pos.z + Math.cos(b.heading) * ob - (a.pos.z + Math.cos(a.heading) * oa);
             const d2 = dx * dx + dz * dz;
             if (d2 > 0 && (!best || d2 < best.d2)) best = { dx, dz, d2 };
           }
         }
-        const min = RADIUS * 2;
+        const min = ba.radius + bb.radius;
         if (!best || best.d2 >= min * min) continue;
         const d = Math.sqrt(best.d2);
         const nx = best.dx / d;

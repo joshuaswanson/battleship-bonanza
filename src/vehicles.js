@@ -37,6 +37,7 @@ const BASE = {
   impact: null,
   shoreImpact: DUST_IMPACT,
   engine: undefined,
+  body: null,
 };
 
 const wheeled = { cruising: onLand, grip: LAND_GRIP, rigid: false, marks: 'dirt', impact: DUST_IMPACT };
@@ -44,7 +45,7 @@ const flying = { cruising: inFlight, speed: 2.3, thrust: 4, launchPeak: LOW_PEAK
 
 export const VEHICLES = {
   truck: { ...BASE, ...wheeled, Form: TruckForm, mud: true, trail: 'dirt', engine: 'truck' },
-  car: { ...BASE, ...wheeled, Form: CarForm, speed: 1.75, thrust: 2.8, grip: 4, marks: 'asphalt', engine: 'car' },
+  car: { ...BASE, ...wheeled, Form: CarForm, body: { offset: 4.2, radius: 3.3, axis: 7.2 }, speed: 1.75, thrust: 2.8, grip: 4, marks: 'asphalt', engine: 'car' },
   scooter: { ...BASE, ...wheeled, Form: ScooterForm, speed: 1.25, thrust: 2.2, grip: 3, marks: null, engine: 'scooter' },
   tank: { ...BASE, ...wheeled, Form: TankForm, launchPeak: 15, launchBlast: 1.8, trail: 'sand', impact: SOOT_IMPACT, shoreImpact: SOOT_IMPACT, engine: 'tank' },
   jet: { ...BASE, ...flying, Form: JetForm, engine: 'jet' },

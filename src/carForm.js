@@ -3,6 +3,7 @@ import { cachedGeometry, glow } from './toon.js';
 import { HullForm, back, box, merge, mix, morphTime, seg, sideways, smooth, tube } from './hullForm.js';
 
 const SPEC = { key: 'car', hatch: false, jaws: false };
+export const CAR_SCALE = 1.45;
 export const CAR_RIDE = 0.5;
 const WHEEL_X = 2.16;
 const WHEEL_R = 0.74;
@@ -198,13 +199,17 @@ export class CarForm extends HullForm {
     this.glowLight.position.y = FLOOR - 0.34;
     this.glowLight.renderOrder = 4;
     rig.add(this.glowLight);
+    this.shell = new THREE.Group();
+    this.shell.scale.setScalar(CAR_SCALE);
+    for (const part of rig.children.filter((o) => !this.boatBits.includes(o) && !columns.has(o))) this.shell.add(part);
+    rig.add(this.shell);
   }
 
   set(p, roll, steer, time) {
     if (!this.enter(p)) return;
     const m = morphTime(p);
     const done = p >= 1;
-    this.ride = CAR_RIDE * back(seg(m, 1.5, 2.1), 1.3);
+    this.ride = (CAR_RIDE + (WHEEL_R - WHEEL_Y) * (CAR_SCALE - 1)) * back(seg(m, 1.5, 2.1), 1.3);
     this.poseDeck(m, done, 0.4);
     const squash = seg(m, 1.2, 2);
     for (const bit of this.boatBits) {
@@ -254,7 +259,7 @@ export class CarForm extends HullForm {
     for (const t of this.turrets) {
       const front = t.slot === 0;
       const seat = smooth(seg(m, front ? 2.7 : 2.6, front ? 3.15 : 3.05));
-      this.placeTurret(t, mix(this.riseOf(t, m), front ? 1.74 : 0.86, seat), mix(t.rest.z, front ? -0.7 : -3.2, seat), 1, 1 - seg(m, 2.8, 3.1), m, seat > 0.99);
+      this.placeTurret(t, mix(this.riseOf(t, m), (front ? 1.74 : 0.86) * CAR_SCALE, seat), mix(t.rest.z, (front ? -0.7 : -3.2) * CAR_SCALE, seat), 1, 1 - seg(m, 2.8, 3.1), m, seat > 0.99);
     }
   }
 

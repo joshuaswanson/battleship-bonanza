@@ -2,7 +2,9 @@ import * as THREE from 'three';
 import { ITEMS } from '../items.js';
 import { buildBoat, newHeat } from '../boatModel.js';
 import { createAI } from '../ai.js';
-import { AXIS_HALF, HOLD_IDS, MAX_HP, clamp } from './shared.js';
+import { AXIS_HALF, CIRCLE_OFFSET, HOLD_IDS, MAX_HP, RADIUS, clamp } from './shared.js';
+
+const HULL_BODY = { offset: CIRCLE_OFFSET, radius: RADIUS, axis: AXIS_HALF };
 
 let shadowTexture;
 function shadowMaterial() {
@@ -34,6 +36,7 @@ export class Boat {
     this.flag = null;
     this.model = buildBoat(def.color, def.items);
     this.form = vehicle ? new vehicle.Form(this.model, def.color) : null;
+    this.vehicle = vehicle;
     this.formP = 0;
     this.orbit = null;
     this.morphing = false;
@@ -125,6 +128,10 @@ export class Boat {
     return this.local(0, 0.9, 0, out);
   }
 
+  get body() {
+    return (this.formP > 0.5 && this.vehicle?.body) || HULL_BODY;
+  }
+
   distanceToAxis(point) {
     const fx = Math.sin(this.heading);
     const fz = Math.cos(this.heading);
@@ -132,7 +139,8 @@ export class Boat {
     const dx = point.x - this.pos.x;
     const dy = point.y - cy;
     const dz = point.z - this.pos.z;
-    const along = clamp(dx * fx + dz * fz, -AXIS_HALF, AXIS_HALF);
+    const half = this.body.axis;
+    const along = clamp(dx * fx + dz * fz, -half, half);
     return Math.hypot(dx - fx * along, dy, dz - fz * along);
   }
 
@@ -141,7 +149,8 @@ export class Boat {
     const fz = Math.cos(this.heading);
     const dx = x - this.pos.x;
     const dz = z - this.pos.z;
-    const along = clamp(dx * fx + dz * fz, -AXIS_HALF, AXIS_HALF);
+    const half = this.body.axis;
+    const along = clamp(dx * fx + dz * fz, -half, half);
     return Math.hypot(dx - fx * along, dz - fz * along);
   }
 
