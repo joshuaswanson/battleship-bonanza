@@ -2041,8 +2041,10 @@ function addCaveInterior(batch, site, scene, rand) {
   return pool;
 }
 
+const FALL_OVERLAP = 2;
+
 function addGorgeRiver(site, scene) {
-  const frames = caveFrames(site, false).filter((f) => Math.hypot(f.x - site.center.x, f.z - site.center.z) > site.radius + 1 && f.z > mainlandEdge(f.x) + FACE_DEPTH * 0.5);
+  const frames = caveFrames(site, false).filter((f) => Math.hypot(f.x - site.center.x, f.z - site.center.z) > site.radius + 1 && f.z > mainlandEdge(f.x) + gorgeLip(site, f.x));
   const water = [];
   const across = 6;
   for (let k = 0; k < frames.length - 1; k++) {
@@ -2063,10 +2065,21 @@ function addGorgeRiver(site, scene) {
   return river;
 }
 
+function gorgeLip(site, x) {
+  let lo = 0.4;
+  let hi = FACE_DEPTH;
+  for (let k = 0; k < 24; k++) {
+    const mid = (lo + hi) / 2;
+    if (faceRise(x, mid) < site.lift + CARVE_FLOOR) lo = mid;
+    else hi = mid;
+  }
+  return lo;
+}
+
 function gorgeFall(site) {
   const [mouth] = caveFrames(site, false);
   const edge = mainlandEdge(mouth.x);
-  return { top: new THREE.Vector3(mouth.x, site.lift - 0.4, edge + FACE_DEPTH * 0.5), foot: new THREE.Vector3(mouth.x, 0.2, edge - 7), dx: 0, dz: -1, width: ((mouth.half + 4) * 2) / 0.75, spread: 0.12, rows: 40 };
+  return { top: new THREE.Vector3(mouth.x, site.lift + 0.1, edge + gorgeLip(site, mouth.x) + FALL_OVERLAP), foot: new THREE.Vector3(mouth.x, 0.2, edge - 7), dx: 0, dz: -1, width: ((mouth.half + 4) * 2) / 0.75, spread: 0.12, rows: 40 };
 }
 
 function addGorge(batch, site, rand) {
