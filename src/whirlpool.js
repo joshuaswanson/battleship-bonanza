@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { toon, INK } from './toon.js';
+import { createWater } from './water.js';
 import { BASE_SPEED } from './race/shared.js';
 
 export const HOLE_Y = 26;
@@ -14,6 +15,8 @@ const FLUME_SPEED = 72;
 const FLUME_RADIUS = 7.5;
 const DARK = 0.92;
 const RIVER_BANK = 10;
+const EXIT_AIM = 95;
+const RIM_BAND = 16;
 const RIVER_CHOP = 0.25;
 const DAWN = 18;
 
@@ -61,6 +64,8 @@ export function whirlpoolSite(track, edgeAt, faceAt) {
   const hx = track.px[guess];
   const hz = faceAt(hx, HOLE_Y) - 1;
   const holeIdx = nearest([hx + dx * 14, hz + dz * 14], entryIdx);
+  const aim = track.wrap(holeIdx + Math.round(EXIT_AIM / track.spacing));
+  const exit = Math.atan2(track.px[aim] - hx, track.pz[aim] - hz);
   const center = { x: spec.center[0], z: spec.center[1] };
   const radius = spec.radius;
   const route = [...spec.flume.map(([x, z, y]) => new THREE.Vector3(x, y, z)), new THREE.Vector3(hx, HOLE_Y, hz)];
@@ -87,7 +92,7 @@ export function whirlpoolSite(track, edgeAt, faceAt) {
     cave,
     entryS: track.sAt[entryIdx],
     holeS: track.sAt[holeIdx],
-    hole: { x: hx, z: hz, y: HOLE_Y, dx, dz, heading },
+    hole: { x: hx, z: hz, y: HOLE_Y, dx: Math.sin(exit), dz: Math.cos(exit), heading: exit },
     flume: { curve, samples, length, lightFrom, radius: FLUME_RADIUS },
     hidden: (i) => i > entryIdx && i < holeIdx,
     caveDistance(x, z) {
@@ -170,6 +175,7 @@ const FUNNEL_FRAG = /* glsl */ `
   uniform float uDrain;
   uniform vec3 uSunDir;
   uniform vec2 uCenterW;
+  uniform float uRim;
   varying vec2 vLocal;
   varying vec3 vWorld;
   varying float vDepth;
@@ -235,11 +241,40 @@ const FUNNEL_FRAG = /* glsl */ `
     color = mix(color, foam, step(0.55, glint) * 0.6 * (0.3 + flow));
 
     color = mix(color, vec3(0.0, 0.03, 0.06), smoothstep(-uDepth * 0.7, -uDepth - 26.0, vDepth));
-    gl_FragColor = vec4(color, 1.0);
+    gl_FragColor = vec4(color, smoothstep(uRadius + 2.0, uRadius + 2.0 - uRim, r));
     #include <colorspace_fragment>
     #include <fog_fragment>
   }
 `;
+
+function rimGeometry(center, radius, lift) {
+  const segs = 120;
+  const rings = 6;
+  const inner = radius + 2 - RIM_BAND - 2;
+  const outer = radius + 6;
+  const positions = [];
+  const indices = [];
+  for (let i = 0; i <= rings; i++) {
+    const r = inner + ((outer - inner) * i) / rings;
+    const y = lift + funnelLevel(r, radius + 2) - 0.12;
+    for (let j = 0; j <= segs; j++) {
+      const a = (j / segs) * Math.PI * 2;
+      positions.push(center.x + Math.cos(a) * r, y, center.z + Math.sin(a) * r);
+    }
+  }
+  for (let i = 0; i < rings; i++) {
+    for (let j = 0; j < segs; j++) {
+      const a = i * (segs + 1) + j;
+      const b = a + segs + 1;
+      indices.push(a, b, a + 1, a + 1, b, b + 1);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  g.setIndex(indices);
+  g.computeVertexNormals();
+  return g.toNonIndexed();
+}
 
 function funnelGeometry(center, radius) {
   const segs = 180;
@@ -325,15 +360,19 @@ export class Whirlpool {
     this.material = new THREE.ShaderMaterial({
       uniforms: THREE.UniformsUtils.merge([
         THREE.UniformsLib.fog,
-        { uTime: { value: 0 }, uCenter: { value: new THREE.Vector2(center.x, center.z) }, uRadius: { value: radius }, uDepth: { value: DEPTH }, uDrain: { value: DRAIN }, uCenterW: { value: new THREE.Vector2(center.x, center.z) }, uSunDir: { value: new THREE.Vector3(0.4, 1, 0.3) } },
+        { uTime: { value: 0 }, uCenter: { value: new THREE.Vector2(center.x, center.z) }, uRadius: { value: radius }, uDepth: { value: DEPTH }, uDrain: { value: DRAIN }, uCenterW: { value: new THREE.Vector2(center.x, center.z) }, uSunDir: { value: new THREE.Vector3(0.4, 1, 0.3) }, uRim: { value: RIM_BAND } },
       ]),
       vertexShader: FUNNEL_VERT,
       fragmentShader: FUNNEL_FRAG,
       fog: true,
+      transparent: true,
     });
     const funnel = new THREE.Mesh(funnelGeometry(center, radius), this.material);
     funnel.position.y = site.lift;
+    funnel.renderOrder = 2;
     this.group.add(funnel);
+    this.rim = createWater({ geometry: rimGeometry(center, radius, site.lift), flat: true });
+    this.group.add(this.rim.mesh);
     const tube = new THREE.Mesh(new THREE.TubeGeometry(flume.curve, 120, flume.radius, 14, false), new THREE.MeshBasicMaterial({ color: 0x0b141c, side: THREE.BackSide }));
     this.group.add(tube);
     const mouth = new THREE.Group();
@@ -364,6 +403,7 @@ export class Whirlpool {
 
   animate(t) {
     this.material.uniforms.uTime.value = t;
+    this.rim.update(t);
   }
 
   darkness(b) {

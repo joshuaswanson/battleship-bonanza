@@ -1339,10 +1339,13 @@ const mainlandHeight = (x) => 74 + 16 * Math.sin(x * 0.009) + 9 * Math.sin(x * 0
 const STRATA = 5;
 const FACE_KNOTS = [0.4, ...Array.from({ length: STRATA }, (_, j) => [0.4 + j * 3.2 + 0.3, 0.4 + j * 3.2 + 0.6, 0.4 + j * 3.2 + 0.9, 0.4 + (j + 1) * 3.2]).flat()];
 const FACE_DEPTH = FACE_KNOTS[FACE_KNOTS.length - 1];
-const MAINLAND_ROWS = [-14, -5, -1.5, ...FACE_KNOTS, 24, 32, 60, 120, 240, 520];
-const CARVED_ROWS = [-14, -5, -1.5, ...FACE_KNOTS, ...Array.from({ length: 166 }, (_, k) => 20 + k * 4), 720];
+const MAINLAND_ROWS = [-14, -5, -1.5, ...FACE_KNOTS, 24, 32, 60, 120, 240, 520, 1000, 1700, 2600];
+const CARVED_ROWS = [-14, -5, -1.5, ...FACE_KNOTS, ...Array.from({ length: 166 }, (_, k) => 20 + k * 4), 720, 1100, 1700, 2600];
 const CARVE_FLOOR = -8;
 const CRATER_FLOOR = -80;
+const LAND_SPAN = 2600;
+const HORIZON_SEA = 8000;
+const HORIZON_DROP = -1.6;
 const CRATER_WALL = 12;
 const CAVE_WALL = 8;
 
@@ -1504,6 +1507,7 @@ function gullyFall(site, g) {
     dz: g.dz,
     width: g.width,
     rows: 70,
+    bulge: (t) => (t <= inside ? 0 : 0.35),
     path,
   };
 }
@@ -1589,7 +1593,7 @@ function addBlowholeCollar(batch, site) {
 
 function addMainland(batch, rand, site = null) {
   let xs = [];
-  for (let x = -1300; x <= 1300; x += site && x >= -140 && x < 220 ? 3 : 8) xs.push(x);
+  for (let x = -LAND_SPAN; x <= LAND_SPAN; x += site && x >= -140 && x < 220 ? 3 : Math.abs(x) > 1300 ? 40 : 8) xs.push(x);
   let rowsAt = site ? CARVED_ROWS : MAINLAND_ROWS;
   if (site) {
     const extra = [];
@@ -2038,7 +2042,7 @@ function addCaveInterior(batch, site, scene, rand) {
 }
 
 function addGorgeRiver(site, scene) {
-  const frames = caveFrames(site, false).filter((f) => Math.hypot(f.x - site.center.x, f.z - site.center.z) > site.radius + 1);
+  const frames = caveFrames(site, false).filter((f) => Math.hypot(f.x - site.center.x, f.z - site.center.z) > site.radius + 1 && f.z > mainlandEdge(f.x) + FACE_DEPTH * 0.5);
   const water = [];
   const across = 6;
   for (let k = 0; k < frames.length - 1; k++) {
@@ -2062,7 +2066,7 @@ function addGorgeRiver(site, scene) {
 function gorgeFall(site) {
   const [mouth] = caveFrames(site, false);
   const edge = mainlandEdge(mouth.x);
-  return { top: new THREE.Vector3(mouth.x, site.lift - 0.4, edge + FACE_DEPTH * 0.5), foot: new THREE.Vector3(mouth.x, 0.2, edge - 7), dx: 0, dz: -1, width: mouth.half * 1.5, rows: 40 };
+  return { top: new THREE.Vector3(mouth.x, site.lift - 0.4, edge + FACE_DEPTH * 0.5), foot: new THREE.Vector3(mouth.x, 0.2, edge - 7), dx: 0, dz: -1, width: ((mouth.half + 4) * 2) / 0.75, spread: 0.12, rows: 40 };
 }
 
 function addGorge(batch, site, rand) {
@@ -2311,6 +2315,9 @@ export function createWorld(scene, track, fx) {
   scene.add(waterfalls.group);
   addFarIslands(batch, rand);
   addMainland(batch, rand, site);
+  const horizon = createWater({ size: HORIZON_SEA, segments: 40, amp: 0 });
+  horizon.mesh.position.y = HORIZON_DROP;
+  scene.add(horizon.mesh);
   if (site) addPlateauJungle(batch, track, site, mulberry32(51407));
   const whirlpool = site ? new Whirlpool({ track, site, group: scene }) : null;
   if (site) track.reach = courseReach(track, site);
@@ -2374,6 +2381,7 @@ export function createWorld(scene, track, fx) {
         caveWater.update(t);
       }
       water.update(t);
+      horizon.update(t);
       cullChunks(chunks, camera, fog.far);
       sky.position.copy(camera.position);
       buoys.userData.update(t, camera);

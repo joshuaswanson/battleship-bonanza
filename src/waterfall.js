@@ -61,8 +61,10 @@ const PUFF = new THREE.SphereGeometry(1, 12, 8);
 const RIPPLE = new THREE.TorusGeometry(1, 0.07, 5, 40).rotateX(Math.PI / 2);
 const ROWS = 26;
 const COLS = 14;
-const DEPTH = 0.62;
+const DEPTH = 0.38;
 const SINK = 0.35;
+const CREST = 0.15;
+const MAX_DEPTH = 2.4;
 const CHURN = 30;
 const LIP = 5;
 const MIST = 7;
@@ -80,6 +82,13 @@ function streamGeometry(spec, seed) {
   const rows = spec.rows ?? ROWS;
   const path = spec.path ?? fallPath;
   const points = Array.from({ length: rows + 1 }, (_, r) => new THREE.Vector3(...path(spec, r / rows)));
+  const crest = points[0].y + CREST;
+  const roundness = (t) => {
+    if (!spec.bulge) return 1;
+    let sum = 0;
+    for (let k = -3; k <= 3; k++) sum += Math.min(1, spec.bulge(Math.min(1, Math.max(0, t + k * 0.012))) / 0.35);
+    return sum / 7;
+  };
   const positions = [];
   const flows = [];
   const shades = [];
@@ -94,13 +103,13 @@ function streamGeometry(spec, seed) {
     if (r) run += c.distanceTo(points[r - 1]);
     along.subVectors(points[Math.min(rows, r + 1)], points[Math.max(0, r - 1)]).normalize();
     out.crossVectors(across, along).normalize();
-    const w = spec.width * (0.75 + 0.9 * t) * 0.5;
-    const deep = w * DEPTH;
+    const w = spec.width * (0.75 + 0.9 * t * (spec.spread ?? 1)) * 0.5;
+    const deep = Math.min(w * DEPTH, MAX_DEPTH) * roundness(t);
     for (let k = 0; k <= COLS; k++) {
       const a = (k / COLS) * Math.PI * 2;
       const side = Math.cos(a) * w;
       const lift = (Math.sin(a) + 1 - SINK) * deep;
-      positions.push(c.x + across.x * side + out.x * lift, c.y + out.y * lift, c.z + across.z * side + out.z * lift);
+      positions.push(c.x + across.x * side + out.x * lift, Math.min(crest, c.y + out.y * lift), c.z + across.z * side + out.z * lift);
       flows.push(0.5 + 0.42 * Math.sin(a), t, run);
       shades.push((spec.shade ? spec.shade(t) : 1) * (0.86 + 0.14 * Math.sin(a)));
       seeds.push(seed);
