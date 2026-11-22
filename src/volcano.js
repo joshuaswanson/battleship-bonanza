@@ -927,6 +927,12 @@ export async function createVolcano(group, track, fx) {
     solid(p) {
       return groundHit(height, p);
     },
+    ground(x, z) {
+      const y = height(x, z);
+      const field = track.river.flight;
+      if (field && field.weight(x, z) > 0.5 && field.dist(x, z) < CANYON_HALF + 40) return { y, molten: true, dry: false };
+      return { y: Math.max(y, 0), dry: y > 0 };
+    },
     update(t, dt, camera) {
       water.update(t);
       ocean.update(t);

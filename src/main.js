@@ -337,7 +337,7 @@ function newRace(attract, map = pickMap(attract), given = null, guest = false) {
   const ctf = isArena(map) ? new TEAM_MODES[map.split(':')[0]]({ scene, track: current.track }) : null;
   const dealt = given ?? (ctf ? makeTeams(setup) : makeDefs(attract ? null : setup));
   const defs = ctf ? dealt.map((def) => ({ ...def, color: TEAMS[def.team].color })) : dealt;
-  race = new Race({ scene, track: current.track, fx, sfx: attract ? SILENT : sfx, shores: current.world.shores, solid: current.world.solid, raycast: current.world.raycast ?? null, chopper: current.world.chopper ?? null, hazards: current.world.hazards ?? null, mode: ctf, defs, attract, difficulty: DIFFICULTIES[attract || given ? 'normal' : setup.difficulty] });
+  race = new Race({ scene, track: current.track, fx, sfx: attract ? SILENT : sfx, shores: current.world.shores, solid: current.world.solid, raycast: current.world.raycast ?? null, chopper: current.world.chopper ?? null, hazards: current.world.hazards ?? null, ground: current.world.ground ?? null, mode: ctf, defs, attract, difficulty: DIFFICULTIES[attract || given ? 'normal' : setup.difficulty] });
   ghost?.dispose();
   ghost = null;
   ghostRecorder = null;
@@ -1180,7 +1180,7 @@ if (import.meta.env.DEV) {
       race?.dispose();
       const defs = PAINTS.map((paint, i) => ({ name: `Boat ${i + 1}`, color: paint.value, items: arrange(shuffle(ITEM_IDS).slice(0, 2)) }));
       useVenue(map);
-      race = new Race({ scene, track: current.track, fx, sfx, shores: current.world.shores, solid: current.world.solid, raycast: current.world.raycast ?? null, chopper: current.world.chopper ?? null, hazards: current.world.hazards ?? null, defs, attract: false });
+      race = new Race({ scene, track: current.track, fx, sfx, shores: current.world.shores, solid: current.world.solid, raycast: current.world.raycast ?? null, chopper: current.world.chopper ?? null, hazards: current.world.hazards ?? null, ground: current.world.ground ?? null, defs, attract: false });
       mode = 'sim';
       hud.show(false);
       showScreen(null);

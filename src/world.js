@@ -2373,6 +2373,11 @@ export function createWorld(scene, track, fx) {
       return ellipseHit(shores, p);
     },
     surface: site ? bayWaters(site) : null,
+    ground(x, z) {
+      const sea = site ? site.sample(x, z, { level: 0, amp: 1 }).level : 0;
+      const land = z > mainlandEdge(x) - 2 ? Math.min(mainlandGround(x, z), carveHeight(site, x, z)) : -Infinity;
+      return { y: Math.max(sea, land), dry: land > sea };
+    },
     hazards: whirlpool,
     stacks,
     update(t, dt, camera) {
