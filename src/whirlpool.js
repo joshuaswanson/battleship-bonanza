@@ -15,7 +15,8 @@ const FLUME_SPEED = 72;
 const FLUME_RADIUS = 7.5;
 const DARK = 0.92;
 const RIVER_BANK = 10;
-const EXIT_AIM = 95;
+const EXIT_AIM = 150;
+const EXIT_SPAN = 100;
 const RIM_BAND = 16;
 const RIM_REACH = 30;
 const RIM_DROP = 0.4;
@@ -34,6 +35,22 @@ export function funnelAmp(r, radius) {
 
 function swirlAt(k) {
   return 22 + 42 * k;
+}
+
+function straightExit(track, from, faceAt) {
+  const step = (d) => track.wrap(from + Math.round(d / track.spacing));
+  const a = step(EXIT_AIM);
+  const b = step(EXIT_AIM + EXIT_SPAN);
+  const len = Math.hypot(track.px[a] - track.px[b], track.pz[a] - track.pz[b]);
+  const bx = (track.px[a] - track.px[b]) / len;
+  const bz = (track.pz[a] - track.pz[b]) / len;
+  let x = track.px[a];
+  let z = track.pz[a];
+  for (let d = 0; d < EXIT_AIM * 3 && z < faceAt(x, HOLE_Y) - 1; d += 0.5) {
+    x += bx * 0.5;
+    z += bz * 0.5;
+  }
+  return [x, z, Math.atan2(-bx, -bz)];
 }
 
 export function whirlpoolSite(track, edgeAt, faceAt) {
@@ -63,11 +80,10 @@ export function whirlpoolSite(track, edgeAt, faceAt) {
   const heading = track.heading(guess);
   const dx = Math.sin(heading);
   const dz = Math.cos(heading);
-  const hx = track.px[guess];
-  const hz = faceAt(hx, HOLE_Y) - 1;
-  const holeIdx = nearest([hx + dx * 14, hz + dz * 14], entryIdx);
-  const aim = track.wrap(holeIdx + Math.round(EXIT_AIM / track.spacing));
-  const exit = Math.atan2(track.px[aim] - hx, track.pz[aim] - hz);
+  const near = track.px[guess];
+  const roughIdx = nearest([near + dx * 14, faceAt(near, HOLE_Y) - 1 + dz * 14], entryIdx);
+  const [hx, hz, exit] = straightExit(track, roughIdx, faceAt);
+  const holeIdx = nearest([hx + Math.sin(exit) * 14, hz + Math.cos(exit) * 14], entryIdx);
   const center = { x: spec.center[0], z: spec.center[1] };
   const radius = spec.radius;
   const route = [...spec.flume.map(([x, z, y]) => new THREE.Vector3(x, y, z)), new THREE.Vector3(hx, HOLE_Y, hz)];
