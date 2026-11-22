@@ -99,11 +99,16 @@ function beam(batch, key, a, b, radius) {
   batch.add(key, CYL, new THREE.Matrix4().compose(middle, q, new THREE.Vector3(radius, span.length(), radius)));
 }
 
+const GATE_HALF = 3.4;
+const GATE_DEPTH = 0.6;
+const GATE_TOP = 5;
+
 function slalomGate(batch, x, y, z, yaw, key) {
   const c = Math.cos(yaw);
   const s = Math.sin(yaw);
-  for (const side of [-1, 1]) batch.add('flagPole', CYL, mat(x + c * side * 3.4, y + 2.6, z - s * side * 3.4, 0.14, 5.2, 0.14));
-  batch.add(key, BOX, mat(x, y + 4.2, z, 6.8, 1.7, 0.1, 0, yaw));
+  for (const side of [-1, 1]) batch.add('flagPole', CYL, mat(x + c * side * GATE_HALF, y + 2.6, z - s * side * GATE_HALF, 0.14, 5.2, 0.14));
+  batch.add(key, BOX, mat(x, y + 4.2, z, GATE_HALF * 2, 1.7, 0.1, 0, yaw));
+  return { x, z, rx: GATE_HALF + 0.3, rz: GATE_DEPTH, rot: yaw, top: y + GATE_TOP };
 }
 
 function boatLift(batch, track, height) {
@@ -498,7 +503,7 @@ export async function createAlps(group, track, fx) {
     const s = launch + d;
     const i = track.wrap(Math.round(s / track.spacing));
     const p = track.point(i, (k % 2 ? 1 : -1) * 15);
-    slalomGate(batch, p.x, track.level(s), p.z, track.heading(i), k % 2 ? 'flagRed' : 'gateBlue');
+    shores.push(slalomGate(batch, p.x, track.level(s), p.z, track.heading(i), k % 2 ? 'flagRed' : 'gateBlue'));
   }
   boatLift(batch, track, height);
   lipCrags(batch, track, height, lipTop, rand);
