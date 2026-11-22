@@ -14,12 +14,14 @@ function track(file, volume, preload = 'auto') {
   return audio;
 }
 
+const JET_IDLE = 0.4;
+const JET_VOLUME = 0.22;
+
 const ENGINE_VOICES = {
   boat: { pitch: 55, rev: 70, tone: 300, bright: 500, gain: 1 },
   truck: { pitch: 36, rev: 52, tone: 420, bright: 760, gain: 1.7 },
   car: { pitch: 75, rev: 110, tone: 700, bright: 1500, gain: 1.3 },
   scooter: { pitch: 95, rev: 120, tone: 900, bright: 1300, gain: 1.1 },
-  jet: { pitch: 150, rev: 60, tone: 1600, bright: 900, gain: 1.2 },
   tank: { pitch: 30, rev: 26, tone: 240, bright: 320, gain: 2.2 },
 };
 
@@ -122,6 +124,7 @@ export class Sfx {
       this.buildSaw();
       this.buildFlame();
       this.buildRotor();
+      this.buildJet();
     }
     if (this.ctx.state === 'suspended') this.ctx.resume();
     if (this.musicWanted && this.musicOn && this.music.paused) this.music.play().catch(() => {});
@@ -249,6 +252,57 @@ export class Sfx {
     whineGain.gain.value = 0.05;
     whine.connect(whineFilter).connect(whineGain).connect(out);
     this.rotor = { out, beat, whine };
+  }
+
+  buildJet() {
+    const ctx = this.ctx;
+    const out = ctx.createGain();
+    out.gain.value = 0;
+    out.connect(this.master);
+    const noise = (rate) => {
+      const source = ctx.createBufferSource();
+      source.buffer = this.noiseBuffer;
+      source.loop = true;
+      source.playbackRate.value = rate;
+      source.start();
+      return source;
+    };
+    const roarFilter = ctx.createBiquadFilter();
+    roarFilter.type = 'bandpass';
+    roarFilter.frequency.value = 500;
+    roarFilter.Q.value = 0.6;
+    const roarGain = ctx.createGain();
+    roarGain.gain.value = 1.6;
+    noise(1).connect(roarFilter).connect(roarGain).connect(out);
+    const rumbleFilter = ctx.createBiquadFilter();
+    rumbleFilter.type = 'lowpass';
+    rumbleFilter.frequency.value = 140;
+    const rumbleGain = ctx.createGain();
+    rumbleGain.gain.value = 2.2;
+    noise(0.7).connect(rumbleFilter).connect(rumbleGain).connect(out);
+    const hissFilter = ctx.createBiquadFilter();
+    hissFilter.type = 'highpass';
+    hissFilter.frequency.value = 3200;
+    const hiss = ctx.createGain();
+    hiss.gain.value = 0;
+    noise(1).connect(hissFilter).connect(hiss).connect(out);
+    const whine = ctx.createOscillator();
+    whine.type = 'sine';
+    whine.frequency.value = 1900;
+    whine.start();
+    const whineGain = ctx.createGain();
+    whineGain.gain.value = 0.035;
+    whine.connect(whineGain).connect(out);
+    this.jet = { out, roarFilter, hiss, whine };
+  }
+
+  setJet(level, thrust = 0) {
+    if (!this.jet) return;
+    const t = this.ctx.currentTime;
+    this.jet.out.gain.setTargetAtTime(level * (JET_IDLE + (1 - JET_IDLE) * thrust) * JET_VOLUME, t, 0.25);
+    this.jet.roarFilter.frequency.setTargetAtTime(380 + 620 * thrust, t, 0.4);
+    this.jet.hiss.gain.setTargetAtTime(0.5 * thrust, t, 0.3);
+    this.jet.whine.frequency.setTargetAtTime(1700 + 900 * thrust, t, 0.6);
   }
 
   setRotor(level) {

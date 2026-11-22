@@ -1110,12 +1110,16 @@ function frame(now) {
   if (race.player && !race.attract && mode !== 'replay') {
     hud.update(race, camera, mode === 'paused' ? 0 : dt);
     sfx.listener = race.player.pos;
-    sfx.setEngine(Math.abs(race.player.speed) / BASE_SPEED, mode === 'race' && state.throttle > 0 && race.player.alive, race.player.formP > 0.5 ? race.vehicle?.engine : undefined);
+    const voice = race.player.formP > 0.5 ? race.vehicle?.engine : undefined;
+    const driving = mode === 'race' && race.player.alive;
+    sfx.setEngine(Math.abs(race.player.speed) / BASE_SPEED, driving && state.throttle > 0 && voice !== 'jet', voice);
+    sfx.setJet(driving && voice === 'jet' ? Math.max(0, race.player.formP - ROTOR_SOUND_START) / (1 - ROTOR_SOUND_START) : 0, state.throttle > 0 ? 1 : 0);
     sfx.setRotor(mode === 'race' && race.player.alive && race.player.form?.rotor ? Math.max(0, race.player.formP - ROTOR_SOUND_START) / (1 - ROTOR_SOUND_START) : 0);
   } else {
     sfx.listener = cam.pos;
     sfx.setEngine(0, false);
     sfx.setRotor(0);
+    sfx.setJet(0);
   }
   updateSawSound();
 
