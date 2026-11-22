@@ -258,7 +258,7 @@ export async function createVenice(group, track, fx) {
   const laundryLines = track.map.ramps
     .filter(([, , routeId]) => routeId === undefined)
     .map(([f]) => track.wrap(Math.round(f * N) + Math.round(LINE_AHEAD / track.spacing)))
-    .filter((i) => !bridges.some((b) => Math.hypot(b.x - track.px[i], b.z - track.pz[i]) < 30));
+    .filter((i) => !crossing[i] && !bridges.some((b) => Math.hypot(b.x - track.px[i], b.z - track.pz[i]) < 30));
   for (const i of laundryLines) for (const side of [-1, 1]) {
     const p = track.point(i, side * (track.hw[i] + LINE_POST));
     batch.add('woodDark', CYL, mat(p.x, (LINE_HEIGHT - 1) / 2, p.z, 0.28, LINE_HEIGHT + 1.6, 0.28));
