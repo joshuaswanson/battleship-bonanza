@@ -240,6 +240,12 @@ export class ScooterForm extends HullForm {
     this.bars.rotation.y = done ? steer * STEER : mix(1.4, 0, back(seg(m, 2.7, 3.15), 1.8));
     this.bars.scale.setScalar(Math.max(0.001, back(seg(m, 2.6, 3.05), 1.8)));
 
+    this.fitSpikes(m, [0.62, 0.8, 0.9], -0.35);
+    if (this.spikes) {
+      this.spikes.rotation.z = this.frame.rotation.z;
+      this.spikes.position.x = this.frame.position.x;
+      this.spikes.position.y += this.frame.position.y;
+    }
     const pop = back(seg(m, 2.75, 3.15), 2);
     this.spare.visible = m > 2.7;
     this.spare.scale.setScalar(Math.max(0.001, pop));
@@ -264,5 +270,7 @@ export class ScooterForm extends HullForm {
     this.refs.flag.visible = true;
     for (const bit of this.boatBits) bit.scale.set(1, 1, 1);
     for (const t of this.turrets) t.group.rotation.z = 0;
+    if (this.spikes) this.spikes.rotation.z = 0;
+    if (this.spikes) this.spikes.position.x = 0;
   }
 }

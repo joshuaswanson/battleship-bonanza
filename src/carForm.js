@@ -249,6 +249,7 @@ export class CarForm extends HullForm {
     this.spoiler.position.y = mix(0.8, 1.62, rise);
     this.spoiler.scale.set(Math.max(0.001, rise), 1, 1);
     const popped = back(seg(m, 2.75, 3.1), 2);
+    this.fitSpikes(m, [CAR_SCALE * 1.02, 1, CAR_SCALE * 0.95], -0.2);
     for (const pivot of this.lamps) {
       pivot.visible = m > 2.7;
       pivot.rotation.x = mix(1.5, 0, popped);

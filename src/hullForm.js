@@ -351,7 +351,8 @@ export class HullForm {
     this.hull = refs.body.children.filter((o) => o.isMesh);
     for (const s of refs.spinners) if (s.propeller) this.hull.push(s.mesh);
     const turretGroups = new Set(refs.swivels.map((s) => s.group.parent));
-    this.mods = Object.values(refs.parts).filter((o) => !turretGroups.has(o));
+    this.spikes = refs.parts.spikes ?? null;
+    this.mods = Object.values(refs.parts).filter((o) => !turretGroups.has(o) && o !== this.spikes);
     const rig = new THREE.Group();
     rig.visible = false;
     refs.body.add(rig);
@@ -429,7 +430,18 @@ export class HullForm {
     this.paint.color.copy(this.color).lerp(SOOT, amount * 0.72);
   }
 
+  fitSpikes(m, [sx, sy, sz], lift) {
+    if (!this.spikes) return;
+    const u = smooth(seg(m, 1.5, 2.4));
+    this.spikes.scale.set(mix(1, sx, u), mix(1, sy, u), mix(1, sz, u));
+    this.spikes.position.y = lift * u;
+  }
+
   stow() {
+    if (this.spikes) {
+      this.spikes.scale.setScalar(1);
+      this.spikes.position.y = 0;
+    }
     this.active = false;
     this.ride = 0;
     this.rig.visible = false;
