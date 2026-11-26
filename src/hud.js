@@ -39,10 +39,10 @@ const MARK_ICONS = {
   flag: '<svg viewBox="0 0 24 24"><path d="M7 3v18" stroke="#0E2A47" stroke-width="2.6" stroke-linecap="round"/><path d="M8 4h11l-3.2 4.2L19 12.5H8z" fill="#fff" stroke="#0E2A47" stroke-width="2" stroke-linejoin="round"/></svg>',
   base: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none" stroke="#fff" stroke-width="3.2"/><circle cx="12" cy="12" r="3.2" fill="#fff"/></svg>',
 };
-const SEEK_TIME = 0.8;
-const TARGETING = {
-  missiles: { range: 180, minDot: -1, filter: (o) => !o.has('camo') },
-};
+const SEEK_FOLLOW = 5.5;
+const SEEK_SETTLE = 10;
+const SEEK_JOLT = 360;
+const SEEK_DAMP = 8;
 
 export class Hud {
   constructor(track, sfx) {
@@ -66,7 +66,7 @@ export class Hud {
     this.reticle = $('hud-reticle');
     this.seeker = $('hud-seeker');
     this.seekLabel = this.seeker.querySelector('.sk-label');
-    this.seek = { target: null, t: 0, tick: 0, x: 0, y: 0 };
+    this.seek = { target: null, t: 0, tick: 0, kick: 0, x: 0, y: 0, vx: 0, vy: 0, turn: 1, locked: false };
     this.barsEl = $('hud-bars');
     this.dmgEl = $('hud-dmg');
     this.popups = [];
@@ -605,26 +605,14 @@ export class Hud {
   }
 
   updateSeeker(race, camera, dt) {
-    const p = race.player;
-    const slot = p.items.indexOf('missiles');
-    const ready = slot >= 0 && p.alive && race.state === 'racing' && !p.finished && p.charges[slot].left > 0 && p.disabled <= 0;
-    const target = ready ? race.findTarget(p, { ...TARGETING.missiles, filter: (o) => TARGETING.missiles.filter(o) && race.missileSide(p, o) }) : null;
+    const lock = race.player.seek;
+    const target = lock.target;
     const s = this.seek;
     if (!target) {
       s.target = null;
       this.seeker.classList.remove('on', 'locked');
       return;
     }
-    if (target !== s.target) {
-      s.target = target;
-      s.t = 0;
-      s.tick = 0;
-      s.drift = (Math.random() - 0.5) * 120;
-      this.seeker.classList.remove('locked');
-    }
-    const before = s.t;
-    s.t += dt;
-    const k = Math.min(1, s.t / SEEK_TIME);
     const v = target.center(this.projected).project(camera);
     let sx = v.z > 1 ? -v.x : v.x;
     let sy = v.z > 1 ? -v.y : v.y;
@@ -638,23 +626,52 @@ export class Hud {
     this.seeker.classList.toggle('edge', offscreen);
     const x = (sx * 0.5 + 0.5) * innerWidth;
     const y = (-sy * 0.5 + 0.5) * innerHeight;
-    const wander = (1 - k) * (1 - k);
-    const jx = wander * (s.drift + Math.sin(s.t * 23) * 18);
-    const jy = wander * (Math.cos(s.t * 19) * 14 - s.drift * 0.4);
-    this.seeker.style.transform = `translate(${x + jx}px, ${y + jy}px)`;
-    this.seeker.style.setProperty('--spread', `${26 + 70 * wander}px`);
-    this.seeker.style.setProperty('--spin', `${45 * wander}deg`);
+    if (target !== s.target) {
+      const a = Math.random() * Math.PI * 2;
+      const r = 60 + Math.random() * 110;
+      Object.assign(s, { target, t: 0, tick: 0, kick: 0, vx: 0, vy: 0, locked: false });
+      s.x = x + Math.cos(a) * r;
+      s.y = y + Math.sin(a) * r;
+      s.turn = Math.random() < 0.5 ? -1 : 1;
+      this.seeker.classList.remove('locked');
+    }
+    s.t += dt;
+    if (s.locked && !lock.locked) {
+      s.locked = false;
+      this.seeker.classList.remove('locked');
+    }
+    const loose = 1 - lock.p;
+    s.kick -= dt;
+    if (s.kick <= 0 && !s.locked) {
+      s.kick = 0.06 + Math.random() * 0.3;
+      const a = Math.random() * Math.PI * 2;
+      const jolt = SEEK_JOLT * loose * Math.random();
+      s.vx += Math.cos(a) * jolt;
+      s.vy += Math.sin(a) * jolt;
+    }
+    const damp = Math.exp(-SEEK_DAMP * dt);
+    s.vx *= damp;
+    s.vy *= damp;
+    const follow = 1 - Math.exp(-(SEEK_FOLLOW + SEEK_SETTLE * lock.p) * dt);
+    s.x += (x - s.x) * follow + s.vx * dt;
+    s.y += (y - s.y) * follow + s.vy * dt;
+    const miss = Math.hypot(s.x - x, s.y - y);
+    const wander = s.locked ? 0 : loose * loose;
+    this.seeker.style.transform = `translate(${s.x}px, ${s.y}px)`;
+    this.seeker.style.setProperty('--spread', `${26 + Math.min(70, miss * 0.6 + 40 * wander)}px`);
+    this.seeker.style.setProperty('--spin', `${s.turn * (45 * wander + Math.min(30, miss * 0.3))}deg`);
     this.seeker.classList.add('on');
-    if (k < 1) {
+    if (!lock.locked) {
       s.tick -= dt;
       if (s.tick <= 0) {
-        s.tick = 0.17 - k * 0.1;
-        this.sfx.play('seek', null, 700 + k * 900);
+        s.tick = 0.17 - lock.p * 0.1;
+        this.sfx.play('seek', null, 700 + lock.p * 900);
       }
       const text = t('tracking');
       if (this.seekLabel.textContent !== text) this.seekLabel.textContent = text;
       this.seeker.classList.toggle('blink', Math.floor(s.t * 8) % 2 === 0);
-    } else if (before < SEEK_TIME) {
+    } else if (!s.locked) {
+      s.locked = true;
       this.seeker.classList.add('locked');
       this.seeker.classList.remove('blink');
       this.seekLabel.textContent = t('locked');

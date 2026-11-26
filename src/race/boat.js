@@ -52,6 +52,7 @@ export class Boat {
       .map((s) => ({ id: s.id, group: s.group, center: s.center }));
     this.aim = {};
     this.missileQueue = [];
+    this.seek = { target: null, p: 0, locked: false, knack: 1, wobble: 1, shift: 0 };
     this.charges = this.items.map((id) => (ITEMS[id]?.charges ? { left: ITEMS[id].charges, refill: 0 } : null));
     this.attackRolls = new Map();
     this.lastFired = -Infinity;

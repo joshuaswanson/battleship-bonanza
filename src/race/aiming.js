@@ -3,7 +3,39 @@ import { buildMissile, spendMissile, missileDirection, ALWAYS_AIMS } from '../bo
 import { fast } from '../tuning.js';
 import { FLAME_REACH, HALF_ARC, HIT_RADIUS, WATCH_RANGE, clamp, wrapAngle } from './shared.js';
 
+export const SEEK_RANGE = 180;
+const SEEK_KEEP = 210;
+const SEEK_RATE = 1.6;
+const SEEK_SWEEP = 0.6;
+const SEEK_SLIP = 0.6;
+
 export const methods = {
+  canSeek(b, o) {
+    return o !== b && o.alive && o.invuln <= 0 && !o.has('camo') && !(o.finished && !this.attract) && !this.allied(b, o) && this.missileSide(b, o) && this.willAttack(b, o);
+  },
+
+  updateSeek(b, dt) {
+    const s = b.seek;
+    const slot = b.items.indexOf('missiles');
+    const ready = slot >= 0 && b.alive && !b.finished && b.blind <= 0 && b.disabled <= 0 && b.charges[slot].left > 0 && (this.state === 'racing' || this.attract);
+    const kept = ready && s.target && this.canSeek(b, s.target) && Math.hypot(s.target.pos.x - b.pos.x, s.target.pos.z - b.pos.z) <= SEEK_KEEP;
+    const target = kept ? s.target : ready ? this.findTarget(b, { range: SEEK_RANGE, filter: (o) => this.canSeek(b, o) }) : null;
+    if (target !== s.target) Object.assign(s, { target, p: 0, locked: false, knack: 0.6 + Math.random() * 0.7, shift: 0 });
+    if (!target || s.locked) return;
+    s.shift -= dt;
+    if (s.shift <= 0) {
+      s.shift = 0.08 + Math.random() * 0.22;
+      s.wobble = 0.35 + Math.random() * 1.15;
+    }
+    const dx = target.pos.x - b.pos.x;
+    const dz = target.pos.z - b.pos.z;
+    const d = Math.max(1, Math.hypot(dx, dz));
+    const sweep = Math.abs((target.vel.x - b.vel.x) * dz - (target.vel.z - b.vel.z) * dx) / (d * d);
+    const rate = SEEK_RATE * s.knack * s.wobble * (1 - sweep / SEEK_SWEEP);
+    s.p = clamp(s.p + Math.max(-SEEK_SLIP, rate) * dt, 0, 1);
+    if (s.p >= 1) s.locked = true;
+  },
+
   findTarget(b, { range, minDot = -1, maxDot = 1, filter = null, minRange = 0 }) {
     if (b.blind > 0) return null;
     let best = null;
@@ -100,6 +132,7 @@ export const methods = {
   },
 
   updateTurrets(b, dt) {
+    this.updateSeek(b, dt);
     const busy = b.model.busy;
     for (const t of b.turrets) {
       busy[t.id] = Math.max(0, (busy[t.id] ?? 0) - dt);

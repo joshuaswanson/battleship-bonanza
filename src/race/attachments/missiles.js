@@ -82,15 +82,7 @@ export const methods = {
 
 export const actions = {
   missiles(b) {
-    const chased = new Set(this.missiles.filter((m) => m.owner === b && m.target).map((m) => m.target));
-    for (const q of b.missileQueue) if (q.target) chased.add(q.target);
-    const targets = this.boats
-      .filter((o) => o !== b && !this.allied(b, o) && o.alive && o.invuln <= 0 && !o.has('camo') && !(o.finished && !this.attract) && this.missileSide(b, o) && this.willAttack(b, o))
-      .map((o) => ({ o, d: Math.hypot(o.pos.x - b.pos.x, o.pos.z - b.pos.z) + (chased.has(o) ? 60 : 0) }))
-      .filter((t) => t.d <= 240)
-      .sort((x, y) => x.d - y.d)
-      .map((t) => t.o);
-    const target = b.blind > 0 ? null : targets[0] ?? null;
+    const target = b.seek.locked && b.blind <= 0 ? b.seek.target : null;
     b.model.busy.missiles = 1;
     b.missileAim = target ? this.relativeAngle(b, target) : 0;
     b.missileQueue.push({ target, wait: 0.12 });

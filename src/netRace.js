@@ -11,7 +11,7 @@ const FX_POOLS = ['puffs', 'sparks', 'soot', 'fire', 'fireMid', 'fireCore'];
 const MUTED = ['whitecaps', 'boatTrail'];
 const BOAT_REST = 9;
 const REST = BOAT_REST + FORM_SLOTS;
-const STATUS = 30 + HOLD_IDS.length * 4;
+const STATUS = 32 + HOLD_IDS.length * 4;
 const LOOSE = { missile: 0, mine: 1, hook: 2 };
 
 const SCALE = 100;
@@ -83,7 +83,7 @@ function writeStatus(out, o, b) {
     b.hp, b.ko, b.lap, b.place, b.finished ? 1 : 0, b.finishTime, b.finishOrder, b.dist, b.invuln, b.disabled,
     b.offCourse, b.wrongWay, b.regenerating ? 1 : 0, b.regenRate, b.burn ? 1 : 0, b.cooldowns[0], b.cooldowns[1],
     charge(0).left, charge(0).refill, charge(1).left, charge(1).refill, b.sawState.spin, b.sawState.chop,
-    b.blind, b.stun, b.boost, b.spinTime, b.steerVis, b.flash, b.exploded ? 1 : 0,
+    b.blind, b.stun, b.boost, b.spinTime, b.steerVis, b.flash, b.exploded ? 1 : 0, b.seek.target ? b.seek.target.index : -1, b.seek.p,
   ];
   out.set(fields, o);
   let k = o + fields.length;
@@ -96,7 +96,7 @@ function writeStatus(out, o, b) {
   }
 }
 
-function readStatus(b, d, o) {
+function readStatus(race, b, d, o) {
   let k = o;
   b.hp = d[k++];
   b.ko = d[k++];
@@ -129,6 +129,9 @@ function readStatus(b, d, o) {
   b.steerVis = d[k++];
   b.flash = d[k++];
   b.exploded = d[k++] > 0;
+  b.seek.target = race.boats[d[k++]] ?? null;
+  b.seek.p = d[k++];
+  b.seek.locked = b.seek.p >= 1;
   for (const id of HOLD_IDS) {
     const h = b.heat[id];
     h.heat = d[k++];
@@ -422,7 +425,7 @@ export class Mirror {
     race.clock = f.clock;
     race.finishCount = f.finishCount;
     race.order = f.order.map((i) => race.boats[i]);
-    race.boats.forEach((b, i) => readStatus(b, f.statusFull, i * STATUS));
+    race.boats.forEach((b, i) => readStatus(race, b, f.statusFull, i * STATUS));
     if (f.stats) this.stats(f.stats);
     for (const [id, ...args] of f.calls) {
       if (id === -1) race.chopper?.chop(...unpackArgs('chop', args));
