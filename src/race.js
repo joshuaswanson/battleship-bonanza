@@ -673,6 +673,7 @@ export class Race {
     b.ko = KO_TIME + (this.mode?.respawnDelay ?? 0);
     b.koTime = b.ko;
     b.stats.sunk++;
+    b.crashed = false;
     if (source !== b) source.stats.kills++;
     b.air = null;
     b.yOffset = 0;

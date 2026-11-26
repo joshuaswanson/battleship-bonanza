@@ -21,12 +21,35 @@ const CAR_SMOKE_FROM = 0.45;
 const SCREW_BUBBLE_RATE = 170;
 const SCREW_BUBBLE_RANGE = 220;
 const POLE_OUT = 0.3;
+const WRECK_GRAVITY = 32;
+const STILL = { x: 0, z: 0 };
+const WRECK_REST = 0.6;
+const WRECK_DIVE = 0.9;
+const WRECK_SPIN = 3.5;
 const POLE_IN = 0.4;
 const POLE_SWAY = 0.035;
 const POLE_LEAN = 0.8;
 const POLE_MAX_LEAN = 0.36;
 
 export const methods = {
+  fallFromSky(b, dt, ease) {
+    const { root, body } = b.model;
+    const since = (b.koTime ?? KO_TIME) - b.ko;
+    const floor = this.ground ? this.ground(b.pos.x, b.pos.z).y + WRECK_REST : -Infinity;
+    const y = Math.max(floor, root.position.y - 0.5 * WRECK_GRAVITY * since * since);
+    if (y <= floor && !b.crashed) {
+      b.crashed = true;
+      this.fx.explosion(b.pos.x, floor, b.pos.z, 1.4);
+      this.sfx.play('pop', b.pos);
+    }
+    root.position.y = y;
+    b.pos.y = y;
+    if (b.crashed) return;
+    body.rotation.x += (WRECK_DIVE - body.rotation.x) * ease;
+    body.rotation.z += WRECK_SPIN * dt;
+    if (Math.random() < dt * 30) this.fx.blackSmoke(b.pos.x, y + 1, b.pos.z, STILL);
+  },
+
   updateVisual(b, dt) {
     const t = this.time;
     b.aloft = this.layered && this.track.formAt(b.trackS);
@@ -68,9 +91,12 @@ export const methods = {
     } else {
       const k = Math.min(1.6, ((b.koTime ?? KO_TIME) - b.ko) / KO_TIME);
       const wrecked = this.track.grounded(b.trackS);
-      body.rotation.z += ((wrecked ? WRECK_ROLL : Math.PI * 0.95) - body.rotation.z) * ease;
-      if (wrecked) body.rotation.x += (WRECK_PITCH - body.rotation.x) * ease;
-      else root.position.y -= Math.max(0, k - 0.3) * 4;
+      if (b.form && b.formP > 0.5 && this.track.formKind(b.trackS) === 'jet') this.fallFromSky(b, dt, ease);
+      else {
+        body.rotation.z += ((wrecked ? WRECK_ROLL : Math.PI * 0.95) - body.rotation.z) * ease;
+        if (wrecked) body.rotation.x += (WRECK_PITCH - body.rotation.x) * ease;
+        else root.position.y -= Math.max(0, k - 0.3) * 4;
+      }
     }
 
     b.squashVel += (-b.squash * 220 - b.squashVel * 11) * dt;
