@@ -32,6 +32,7 @@ import { MINE_COLORS, buildGoldMine } from './goldMine.js';
 import { PROP_COLORS, town, waterTower, oreCart, rails, trestle, train, sign } from './canyonProps.js';
 
 const SKY = 0xf3d9b4;
+const SATELLITE_SPREAD = 2.2;
 
 const CANYON_COLORS = {
   ...MINE_COLORS,
@@ -399,10 +400,15 @@ export async function createCanyon(group, track, fx) {
     const p = track.point(idx, lateral);
     if (shores.some((o) => Math.hypot(o.x - p.x, o.z - p.z) < o.rx + size + 9)) continue;
     boulder(batch, p.x, track.level(s) - size * 0.25, p.z, size, rand);
+    const outward = Math.atan2(Math.sign(lateral) * track.nz[idx], Math.sign(lateral) * track.nx[idx]);
     for (let k = 0; k < 2; k++) {
-      const a = rand() * Math.PI * 2;
+      const a = outward + (rand() - 0.5) * SATELLITE_SPREAD;
       const r = size * (0.9 + rand() * 0.5);
-      boulder(batch, p.x + Math.cos(a) * r, track.level(s) - 0.6, p.z + Math.sin(a) * r, size * (0.35 + rand() * 0.25), rand);
+      const small = size * (0.35 + rand() * 0.25);
+      const sx = p.x + Math.cos(a) * r;
+      const sz = p.z + Math.sin(a) * r;
+      boulder(batch, sx, track.level(s) - 0.6, sz, small, rand);
+      shores.push({ x: sx, z: sz, rx: small, rz: small, rot: 0, top: track.level(s) - 0.6 + small * 0.8 });
     }
     batch.add('foam', CYL, mat(p.x, track.level(s) + 0.12, p.z, size * 1.35, 0.05, size * 1.35));
     shores.push({ x: p.x, z: p.z, rx: size * 0.9, rz: size * 0.9, rot: 0, top: track.level(s) + size * 0.55, launch: true });
