@@ -47,7 +47,7 @@ export const VEHICLES = {
   truck: { ...BASE, ...wheeled, Form: TruckForm, mud: true, trail: 'dirt', engine: 'truck' },
   car: { ...BASE, ...wheeled, Form: CarForm, body: { offset: 4.2, radius: 3.3, axis: 7.2 }, speed: 1.75, thrust: 2.8, grip: 4, marks: 'asphalt', engine: 'car' },
   scooter: { ...BASE, ...wheeled, Form: ScooterForm, speed: 1.25, thrust: 2.2, grip: 3, marks: null, engine: 'scooter' },
-  tank: { ...BASE, ...wheeled, Form: TankForm, launchPeak: 15, launchBlast: 1.8, trail: 'sand', impact: SOOT_IMPACT, shoreImpact: SOOT_IMPACT, engine: 'tank' },
+  tank: { ...BASE, ...wheeled, Form: TankForm, launchPeak: 0, trail: 'sand', impact: SOOT_IMPACT, shoreImpact: SOOT_IMPACT, engine: 'tank' },
   jet: { ...BASE, ...flying, Form: JetForm, engine: 'jet' },
   heli: { ...BASE, ...flying, Form: HeliForm },
   sub: { ...BASE, Form: SubForm, plunge: true, impact: 'bubbles' },

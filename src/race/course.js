@@ -58,11 +58,12 @@ export const methods = {
       this.hookLift(b);
       return;
     }
-    b.orbit = { t: 0, dur: LAND_FLIGHT };
     b.speed = Math.max(b.speed, BASE_SPEED * b.skill * 0.8);
     b.boost = Math.max(b.boost, 1);
-    this.fx.splash(b.pos.x, b.waterY, b.pos.z, 1.4);
     this.sfx.play('transform', b.pos);
+    if (!this.vehicle.launchPeak) return;
+    b.orbit = { t: 0, dur: LAND_FLIGHT };
+    this.fx.splash(b.pos.x, b.waterY, b.pos.z, 1.4);
     b.air = { t: 0, dur: LAND_FLIGHT, peak: this.vehicle.launchPeak, jet: false, plunge: this.vehicle.plunge };
     if (this.vehicle.launchBlast) this.fx.explosion(b.pos.x, b.waterY + 0.5, b.pos.z, this.vehicle.launchBlast);
     b.stats.jumps++;
