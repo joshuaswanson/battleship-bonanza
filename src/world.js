@@ -1397,9 +1397,14 @@ function baseCarve(site, x, z) {
   if (r < CRATER_WALL + 2) h = site.lift + (r < 0 ? CRATER_FLOOR : CARVE_FLOOR + (r / CRATER_WALL) * 90);
   const d = site.caveDistance(x, z);
   if (d < CAVE_WALL + 2) h = Math.min(h, site.lift + CARVE_FLOOR + (Math.max(0, d) / CAVE_WALL) * 90);
+  if (site.sillBack && z - mainlandEdge(x) < site.sillBack) h = Math.max(h, site.lift + SILL_TOP);
   return h;
 }
 
+const SILL_TOP = 4;
+const SILL_DEPTH = 9;
+const SILL_TUCK = 2;
+const SPRING_SETBACK = 14;
 const GULLY_RECESS = 5;
 const GULLY_NOTCH = 6;
 const GULLY_BED = 1.4;
@@ -1463,10 +1468,18 @@ function bayGullies(site) {
   const frames = caveFrames(site, false).filter((f) => Math.hypot(f.x - site.center.x, f.z - site.center.z) > site.radius + CRATER_WALL + 30);
   [0.2, 0.5, 0.8].forEach((u, n) => {
     const f = frames[Math.floor(frames.length * u)];
+    if (!f) return;
     const side = n % 2 ? 1 : -1;
     const rim = f.half + CAVE_WALL - 0.5;
     add(f.x + f.nx * side * rim, f.z + f.nz * side * rim, -f.nx * side, -f.nz * side, [f.x + f.nx * side * (f.half - 3), f.z + f.nz * side * (f.half - 3)], 3.5 + rand() * 1.5);
   });
+  if (site.lift) {
+    const head = caveFrames(site, false).find((f) => f.z > mainlandEdge(f.x) + site.sillBack + SPRING_SETBACK);
+    for (const side of [-1, 1]) {
+      const rim = head.half + CAVE_WALL - 0.5;
+      add(head.x + head.nx * side * rim, head.z + head.nz * side * rim, -head.nx * side, -head.nz * side, [head.x + head.nx * side * (head.half - 3), head.z + head.nz * side * (head.half - 3)], 6 + rand() * 1.5);
+    }
+  }
   for (const x of [-360, -230, 270, 395]) add(x, mainlandEdge(x) + FACE_DEPTH, 0, -1, [x, mainlandEdge(x) - 3], 3 + rand() * 1.5, 0);
   return gullies;
 }
@@ -2041,10 +2054,9 @@ function addCaveInterior(batch, site, scene, rand) {
   return pool;
 }
 
-const FALL_OVERLAP = 2;
 
 function addGorgeRiver(site, scene) {
-  const frames = caveFrames(site, false).filter((f) => Math.hypot(f.x - site.center.x, f.z - site.center.z) > site.radius + 1 && f.z > mainlandEdge(f.x) + gorgeLip(site, f.x));
+  const frames = caveFrames(site, false).filter((f) => Math.hypot(f.x - site.center.x, f.z - site.center.z) > site.radius + 1 && f.z > mainlandEdge(f.x) + site.sillBack - SILL_TUCK);
   const water = [];
   const across = 6;
   for (let k = 0; k < frames.length - 1; k++) {
@@ -2076,11 +2088,6 @@ function gorgeLip(site, x) {
   return lo;
 }
 
-function gorgeFall(site) {
-  const [mouth] = caveFrames(site, false);
-  const edge = mainlandEdge(mouth.x);
-  return { top: new THREE.Vector3(mouth.x, site.lift + 0.1, edge + gorgeLip(site, mouth.x) + FALL_OVERLAP), foot: new THREE.Vector3(mouth.x, 0.2, edge - 7), dx: 0, dz: -1, width: ((mouth.half + 4) * 2) / 0.75, spread: 0.12, rows: 40 };
-}
 
 function addGorge(batch, site, rand) {
   const frames = caveFrames(site, false).filter((f) => Math.hypot(f.x - site.center.x, f.z - site.center.z) > site.radius + CRATER_WALL + 6);
@@ -2253,6 +2260,10 @@ const BAY_COLORS = { ...COLORS, moss: 0x6aa82c, mossDark: 0x4d8c22, jungle: 0x3d
 export function createWorld(scene, track, fx) {
   if (track.map.arena) return createBayArena(scene, track.map.arena, fx);
   const site = track.map.whirlpool ? whirlpoolSite(track, mainlandEdge, cliffFace) : null;
+  if (site?.lift) {
+    const [mouth] = caveFrames(site, false);
+    site.sillBack = gorgeLip(site, mouth.x) + SILL_DEPTH;
+  }
   if (site) site.gullies = bayGullies(site);
   track.whirlpool = site;
   const fog = new THREE.Fog(SKY_HORIZON, 480, 950);
@@ -2317,7 +2328,6 @@ export function createWorld(scene, track, fx) {
     if (!site.lift) addCaveRoof(batch, site);
     addBlowholeCollar(batch, site);
     caveWater = site.lift ? addGorgeRiver(site, scene) : addCaveInterior(batch, site, scene, dress);
-    if (site.lift) specs.push(gorgeFall(site));
     addCrater(batch, site, rand);
     specs.push(...site.gullies.map((g) => gullyFall(site, g)), flumeStream(site));
     addGorge(batch, site, dress);

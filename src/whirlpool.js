@@ -127,7 +127,7 @@ export function whirlpoolSite(track, edgeAt, faceAt) {
       }
       out.level = 0;
       out.amp = 1;
-      if (lift && z > edgeAt(x) && this.caveDistance(x, z) < RIVER_BANK) {
+      if (lift && z > edgeAt(x) + (this.sillBack ?? 0) - 2 && this.caveDistance(x, z) < RIVER_BANK) {
         out.level = lift;
         out.amp = RIVER_CHOP;
         return out;

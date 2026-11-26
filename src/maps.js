@@ -42,8 +42,8 @@ export const MAPS = {
       slope: 0,
       top: 60,
       drops: [[0.7978, 60]],
-      tunnel: [0.5892, 0.5892, 0.5892],
-      land: { kind: 'jet', layered: true, from: 0.1083, to: 0.5892, height: 8, peak: 150, skim: 150, rise: 420, settle: 380, split: 601.2, added: 2382.9 },
+      tunnel: [0.5924, 0.5924, 0.5924],
+      land: { kind: 'jet', layered: true, from: 0.1083, to: 0.5924, height: 8, peak: 150, skim: 150, rise: 420, settle: 380, split: 601.2, added: 2382.9 },
     },
     widths: [[0, 28], [0.1083, 28], [0.1367, 44], [0.5147, 44], [0.5697, 24], [0.6033, 24], [0.6281, 16], [0.6616, 16], [0.8049, 28]],
     control: [
