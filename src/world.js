@@ -1279,12 +1279,15 @@ function archGeometry(span, height, thick, rand) {
 }
 
 // The pillar layouts that follow the arches were tuned at these stream positions.
+const ARCH_SPOTS = [[405, -430], [-151, 317], [-276, 50]];
+const GATE_PILLARS = [[398, -300], [-74, 477], [-251, 101]];
+
 const advance = (rand, n) => {
   for (let k = 0; k < n; k++) rand();
 };
 
-function addArch(batch, track, fraction, rand) {
-  const idx = track.wrap(Math.round(track.lapIndex(fraction)));
+function addArch(batch, track, [x, z], rand) {
+  const idx = track.project(x, z).idx;
   const p = track.point(idx, 0);
   return addArchAt(batch, p.x, p.z, track.heading(idx), track.halfWidth + 11, rand);
 }
@@ -2288,10 +2291,10 @@ export function createWorld(scene, track, fx) {
   const falls = [];
   const fits = (x, z, r) => !pillars.some((o) => Math.hypot(o.x - x, o.z - z) < o.r + r + 6);
   const archRand = mulberry32(20261031);
-  for (const f of [0.118, 0.743, 0.835]) shores.push(...addArch(batch, track, f, archRand));
+  for (const at of ARCH_SPOTS) shores.push(...addArch(batch, track, at, archRand));
   advance(rand, 8351);
-  for (const f of [0.131, 0.689, 0.817]) {
-    const idx = track.wrap(Math.round(track.lapIndex(f)));
+  for (const [x, z] of GATE_PILLARS) {
+    const idx = track.project(x, z).idx;
     for (const side of [-1, 1]) {
       const p = track.point(idx, side * (half + 9));
       pillars.push({ x: p.x, z: p.z, r: 8 });
