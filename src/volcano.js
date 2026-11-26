@@ -504,13 +504,15 @@ function fallSource(track, side, s, width, top, phase) {
   return points;
 }
 
+const PLUME_CLEAR = 40;
+
 function ashPlume(batch, rand) {
   for (let k = 0; k < 54; k++) {
     const t = k / 53;
     const r = 15 + 62 * t * t + rand() * 11;
     const a = rand() * 6.3;
     const spread = r * 0.6;
-    batch.add('ashCloud', SPHERE, mat(-150 * t * t + Math.cos(a) * spread, LAVA_Y + 84 + t * 380, 90 * t * t + Math.sin(a) * spread, r, r * (0.72 + rand() * 0.3), r));
+    batch.add('ashCloud', SPHERE, mat(-150 * t * t + Math.cos(a) * spread, LAVA_Y + 84 + PLUME_CLEAR + t * 380, 90 * t * t + Math.sin(a) * spread, r, r * (0.72 + rand() * 0.3), r));
   }
 }
 
