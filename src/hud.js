@@ -608,7 +608,7 @@ export class Hud {
     const p = race.player;
     const slot = p.items.indexOf('missiles');
     const ready = slot >= 0 && p.alive && race.state === 'racing' && !p.finished && p.charges[slot].left > 0 && p.disabled <= 0;
-    const target = ready ? race.findTarget(p, TARGETING.missiles) : null;
+    const target = ready ? race.findTarget(p, { ...TARGETING.missiles, filter: (o) => TARGETING.missiles.filter(o) && race.missileSide(p, o) }) : null;
     const s = this.seek;
     if (!target) {
       s.target = null;

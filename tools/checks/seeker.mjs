@@ -10,6 +10,7 @@ await page.evaluate(() => {
   const v = r.boats.find((b) => !b.isPlayer && !b.has('camo'));
   v.pos.set(p.pos.x + Math.sin(p.heading) * 35 + Math.cos(p.heading) * 6, 0, p.pos.z + Math.cos(p.heading) * 35 - Math.sin(p.heading) * 6);
   v.trackIdx = p.trackIdx;
+  v.dist = p.dist + 35;
 });
 await wait(250);
 const state = () => page.evaluate(() => ({ cls: document.getElementById('hud-seeker').className, label: document.querySelector('.sk-label').textContent }));
@@ -25,9 +26,10 @@ await page.evaluate(() => {
   const p = r.player;
   const v = r.boats.find((b) => !b.isPlayer && !b.has('camo'));
   v.pos.set(p.pos.x - Math.sin(p.heading) * 30, 0, p.pos.z - Math.cos(p.heading) * 30);
+  v.dist = p.dist - 30;
 });
 await wait(1300);
 const behind = await state();
 await page.screenshot({ path: 'tools/shots/seek-behind.png' });
-check('a boat behind is tracked at the screen edge', /on/.test(behind.cls) && /edge/.test(behind.cls) && /locked/.test(behind.cls), JSON.stringify(behind));
+check('front missiles ignore a boat behind', !/on/.test(behind.cls), JSON.stringify(behind));
 await browser.close();

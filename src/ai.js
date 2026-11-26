@@ -177,7 +177,7 @@ function shouldUse(race, b, id, ai) {
   const r = Math.random();
   switch (id) {
     case 'missiles': {
-      const t = race.findTarget(b, { range: 170, minDot: -1, filter: (o) => !o.has('camo') && race.willAttack(b, o) });
+      const t = race.findTarget(b, { range: 170, minDot: -1, filter: (o) => !o.has('camo') && race.missileSide(b, o) && race.willAttack(b, o) });
       return !!t && r < ai.aggression * race.difficulty.aggression * 0.45;
     }
     case 'grapple': {

@@ -69,6 +69,11 @@ export const methods = {
     return best;
   },
 
+  missileSide(b, o) {
+    const front = b.items.indexOf('missiles') === 0;
+    return front ? o.dist > b.dist : o.dist < b.dist;
+  },
+
   willAttack(b, o) {
     if (this.mode) return !this.allied(b, o);
     const player = this.player;
