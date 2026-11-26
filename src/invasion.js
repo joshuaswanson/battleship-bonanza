@@ -4,7 +4,7 @@ import { mat, ROCK } from './world.js';
 import { toon } from './toon.js';
 import { groundMesh, noise, smooth } from './mapKit.js';
 import { sandGround } from './groundShader.js';
-import { casemate } from './bunker.js';
+import { casemate, MG_LENGTH } from './bunker.js';
 
 export const BEACH_COLORS = {
   hedgehog: 0x4a4542,
@@ -85,6 +85,9 @@ const EAST = 980;
 const HEDGEHOG_GAP = 30;
 const MG_GAP = 0.07;
 const MG_SPEED = 330;
+const MG_TRAVERSE = 1;
+const MG_DIP = 0.32;
+const MG_REAR = 0.3;
 const DRIFT = new THREE.Vector3(1.6, 0, 0.5);
 const CLEAR_ENDS = 110;
 const SHOT_EVERY = 0.55;
@@ -379,11 +382,11 @@ export async function buildBeach({ group, batch, fine, track, surface, tick, ran
   const guns = [];
   const mgs = [];
   pads.forEach((pad) => {
-    const { group: post, muzzles } = casemate();
+    const { group: post, muzzles, pivots } = casemate();
     post.position.set(pad.x, pad.y - 0.4, pad.z);
     group.add(post);
     guns.push(muzzles.gun.clone().add(post.position));
-    for (const m of muzzles.guns) mgs.push(m.clone().add(post.position));
+    for (const pivot of pivots) mgs.push({ pivot, base: pivot.position.clone().add(post.position) });
     for (let k = 0; k < 44; k++) {
       const a = Math.PI + (k / 43) * Math.PI;
       const r = 40 + rand() * 8;
@@ -418,6 +421,8 @@ export function bunkerFire({ guns, mgs, track, fx, surface, events, tracers, hei
   const from = new THREE.Vector3();
   const to = new THREE.Vector3();
   const spurts = [];
+  const aim = new THREE.Vector3();
+  const muzzle = new THREE.Vector3();
   const bursts = mgs.map(() => ({ wait: Math.random() * 2, left: 0, cool: 0, s: 0, lat: 0, walk: 0 }));
   return (dt, camera) => {
     for (let k = spurts.length - 1; k >= 0; k--) {
@@ -451,9 +456,16 @@ export function bunkerFire({ guns, mgs, track, fx, surface, events, tracers, hei
         const p = track.point(track.wrap(near.idx + Math.round(burst.s / track.spacing)), lane);
         const y = height(p.x, p.z);
         to.set(p.x + (Math.random() - 0.5) * 1.6, y + 0.3, p.z + (Math.random() - 0.5) * 1.6);
-        tracers(mgs[k], to, MG_SPEED);
-        spurts.push({ x: to.x, y: to.y, z: to.z, at: mgs[k].distanceTo(to) / MG_SPEED });
-        if (Math.random() < 0.35) fx.sparkBurst(mgs[k].x, mgs[k].y, mgs[k].z, 0xffd27a, 3);
+        const { pivot, base } = mgs[k];
+        aim.subVectors(to, base);
+        const yaw = Math.atan2(aim.x, aim.z);
+        const dip = -Math.atan2(aim.y, Math.hypot(aim.x, aim.z));
+        if (Math.abs(yaw) > MG_TRAVERSE || dip > MG_DIP) continue;
+        pivot.rotation.set(dip, yaw, 0, 'YXZ');
+        muzzle.copy(base).addScaledVector(aim.normalize(), MG_LENGTH - MG_REAR);
+        tracers(muzzle, to, MG_SPEED);
+        spurts.push({ x: to.x, y: to.y, z: to.z, at: muzzle.distanceTo(to) / MG_SPEED });
+        if (Math.random() < 0.35) fx.sparkBurst(muzzle.x, muzzle.y, muzzle.z, 0xffd27a, 3);
       }
     });
     wait -= dt;

@@ -98,6 +98,9 @@ function apertured(w, h, holeW, holeLow, holeHigh, depth, z) {
   return new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: true, bevelSize: 0.35, bevelThickness: 0.35, bevelSegments: 1 }).translate(0, 0, z);
 }
 
+export const MG_LENGTH = 2.6;
+const MG_TUCK = 0.3;
+
 export function casemate() {
   const concrete = toon(0xffffff, { map: boardForm() });
   const dark = toon(0x121110);
@@ -135,7 +138,12 @@ export function casemate() {
   group.add(outlined(merge([barrel, brake, mantlet]), steel, 0.08));
   const slots = [1, -1].map((side) => new THREE.BoxGeometry(SLOT_W, SLOT_H, 0.1).translate(side * SLOT_X, SLOT_Y, face + 0.06));
   group.add(new THREE.Mesh(merge(slots), dark));
-  const mgs = [1, -1].map((side) => new THREE.CylinderGeometry(0.11, 0.15, 2.6, 8).rotateX(Math.PI / 2).translate(side * SLOT_X, SLOT_Y - 0.1, face + 1.3));
-  group.add(outlined(merge(mgs), steel, 0.05));
-  return { group, muzzles: { gun: new THREE.Vector3(0, 6.2, front + 13.6), guns: [1, -1].map((side) => new THREE.Vector3(side * SLOT_X, SLOT_Y - 0.1, face + 2.7)) } };
+  const mgBarrel = new THREE.CylinderGeometry(0.11, 0.15, MG_LENGTH, 8).rotateX(Math.PI / 2).translate(0, 0, MG_LENGTH / 2 - MG_TUCK);
+  const pivots = [1, -1].map((side) => {
+    const pivot = outlined(mgBarrel, steel, 0.05);
+    pivot.position.set(side * SLOT_X, SLOT_Y - 0.1, face);
+    group.add(pivot);
+    return pivot;
+  });
+  return { group, pivots, muzzles: { gun: new THREE.Vector3(0, 6.2, front + 13.6) } };
 }
