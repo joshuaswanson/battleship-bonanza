@@ -1186,15 +1186,30 @@ function flyGulls(gulls, t) {
   }
 }
 
-function addFarIslands(batch, rand) {
+const FAR_ISLAND_MARGIN = 12;
+
+function addFarIslands(batch, rand, track) {
+  const islands = [];
   for (let k = 0; k < 18; k++) {
     const a = (k / 18) * Math.PI * 2 + rand() * 0.2;
     const d = 700 + rand() * 180;
     const x = Math.cos(a) * d;
     const z = Math.sin(a) * d - 60;
+    const radius = 22 + rand() * 22;
+    const height = 30 + rand() * 50;
     if (z > mainlandEdge(x) - 60) continue;
-    addPillar(batch, x, z, rand, { radius: 22 + rand() * 22, height: 30 + rand() * 50, plants: 0.6 });
+    const inTheWay = track && courseGap(track, x, z) < pillarReach(radius);
+    const pillar = addPillar(inTheWay ? new Batcher() : batch, x, z, rand, { radius, height, plants: 0.6 });
+    if (!inTheWay) islands.push(pillar.blob);
   }
+  return islands;
+}
+
+const pillarReach = (radius) => radius * 1.6 + FAR_ISLAND_MARGIN;
+
+function courseGap(track, x, z) {
+  const near = track.project(x, z);
+  return near.distance - track.hw[near.idx];
 }
 
 function archGeometry(span, height, thick, rand) {
@@ -1346,13 +1361,25 @@ const MAINLAND_ROWS = [-14, -5, -1.5, ...FACE_KNOTS, 24, 32, 60, 120, 240, 520, 
 const CARVED_ROWS = [-14, -5, -1.5, ...FACE_KNOTS, ...Array.from({ length: 166 }, (_, k) => 20 + k * 4), 720, 1100, 1700, 2600];
 const CARVE_FLOOR = -8;
 const CRATER_FLOOR = -80;
+const BANK_HEIGHT = 12;
+const BANK_REACH = 60;
 const LAND_SPAN = 2600;
 const HORIZON_SEA = 8000;
 const HORIZON_DROP = -1.6;
 const CRATER_WALL = 12;
 const CAVE_WALL = 8;
 
-const mainlandRise = (x, d) => mainlandHeight(x) + Math.min(1, d / 40) * (6 * Math.sin(x * 0.02 + d * 0.03) + 5 * Math.sin(d * 0.05 - x * 0.011));
+const naturalRise = (x, d) => mainlandHeight(x) + Math.min(1, d / 40) * (6 * Math.sin(x * 0.02 + d * 0.03) + 5 * Math.sin(d * 0.05 - x * 0.011));
+let raisedBasin = null;
+function basinBank(x, z) {
+  const site = raisedBasin;
+  const gap = Math.min(site.caveDistance(x, z) - CAVE_WALL, Math.hypot(x - site.center.x, z - site.center.z) - site.radius - CRATER_WALL);
+  return site.lift + BANK_HEIGHT * (1 - THREE.MathUtils.smoothstep(gap, BANK_REACH * 0.5, BANK_REACH));
+}
+const mainlandRise = (x, d) => {
+  const natural = naturalRise(x, d);
+  return raisedBasin && d >= FACE_DEPTH ? Math.max(natural, basinBank(x, mainlandEdge(x) + d)) : natural;
+};
 const faceSway = (x, y) => Math.sin(y * 0.22 + x * 0.09) * 2.6 + Math.sin(y * 0.07 + x * 0.21) * 1.8;
 
 function faceHeights(x) {
@@ -1397,14 +1424,21 @@ function baseCarve(site, x, z) {
   let h = Infinity;
   const a = Math.atan2(z - site.center.z, x - site.center.x);
   const r = Math.hypot(x - site.center.x, z - site.center.z) - (site.radius + 2) + Math.sin(a * 9) * 1.2 + Math.sin(a * 23 + 1) * 0.7;
-  if (r < CRATER_WALL + 2) h = site.lift + (r < 0 ? CRATER_FLOOR : CARVE_FLOOR + (r / CRATER_WALL) * 90);
+  const wallRise = site.lift ? (BANK_HEIGHT + 2 - CARVE_FLOOR) / CRATER_WALL : 90 / CRATER_WALL;
+  if (r < CRATER_WALL + 2) h = site.lift + (r < 0 ? CRATER_FLOOR : CARVE_FLOOR + r * wallRise);
   const d = site.caveDistance(x, z);
   if (d < CAVE_WALL + 2) h = Math.min(h, site.lift + CARVE_FLOOR + (Math.max(0, d) / CAVE_WALL) * 90);
   if (site.sillBack && z - mainlandEdge(x) < site.sillBack) h = Math.max(h, site.lift + SILL_TOP);
   return h;
 }
 
-const SILL_TOP = 4;
+const SILL_TOP = 9;
+const BASIN_STEP = 3;
+const BASIN_MARGIN = 12;
+const BASIN_SLACK = 30;
+const BASIN_DRY = 6;
+const BASIN_HOLE = 4;
+const BASIN_FADE = 12;
 const SILL_DEPTH = 9;
 const SILL_TUCK = 2;
 const SPRING_SETBACK = 14;
@@ -1457,6 +1491,21 @@ function gullyBox(g) {
   return { x0: Math.min(...xs), x1: Math.max(...xs), z0: Math.min(...zs), z1: Math.max(...zs) };
 }
 
+function addSillRocks(site, rand) {
+  site.sillRocks = [];
+  const [mouth] = caveFrames(site, false);
+  for (let k = -1; k <= 1; k += 0.13) {
+    const lat = k * (mouth.half + CAVE_WALL);
+    const x = mouth.x + mouth.nx * lat;
+    const z = mainlandEdge(x) + site.sillBack - SILL_DEPTH * (0.2 + 0.5 * rand());
+    site.sillRocks.push({ x, z, s: 2.6 + rand() * 1.8, turn: rand() * 6 });
+  }
+}
+
+function dressSill(batch, site) {
+  for (const r of site.sillRocks) batch.add(r.s > 3.6 ? 'rock' : 'rockland', ROCK, mat(r.x, site.lift + SILL_TOP + r.s * 0.25, r.z, r.s * 1.3, r.s * 0.9, r.s, 0.2, r.turn, 0.1));
+}
+
 function bayGullies(site) {
   const rand = mulberry32(5150);
   const { center, radius } = site;
@@ -1476,6 +1525,7 @@ function bayGullies(site) {
     const rim = f.half + CAVE_WALL - 0.5;
     add(f.x + f.nx * side * rim, f.z + f.nz * side * rim, -f.nx * side, -f.nz * side, [f.x + f.nx * side * (f.half - 3), f.z + f.nz * side * (f.half - 3)], 3.5 + rand() * 1.5);
   });
+  if (site.lift) addSillRocks(site, rand);
   if (site.lift) {
     const head = caveFrames(site, false).find((f) => f.z > mainlandEdge(f.x) + site.sillBack + SPRING_SETBACK);
     for (const side of [-1, 1]) {
@@ -2059,25 +2109,28 @@ function addCaveInterior(batch, site, scene, rand) {
 
 
 function addGorgeRiver(site, scene) {
-  const frames = caveFrames(site, false).filter((f) => Math.hypot(f.x - site.center.x, f.z - site.center.z) > site.radius + 1 && f.z > mainlandEdge(f.x) + site.sillBack - SILL_TUCK);
+  const pts = [...site.cave, { x: site.center.x, z: site.center.z, half: site.radius + CRATER_WALL }];
+  const minX = Math.min(...pts.map((p) => p.x - p.half)) - BASIN_MARGIN;
+  const maxX = Math.max(...pts.map((p) => p.x + p.half)) + BASIN_MARGIN;
+  const minZ = Math.min(...pts.map((p) => p.z - p.half)) - BASIN_MARGIN;
+  const maxZ = Math.max(...pts.map((p) => p.z + p.half)) + BASIN_MARGIN;
+  const y = site.lift + 0.12;
+  const inside = (x, z) => z > mainlandEdge(x) + site.sillBack - SILL_TUCK && carveHeight(site, x, z) < y + BASIN_SLACK;
   const water = [];
-  const across = 6;
-  for (let k = 0; k < frames.length - 1; k++) {
-    const a = frames[k];
-    const b = frames[k + 1];
-    for (let j = 0; j < across; j++) {
-      const u0 = (j / across) * 2 - 1;
-      const u1 = ((j + 1) / across) * 2 - 1;
-      const at = (f, u) => [f.x + f.nx * u * (f.half + 4), site.lift + 0.12, f.z + f.nz * u * (f.half + 4)];
-      water.push(...at(a, u0), ...at(b, u0), ...at(a, u1), ...at(a, u1), ...at(b, u0), ...at(b, u1));
+  for (let x = minX; x < maxX; x += BASIN_STEP) {
+    for (let z = minZ; z < maxZ; z += BASIN_STEP) {
+      const corners = [[x, z], [x + BASIN_STEP, z], [x, z + BASIN_STEP], [x + BASIN_STEP, z + BASIN_STEP]];
+      if (!corners.some(([cx, cz]) => inside(cx, cz)) || corners.some(([cx, cz]) => mainlandGround(cx, cz) < y + BASIN_DRY)) continue;
+      const v = corners.map(([cx, cz]) => [cx, y, cz]);
+      water.push(...v[0], ...v[2], ...v[1], ...v[1], ...v[2], ...v[3]);
     }
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(water, 3));
   g.computeVertexNormals();
-  const river = createWater({ geometry: g, flat: true });
-  scene.add(river.mesh);
-  return river;
+  const basin = createWater({ geometry: g, flat: true, hole: [site.center.x, site.center.z, site.radius + 2 - BASIN_HOLE - BASIN_FADE], holeFade: BASIN_FADE });
+  scene.add(basin.mesh);
+  return basin;
 }
 
 function gorgeLip(site, x) {
@@ -2261,8 +2314,10 @@ const BAY_SKY = { top: 0x1a78e6, horizon: SKY_HORIZON };
 const BAY_COLORS = { ...COLORS, moss: 0x6aa82c, mossDark: 0x4d8c22, jungle: 0x3d7a1d, jungleLight: 0x8cc63a, vineStem: 0x4a6a22, vineLeaf: 0x64a82a, vineLeafDark: 0x41801f };
 
 export function createWorld(scene, track, fx) {
+  raisedBasin = null;
   if (track.map.arena) return createBayArena(scene, track.map.arena, fx);
   const site = track.map.whirlpool ? whirlpoolSite(track, mainlandEdge, cliffFace) : null;
+  raisedBasin = site?.lift ? site : null;
   if (site?.lift) {
     const [mouth] = caveFrames(site, false);
     site.sillBack = gorgeLip(site, mouth.x) + SILL_DEPTH;
@@ -2336,10 +2391,11 @@ export function createWorld(scene, track, fx) {
     addGorge(batch, site, dress);
     addCliffDressing(batch, site, dress);
     for (const g of site.gullies) dressGully(batch, site, g, dress);
+    if (site.lift) dressSill(batch, site);
   }
   const waterfalls = createWaterfalls(specs, rand);
   scene.add(waterfalls.group);
-  addFarIslands(batch, rand);
+  shores.push(...addFarIslands(batch, rand, track));
   addMainland(batch, rand, site);
   const horizon = createWater({ size: HORIZON_SEA, segments: 40, amp: 0 });
   horizon.mesh.position.y = HORIZON_DROP;
